@@ -125,6 +125,14 @@ export function ProjectsOverview() {
           to create and manage them.
         </Step>
       </Steps>
+
+      <H2>Client &amp; billing</H2>
+      <P>
+        On the project&apos;s <strong>Overview</strong> tab, <strong>Client &amp; billing</strong> shows who we bill and where
+        the invoices go. It starts as the building&apos;s managing company. Pick a different <strong>Client company</strong> when
+        the job bills someone else, like a GC on a post-construction job. You can also add post-construction jobs from the
+        GC&apos;s page under <strong>Companies</strong>. See <A href="/erp/help/companies/companies-overview">Companies and Billing Info</A>.
+      </P>
     </>
   );
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canSeeFinancials } from "@/lib/erpAuth";
+import { contentDisposition } from "@/lib/contentDisposition";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -28,7 +29,7 @@ export async function GET(_req: Request, ctx: Ctx) {
     if (!res.ok) return NextResponse.json({ error: `HubSpot returned ${res.status} for the invoice PDF` }, { status: 502 });
     const name = (link.invoiceNumber ?? "invoice").replace(/["\\\r\n]/g, "");
     return new NextResponse(new Uint8Array(await res.arrayBuffer()), {
-      headers: { "content-type": "application/pdf", "content-disposition": `attachment; filename="${name}.pdf"`, "cache-control": "private, no-store" },
+      headers: { "content-type": "application/pdf", "content-disposition": contentDisposition("attachment", `${name}.pdf`), "cache-control": "private, no-store" },
     });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Could not fetch the invoice PDF" }, { status: 502 });

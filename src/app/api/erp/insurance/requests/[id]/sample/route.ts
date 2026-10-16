@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canManageInsurance } from "@/lib/erpAuth";
+import { contentDisposition } from "@/lib/contentDisposition";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -16,7 +17,7 @@ export async function GET(_req: Request, ctx: Ctx) {
   return new NextResponse(r.sampleData as unknown as BodyInit, {
     headers: {
       "Content-Type": r.sampleMimeType ?? "application/octet-stream",
-      "Content-Disposition": `inline; filename="${(r.sampleFilename ?? "sample").replace(/"/g, "")}"`,
+      "Content-Disposition": contentDisposition("inline", r.sampleFilename ?? "sample"),
       "Cache-Control": "private, max-age=3600",
     },
   });

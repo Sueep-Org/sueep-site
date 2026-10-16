@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { CoDayPopover } from "./CoDayPopover";
@@ -210,6 +210,93 @@ type TurnoverEntry =
   /// building's group so the CO shows up under the building dropdown even
   /// when the unit itself isn't otherwise on the schedule.
   | { kind: "coOnly"; project: ScheduleProject };
+
+/** A project's own chip on one day, drawn as one piece of a bar that runs
+ * across back-to-back days in the same calendar week (like the Gantt). */
+type BuildingGroup = { buildingId: string; buildingName: string; entries: TurnoverEntry[] };
+type LaneEntry =
+  | TurnoverEntry
+  /// A building's grouped turnover chip on back-to-back days. Opening any
+  /// day of it opens every day, and its units are drawn as rows below it.
+  | { kind: "buildingGroup"; group: BuildingGroup; runKeys: string[]; unitCount: number; expanded: boolean }
+  /// A change order in the rows right under its project's bar (or its unit's
+  /// row in an open building bar), so it never drifts under another group.
+  | { kind: "changeOrder"; co: ScheduleChangeOrder };
+type LaneSegment = {
+  entry: LaneEntry;
+  continuesLeft: boolean;
+  continuesRight: boolean;
+  /** Days the bar covers from here, set only on its first day in the week
+   * (where the title is drawn across the whole bar). 0 everywhere else. */
+  labelSpanDays: number;
+  /** Left inset in px, for a unit row nested under an open building bar. */
+  indent: number;
+};
+
+/** Fixed lane height so every day in the week lines its bars up. */
+const LANE_HEIGHT_PX = 20;
+
+function laneEntryKey(e: LaneEntry): string {
+  switch (e.kind) {
+    case "buildingGroup":
+      return `bldg:${e.group.buildingId}`;
+    case "changeOrder":
+      return `co:${e.co.id}`;
+    case "planned":
+      return `planned:${e.assignment.id}`;
+    case "confirmed":
+    case "coOnly":
+      return `${e.kind}:${e.project.id}`;
+    default:
+      return `${e.kind}:${e.project.id}:${e.role}`;
+  }
+}
+
+// Day cells have 6px padding and a 1px grid gap, so a joined piece reaches
+// 6px right (its own padding) and 7px left (padding + gap). Only the later
+// day reaches over the gap, since a later cell paints over an earlier one.
+function laneLiStyle(seg: LaneSegment): CSSProperties {
+  return {
+    height: LANE_HEIGHT_PX,
+    marginLeft: seg.continuesLeft ? -7 : seg.indent || undefined,
+    marginRight: seg.continuesRight ? -6 : undefined,
+  };
+}
+
+function laneButtonStyle(seg: LaneSegment): CSSProperties {
+  return {
+    height: "100%",
+    boxShadow: "none",
+    ...(seg.continuesLeft ? { borderTopLeftRadius: 0, borderBottomLeftRadius: 0, borderLeftWidth: 0 } : {}),
+    ...(seg.continuesRight ? { borderTopRightRadius: 0, borderBottomRightRadius: 0, borderRightWidth: 0 } : {}),
+  };
+}
+
+function groupTextClass(group: CalendarSegmentGroup): string {
+  return CALENDAR_GROUP_CHIP_CLASS[group]
+    .split(" ")
+    .filter((c) => c.startsWith("text-"))
+    .join(" ");
+}
+
+// The title (and status icons) for a bar, drawn once on its first day and
+// stretched over the whole bar. Width is n cells + (n-1) gaps - both outer
+// paddings - indent, written relative to the first piece, which is
+// cell width - 12px padding + 6px if it reaches right - indent.
+function laneLabelOverlay(seg: LaneSegment, content: React.ReactNode, textClass: string, complete: boolean) {
+  const n = seg.labelSpanDays;
+  if (n === 0) return null;
+  const reachRight = seg.continuesRight ? 6 : 0;
+  return (
+    <span
+      aria-hidden
+      className={`pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center gap-1 overflow-hidden whitespace-nowrap pl-1.5 pr-4 text-[10px] font-medium ${textClass} ${completionChipClass(complete)}`}
+      style={{ width: `calc(${n} * (100% + ${12 - reachRight + seg.indent}px) + ${n - 13 - seg.indent}px)` }}
+    >
+      {content}
+    </span>
+  );
+}
 
 function formatClockTime(time: string): string {
   const [h, m] = time.split(":").map(Number);
@@ -1017,6 +1104,17 @@ export function SchedulePlanner({
       const next = new Set(prev);
       if (next.has(groupKey)) next.delete(groupKey);
       else next.add(groupKey);
+      return next;
+    });
+  }
+
+  function setBuildingGroupRunExpanded(dayKeys: string[], buildingId: string, expanded: boolean) {
+    setExpandedBuildingGroups((prev) => {
+      const next = new Set(prev);
+      for (const dk of dayKeys) {
+        if (expanded) next.add(`${dk}:${buildingId}`);
+        else next.delete(`${dk}:${buildingId}`);
+      }
       return next;
     });
   }
@@ -1868,7 +1966,7 @@ export function SchedulePlanner({
             </div>
           </div>
 
-          {calendarSegmentGroup(p.segment) === "POST_CONSTRUCTION" ? (
+          {calendarSegmentGroup(p.segment) === "POST_CONSTRUCTION" || p.sovItems.length > 0 ? (
             <div className="mt-1.5">
               <label className="block text-[9px] text-gray-400">SOV item(s) being worked on</label>
               <div className="mt-0.5">
@@ -2468,6 +2566,410 @@ export function SchedulePlanner({
   const legendShowsGroupingTip = presentGroups.includes("JANITORIAL_TURNOVER_REQUESTS");
   const showLegend = legendShowsType || legendShowsStatus || legendShowsIcons || legendShowsGroupingTip;
 
+  // Every visible day's chip lists, worked out before drawing any cell so
+  // a project on back-to-back days can be drawn as one bar (see
+  // laneSegmentsByDay below).
+  function computeDayLists(k: string) {
+    let dayProjects = projectsByDay.get(k) ?? [];
+    let dayPlannedRaw = plannedByDay.get(k) ?? [];
+    let dayChangeOrders = changeOrdersByDay.get(k) ?? [];
+    let daySovRequests = sovRequestsByDay.get(k) ?? [];
+    const daySpanMarkers = projectSpanMarkersByDay.get(k) ?? [];
+    // Unassigned by definition, so a supervisor filter can never
+    // match one — hide rather than show under the wrong supervisor.
+    let dayNeedsSupervisor = selectedSupervisorId ? [] : daySpanMarkers.filter((e) => e.kind === "needsSupervisor");
+    let dayCoNeedsSupervisor = selectedSupervisorId ? [] : coNeedsSupervisorByDay.get(k) ?? [];
+    let dayProjectSpanEndpoints = daySpanMarkers.filter((e) => e.kind === "spanEndpoint");
+
+    if (selectedSupervisorId) {
+      dayProjects = dayProjects.filter(
+        (p) => projectSupervisorOnDay(p.id, k) === selectedSupervisorId,
+      );
+      dayPlannedRaw = dayPlannedRaw.filter((a) => a.supervisorUserId === selectedSupervisorId);
+      dayChangeOrders = dayChangeOrders.filter(
+        (co) => projectSupervisorOnDay(co.projectId, k) === selectedSupervisorId,
+      );
+      daySovRequests = daySovRequests.filter(
+        (r) => projectSupervisorOnDay(r.projectId, k) === selectedSupervisorId,
+      );
+      dayProjectSpanEndpoints = dayProjectSpanEndpoints.filter(
+        (x) => projectSupervisorOnDay(x.project.id, k) === selectedSupervisorId,
+      );
+    }
+
+    dayProjects = dayProjects.filter((p) => selectedTypes.has(calendarSegmentGroup(p.segment)));
+    dayChangeOrders = selectedTypes.has("CO") ? dayChangeOrders : [];
+    daySovRequests = selectedTypes.has("SOV") ? daySovRequests : [];
+    dayPlannedRaw = dayPlannedRaw.filter((a) => {
+      const project = projectById.get(a.projectId);
+      return project ? selectedTypes.has(calendarSegmentGroup(project.segment)) : false;
+    });
+    dayNeedsSupervisor = dayNeedsSupervisor.filter((x) => selectedTypes.has(calendarSegmentGroup(x.project.segment)));
+    dayCoNeedsSupervisor = selectedTypes.has("CO") ? dayCoNeedsSupervisor : [];
+    // Full set (turnover + everything else) — renderCoChip uses
+    // this to still show the amber "needs a supervisor" warning
+    // on a turnover CO even though it's nested under its unit
+    // now, not floating separately (see the split below).
+    const coNeedsSupervisorIds = new Set(dayCoNeedsSupervisor.map((x) => x.co.id));
+    // Any CO with a parent project stays nested under that
+    // project's own chip (and, for turnover, that unit's building
+    // dropdown) even while it needs a supervisor — same as any
+    // other CO on that project — rather than popping out to float
+    // separately just because it isn't staffed yet. Only a CO
+    // whose project can't be resolved at all (see looseChangeOrders
+    // below) keeps the standalone amber chip, since there's
+    // nowhere to nest it under.
+    dayCoNeedsSupervisor = dayCoNeedsSupervisor.filter((x) => !projectById.has(x.co.projectId));
+    if (dayCoNeedsSupervisor.length > 0) {
+      const flagged = new Set(dayCoNeedsSupervisor.map((x) => x.co.id));
+      dayChangeOrders = dayChangeOrders.filter((co) => !flagged.has(co.id));
+    }
+    dayProjectSpanEndpoints = dayProjectSpanEndpoints.filter((x) => selectedTypes.has(calendarSegmentGroup(x.project.segment)));
+
+    const confirmedProjectIds = new Set(dayProjects.map((p) => p.id));
+    // Planned assignments are only shown when there's no confirmed
+    // labor log yet for that project/day — once real work is
+    // logged, the confirmed chip takes over.
+    const dayPlanned = dayPlannedRaw
+      .filter((a) => !confirmedProjectIds.has(a.projectId))
+      .map((a) => ({ assignment: a, project: projectById.get(a.projectId) }))
+      .filter((x): x is { assignment: ScheduleDayAssignment; project: ScheduleProject } => !!x.project);
+
+    // A project's change order(s) hang directly below that
+    // project's own chip instead of sitting in a flat, unrelated
+    // CO list, so the two read as one unit — a Post-Construction
+    // project's CO with logged labor used to render as a totally
+    // separate "loose" chip on the same day with no visual link
+    // to that project's own confirmed/planned chip, same as a
+    // turnover unit's CO always has. Only a CO whose project
+    // can't be resolved at all falls back to the flat list, since
+    // there's nothing to nest it under.
+    const coByProjectId = new Map<string, ScheduleChangeOrder[]>();
+    const looseChangeOrders: ScheduleChangeOrder[] = [];
+    for (const co of dayChangeOrders) {
+      const parent = projectById.get(co.projectId);
+      if (parent) {
+        const list = coByProjectId.get(co.projectId) ?? [];
+        list.push(co);
+        coByProjectId.set(co.projectId, list);
+      } else {
+        looseChangeOrders.push(co);
+      }
+    }
+    // A project's own chip today comes from one of the four
+    // buckets below — but a CO's scheduled day doesn't have to
+    // land on a day its project is otherwise on the calendar
+    // (e.g. extra work scheduled well after the base job already
+    // finished). Without this, that CO would never get a home to
+    // nest under and would just silently not render at all
+    // (still named "...JanitorialUnits" below — predates this
+    // covering every segment, not just turnover). Any such
+    // orphaned project gets a minimal chip of its own instead,
+    // purely so the CO always renders "under" it and the two
+    // stay visually linked, same as everywhere else.
+    const projectIdsWithOwnChipToday = new Set<string>([
+      ...dayNeedsSupervisor.map(({ project }) => project.id),
+      ...dayProjectSpanEndpoints.map(({ project }) => project.id),
+      ...dayProjects.map((p) => p.id),
+      ...dayPlanned.map(({ project }) => project.id),
+    ]);
+    const orphanedJanitorialUnits = Array.from(coByProjectId.keys())
+      .filter((id) => !projectIdsWithOwnChipToday.has(id))
+      .map((id) => projectById.get(id))
+      .filter((p): p is ScheduleProject => !!p);
+
+    // Same-building turnover units sharing this day, pulled out
+    // of the four buckets above (not duplicated — each entry
+    // still remembers which bucket/extras it came from) so they
+    // can collapse into one expandable chip. Grouping happens
+    // purely at render time; it doesn't change what's "planned"
+    // vs. "confirmed" for any other logic on this day.
+    const turnoverEntries: TurnoverEntry[] = [
+      ...dayNeedsSupervisor
+        .filter(({ project }) => isGroupableTurnoverProject(project))
+        .map(({ project, role }) => ({ kind: "needsSupervisor" as const, project, role })),
+      ...dayProjectSpanEndpoints
+        .filter(({ project }) => isGroupableTurnoverProject(project))
+        .map(({ project, role }) => ({ kind: "spanEndpoint" as const, project, role })),
+      ...dayProjects
+        .filter(isGroupableTurnoverProject)
+        .map((project) => ({ kind: "confirmed" as const, project })),
+      ...dayPlanned
+        .filter(({ project }) => isGroupableTurnoverProject(project))
+        .map(({ assignment, project }) => ({ kind: "planned" as const, assignment, project })),
+      // Counts toward its building's group even though it has no
+      // chip of its own today — see orphanedJanitorialUnits.
+      ...orphanedJanitorialUnits
+        .filter(isGroupableTurnoverProject)
+        .map((project) => ({ kind: "coOnly" as const, project })),
+    ];
+    const turnoverEntriesByBuilding = new Map<string, TurnoverEntry[]>();
+    for (const entry of turnoverEntries) {
+      const buildingId = entry.project.buildingId!;
+      const list = turnoverEntriesByBuilding.get(buildingId) ?? [];
+      list.push(entry);
+      turnoverEntriesByBuilding.set(buildingId, list);
+    }
+    // Collapsing one unit into "1 unit, click to expand" saves
+    // nothing over just showing it, so only buildings with 2+
+    // turnover entries this day actually group.
+    const buildingGroups = Array.from(turnoverEntriesByBuilding.entries())
+      .filter(([, entries]) => entries.length >= 2)
+      .map(([buildingId, entries]) => ({
+        buildingId,
+        buildingName: entries[0]!.project.buildingName ?? "Building",
+        entries,
+      }))
+      .sort((a, b) => a.buildingName.localeCompare(b.buildingName));
+    const groupedBuildingIds = new Set(buildingGroups.map((g) => g.buildingId));
+    const isGroupedOut = (p: ScheduleProject) => !!p.buildingId && groupedBuildingIds.has(p.buildingId);
+    const dayNeedsSupervisorUngrouped = dayNeedsSupervisor.filter(({ project }) => !isGroupedOut(project));
+    const dayProjectSpanEndpointsUngrouped = dayProjectSpanEndpoints.filter(({ project }) => !isGroupedOut(project));
+    const dayProjectsUngrouped = dayProjects.filter((p) => !isGroupedOut(p));
+    const dayPlannedUngrouped = dayPlanned.filter(({ project }) => !isGroupedOut(project));
+    const orphanedJanitorialUnitsUngrouped = orphanedJanitorialUnits.filter((p) => !isGroupedOut(p));
+    return {
+      dayCoNeedsSupervisor,
+      coNeedsSupervisorIds,
+      coByProjectId,
+      looseChangeOrders,
+      daySovRequests,
+      buildingGroups,
+      dayNeedsSupervisorUngrouped,
+      dayProjectSpanEndpointsUngrouped,
+      dayProjectsUngrouped,
+      dayPlannedUngrouped,
+      orphanedJanitorialUnitsUngrouped,
+    };
+  }
+  const dayListsByKey = new Map(matrix.flat().map((cell) => [dayKey(cell), computeDayLists(dayKey(cell))] as const));
+
+  // A project's chips on 2+ back-to-back days in the same week become one
+  // bar, and so does a building's grouped turnover chip. Each bar gets rows
+  // at the top of its days (an open building bar also gets one row per unit
+  // line under it), reused once free, so every piece of a bar sits at the
+  // same height across the week.
+  const laneSegmentsByDay = new Map<string, (LaneSegment | null)[]>();
+  function runsOf<T>(byDay: Map<string, T>[], from: number, to: number, minDays: number) {
+    const runs: { start: number; end: number; id: string }[] = [];
+    const ids = new Set(byDay.slice(from, to + 1).flatMap((m) => [...m.keys()]));
+    for (const id of ids) {
+      let d = from;
+      while (d <= to) {
+        if (!byDay[d]!.has(id)) {
+          d++;
+          continue;
+        }
+        let end = d;
+        while (end + 1 <= to && byDay[end + 1]!.has(id)) end++;
+        if (end - d + 1 >= minDays) runs.push({ start: d, end, id });
+        d = end + 1;
+      }
+    }
+    return runs.sort((a, b) => a.start - b.start || b.end - b.start - (a.end - a.start) || a.id.localeCompare(b.id));
+  }
+  // Whether a chip shows a ⚠ on day k. Mirrors the icons each render*Chip
+  // draws: needs a supervisor, overdue (planned or span day passed with
+  // nothing logged), planned with no one assigned, and a building group's
+  // worst-unit severity (buildingGroupSeverity).
+  function laneEntryWarns(e: LaneEntry, k: string): boolean {
+    const overdue = k < todayKey;
+    const unassigned = (a: ScheduleDayAssignment) => !a.supervisorUserId && !a.projectManagerUserId && !a.supervisorContractorId;
+    switch (e.kind) {
+      case "needsSupervisor":
+        return true;
+      case "spanEndpoint":
+        return overdue;
+      case "planned":
+        return overdue || (unassigned(e.assignment) && !projectSoloCoverage.dayPairs.has(`${e.project.id}:${k}`));
+      case "changeOrder":
+        return (
+          dayListsByKey.get(k)!.coNeedsSupervisorIds.has(e.co.id) ||
+          (overdue && !e.co.laborByDay[k] && coDayAssignments.some((a) => a.dateKey === k && a.changeOrderId === e.co.id))
+        );
+      case "buildingGroup":
+        return e.group.entries.some(
+          (u) => u.kind === "needsSupervisor" || (u.kind === "planned" && (overdue || unassigned(u.assignment))),
+        );
+      default:
+        return false;
+    }
+  }
+  function laneSegment(entry: LaneEntry, d: number, run: { start: number; end: number }, indent: number): LaneSegment {
+    return {
+      entry,
+      continuesLeft: d > run.start,
+      continuesRight: d < run.end,
+      labelSpanDays: d === run.start ? run.end - run.start + 1 : 0,
+      indent,
+    };
+  }
+  for (const week of matrix) {
+    const keys = week.map((cell) => dayKey(cell));
+    const lastDay = keys.length - 1;
+    // One chip per project per day: the first of its own chips that day.
+    const projectChipsByDay = keys.map((k) => {
+      const lists = dayListsByKey.get(k)!;
+      const byProject = new Map<string, LaneEntry>();
+      const add = (e: TurnoverEntry) => {
+        if (!byProject.has(e.project.id)) byProject.set(e.project.id, e);
+      };
+      lists.dayNeedsSupervisorUngrouped.forEach(({ project, role }) => add({ kind: "needsSupervisor", project, role }));
+      lists.dayProjectSpanEndpointsUngrouped.forEach(({ project, role }) => add({ kind: "spanEndpoint", project, role }));
+      lists.dayProjectsUngrouped.forEach((project) => add({ kind: "confirmed", project }));
+      lists.dayPlannedUngrouped.forEach(({ assignment, project }) => add({ kind: "planned", assignment, project }));
+      // A day with only the project's change order still joins its bar; that
+      // piece keeps the dashed "not otherwise scheduled" look.
+      lists.orphanedJanitorialUnitsUngrouped.forEach((project) => add({ kind: "coOnly", project }));
+      return byProject;
+    });
+    const groupsByDay = keys.map((k) => new Map(dayListsByKey.get(k)!.buildingGroups.map((g) => [g.buildingId, g] as const)));
+
+    type Put = (row: number, d: number, seg: LaneSegment) => void;
+    type Block = { start: number; end: number; height: number; fill: (row: number, put: Put) => void };
+    // Stacks blocks into the lowest rows free across all of their days.
+    function pack(blocks: Block[]) {
+      const taken = new Set<string>();
+      const placed: { block: Block; row: number }[] = [];
+      let height = 0;
+      const sorted = [...blocks].sort((a, b) => a.start - b.start || b.end - b.start - (a.end - a.start));
+      for (const block of sorted) {
+        const fits = (r: number) => {
+          for (let h = 0; h < block.height; h++) {
+            for (let d = block.start; d <= block.end; d++) if (taken.has(`${r + h}:${d}`)) return false;
+          }
+          return true;
+        };
+        let row = 0;
+        while (!fits(row)) row++;
+        for (let h = 0; h < block.height; h++) {
+          for (let d = block.start; d <= block.end; d++) taken.add(`${row + h}:${d}`);
+        }
+        placed.push({ block, row });
+        height = Math.max(height, row + block.height);
+      }
+      return { placed, height };
+    }
+    // A chip line plus its change orders in the rows right below it. The
+    // rows are reserved on every day of the line, blank where there's no
+    // CO that day, so the next group never shifts up under this one.
+    function withChangeOrders(line: Block, projectId: string, indent: number): Block {
+      const cosByDay = keys.map((k, d) =>
+        d < line.start || d > line.end
+          ? new Map<string, ScheduleChangeOrder>()
+          : new Map((dayListsByKey.get(k)!.coByProjectId.get(projectId) ?? []).map((co) => [co.id, co] as const)),
+      );
+      const cos = pack(
+        runsOf(cosByDay, line.start, line.end, 1).map((coRun) => ({
+          start: coRun.start,
+          end: coRun.end,
+          height: 1,
+          fill: (row: number, put: Put) => {
+            for (let d = coRun.start; d <= coRun.end; d++) {
+              put(row, d, laneSegment({ kind: "changeOrder", co: cosByDay[d]!.get(coRun.id)! }, d, coRun, indent + 12));
+            }
+          },
+        })),
+      );
+      return {
+        start: line.start,
+        end: line.end,
+        height: 1 + cos.height,
+        fill: (row, put) => {
+          line.fill(row, put);
+          for (const c of cos.placed) c.block.fill(row + 1 + c.row, put);
+        },
+      };
+    }
+
+    const blocks: Block[] = [];
+    for (const run of runsOf(projectChipsByDay, 0, lastDay, 2)) {
+      const line: Block = {
+        start: run.start,
+        end: run.end,
+        height: 1,
+        fill: (row, put) => {
+          for (let d = run.start; d <= run.end; d++) put(row, d, laneSegment(projectChipsByDay[d]!.get(run.id)!, d, run, 0));
+        },
+      };
+      blocks.push(withChangeOrders(line, run.id, 0));
+    }
+    for (const run of runsOf(groupsByDay, 0, lastDay, 2)) {
+      const runKeys = keys.slice(run.start, run.end + 1);
+      const expanded = runKeys.some((k) => expandedBuildingGroups.has(`${k}:${run.id}`));
+      const unitsByDay = keys.map((_, d) => {
+        const byProject = new Map<string, TurnoverEntry>();
+        for (const e of groupsByDay[d]!.get(run.id)?.entries ?? []) {
+          if (!byProject.has(e.project.id)) byProject.set(e.project.id, e);
+        }
+        return byProject;
+      });
+      const unitCount = new Set(unitsByDay.flatMap((m) => [...m.keys()])).size;
+      // Unit lines under an open bar: a unit on back-to-back days as its own
+      // bar, a one-day unit as a plain chip, each with its COs right below.
+      const units = pack(
+        expanded
+          ? runsOf(unitsByDay, run.start, run.end, 1).map((unitRun) =>
+              withChangeOrders(
+                {
+                  start: unitRun.start,
+                  end: unitRun.end,
+                  height: 1,
+                  fill: (row, put) => {
+                    for (let d = unitRun.start; d <= unitRun.end; d++) {
+                      put(row, d, laneSegment(unitsByDay[d]!.get(unitRun.id)!, d, unitRun, 12));
+                    }
+                  },
+                },
+                unitRun.id,
+                12,
+              ),
+            )
+          : [],
+      );
+      blocks.push({
+        start: run.start,
+        end: run.end,
+        height: 1 + units.height,
+        fill: (row, put) => {
+          for (let d = run.start; d <= run.end; d++) {
+            const group = groupsByDay[d]!.get(run.id)!;
+            put(row, d, laneSegment({ kind: "buildingGroup", group, runKeys, unitCount, expanded }, d, run, 0));
+          }
+          for (const u of units.placed) u.block.fill(row + 1 + u.row, put);
+        },
+      });
+    }
+
+    const rowsByDay = keys.map(() => [] as (LaneSegment | null)[]);
+    const put: Put = (row, d, seg) => {
+      rowsByDay[d]![row] = seg;
+    };
+    for (const { block, row } of pack(blocks).placed) {
+      for (let d = block.start; d <= block.end; d++) {
+        const rows = rowsByDay[d]!;
+        while (rows.length < row + block.height) rows.push(null);
+      }
+      block.fill(row, put);
+    }
+    // Warnings stay per day: a later day with its own ⚠ shows it in its
+    // piece of the bar, so the title stops short of that day.
+    rowsByDay.forEach((rows, d) =>
+      rows.forEach((seg, row) => {
+        if (!seg || seg.labelSpanDays < 2) return;
+        for (let j = 1; j < seg.labelSpanDays; j++) {
+          const later = rowsByDay[d + j]![row];
+          if (later && laneEntryWarns(later.entry, keys[d + j]!)) {
+            seg.labelSpanDays = j;
+            break;
+          }
+        }
+      }),
+    );
+    keys.forEach((k, d) => laneSegmentsByDay.set(k, rowsByDay[d]!));
+  }
+
+
   return (
     <div className="space-y-6">
       <CollapsibleSection title="Calendar" headerExtra={calendarNav}>
@@ -2508,115 +3010,39 @@ export function SchedulePlanner({
                   isNearRightEdge ? "right-0" : "left-0"
                 }`;
 
-                let dayProjects = projectsByDay.get(k) ?? [];
-                let dayPlannedRaw = plannedByDay.get(k) ?? [];
-                let dayChangeOrders = changeOrdersByDay.get(k) ?? [];
-                let daySovRequests = sovRequestsByDay.get(k) ?? [];
-                const daySpanMarkers = projectSpanMarkersByDay.get(k) ?? [];
-                // Unassigned by definition, so a supervisor filter can never
-                // match one — hide rather than show under the wrong supervisor.
-                let dayNeedsSupervisor = selectedSupervisorId ? [] : daySpanMarkers.filter((e) => e.kind === "needsSupervisor");
-                let dayCoNeedsSupervisor = selectedSupervisorId ? [] : coNeedsSupervisorByDay.get(k) ?? [];
-                let dayProjectSpanEndpoints = daySpanMarkers.filter((e) => e.kind === "spanEndpoint");
+                const {
+                  dayCoNeedsSupervisor,
+                  coNeedsSupervisorIds,
+                  coByProjectId,
+                  looseChangeOrders,
+                  daySovRequests,
+                  buildingGroups: buildingGroupsAll,
+                  dayNeedsSupervisorUngrouped: dayNeedsSupervisorAll,
+                  dayProjectSpanEndpointsUngrouped: dayProjectSpanEndpointsAll,
+                  dayProjectsUngrouped: dayProjectsAll,
+                  dayPlannedUngrouped: dayPlannedAll,
+                  orphanedJanitorialUnitsUngrouped: orphanedJanitorialUnitsAll,
+                } = dayListsByKey.get(k)!;
+                // Chips drawn as part of a multi-day bar (top of the cell,
+                // fixed lane) come out of the regular lists below.
+                const laneSegments = laneSegmentsByDay.get(k) ?? [];
+                const laneKeys = new Set(laneSegments.flatMap((seg) => (seg ? [laneEntryKey(seg.entry)] : [])));
+                const dayNeedsSupervisorUngrouped = dayNeedsSupervisorAll.filter(
+                  ({ project, role }) => !laneKeys.has(laneEntryKey({ kind: "needsSupervisor", project, role })),
+                );
+                const dayProjectSpanEndpointsUngrouped = dayProjectSpanEndpointsAll.filter(
+                  ({ project, role }) => !laneKeys.has(laneEntryKey({ kind: "spanEndpoint", project, role })),
+                );
+                const dayProjectsUngrouped = dayProjectsAll.filter((project) => !laneKeys.has(laneEntryKey({ kind: "confirmed", project })));
+                const dayPlannedUngrouped = dayPlannedAll.filter(
+                  ({ assignment, project }) => !laneKeys.has(laneEntryKey({ kind: "planned", assignment, project })),
+                );
+                const orphanedJanitorialUnitsUngrouped = orphanedJanitorialUnitsAll.filter(
+                  (project) => !laneKeys.has(laneEntryKey({ kind: "coOnly", project })),
+                );
+                const buildingGroups = buildingGroupsAll.filter((g) => !laneKeys.has(`bldg:${g.buildingId}`));
 
-                if (selectedSupervisorId) {
-                  dayProjects = dayProjects.filter(
-                    (p) => projectSupervisorOnDay(p.id, k) === selectedSupervisorId,
-                  );
-                  dayPlannedRaw = dayPlannedRaw.filter((a) => a.supervisorUserId === selectedSupervisorId);
-                  dayChangeOrders = dayChangeOrders.filter(
-                    (co) => projectSupervisorOnDay(co.projectId, k) === selectedSupervisorId,
-                  );
-                  daySovRequests = daySovRequests.filter(
-                    (r) => projectSupervisorOnDay(r.projectId, k) === selectedSupervisorId,
-                  );
-                  dayProjectSpanEndpoints = dayProjectSpanEndpoints.filter(
-                    (x) => projectSupervisorOnDay(x.project.id, k) === selectedSupervisorId,
-                  );
-                }
-
-                dayProjects = dayProjects.filter((p) => selectedTypes.has(calendarSegmentGroup(p.segment)));
-                dayChangeOrders = selectedTypes.has("CO") ? dayChangeOrders : [];
-                daySovRequests = selectedTypes.has("SOV") ? daySovRequests : [];
-                dayPlannedRaw = dayPlannedRaw.filter((a) => {
-                  const project = projectById.get(a.projectId);
-                  return project ? selectedTypes.has(calendarSegmentGroup(project.segment)) : false;
-                });
-                dayNeedsSupervisor = dayNeedsSupervisor.filter((x) => selectedTypes.has(calendarSegmentGroup(x.project.segment)));
-                dayCoNeedsSupervisor = selectedTypes.has("CO") ? dayCoNeedsSupervisor : [];
-                // Full set (turnover + everything else) — renderCoChip uses
-                // this to still show the amber "needs a supervisor" warning
-                // on a turnover CO even though it's nested under its unit
-                // now, not floating separately (see the split below).
-                const coNeedsSupervisorIds = new Set(dayCoNeedsSupervisor.map((x) => x.co.id));
-                // Any CO with a parent project stays nested under that
-                // project's own chip (and, for turnover, that unit's building
-                // dropdown) even while it needs a supervisor — same as any
-                // other CO on that project — rather than popping out to float
-                // separately just because it isn't staffed yet. Only a CO
-                // whose project can't be resolved at all (see looseChangeOrders
-                // below) keeps the standalone amber chip, since there's
-                // nowhere to nest it under.
-                dayCoNeedsSupervisor = dayCoNeedsSupervisor.filter((x) => !projectById.has(x.co.projectId));
-                if (dayCoNeedsSupervisor.length > 0) {
-                  const flagged = new Set(dayCoNeedsSupervisor.map((x) => x.co.id));
-                  dayChangeOrders = dayChangeOrders.filter((co) => !flagged.has(co.id));
-                }
-                dayProjectSpanEndpoints = dayProjectSpanEndpoints.filter((x) => selectedTypes.has(calendarSegmentGroup(x.project.segment)));
-
-                const confirmedProjectIds = new Set(dayProjects.map((p) => p.id));
-                // Planned assignments are only shown when there's no confirmed
-                // labor log yet for that project/day — once real work is
-                // logged, the confirmed chip takes over.
-                const dayPlanned = dayPlannedRaw
-                  .filter((a) => !confirmedProjectIds.has(a.projectId))
-                  .map((a) => ({ assignment: a, project: projectById.get(a.projectId) }))
-                  .filter((x): x is { assignment: ScheduleDayAssignment; project: ScheduleProject } => !!x.project);
-
-                // A project's change order(s) hang directly below that
-                // project's own chip instead of sitting in a flat, unrelated
-                // CO list, so the two read as one unit — a Post-Construction
-                // project's CO with logged labor used to render as a totally
-                // separate "loose" chip on the same day with no visual link
-                // to that project's own confirmed/planned chip, same as a
-                // turnover unit's CO always has. Only a CO whose project
-                // can't be resolved at all falls back to the flat list, since
-                // there's nothing to nest it under.
-                const coByProjectId = new Map<string, ScheduleChangeOrder[]>();
-                const looseChangeOrders: ScheduleChangeOrder[] = [];
-                for (const co of dayChangeOrders) {
-                  const parent = projectById.get(co.projectId);
-                  if (parent) {
-                    const list = coByProjectId.get(co.projectId) ?? [];
-                    list.push(co);
-                    coByProjectId.set(co.projectId, list);
-                  } else {
-                    looseChangeOrders.push(co);
-                  }
-                }
-                // A project's own chip today comes from one of the four
-                // buckets below — but a CO's scheduled day doesn't have to
-                // land on a day its project is otherwise on the calendar
-                // (e.g. extra work scheduled well after the base job already
-                // finished). Without this, that CO would never get a home to
-                // nest under and would just silently not render at all
-                // (still named "...JanitorialUnits" below — predates this
-                // covering every segment, not just turnover). Any such
-                // orphaned project gets a minimal chip of its own instead,
-                // purely so the CO always renders "under" it and the two
-                // stay visually linked, same as everywhere else.
-                const projectIdsWithOwnChipToday = new Set<string>([
-                  ...dayNeedsSupervisor.map(({ project }) => project.id),
-                  ...dayProjectSpanEndpoints.map(({ project }) => project.id),
-                  ...dayProjects.map((p) => p.id),
-                  ...dayPlanned.map(({ project }) => project.id),
-                ]);
-                const orphanedJanitorialUnits = Array.from(coByProjectId.keys())
-                  .filter((id) => !projectIdsWithOwnChipToday.has(id))
-                  .map((id) => projectById.get(id))
-                  .filter((p): p is ScheduleProject => !!p);
-
-                function renderCoChip(co: ScheduleChangeOrder, nested: boolean) {
+                function renderCoChip(co: ScheduleChangeOrder, nested: boolean, seg?: LaneSegment) {
                   const summary = co.laborByDay[k];
                   const parentProject = projectById.get(co.projectId);
                   const role: "start" | "end" | null =
@@ -2658,10 +3084,24 @@ export function SchedulePlanner({
                   // instead of floating separately — see the
                   // coNeedsSupervisorIds split above.
                   const needsSupervisor = coNeedsSupervisorIds.has(co.id);
+                  const warningIcons = (
+                    <>
+                      {needsSupervisor ? <span aria-hidden>⚠</span> : null}
+                      {isOverdue ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : null}
+                    </>
+                  );
+                  const chipContent = (
+                    <>
+                      {warningIcons}
+                      <CompletionStatusIcon complete={coIsComplete(co.status)} />
+                      <span className="truncate">{co.title}</span>
+                    </>
+                  );
                   return (
                     <li
                       key={`co-${co.id}`}
                       className={`${inMonth ? "group relative" : "relative"} ${nested ? "ml-3 border-l-2 border-blue-200 pl-1.5" : ""}`}
+                      style={seg ? laneLiStyle(seg) : undefined}
                     >
                       <button
                         type="button"
@@ -2681,12 +3121,18 @@ export function SchedulePlanner({
                         } : undefined}
                         onClick={() => openCoPopover(k, co)}
                         className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${draggableHere ? "cursor-grab active:cursor-grabbing" : ""} ${isPlannedOnly ? (isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS) : ""} ${needsSupervisor ? "border-2 border-amber-600 bg-amber-400 font-bold text-amber-950 hover:bg-amber-300" : CHANGE_ORDER_CHIP_CLASS} ${completionChipClass(coIsComplete(co.status))}`}
+                        style={seg ? laneButtonStyle(seg) : undefined}
                       >
-                        {needsSupervisor ? <span aria-hidden>⚠</span> : null}
-                        {isOverdue ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : null}
-                        <CompletionStatusIcon complete={coIsComplete(co.status)} />
-                        <span className="truncate">{co.title}</span>
+                        {seg ? (seg.labelSpanDays ? null : warningIcons) : chipContent}
                       </button>
+                      {seg
+                        ? laneLabelOverlay(
+                            seg,
+                            chipContent,
+                            needsSupervisor ? "font-bold text-amber-950" : "text-blue-800",
+                            coIsComplete(co.status),
+                          )
+                        : null}
                       {renderCoPopover(k, co)}
                       {inMonth ? (
                         <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
@@ -2740,18 +3186,21 @@ export function SchedulePlanner({
                 // its nested CO(s) instead: transparent once every CO
                 // nested under it is complete, same "worst wins" rule
                 // buildingGroupSeverity's allComplete uses for a group.
-                function renderOrphanedUnitChip(p: ScheduleProject, compactLabel?: string) {
+                function renderOrphanedUnitChip(p: ScheduleProject, compactLabel?: string, seg?: LaneSegment) {
                   const nestedCos = coByProjectId.get(p.id) ?? [];
                   const allNestedCosComplete = nestedCos.length > 0 && nestedCos.every((co) => coIsComplete(co.status));
+                  const chipContent = <span className="truncate">{compactLabel ?? p.jobTitle}</span>;
                   return (
                     <Fragment key={`co-only-${p.id}`}>
-                    <li className={inMonth ? "group relative" : "relative"}>
+                    <li className={inMonth ? "group relative" : "relative"} style={seg ? laneLiStyle(seg) : undefined}>
                       <Link
                         href={`/erp/projects/${p.id}`}
                         className={`flex w-full items-center gap-1 truncate rounded border border-dashed px-1.5 py-0.5 text-[10px] font-medium transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${completionChipClass(allNestedCosComplete)}`}
+                        style={seg ? laneButtonStyle(seg) : undefined}
                       >
-                        <span className="truncate">{compactLabel ?? p.jobTitle}</span>
+                        {seg ? null : chipContent}
                       </Link>
+                      {seg ? laneLabelOverlay(seg, chipContent, groupTextClass(calendarSegmentGroup(p.segment)), allNestedCosComplete) : null}
                       {inMonth ? (
                         <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                           <div className="font-semibold">{p.jobTitle}</div>
@@ -2759,15 +3208,22 @@ export function SchedulePlanner({
                         </div>
                       ) : null}
                     </li>
-                    {nestedCos.map((co) => renderCoChip(co, true))}
+                    {seg ? null : nestedCos.map((co) => renderCoChip(co, true))}
                     </Fragment>
                   );
                 }
 
-                function renderNeedsSupervisorChip(p: ScheduleProject, role: "start" | "end", compactLabel?: string) {
+                function renderNeedsSupervisorChip(p: ScheduleProject, role: "start" | "end", compactLabel?: string, seg?: LaneSegment) {
+                  const chipContent = (
+                    <>
+                      <span aria-hidden>⚠</span>
+                      <CompletionStatusIcon complete={p.status === "COMPLETE"} />
+                      <span className="truncate" title={p.jobTitle}>{compactLabel ?? p.jobTitle}</span>
+                    </>
+                  );
                   return (
                     <Fragment key={`needs-${p.id}-${role}`}>
-                    <li className={inMonth ? "group relative" : "relative"}>
+                    <li className={inMonth ? "group relative" : "relative"} style={seg ? laneLiStyle(seg) : undefined}>
                       <button
                         type="button"
                         draggable
@@ -2782,11 +3238,11 @@ export function SchedulePlanner({
                         }}
                         onClick={() => openEventPopover(k, p, undefined, role)}
                         className={`w-full cursor-grab active:cursor-grabbing ${NEEDS_SUPERVISOR_CHIP_CLASS} ${completionChipClass(p.status === "COMPLETE")}`}
+                        style={seg ? laneButtonStyle(seg) : undefined}
                       >
-                        <span aria-hidden>⚠</span>
-                        <CompletionStatusIcon complete={p.status === "COMPLETE"} />
-                        <span className="truncate" title={p.jobTitle}>{compactLabel ?? p.jobTitle}</span>
+                        {seg ? (seg.labelSpanDays ? null : <>{<span aria-hidden>⚠</span>}</>) : chipContent}
                       </button>
+                      {seg ? laneLabelOverlay(seg, chipContent, "font-bold text-amber-950", p.status === "COMPLETE") : null}
                       {inMonth ? (
                         <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                           <div className="font-semibold">{p.jobTitle}</div>
@@ -2800,12 +3256,12 @@ export function SchedulePlanner({
                       ) : null}
                       {renderEventPopover(k, p)}
                     </li>
-                    {(coByProjectId.get(p.id) ?? []).map((co) => renderCoChip(co, true))}
+                    {seg ? null : (coByProjectId.get(p.id) ?? []).map((co) => renderCoChip(co, true))}
                     </Fragment>
                   );
                 }
 
-                function renderSpanEndpointChip(p: ScheduleProject, role: "start" | "end", compactLabel?: string) {
+                function renderSpanEndpointChip(p: ScheduleProject, role: "start" | "end", compactLabel?: string, seg?: LaneSegment) {
                   // Same escalation renderPlannedChip already applies to a
                   // real ProjectDayAssignment once its day passes unlogged —
                   // this chip covers the case where there wasn't even an
@@ -2815,9 +3271,16 @@ export function SchedulePlanner({
                   // computeProjectSpanMarkersByDay, didn't render at all past
                   // its own date).
                   const isOverdue = !isFutureOrToday;
+                  const chipContent = (
+                    <>
+                      {isOverdue ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : null}
+                      <CompletionStatusIcon complete={p.status === "COMPLETE"} />
+                      <span className="truncate">{compactLabel ?? p.jobTitle}</span>
+                    </>
+                  );
                   return (
                     <Fragment key={`span-${p.id}-${role}`}>
-                    <li className={inMonth ? "group relative" : "relative"}>
+                    <li className={inMonth ? "group relative" : "relative"} style={seg ? laneLiStyle(seg) : undefined}>
                       <button
                         type="button"
                         draggable
@@ -2832,11 +3295,11 @@ export function SchedulePlanner({
                         }}
                         onClick={() => openEventPopover(k, p, undefined, role)}
                         className={`flex w-full cursor-grab items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors active:cursor-grabbing ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS} ${completionChipClass(p.status === "COMPLETE")}`}
+                        style={seg ? laneButtonStyle(seg) : undefined}
                       >
-                        {isOverdue ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : null}
-                        <CompletionStatusIcon complete={p.status === "COMPLETE"} />
-                        <span className="truncate">{compactLabel ?? p.jobTitle}</span>
+                        {seg ? (seg.labelSpanDays ? null : <>{isOverdue ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : null}</>) : chipContent}
                       </button>
+                      {seg ? laneLabelOverlay(seg, chipContent, groupTextClass(calendarSegmentGroup(p.segment)), p.status === "COMPLETE") : null}
                       <button
                         type="button"
                         onClick={(e) => {
@@ -2845,7 +3308,7 @@ export function SchedulePlanner({
                         }}
                         disabled={clearingSpanDateKey === `${p.id}:${role}`}
                         title={role === "end" ? "Clear this project's end date" : "Clear this project's start date"}
-                        className="absolute right-0.5 top-1/2 -translate-y-1/2 z-20 px-0.5 text-[11px] font-bold leading-none opacity-60 hover:opacity-100 disabled:opacity-30"
+                        className={`absolute right-0.5 top-1/2 -translate-y-1/2 z-20 px-0.5 text-[11px] font-bold leading-none disabled:opacity-30 ${seg && inMonth ? "opacity-0 group-hover:opacity-100" : "opacity-60 hover:opacity-100"}`}
                       >
                         ×
                       </button>
@@ -2862,12 +3325,12 @@ export function SchedulePlanner({
                       ) : null}
                       {renderEventPopover(k, p)}
                     </li>
-                    {(coByProjectId.get(p.id) ?? []).map((co) => renderCoChip(co, true))}
+                    {seg ? null : (coByProjectId.get(p.id) ?? []).map((co) => renderCoChip(co, true))}
                     </Fragment>
                   );
                 }
 
-                function renderConfirmedChip(p: ScheduleProject, compactLabel?: string) {
+                function renderConfirmedChip(p: ScheduleProject, compactLabel?: string, seg?: LaneSegment) {
                   const summary = p.laborByDay[k];
                   const loggedWorkers = new Set(summary?.workers ?? []);
                   const plannedWorkers = (p.plannedWorkersByDay[k] ?? []).filter((w) => !loggedWorkers.has(w));
@@ -2879,17 +3342,24 @@ export function SchedulePlanner({
                       (p.laborEntriesByDay[k] ?? []).flatMap((e) => [...e.sovItemDescriptions, ...(e.taskDescription ? [e.taskDescription] : [])])
                     ),
                   ];
+                  const chipContent = (
+                    <>
+                      <CompletionStatusIcon complete={p.status === "COMPLETE"} />
+                      <span className="truncate">{compactLabel ?? p.jobTitle}</span>
+                    </>
+                  );
                   return (
                     <Fragment key={`p-${p.id}`}>
-                    <li className={inMonth ? "group relative" : "relative"}>
+                    <li className={inMonth ? "group relative" : "relative"} style={seg ? laneLiStyle(seg) : undefined}>
                       <button
                         type="button"
                         onClick={() => openLaborPopover(k, p)}
                         className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${completionChipClass(p.status === "COMPLETE")}`}
+                        style={seg ? laneButtonStyle(seg) : undefined}
                       >
-                        <CompletionStatusIcon complete={p.status === "COMPLETE"} />
-                        <span className="truncate">{compactLabel ?? p.jobTitle}</span>
+                        {seg ? null : chipContent}
                       </button>
+                      {seg ? laneLabelOverlay(seg, chipContent, groupTextClass(calendarSegmentGroup(p.segment)), p.status === "COMPLETE") : null}
                       {renderLaborPopover(k, p)}
                       {inMonth ? (
                         <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
@@ -2912,12 +3382,12 @@ export function SchedulePlanner({
                         </div>
                       ) : null}
                     </li>
-                    {(coByProjectId.get(p.id) ?? []).map((co) => renderCoChip(co, true))}
+                    {seg ? null : (coByProjectId.get(p.id) ?? []).map((co) => renderCoChip(co, true))}
                     </Fragment>
                   );
                 }
 
-                function renderPlannedChip(assignment: ScheduleDayAssignment, project: ScheduleProject, compactLabel?: string) {
+                function renderPlannedChip(assignment: ScheduleDayAssignment, project: ScheduleProject, compactLabel?: string, seg?: LaneSegment) {
                   const isOverdue = !isFutureOrToday;
                   const plannedWorkers = project.plannedWorkersByDay[k] ?? [];
                   const supervisor = assignment.supervisorUserId ? supervisors.find((s) => s.id === assignment.supervisorUserId) : null;
@@ -2938,9 +3408,20 @@ export function SchedulePlanner({
                   const assignmentScopeLabels = assignment.scopeItems.map((v) => turnoverScopeDisplayLabel(v, project.otherScopeDescription));
                   const noSupervisor =
                     !isOverdue && !supervisor && !pm && !contractor && !projectSoloCoverage.dayPairs.has(`${project.id}:${k}`);
+                  const chipContent = (
+                    <>
+                      {isOverdue ? (
+                        <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span>
+                      ) : noSupervisor ? (
+                        <span aria-hidden title="No supervisor assigned" className="shrink-0 text-amber-950">⚠</span>
+                      ) : null}
+                      <CompletionStatusIcon complete={project.status === "COMPLETE"} />
+                      <span className="truncate">{compactLabel ?? project.jobTitle}</span>
+                    </>
+                  );
                   return (
                   <Fragment key={`plan-${assignment.id}`}>
-                  <li className={inMonth ? "group relative" : "relative"}>
+                  <li className={inMonth ? "group relative" : "relative"} style={seg ? laneLiStyle(seg) : undefined}>
                     <button
                       type="button"
                       draggable
@@ -2959,15 +3440,11 @@ export function SchedulePlanner({
                           ? NO_SUPERVISOR_PLANNED_CHIP_CLASS
                           : `${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(project.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS}`
                       } ${completionChipClass(project.status === "COMPLETE")}`}
+                      style={seg ? laneButtonStyle(seg) : undefined}
                     >
-                      {isOverdue ? (
-                        <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span>
-                      ) : noSupervisor ? (
-                        <span aria-hidden title="No supervisor assigned" className="shrink-0 text-amber-950">⚠</span>
-                      ) : null}
-                      <CompletionStatusIcon complete={project.status === "COMPLETE"} />
-                      <span className="truncate">{compactLabel ?? project.jobTitle}</span>
+                      {seg ? (seg.labelSpanDays ? null : <>{isOverdue ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : noSupervisor ? <span aria-hidden title="No supervisor assigned" className="shrink-0 text-amber-950">⚠</span> : null}</>) : chipContent}
                     </button>
+                    {seg ? laneLabelOverlay(seg, chipContent, noSupervisor ? "text-amber-950" : groupTextClass(calendarSegmentGroup(project.segment)), project.status === "COMPLETE") : null}
                     {renderEventPopover(k, project)}
                     <button
                       type="button"
@@ -2977,7 +3454,7 @@ export function SchedulePlanner({
                       }}
                       disabled={deletingAssignmentId === assignment.id}
                       title="Remove this scheduled assignment"
-                      className="absolute right-0.5 top-1/2 -translate-y-1/2 z-20 px-0.5 text-[11px] font-bold leading-none opacity-60 hover:opacity-100 disabled:opacity-30"
+                      className={`absolute right-0.5 top-1/2 -translate-y-1/2 z-20 px-0.5 text-[11px] font-bold leading-none disabled:opacity-30 ${seg && inMonth ? "opacity-0 group-hover:opacity-100" : "opacity-60 hover:opacity-100"}`}
                     >
                       ×
                     </button>
@@ -3016,61 +3493,11 @@ export function SchedulePlanner({
                       </div>
                     ) : null}
                   </li>
-                  {(coByProjectId.get(project.id) ?? []).map((co) => renderCoChip(co, true))}
+                  {seg ? null : (coByProjectId.get(project.id) ?? []).map((co) => renderCoChip(co, true))}
                   </Fragment>
                   );
                 }
 
-                // Same-building turnover units sharing this day, pulled out
-                // of the four buckets above (not duplicated — each entry
-                // still remembers which bucket/extras it came from) so they
-                // can collapse into one expandable chip. Grouping happens
-                // purely at render time; it doesn't change what's "planned"
-                // vs. "confirmed" for any other logic on this day.
-                const turnoverEntries: TurnoverEntry[] = [
-                  ...dayNeedsSupervisor
-                    .filter(({ project }) => isGroupableTurnoverProject(project))
-                    .map(({ project, role }) => ({ kind: "needsSupervisor" as const, project, role })),
-                  ...dayProjectSpanEndpoints
-                    .filter(({ project }) => isGroupableTurnoverProject(project))
-                    .map(({ project, role }) => ({ kind: "spanEndpoint" as const, project, role })),
-                  ...dayProjects
-                    .filter(isGroupableTurnoverProject)
-                    .map((project) => ({ kind: "confirmed" as const, project })),
-                  ...dayPlanned
-                    .filter(({ project }) => isGroupableTurnoverProject(project))
-                    .map(({ assignment, project }) => ({ kind: "planned" as const, assignment, project })),
-                  // Counts toward its building's group even though it has no
-                  // chip of its own today — see orphanedJanitorialUnits.
-                  ...orphanedJanitorialUnits
-                    .filter(isGroupableTurnoverProject)
-                    .map((project) => ({ kind: "coOnly" as const, project })),
-                ];
-                const turnoverEntriesByBuilding = new Map<string, TurnoverEntry[]>();
-                for (const entry of turnoverEntries) {
-                  const buildingId = entry.project.buildingId!;
-                  const list = turnoverEntriesByBuilding.get(buildingId) ?? [];
-                  list.push(entry);
-                  turnoverEntriesByBuilding.set(buildingId, list);
-                }
-                // Collapsing one unit into "1 unit, click to expand" saves
-                // nothing over just showing it, so only buildings with 2+
-                // turnover entries this day actually group.
-                const buildingGroups = Array.from(turnoverEntriesByBuilding.entries())
-                  .filter(([, entries]) => entries.length >= 2)
-                  .map(([buildingId, entries]) => ({
-                    buildingId,
-                    buildingName: entries[0]!.project.buildingName ?? "Building",
-                    entries,
-                  }))
-                  .sort((a, b) => a.buildingName.localeCompare(b.buildingName));
-                const groupedBuildingIds = new Set(buildingGroups.map((g) => g.buildingId));
-                const isGroupedOut = (p: ScheduleProject) => !!p.buildingId && groupedBuildingIds.has(p.buildingId);
-                const dayNeedsSupervisorUngrouped = dayNeedsSupervisor.filter(({ project }) => !isGroupedOut(project));
-                const dayProjectSpanEndpointsUngrouped = dayProjectSpanEndpoints.filter(({ project }) => !isGroupedOut(project));
-                const dayProjectsUngrouped = dayProjects.filter((p) => !isGroupedOut(p));
-                const dayPlannedUngrouped = dayPlanned.filter(({ project }) => !isGroupedOut(project));
-                const orphanedJanitorialUnitsUngrouped = orphanedJanitorialUnits.filter((p) => !isGroupedOut(p));
 
                 // Worst-state-wins, using the exact same severity levels the
                 // ungrouped chips already use — a group is only as "healthy"
@@ -3093,11 +3520,12 @@ export function SchedulePlanner({
                   return "confirmed";
                 }
 
-                function renderBuildingGroupChip(group: { buildingId: string; buildingName: string; entries: TurnoverEntry[] }) {
+                function renderBuildingGroupChip(group: BuildingGroup, seg?: LaneSegment) {
                   const { buildingId, buildingName, entries } = group;
                   const severity = buildingGroupSeverity(entries);
                   const groupKey = `${k}:${buildingId}`;
-                  const isExpanded = expandedBuildingGroups.has(groupKey);
+                  const run = seg?.entry.kind === "buildingGroup" ? seg.entry : null;
+                  const isExpanded = run ? run.expanded : expandedBuildingGroups.has(groupKey);
                   // Same "worst/least-done unit wins" rule severity already
                   // follows, just inverted: the heading only reads complete
                   // once every single unit in the group does.
@@ -3110,12 +3538,33 @@ export function SchedulePlanner({
                       : severity === "planned"
                       ? `${CALENDAR_GROUP_CHIP_CLASS.JANITORIAL_TURNOVER_REQUESTS} ${PLANNED_CHIP_EXTRA_CLASS}`
                       : CALENDAR_GROUP_CHIP_CLASS.JANITORIAL_TURNOVER_REQUESTS;
+                  const chipContent = (
+                    <>
+                      {severity === "needsSupervisor" ? <span aria-hidden>⚠</span> : null}
+                      {severity === "overdue" ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : null}
+                      <CompletionStatusIcon complete={allComplete} />
+                      <span className="truncate">{buildingName}</span>
+                      <span className="pointer-events-none absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5 whitespace-nowrap text-[9px] font-normal opacity-80">
+                        {run ? run.unitCount : entries.length}
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className={`h-3 w-3 shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2.5}
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </span>
+                    </>
+                  );
                   return (
                     <Fragment key={`bldg-${buildingId}`}>
-                    <li className={inMonth ? "group relative" : "relative"}>
+                    <li className={inMonth ? "group relative" : "relative"} style={seg ? laneLiStyle(seg) : undefined}>
                       <button
                         type="button"
-                        onClick={() => toggleBuildingGroup(groupKey)}
+                        onClick={() => (run ? setBuildingGroupRunExpanded(run.runKeys, buildingId, !run.expanded) : toggleBuildingGroup(groupKey))}
                         title={buildingName}
                         // The unit count + chevron used to sit in this same
                         // flex row as the name (ml-auto pushing them right),
@@ -3125,25 +3574,11 @@ export function SchedulePlanner({
                         // positioned badge below instead, reserving a fixed
                         // pr-8 gutter so the name gets the rest of the width.
                         className={`relative flex w-full items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-8 text-[10px] font-medium shadow-sm transition-colors ${severityClass} ${completionChipClass(allComplete)}`}
+                        style={seg ? laneButtonStyle(seg) : undefined}
                       >
-                        {severity === "needsSupervisor" ? <span aria-hidden>⚠</span> : null}
-                        {severity === "overdue" ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : null}
-                        <CompletionStatusIcon complete={allComplete} />
-                        <span className="truncate">{buildingName}</span>
-                        <span className="pointer-events-none absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5 whitespace-nowrap text-[9px] font-normal opacity-80">
-                          {entries.length}
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className={`h-3 w-3 shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={2.5}
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                          </svg>
-                        </span>
+                        {seg ? (seg.labelSpanDays ? null : <>{severity === "needsSupervisor" ? <span aria-hidden>⚠</span> : severity === "overdue" ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : null}</>) : chipContent}
                       </button>
+                      {seg ? laneLabelOverlay(seg, chipContent, severity === "needsSupervisor" ? "font-bold text-amber-950" : groupTextClass("JANITORIAL_TURNOVER_REQUESTS"), allComplete) : null}
                       {inMonth ? (
                         <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                           <div className="font-semibold">{buildingName}</div>
@@ -3164,7 +3599,7 @@ export function SchedulePlanner({
                         </div>
                       ) : null}
                     </li>
-                    {isExpanded ? (
+                    {!seg && isExpanded ? (
                       <ul className="ml-3 space-y-1 border-l-2 border-gray-200 pl-1.5">
                         {entries.map((e) => {
                           const compactLabel = unitLabelForGroupedChip(e.project);
@@ -3206,7 +3641,9 @@ export function SchedulePlanner({
                     className={`relative min-h-[92px] bg-white p-1.5 text-left ${isToday ? "ring-1 ring-inset ring-pink-400 bg-pink-50/40" : ""} ${dragOverDayKey === k ? "ring-2 ring-inset ring-pink-500 bg-pink-50" : ""}`}
                   >
                   <div className={inMonth ? "" : "opacity-40"}>
-                    <div className="flex items-center justify-between">
+                    {/* Fixed height: past days have no + button, and a shorter
+                        header there would knock multi-day bars out of line. */}
+                    <div className="flex h-6 items-center justify-between">
                       <div
                         className={`flex h-5 w-5 items-center justify-center rounded-full text-xs font-medium ${
                           isToday ? "bg-pink-600 text-white" : "text-gray-500"
@@ -3228,6 +3665,30 @@ export function SchedulePlanner({
                         </button>
                       ) : null}
                     </div>
+                    {laneSegments.length > 0 ? (
+                      <ul className="mt-1 space-y-1">
+                        {laneSegments.map((seg, lane) => {
+                          if (!seg) return <li key={`lane-gap-${lane}`} aria-hidden style={{ height: LANE_HEIGHT_PX }} />;
+                          const e = seg.entry;
+                          if (e.kind === "buildingGroup") return renderBuildingGroupChip(e.group, seg);
+                          if (e.kind === "changeOrder") return renderCoChip(e.co, false, seg);
+                          // Unit rows under an open building bar use the short "Unit 204" label.
+                          const label = seg.indent ? unitLabelForGroupedChip(e.project) : undefined;
+                          switch (e.kind) {
+                            case "needsSupervisor":
+                              return renderNeedsSupervisorChip(e.project, e.role, label, seg);
+                            case "spanEndpoint":
+                              return renderSpanEndpointChip(e.project, e.role, label, seg);
+                            case "confirmed":
+                              return renderConfirmedChip(e.project, label, seg);
+                            case "planned":
+                              return renderPlannedChip(e.assignment, e.project, label, seg);
+                            case "coOnly":
+                              return renderOrphanedUnitChip(e.project, label, seg);
+                          }
+                        })}
+                      </ul>
+                    ) : null}
                     {dayNeedsSupervisorUngrouped.length > 0 ? (
                       <ul className="mt-1 space-y-1">
                         {dayNeedsSupervisorUngrouped.map(({ project: p, role }) => renderNeedsSupervisorChip(p, role))}

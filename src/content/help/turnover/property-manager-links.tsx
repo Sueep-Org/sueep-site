@@ -26,8 +26,8 @@ export function PropertyManagerLinks() {
         <LI>Apply or decline the cancels and new dates they ask for.</LI>
       </UL>
       <Callout type="info">
-        Admins, Project Managers, the Business Manager, and Sales can use the <strong>Property Managers</strong> page (left menu, under
-        Projects). It shows prices, so other roles can&apos;t see it.
+        Admins, Project Managers, the Business Manager, and Sales can use the <strong>Property Managers</strong> page (left menu, Projects, then
+        Clients). It shows prices, so other roles can&apos;t see it.
       </Callout>
 
       <H2>Set up a property manager</H2>
@@ -320,6 +320,13 @@ export function PropertyManagerLinks() {
       <P>
         For buildings and pricing packages, see <A href="/erp/help/buildings/buildings-overview">Buildings Overview</A>. For
         turnovers made by staff, see <A href="/erp/help/turnover/creating-a-request">Creating a Turnover Request</A>.
+      </P>
+
+      <H2>Their company</H2>
+      <P>
+        <strong>Company</strong> on a property manager is a list of the companies on the <strong>Companies</strong> page. Pick
+        theirs to link them, and they show on that company&apos;s page under Linked records. If their company isn&apos;t there
+        yet, pick <strong>Other (type a name)</strong> and type it. Property managers never see billing info on their page.
       </P>
     </>
   );

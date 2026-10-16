@@ -81,6 +81,19 @@ export function BuildingsOverview() {
           <A href="/erp/help/janitorial/janitorial-contracts">Janitorial Contracts</A>.
         </Step>
       </Steps>
+
+      <H2>Client &amp; billing</H2>
+      <P>
+        On the building&apos;s <strong>Details</strong> tab, <strong>Client &amp; billing</strong> sets which company manages
+        the building and, optionally, who owns it. Every job at the building bills the managing company unless the project
+        picks its own client. When management changes, pick the new company and the date it took over. The old one stays
+        under <strong>Past management</strong>.
+      </P>
+      <P>
+        <strong>Invoices go to</strong> shows where this building&apos;s invoices are sent and why. Admins and the Business
+        Manager can add a billing override for the building, like J Centra&apos;s own billing email. See{" "}
+        <A href="/erp/help/companies/companies-overview">Companies and Billing Info</A>.
+      </P>
     </>
   );
 }

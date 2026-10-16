@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import type { ErpRole } from "../erpSession";
-import { canSeePayroll } from "../erpAuth";
+import { canApproveInvoices, canSeePayroll } from "../erpAuth";
 import type { JobTabRow } from "@/app/erp/(shell)/_dashboard/JobTabs";
 import type { CardSection, DashboardCardData } from "@/app/erp/(shell)/_dashboard/DashboardCard";
 import { normalizeBillingStatus } from "./billingStatus";
@@ -20,7 +20,7 @@ import { lienDecisionCloses, lienPillLabel, type LienStage } from "./lienDeadlin
 
 /** Billing data is trusted from here on (same start as the Finance tab), so
  * older unbilled or unlinked rows don't flood the lists. */
-const BILLING_DATA_START = "2026-08-01";
+export const BILLING_DATA_START = "2026-08-01";
 /** Billed this long ago with no invoice linked is worth a look. */
 const UNLINKED_GRACE_DAYS = 7;
 /** Liens: show anything that needs a step within this many days. */
@@ -276,6 +276,53 @@ function payrollSection(periods: PayrollPeriodState[]): CardSection {
   };
 }
 
+// ── Ready to send (auto-drafted invoices) ────────────────────────────────
+
+type WaitingDraft = { id: string; title: string; note: string; cents: number };
+
+/** Waiting on Ready to send: approved invoices still to upload or send, then drafts (janitorial months and picked finished work). */
+const loadWaitingDrafts = cache(async (): Promise<WaitingDraft[]> => {
+  const [months, items] = await Promise.all([
+    prisma.hubSpotContractInvoice.findMany({
+      where: { draftedByErp: true, status: "draft" },
+      select: { hubspotInvoiceId: true, amountCents: true, period: { select: { periodStart: true, recurringContract: { select: { building: { select: { name: true } } } } } } },
+      orderBy: { invoiceDate: "asc" },
+    }),
+    prisma.itemInvoiceDraft.findMany({ where: { status: "DRAFT" }, select: { hubspotInvoiceId: true, title: true, totalCents: true }, orderBy: { createdAt: "asc" } }),
+  ]);
+  const deliveries = await prisma.invoiceDelivery.findMany({
+    where: { status: { in: ["NEEDS_UPLOAD", "NEEDS_SENDING"] } },
+    select: { id: true, title: true, status: true, invoiceNumber: true, totalCents: true },
+    orderBy: { createdAt: "asc" },
+  });
+  return [
+    ...deliveries.map((d) => ({
+      id: `delivery-${d.id}`,
+      title: d.title,
+      note: `${d.invoiceNumber ? `${d.invoiceNumber}, ` : ""}${d.status === "NEEDS_UPLOAD" ? "needs upload" : "needs sending"}`,
+      cents: d.totalCents,
+    })),
+    ...months.map((d) => ({
+      id: d.hubspotInvoiceId,
+      title: d.period.recurringContract.building.name,
+      note: d.period.periodStart.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" }),
+      cents: d.amountCents,
+    })),
+    ...items.map((d) => ({ id: d.hubspotInvoiceId, title: d.title, note: "Finished work", cents: d.totalCents })),
+  ];
+});
+
+function readyToSendSection(drafts: WaitingDraft[]): CardSection {
+  return {
+    key: "ready-to-send",
+    label: "Ready to send",
+    alertCount: drafts.length,
+    rows: drafts.map((d) => ({ id: d.id, href: "/erp/ready-to-send", title: d.title, note: d.note, value: centsToDollars(d.cents) })),
+    empty: "Nothing to approve or send.",
+    href: "/erp/ready-to-send",
+  };
+}
+
 // ── Liens ──────────────────────────────────────────────────────────────────
 
 const loadLienRows = cache(async (todayKey: string): Promise<{ rows: JobTabRow[]; urgent: number }> => {
@@ -307,13 +354,15 @@ const loadLienRows = cache(async (todayKey: string): Promise<{ rows: JobTabRow[]
 export async function loadNeedsAction(role: ErpRole): Promise<DashboardCardData> {
   const todayKey = todayEasternKey();
   const showPayroll = canSeePayroll(role);
-  const [overdue, ready, periods, liens] = await Promise.all([
+  const [overdue, ready, periods, liens, drafts] = await Promise.all([
     loadOverdueInvoices(todayKey),
     loadReadyToBill(todayKey),
     showPayroll ? loadPayrollPeriods(todayKey) : Promise.resolve(null),
     loadLienRows(todayKey),
+    canApproveInvoices(role) ? loadWaitingDrafts() : Promise.resolve(null),
   ]);
   const sections: CardSection[] = [
+    ...(drafts ? [readyToSendSection(drafts)] : []),
     overdueSection(overdue),
     readyToBillSection(ready, todayKey),
     ...(periods ? [payrollSection(periods)] : []),
@@ -322,15 +371,16 @@ export async function loadNeedsAction(role: ErpRole): Promise<DashboardCardData>
   return { alertCount: sections.reduce((s, sec) => s + (sec.alertCount ?? 0), 0), sections };
 }
 
-/** Red number on the Money tab: overdue invoices + last pay period not locked + liens needing a step now. */
+/** Red number on the Money tab: overdue invoices + last pay period not locked + liens needing a step now + drafts waiting (approvers). */
 export async function countNeedsActionAlerts(role: ErpRole): Promise<number> {
   const todayKey = todayEasternKey();
-  const [overdue, periods, liens] = await Promise.all([
+  const [overdue, periods, liens, drafts] = await Promise.all([
     loadOverdueInvoices(todayKey),
     canSeePayroll(role) ? loadPayrollPeriods(todayKey) : Promise.resolve([]),
     loadLienRows(todayKey),
+    canApproveInvoices(role) ? loadWaitingDrafts() : Promise.resolve([]),
   ]);
-  return overdue.length + periods.filter((p) => p.ended && !p.locked).length + liens.urgent;
+  return overdue.length + periods.filter((p) => p.ended && !p.locked).length + liens.urgent + drafts.length;
 }
 
 // ── Checks card: losing money ──────────────────────────────────────────────

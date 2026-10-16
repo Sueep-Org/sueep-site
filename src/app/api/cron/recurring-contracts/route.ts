@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generatePeriodForContract } from "@/lib/erp/recurringContracts";
+import { draftDueJanitorialInvoices } from "@/lib/erp/janitorialInvoiceDrafts";
 
 export const dynamic = "force-dynamic";
 
@@ -34,5 +35,14 @@ export async function GET(req: Request) {
     results.push({ contractId: contract.id, buildingId: contract.buildingId, ...result });
   }
 
-  return NextResponse.json({ checked: contracts.length, results });
+  // HubSpot drafts for contracts with auto-draft on (Ready to send page).
+  // Kept separate so a HubSpot problem never stops the months above.
+  let drafts: unknown;
+  try {
+    drafts = await draftDueJanitorialInvoices();
+  } catch (e) {
+    drafts = { error: e instanceof Error ? e.message : String(e) };
+  }
+
+  return NextResponse.json({ checked: contracts.length, results, drafts });
 }

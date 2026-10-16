@@ -101,6 +101,13 @@ export const DASHBOARD_CARDS: readonly DashboardCardDef[] = [
     roles: ["SALES"],
     info: "Your deals, janitorial contract months and bid bonuses, the same numbers as the Commission tab on Payroll. Counted by the date each one became commissionable.",
   },
+  {
+    id: "stale-quotes",
+    title: "Stale quotes",
+    tab: "sales",
+    roles: ["SALES", "BUSINESS_MANAGER", "ADMIN"],
+    info: "Post-construction bids in Quote Sent, Negotiation or Competitive Quote with no activity in HubSpot for 30 days, biggest first. Click one to open the deal in HubSpot. Full list on Win/loss.",
+  },
   // Jobs (Project Managers, Business Manager, Admin)
   {
     id: "job-status-board",
@@ -130,7 +137,7 @@ export const DASHBOARD_CARDS: readonly DashboardCardDef[] = [
     title: "Needs action",
     tab: "money",
     roles: ["PROJECT_MANAGER", "BUSINESS_MANAGER", "ADMIN"],
-    info: "Overdue: open HubSpot invoices past their due date, counted once per invoice. Ready to bill: finished work still Not billed since Aug 1. Payroll: whether the last pay period is locked. Liens: steps due in the next 30 days.",
+    info: "Ready to send (Admin and Business Manager): approved invoices still to upload or send, and drafts waiting for approval. Overdue: open HubSpot invoices past their due date, counted once per invoice. Ready to bill: finished work still Not billed since Aug 1. Payroll: whether the last pay period is locked. Liens: steps due in the next 30 days.",
   },
   {
     id: "checks",

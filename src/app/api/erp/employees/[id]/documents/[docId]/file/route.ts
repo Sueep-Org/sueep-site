@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { contentDisposition } from "@/lib/contentDisposition";
 
 type Ctx = { params: Promise<{ id: string; docId: string }> };
 
@@ -19,7 +20,7 @@ export async function GET(_req: Request, ctx: Ctx) {
   return new NextResponse(doc.fileData as unknown as BodyInit, {
     headers: {
       "Content-Type": doc.fileMimeType ?? "application/octet-stream",
-      "Content-Disposition": `inline; filename="${filename}"`,
+      "Content-Disposition": contentDisposition("inline", filename),
       "Cache-Control": "private, max-age=3600",
     },
   });

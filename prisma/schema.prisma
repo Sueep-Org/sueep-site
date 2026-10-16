@@ -444,6 +444,15 @@ model RecurringContract {
   /// synced from a HubSpot deal with an owner.
   commissionEmployeeId String?
   commissionEmployee   Employee?                  @relation(fields: [commissionEmployeeId], references: [id], onDelete: SetNull)
+
+  /// Draft this contract's monthly invoice in HubSpot automatically (Ready
+  /// to send page). Off until someone turns it on, so hand-made invoices
+  /// aren't doubled while the team switches over.
+  autoDraftInvoices Boolean @default(false)
+  /// Name on the invoice line, e.g. "THE SMITH" for "Recurring cleaning
+  /// THE SMITH". Blank uses the building name.
+  invoiceLabel      String?
+
   periods              RecurringContractPeriod[]
   shiftPatterns        JanitorialShiftPattern[]
   shiftExceptions      JanitorialShiftException[]
@@ -686,6 +695,14 @@ model RecurringContractPeriod {
   projects        Project[]
   charges         RecurringContractCharge[]
   hubspotInvoices HubSpotContractInvoice[]
+
+  /// Someone discarded this month's auto draft, so it isn't drafted again
+  /// unless they ask (lib/erp/janitorialInvoiceDrafts.ts).
+  draftDiscardedAt      DateTime?
+  draftDiscardedByEmail String?
+  /// Last failure making or updating this month's draft, cleared on success
+  draftError            String?
+  draftErrorAt          DateTime?
 
   @@unique([recurringContractId, periodStart])
 }
@@ -2720,6 +2737,12 @@ model HubSpotContractInvoice {
   /// put it.
   paidAppliedAt     DateTime?
 
+  /// The ERP made this invoice as a draft (Ready to send), not a person in HubSpot
+  draftedByErp    Boolean   @default(false)
+  /// Who opened it from Ready to send, which sends it to QuickBooks
+  approvedAt      DateTime?
+  approvedByEmail String?
+
   @@unique([hubspotInvoiceId, periodId])
   @@index([periodId])
 }
@@ -3648,4 +3671,77 @@ model ClientCompanyLogin {
 
   @@id([companyId, loginId])
   @@index([loginId])
+}
+
+/// A HubSpot draft invoice the ERP made from finished, unbilled items (unit
+/// turns, SOV lines, change orders) picked on Ready to send. One per building
+/// (turnovers) or job (post-construction). The items are linked through the
+/// usual link tables (HubSpotUnitInvoice, HubSpotSovInvoice) with this
+/// hubspotInvoiceId. Janitorial months use HubSpotContractInvoice.draftedByErp.
+model ItemInvoiceDraft {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  hubspotInvoiceId String  @unique
+  dealId           String
+  /// BUILDING or PROJECT, and that record's id
+  groupType        String
+  groupId          String
+  /// Building name or job title, for the list
+  title            String
+  totalCents       Int
+  /// DRAFT | APPROVED | DISCARDED
+  status           String  @default("DRAFT")
+  createdByEmail   String?
+  approvedAt       DateTime?
+  approvedByEmail  String?
+  discardedAt      DateTime?
+  discardedByEmail String?
+  invoiceNumber    String?
+  /// Problem to show on the draft, e.g. no billing contact on the deal
+  note             String?
+
+  @@index([status])
+}
+
+/// How an approved invoice reached the client (Phase 4). Email clients are
+/// emailed on Approve; portal clients (Procore, Coupa, vendor portals) and
+/// anything that couldn't be emailed land on Ready to send's Needs sending
+/// list until someone marks them done.
+model InvoiceDelivery {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  hubspotInvoiceId String   @unique
+  invoiceNumber    String?
+  /// Building name or job title
+  title            String
+  totalCents       Int
+  /// BUILDING or PROJECT whose billing settings decide where it goes, for Email again
+  destType         String
+  destId           String
+  /// ERP page for the invoice's building or project
+  link             String?
+  clientCompanyId  String?
+  clientName       String?
+  /// Billing method at the time (EMAIL, PROCORE...), null when not set
+  method           String?
+  portalUrl        String?
+  viewUrl          String?
+  pdfUrl           String?
+  /// EMAILED | NEEDS_UPLOAD | NEEDS_SENDING | DONE
+  status           String
+  /// Why it's on Needs sending, e.g. "No Send to address"
+  reason           String?
+  sentTo           String[] @default([])
+  cc               String[] @default([])
+  emailedAt        DateTime?
+  approvedByEmail  String?
+  /// Who marked it uploaded or sent by hand, and when
+  doneAt           DateTime?
+  doneByEmail      String?
+
+  @@index([status])
 }

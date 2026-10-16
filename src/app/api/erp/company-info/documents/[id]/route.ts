@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canManageCompanyInfo } from "@/lib/erpAuth";
+import { contentDisposition } from "@/lib/contentDisposition";
 
 export const runtime = "nodejs";
 
@@ -22,7 +23,7 @@ export async function GET(_req: Request, ctx: Ctx) {
   return new NextResponse(doc.data as unknown as BodyInit, {
     headers: {
       "Content-Type": doc.mimeType ?? "application/octet-stream",
-      "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${filename}"`,
+      "Content-Disposition": contentDisposition(inline ? "inline" : "attachment", filename),
       "Cache-Control": "private, no-store",
       "X-Content-Type-Options": "nosniff",
     },

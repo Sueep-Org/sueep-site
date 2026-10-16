@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth } from "@/lib/erpAuth";
 import { projectEmailsWhere } from "@/lib/erp/projectEmails";
+import { contentDisposition } from "@/lib/contentDisposition";
 
 type Ctx = { params: Promise<{ id: string; logId: string; attachmentId: string }> };
 
@@ -23,7 +24,7 @@ export async function GET(_req: Request, ctx: Ctx) {
   return new NextResponse(file.data as unknown as BodyInit, {
     headers: {
       "Content-Type": "application/octet-stream",
-      "Content-Disposition": `attachment; filename="${file.filename.replace(/"/g, "")}"`,
+      "Content-Disposition": contentDisposition("attachment", file.filename),
       "X-Content-Type-Options": "nosniff",
       "Cache-Control": "private, max-age=3600",
     },

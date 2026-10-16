@@ -276,10 +276,15 @@ export function DayAssignmentModal({
   // Whether there's anything to show under "Task details" at all for the
   // current project — same three cases (SOV items, turnover scope, tagged
   // change orders) the section's contents branch on below.
+  // Any project with SOV lines gets the SOV picker, not just
+  // post-construction (e.g. a turnover-request project like stairwell
+  // painting that got SOV lines added by hand).
+  const showSovPicker =
+    selectedGroup === "POST_CONSTRUCTION" || (selectedProject?.sovItems.length ?? 0) > 0;
   const showTaskDetails =
     targetMode === "project" &&
     !!selectedProject &&
-    (selectedGroup === "POST_CONSTRUCTION" ||
+    (showSovPicker ||
       (selectedGroup === "JANITORIAL_TURNOVER_REQUESTS" && availableScopeOptions.length > 0) ||
       selectedProject.changeOrders.length > 0);
 
@@ -287,7 +292,7 @@ export function DayAssignmentModal({
     ? ""
     : (() => {
         const parts: string[] = [];
-        if (selectedGroup === "POST_CONSTRUCTION") {
+        if (showSovPicker) {
           if (sovPicks.length > 0) {
             const priced =
               pickedSovPrices.length > 0
@@ -834,7 +839,7 @@ export function DayAssignmentModal({
               open={taskDetailsOpen}
               onToggle={() => setTaskDetailsOpen((v) => !v)}
             >
-              {selectedGroup === "POST_CONSTRUCTION" ? (
+              {showSovPicker ? (
                 <div>
                   <label className="block text-xs font-medium text-gray-600">SOV item(s) being worked on</label>
                   <div className="mt-1">

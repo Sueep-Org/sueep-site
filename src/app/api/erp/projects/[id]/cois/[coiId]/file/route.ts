@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canManageInsurance } from "@/lib/erpAuth";
+import { contentDisposition } from "@/lib/contentDisposition";
 
 type Ctx = { params: Promise<{ id: string; coiId: string }> };
 
@@ -19,7 +20,7 @@ export async function GET(_req: Request, ctx: Ctx) {
   return new NextResponse(coi.data as unknown as BodyInit, {
     headers: {
       "Content-Type": coi.mimeType,
-      "Content-Disposition": `inline; filename="${coi.filename.replace(/"/g, "")}"`,
+      "Content-Disposition": contentDisposition("inline", coi.filename),
       "Cache-Control": "private, max-age=3600",
     },
   });

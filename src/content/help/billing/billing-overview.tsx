@@ -123,6 +123,15 @@ export function BillingOverview() {
         <A href="/erp/help/projects/projects-overview">Projects Overview</A>. Either place updates
         the same underlying status.
       </P>
+
+      <H2>Auto-drafted invoices</H2>
+      <P>
+        For janitorial contracts with Auto-draft on, the ERP drafts the monthly invoice in HubSpot 3 days before the billing
+        day. Admins and the Business Manager review and approve them on{" "}
+        <A href="/erp/help/billing/ready-to-send">Ready to send</A>. Approving marks the month <strong>Billed</strong> here.
+        Finished unit turns, SOV lines and change orders can be drafted there too, under <strong>Ready to bill</strong>, for
+        clients that don&apos;t have a billing day.
+      </P>
     </>
   );
 }

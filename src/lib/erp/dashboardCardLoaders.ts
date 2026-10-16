@@ -5,6 +5,7 @@ import { loadWins } from "./dashboardWins";
 import { countRenewalAlerts, loadContractRenewals, loadMyCommission } from "./dashboardSales";
 import { countNeedsActionAlerts, loadChecks, loadNeedsAction } from "./dashboardMoney";
 import { loadCashForecast } from "./dashboardCashForecast";
+import { loadStaleQuotes } from "./dashboardStaleQuotes";
 import { countRedJobs, loadJobStatusBoard } from "./dashboardJobs";
 import { countCrewConflicts, loadCrewConflicts, loadWaitingOnOthers } from "./dashboardJobsWaiting";
 
@@ -30,6 +31,7 @@ export const CARD_LOADERS: Record<string, CardLoader> = {
   "win-rate": { load: loadWins },
   "contract-renewals": { load: loadContractRenewals, alertCount: countRenewalAlerts },
   "my-commission": { load: (ctx) => loadMyCommission(ctx.email) },
+  "stale-quotes": { load: loadStaleQuotes },
   "needs-action": { load: (ctx) => loadNeedsAction(ctx.role), alertCount: (ctx) => countNeedsActionAlerts(ctx.role) },
   "cash-forecast": { load: async (ctx) => ({ sections: [], forecast: await loadCashForecast(ctx.role) }) },
   checks: { load: loadChecks },
