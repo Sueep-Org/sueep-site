@@ -50,6 +50,24 @@ export const DASHBOARD_CARDS: readonly DashboardCardDef[] = [
     wide: true,
   },
   {
+    id: "bids-due",
+    title: "Bids due",
+    tab: "queue",
+    roles: ["ESTIMATION"],
+    info: "Post-construction bid due dates and job walks in the next 30 days, soonest first, from Bid Date and Job Walk Date on HubSpot deals. Lost bids are left off. Red when it's within 3 days. Click one to open the deal in HubSpot. All of them are on the Management calendar's Bids category.",
+  },
+  {
+    id: "quote-price-check",
+    title: "Price check",
+    tab: "queue",
+    roles: ["ESTIMATION"],
+    info: [
+      "Open post-construction quotes touched in the last 30 days that have an amount and Area SQFT in HubSpot, compared by $ per sq ft with the usual range for their type of work (cleaning, painting, or both).",
+      "Usual range is the middle half of the jobs we won: 1 in 4 won cheaper, 1 in 4 won higher. When a type has fewer than 5 won jobs (painting today), it uses all our bids of that type instead.",
+      "Check the numbers: 3 times the usual price or more, or a third or less. That's usually a wrong Area SQFT or amount. Click a quote to open it in HubSpot.",
+    ].join("\n\n"),
+  },
+  {
     id: "estimate-accuracy",
     title: "Estimate accuracy",
     tab: "accuracy",
@@ -103,10 +121,10 @@ export const DASHBOARD_CARDS: readonly DashboardCardDef[] = [
   },
   {
     id: "stale-quotes",
-    title: "Stale quotes",
+    title: "Bids",
     tab: "sales",
     roles: ["SALES", "BUSINESS_MANAGER", "ADMIN"],
-    info: "Post-construction bids in Quote Sent, Negotiation or Competitive Quote with no activity in HubSpot for 30 days, biggest first. Click one to open the deal in HubSpot. Full list on Win/loss.",
+    info: "Due soon: post-construction bid due dates and job walks in the next 30 days, from Bid Date and Job Walk Date on HubSpot deals (lost bids left off). Red when it's within 3 days. Stale quotes: bids in Quote Sent, Negotiation or Competitive Quote with no activity in HubSpot for 30 days, biggest first. Click one to open the deal in HubSpot.",
   },
   // Jobs (Project Managers, Business Manager, Admin)
   {

@@ -67,6 +67,8 @@ export const BUILTIN_KEYS = [
   "BIRTHDAYS",
   "COMPANY_INFO",
   "QUALITY_CHECKS",
+  "BIDS",
+  "BILLING_CUTOFFS",
 ] as const;
 export type BuiltinKey = (typeof BUILTIN_KEYS)[number];
 
@@ -84,7 +86,12 @@ export const BUILTIN_SOURCE: Record<BuiltinKey, string> = {
   BIRTHDAYS: "Date of birth on active employees' and contractors' profiles",
   COMPANY_INFO: "Expiration dates on Company Info (licenses, registrations, certifications)",
   QUALITY_CHECKS: "Quality check visits scheduled on janitorial contracts",
+  BIDS: "Bid Date and Job Walk Date on open and won post-construction deals in HubSpot (refreshed hourly)",
+  BILLING_CUTOFFS: "Each active job's billing cutoff: the client company's cutoff day, or the job's own",
 };
+
+/** The only category Sales and Estimation see (canSeeBidCalendar without canManageManagementCalendar). */
+export const BID_CATEGORY_KEY: BuiltinKey = "BIDS";
 
 /**
  * "YYYY-MM-DD" from a free-text date of birth. The profile form saves

@@ -311,6 +311,19 @@ export const NOTIFICATIONS = {
     ccEditable: true,
   }),
 
+  BILLING_CUTOFF_REMINDER: def({
+    label: "Billing cutoff reminder",
+    group: "Billing",
+    when: "About 8am, 5 days before a GC's billing cutoff on an active job (the company's cutoff day, or the job's own)",
+    automatic: "The job's PM (backup PMs when the PM can't be matched to an employee email)",
+  }),
+  INVOICE_PREVIEW: def({
+    label: "Invoice preview",
+    group: "Billing",
+    when: "Someone clicks Email me a preview on a draft on Ready to send",
+    automatic: "Only the person who clicked it",
+    alwaysOn: true,
+  }),
   INVOICE_TO_CLIENT: def({
     label: "Invoice to client",
     group: "Billing",
@@ -340,7 +353,7 @@ export const NOTIFICATIONS = {
     label: "Management calendar reminders",
     group: "Reminders",
     when: "About 8am, when calendar items reach their category's reminder days",
-    automatic: "Every Admin, PM and Business Manager",
+    automatic: "Every Admin, PM and Business Manager. Sales and Estimation get one with only the Bids category",
   }),
 
   LIEN_ALERTS: def({

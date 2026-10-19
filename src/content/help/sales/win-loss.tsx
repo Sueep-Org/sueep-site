@@ -7,7 +7,8 @@ export function WinLossHelp() {
       <P>
         <strong>Win/Loss</strong> (left menu, Projects, then Clients) shows how post-construction bids turn out, read live from HubSpot
         and refreshed every hour. Admins, Project Managers, the Business Manager and Sales can open it. Pick{" "}
-        <strong>Last 12 months</strong>, <strong>This year</strong> or <strong>All time</strong> at the top.
+        <strong>Last 12 months</strong>, <strong>This year</strong> or <strong>All time</strong> at the top, and a type of
+        work (<strong>Cleaning</strong>, <strong>Painting</strong>, <strong>Cleaning + painting</strong>) to see only those bids.
       </P>
       <UL>
         <LI>
@@ -42,6 +43,17 @@ export function WinLossHelp() {
         </LI>
       </UL>
 
+      <H3>Type of work</H3>
+      <P>
+        Each bid&apos;s type of work comes from its line items in HubSpot (copied from the quote): painting words like
+        &quot;Interior Painting&quot;, cleaning words like &quot;Final Cleaning&quot;, or both. Bids without line items use
+        HubSpot&apos;s <strong>Type of business</strong> field. If neither says, the bid shows as <strong>Not known</strong>.
+      </P>
+      <Callout type="tip">
+        Cleaning and painting price very differently per square foot, so use <strong>$ per sq ft by type of work</strong>,
+        not the mixed number. A number based on fewer than 5 jobs is marked as too few to trust.
+      </Callout>
+
       <H3>How GCs are matched</H3>
       <P>
         A bid&apos;s GC is the deal&apos;s Company field in HubSpot, or the company at the end of the deal name (&quot;Ardmore
@@ -49,6 +61,24 @@ export function WinLossHelp() {
         by name or other names. If the same GC shows up under two spellings, open the company and add the other spelling to{" "}
         <strong>Other names</strong>. They merge on the next refresh.
       </P>
+
+      <H2>Price check on quotes</H2>
+      <P>
+        Estimation&apos;s dashboard (Queue tab) has a <strong>Price check</strong> card. It looks at open quotes touched in the
+        last 30 days that have an amount and Area SQFT, and compares their price per square foot with the usual range for
+        their type of work.
+      </P>
+      <UL>
+        <LI>
+          <strong>Usual range</strong> is the middle half of the jobs we won: 1 in 4 won jobs were cheaper, 1 in 4 were higher.
+          A type with fewer than 5 won jobs (painting, for now) uses all our bids of that type instead.
+        </LI>
+        <LI><strong>Outside usual range</strong>: above or below that, with how far off it is.</LI>
+        <LI>
+          <strong>Check the numbers</strong>: 3 times the usual price or more, or a third or less. That&apos;s usually a wrong
+          Area SQFT or amount in HubSpot, worth fixing so the numbers stay useful.
+        </LI>
+      </UL>
 
       <H2>GC scorecard</H2>
       <P>

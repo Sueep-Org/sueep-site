@@ -99,6 +99,34 @@ export function ManagementCalendar() {
         Starting reminders: insurance 30 and 7 days, COIs 14 days, COI requests 2 days, background checks and documents
         30 days, janitorial contracts 60 and 30 days, birthdays 7 days. Time off and payroll start with no reminders.
       </Callout>
+      <H2>Bids</H2>
+      <P>
+        The <strong>Bids</strong> category shows post-construction bid due dates and job walks, from the{" "}
+        <strong>Bid Date</strong> and <strong>Job Walk Date</strong> fields on HubSpot deals (refreshed every hour). Lost
+        bids are left off. Click one to open the deal in HubSpot. Reminders go out 3 days and 1 day before.
+      </P>
+      <P>
+        Sales and Estimation can open this calendar too, but they only see Bids and can&apos;t add events or change
+        categories. Their reminder email has only bids.
+      </P>
+      <P>
+        The next 30 days of bids are also on the dashboard: the <strong>Bids due</strong> card on Estimation&apos;s Queue tab,
+        and the <strong>Bids</strong> card on the Sales tab (Due soon and Stale quotes). Bids due within 3 days show in red.
+      </P>
+            <Callout type="tip">A bid only shows here once its Bid Date is filled in on the HubSpot deal.</Callout>
+      <H2>Billing cutoffs</H2>
+      <P>
+        The <strong>Billing cutoffs</strong> category shows the day each active job&apos;s pay app or invoice is due to the GC:
+        the client company&apos;s <strong>Cutoff day</strong> (on its company page), or the job&apos;s own{" "}
+        <strong>Billing cutoff day</strong> on the project&apos;s Overview when a GC uses different dates per job.
+      </P>
+      <UL>
+        <LI>5 days before, the job&apos;s PM gets an email to update percent complete.</LI>
+        <LI>
+          Once the cutoff passes with no invoice for the job dated that month, it shows as <strong>Missed</strong> in red on the
+          dashboard&apos;s Money tab (Needs action, Billing cutoffs), next to cutoffs coming up in the next week.
+        </LI>
+      </UL>
     </>
   );
 }

@@ -176,7 +176,7 @@ export const registry: ArticleEntry[] = [
     description: "Insurance expirations, time off, deadlines and your own events in one calendar, with email reminders.",
     order: 7,
     component: ManagementCalendar,
-    roles: [...PM_LEVEL_ROLES],
+    roles: [...PM_LEVEL_ROLES, "SALES", "ESTIMATION"],
   },
   {
     slug: "notifications/my-notifications",

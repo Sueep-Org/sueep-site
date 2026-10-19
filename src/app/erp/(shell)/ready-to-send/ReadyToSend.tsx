@@ -27,6 +27,8 @@ export type DraftRow = MonthRow & {
   sendTo: string | null;
   /** What happens on Approve, e.g. "Emails it to ap@udr.com." */
   deliveryPlan: string;
+  /** Client company's payment terms. Null means the due date can be set on the draft. */
+  paymentTermsDays: number | null;
 };
 
 export type DeliveryRow = {
@@ -189,6 +191,13 @@ export function ReadyToSend({
     });
   }
 
+  async function preview(r: DraftRow) {
+    await run(`preview-${r.rowId}`, async () => {
+      const { ok, data } = await call("/api/erp/invoice-drafts/preview", "POST", { kind: r.kind, rowId: r.rowId });
+      toast(ok ? `Preview sent to ${String(data.to ?? "you")}. Nothing was approved.` : String(data.error ?? "Could not send the preview."));
+    });
+  }
+
   async function redraft(m: MonthRow) {
     await run(`redraft-${m.periodId}`, async () => {
       const { ok, data } = await call(`/api/erp/invoice-drafts/${m.periodId}/redraft`, "POST");
@@ -259,7 +268,8 @@ export function ReadyToSend({
                         {d.building}, {d.month}
                       </span>
                       <span className="block text-xs text-gray-500">
-                        Invoice date {fmtDay(d.invoiceDateKey)} · Due {fmtDay(d.dueDate)}
+                        Invoice date {fmtDay(d.invoiceDateKey)} ·{" "}
+                        {d.paymentTermsDays != null ? `Due ${fmtDay(d.dueDate)} (Net ${d.paymentTermsDays})` : <DueDateInput draft={d} />}
                       </span>
                     </span>
                   </label>
@@ -299,6 +309,9 @@ export function ReadyToSend({
                 <div className="mt-3 flex flex-wrap justify-end gap-2">
                   <Button size="sm" variant="ghost" className="text-red-600 hover:text-red-700" disabled={busy !== null} onClick={() => void discard(d)}>
                     Discard
+                  </Button>
+                  <Button size="sm" variant="ghost" disabled={busy !== null} onClick={() => void preview(d)} title="Sends you the exact client email, without approving">
+                    Email me a preview
                   </Button>
                   {d.kind === "month" && (
                     <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => setEditing(d)}>
@@ -748,5 +761,45 @@ function NeedsSending({ rows }: { rows: DeliveryRow[] }) {
         </div>
       ))}
     </section>
+  );
+}
+
+
+/** Due date picker for a draft whose client company has no payment terms. Saves to HubSpot on change. */
+function DueDateInput({ draft }: { draft: DraftRow }) {
+  const router = useRouter();
+  const toast = useToast();
+  const [value, setValue] = useState(draft.dueDate ?? draft.invoiceDateKey);
+  const [saving, setSaving] = useState(false);
+
+  async function save(next: string) {
+    setValue(next);
+    if (!next || next === (draft.dueDate ?? draft.invoiceDateKey)) return;
+    setSaving(true);
+    const { ok, data } = await call("/api/erp/invoice-drafts/due-date", "POST", { kind: draft.kind, rowId: draft.rowId, dueDate: next });
+    setSaving(false);
+    if (!ok) {
+      toast(String(data.error ?? "Could not save the due date."));
+      setValue(draft.dueDate ?? draft.invoiceDateKey);
+      return;
+    }
+    toast(`Due date set to ${fmtDay(next)}.`);
+    router.refresh();
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1">
+      Due
+      <input
+        type="date"
+        aria-label="Due date"
+        value={value}
+        min={draft.invoiceDateKey}
+        disabled={saving}
+        onChange={(e) => void save(e.target.value)}
+        className="rounded border border-gray-300 px-1 py-0.5 text-xs text-gray-900"
+      />
+      <InfoTip text="This client has no payment terms on its company page, so set the due date here. Leave it on the invoice date for due on receipt. Adding terms (Net 30...) on the company sets it for every invoice." />
+    </span>
   );
 }

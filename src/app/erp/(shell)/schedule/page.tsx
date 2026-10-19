@@ -21,6 +21,7 @@ import { todayEasternAsUtcMidnight } from "@/lib/erp/dates";
 import {
   canFilterScheduleBySupervisor,
   canManageManagementCalendar,
+  canSeeBidCalendar,
   canRescheduleOnTimeline,
   canSeeFinancials,
   getErpAuth,
@@ -47,18 +48,20 @@ type PageProps = { searchParams: Promise<{ calendar?: string; contract?: string 
 export default async function SchedulePage({ searchParams }: PageProps) {
   const { calendar, contract } = await searchParams;
   const auth = await getErpAuth();
-  const showManagement = canManageManagementCalendar(auth?.role ?? "EMPLOYEE");
+  // Sales and Estimation see the tab too, read-only with only the Bids category.
+  const showManagement = canSeeBidCalendar(auth?.role ?? "EMPLOYEE");
+  const managementReadOnly = !canManageManagementCalendar(auth?.role ?? "EMPLOYEE");
 
   // Each calendar tab loads only its own data: the Janitorial tab fetches
   // from /api/erp/janitorial/schedule client-side, so none of the project
   // queries below run for it.
-  // Admin and PM only; anyone else lands on the Projects calendar.
+  // Admin, PM, BM (everything) and Sales, Estimation (Bids only); anyone else lands on the Projects calendar.
   if (calendar === "management" && showManagement) {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold text-pink-600">Schedule</h1>
         <ScheduleCalendarTabs active="management" showManagement />
-        <ManagementCalendar />
+        <ManagementCalendar readOnly={managementReadOnly} />
       </div>
     );
   }

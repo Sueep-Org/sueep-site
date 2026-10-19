@@ -235,6 +235,10 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const [companyOptions, invoiceDestination] = showCompanies
     ? await Promise.all([loadCompanyOptions([project.clientCompanyId]), loadProjectInvoiceDestination(project.id)])
     : [[], null];
+  // The client company's cutoff, shown as the default under this job's own.
+  const companyCutoffDay = project.clientCompanyId
+    ? ((await prisma.clientCompany.findUnique({ where: { id: project.clientCompanyId }, select: { billingCutoffDay: true } }))?.billingCutoffDay ?? null)
+    : null;
 
   // Commission owner must be someone with an ERP login — most Employee rows
   // are crew (painters/cleaners) with no ErpUser account at all.
@@ -605,6 +609,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
                 canEditBilling={canEditCompanies(auth!.role)}
                 override={overrideFromColumns(project)}
                 destination={invoiceDestination}
+                cutoffDay={project.billingCutoffDay}
+                companyCutoffDay={companyCutoffDay}
               />
             </>
           )}

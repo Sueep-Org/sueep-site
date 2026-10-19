@@ -41,6 +41,14 @@ export function ReadyToSendHelp() {
           <strong>Draft again</strong> in the Discarded list.
         </LI>
         <LI>Tick several and use <strong>Approve selected</strong> to approve them together.</LI>
+        <LI>
+          <strong>Email me a preview</strong> sends you the exact email the client would get, marked as a preview. Nothing is
+          approved or sent to the client. The real one also has the PDF and a pay button, which only exist after Approve.
+        </LI>
+        <LI>
+          <strong>Due date</strong>: when the client company has payment terms (Net 30...), it&apos;s the invoice date plus the
+          terms. When it has none, pick the due date on the draft; leave it on the invoice date for due on receipt.
+        </LI>
       </UL>
 
       <H2>After Approve: getting it to the client</H2>

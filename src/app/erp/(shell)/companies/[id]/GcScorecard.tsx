@@ -18,7 +18,13 @@ export async function GcScorecard({ companyId }: { companyId: string }) {
     ["Bids", String(s.bids), "Post-construction deals in HubSpot matched to this company, any time."],
     ["Win rate", decided ? `${Math.round((s.won / decided) * 100)}%` : "-", `${s.won} won of ${decided} decided. Won means Quote Approved or later.`],
     ["GC didn't win", String(s.gcNotAwarded), "Lost bids with the reason GC Not Awarded."],
-    ["$/sq ft won", s.perSqftWon == null ? "-" : `$${s.perSqftWon.toFixed(2)}`, `Median of won jobs. All their bids: ${s.perSqftQuoted == null ? "-" : `$${s.perSqftQuoted.toFixed(2)}`}.`],
+    [
+      "$/sq ft won",
+      s.perSqftWon == null ? "-" : `$${s.perSqftWon.toFixed(2)}`,
+      `Median of won jobs, all types of work mixed. ${
+        s.perSqftWonByScope.length ? `By type: ${s.perSqftWonByScope.map((x) => `${x.label} $${x.value.toFixed(2)} (${x.samples} jobs)`).join(", ")}. ` : ""
+      }All their bids: ${s.perSqftQuoted == null ? "-" : `$${s.perSqftQuoted.toFixed(2)}`}.`,
+    ],
     ["Days to pay", s.avgDaysToPay == null ? "-" : String(Math.round(s.avgDaysToPay)), `Average from invoice date to paid date over ${s.paidInvoices} paid invoices on their jobs and buildings.`],
   ];
   return (
@@ -38,6 +44,11 @@ export async function GcScorecard({ companyId }: { companyId: string }) {
           </div>
         ))}
       </dl>
+      {s.perSqftWonByScope.length > 1 && (
+        <p className="mt-2 text-xs text-gray-500">
+          $/sq ft won by type: {s.perSqftWonByScope.map((x) => `${x.label} $${x.value.toFixed(2)} (${x.samples})`).join(" · ")}
+        </p>
+      )}
       {s.recent.length > 0 && (
         <ul className="mt-3 divide-y divide-gray-100 text-sm">
           {s.recent.map((d) => (

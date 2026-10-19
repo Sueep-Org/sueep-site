@@ -26,7 +26,8 @@ export function CompaniesOverview() {
           Add other spellings people use, like JAG for Jefferson Apartment Group. Search finds the company under any of them.
         </Step>
         <Step n={3} title="Billing">
-          Method, send to, cc, cutoff day, how often and payment terms.
+          Method, send to, cc, cutoff day, how often and payment terms. The cutoff day puts each of their active jobs on the
+          Management calendar&apos;s Billing cutoffs, with a reminder to the PM 5 days before.
         </Step>
         <Step n={4} title="Contacts and logins">
           On the company page, add contacts. If they use a portal, save the login on Company Info &gt; Logins first, then use{" "}

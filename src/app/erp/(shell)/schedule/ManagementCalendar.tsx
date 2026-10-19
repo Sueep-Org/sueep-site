@@ -55,7 +55,8 @@ async function fetchFeed(start: string, end: string): Promise<Feed> {
   return json;
 }
 
-export function ManagementCalendar() {
+/** `readOnly`: Sales and Estimation, who only see the Bids category and can't add events or change categories. */
+export function ManagementCalendar({ readOnly = false }: { readOnly?: boolean } = {}) {
   const todayKey = dayKey(todayEasternAsUtcMidnight());
   const [cursor, setCursor] = useState(() => startOfMonth(todayEasternAsUtcMidnight()));
   const [feed, setFeed] = useState<Feed | null>(null);
@@ -223,16 +224,20 @@ export function ManagementCalendar() {
           </div>
         )}
       </div>
-      <button
-        type="button"
-        onClick={() => setCategoriesOpen(true)}
-        className="h-8 rounded border border-gray-200 bg-white px-2.5 text-xs font-medium text-gray-600 transition-colors hover:border-gray-300"
-      >
-        Categories
-      </button>
-      <Button size="xs" onClick={() => setForm({ kind: "new", date: todayKey })} disabled={!feed}>
-        Add event
-      </Button>
+      {!readOnly && (
+        <>
+          <button
+            type="button"
+            onClick={() => setCategoriesOpen(true)}
+            className="h-8 rounded border border-gray-200 bg-white px-2.5 text-xs font-medium text-gray-600 transition-colors hover:border-gray-300"
+          >
+            Categories
+          </button>
+          <Button size="xs" onClick={() => setForm({ kind: "new", date: todayKey })} disabled={!feed}>
+            Add event
+          </Button>
+        </>
+      )}
     </div>
   );
 
@@ -281,7 +286,7 @@ export function ManagementCalendar() {
                         >
                           {cell.getUTCDate()}
                         </div>
-                        {feed && (
+                        {feed && !readOnly && (
                           <button
                             type="button"
                             onClick={() => setForm({ kind: "new", date: k })}

@@ -2,14 +2,15 @@
  * Daily reminder email for the Management calendar. An item is included on
  * the mornings its category's reminder days land on (e.g. 30 and 7 days
  * before), and on the day itself when 0 is in the list. Done items are
- * skipped. Goes to every Admin and Project Manager.
+ * skipped. Goes to every Admin, Project Manager and Business Manager.
+ * Sales and Estimation get their own email with only the Bids category.
  */
 
 import { prisma } from "@/lib/prisma";
 import { PM_LEVEL_ROLES } from "@/lib/erpRoles";
 import { buildManagementReminderEmail, sendEmail } from "@/lib/email";
 import { todayEasternKey } from "./dates";
-import { addDaysKey, daysBetween, formatItemDates } from "./managementCalendar";
+import { BID_CATEGORY_KEY, addDaysKey, daysBetween, formatItemDates } from "./managementCalendar";
 import { loadManagementCategories, loadManagementItems } from "./managementCalendarServer";
 
 export async function sendManagementReminders(todayKey: string = todayEasternKey()) {
@@ -25,13 +26,18 @@ export async function sendManagementReminders(todayKey: string = todayEasternKey
   });
   if (!items.length) return { sent: 0, items: 0 };
 
-  const recipients = await prisma.erpUser.findMany({ where: { role: { in: [...PM_LEVEL_ROLES] } }, select: { email: true } });
-  if (!recipients.length) return { sent: 0, items: items.length };
+  const bidCategoryId = categories.find((c) => c.builtinKey === BID_CATEGORY_KEY)?.id;
+  const bidItems = items.filter((i) => i.categoryId === bidCategoryId);
+  const [recipients, bidRecipients] = await Promise.all([
+    prisma.erpUser.findMany({ where: { role: { in: [...PM_LEVEL_ROLES] } }, select: { email: true } }),
+    bidItems.length ? prisma.erpUser.findMany({ where: { role: { in: ["SALES", "ESTIMATION"] } }, select: { email: true } }) : [],
+  ]);
+  if (!recipients.length && !bidRecipients.length) return { sent: 0, items: items.length };
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "";
-  const html = buildManagementReminderEmail({
+  const emailFor = (list: typeof items) => buildManagementReminderEmail({
     calendarUrl: `${appUrl}/erp/schedule?calendar=management`,
-    items: items.map((i) => {
+    items: list.map((i) => {
       const days = daysBetween(todayKey, i.start);
       return {
         title: i.title,
@@ -42,7 +48,14 @@ export async function sendManagementReminders(todayKey: string = todayEasternKey
       };
     }),
   });
-  const subject = `${items.length} upcoming item${items.length === 1 ? "" : "s"} on the Management calendar`;
-  const results = await Promise.allSettled(recipients.map((r) => sendEmail({ type: "MANAGEMENT_REMINDERS", link: "/erp/schedule?calendar=management", to: r.email, subject, html })));
+  const subjectFor = (n: number, what: string) => `${n} upcoming ${what}${n === 1 ? "" : "s"} on the Management calendar`;
+  const html = emailFor(items);
+  const subject = subjectFor(items.length, "item");
+  const bidHtml = bidItems.length ? emailFor(bidItems) : "";
+  const bidSubject = subjectFor(bidItems.length, "bid");
+  const results = await Promise.allSettled([
+    ...recipients.map((r) => sendEmail({ type: "MANAGEMENT_REMINDERS", link: "/erp/schedule?calendar=management", to: r.email, subject, html })),
+    ...bidRecipients.map((r) => sendEmail({ type: "MANAGEMENT_REMINDERS", link: "/erp/schedule?calendar=management", to: r.email, subject: bidSubject, html: bidHtml })),
+  ]);
   return { sent: results.filter((r) => r.status === "fulfilled").length, items: items.length };
 }

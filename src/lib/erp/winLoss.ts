@@ -11,6 +11,9 @@
  *   that match no Company stay separate until someone adds them as other names.
  * - Stale: Quote Sent up to (not including) Quote Approved, no activity for
  *   STALE_DAYS.
+ * - Type of work: from the deal's line items (copied from its quote): painting
+ *   words, cleaning words, or both. No line items: HubSpot's Type of business.
+ *   Neither: unknown, kept as its own group.
  * - Amounts: a won deal that is an ERP project uses the project's contract
  *   value (what we bill from); HubSpot's Amount is often stale on those.
  *   Everything else uses HubSpot's Amount.
@@ -38,7 +41,36 @@ export type RawDeal = {
   source: string | null;
   sqft: number | null;
   lastActivity: string | null;
+  scope: WorkScope;
+  /** HubSpot Bid Date and Job Walk Date ("YYYY-MM-DD"), for the Management calendar's Bids category */
+  bidDate: string | null;
+  walkDate: string | null;
 };
+
+export const WORK_SCOPES = ["CLEANING", "PAINTING", "BOTH", "UNKNOWN"] as const;
+export type WorkScope = (typeof WORK_SCOPES)[number];
+export const WORK_SCOPE_LABELS: Record<WorkScope, string> = {
+  CLEANING: "Cleaning",
+  PAINTING: "Painting",
+  BOTH: "Cleaning + painting",
+  UNKNOWN: "Not known",
+};
+
+const PAINT_WORDS = /\b(paint\w*|primer|prime|coats?|stain\w*|drywall|caulk\w*)\b/i;
+const CLEAN_WORDS = /\b(clean\w*|wash\w*|rough|final|windows?|janitor\w*|sweep\w*|debris|scrub\w*|mop\w*|pressure)\b/i;
+
+/** Painting, cleaning or both, from line item text; null when the text says neither. */
+export function scopeFromText(text: string): WorkScope | null {
+  const p = PAINT_WORDS.test(text), c = CLEAN_WORDS.test(text);
+  return p && c ? "BOTH" : p ? "PAINTING" : c ? "CLEANING" : null;
+}
+
+/** HubSpot's Type of business values, for deals without line items. */
+function scopeFromTypeOfBusiness(v: string | null): WorkScope | null {
+  if (!v) return null;
+  if (/\+|cleaning and painting/i.test(v)) return "BOTH";
+  return /paint/i.test(v) ? "PAINTING" : /clean/i.test(v) ? "CLEANING" : null;
+}
 
 export type Bundle = {
   deals: RawDeal[];
@@ -52,7 +84,7 @@ export type Bundle = {
   fetchedAt: string;
 };
 
-const PROPS = ["dealname", "dealstage", "amount", "createdate", "hubspot_owner_id", "company", "deal_lost_reason", "how_the_customer_reach_sueep", "area_sqft", "notes_last_updated", "hs_lastmodifieddate"];
+const PROPS = ["dealname", "dealstage", "amount", "createdate", "hubspot_owner_id", "company", "deal_lost_reason", "how_the_customer_reach_sueep", "area_sqft", "notes_last_updated", "hs_lastmodifieddate", "type_of_business", "bid_date", "completion_date"];
 
 async function searchAll(pipelineId: string): Promise<RawDeal[]> {
   const out: RawDeal[] = [];
@@ -85,12 +117,43 @@ async function searchAll(pipelineId: string): Promise<RawDeal[]> {
         source: p.how_the_customer_reach_sueep?.trim() || null,
         sqft: Number.isFinite(sqft) && sqft > 0 ? sqft : null,
         lastActivity: p.notes_last_updated ?? p.hs_lastmodifieddate ?? null,
+        // Filled in from line items in computeBundle; Type of business is the fallback.
+        scope: scopeFromTypeOfBusiness(p.type_of_business ?? null) ?? "UNKNOWN",
+        bidDate: p.bid_date?.slice(0, 10) || null,
+        // HubSpot's "Job Walk Date" lives in a property named completion_date.
+        walkDate: p.completion_date?.slice(0, 10) || null,
       });
     }
     after = data.paging?.next?.after;
     if (!after) break;
   }
   return out;
+}
+
+/** Every deal's line item text, in a few batch calls (associations, then the items). */
+async function loadLineItemText(dealIds: string[]): Promise<Map<string, string>> {
+  const itemsByDeal = new Map<string, string[]>();
+  for (let i = 0; i < dealIds.length; i += 500) {
+    const res = await hubspotFetch("/crm/v4/associations/deals/line_items/batch/read", {
+      method: "POST",
+      body: JSON.stringify({ inputs: dealIds.slice(i, i + 500).map((id) => ({ id })) }),
+    });
+    if (!res.ok) throw new Error(`HubSpot line item links failed: ${res.status}`);
+    const data = (await res.json()) as { results?: { from: { id: string }; to: { toObjectId: number | string }[] }[] };
+    for (const r of data.results ?? []) itemsByDeal.set(String(r.from.id), r.to.map((t) => String(t.toObjectId)));
+  }
+  const allItems = [...new Set([...itemsByDeal.values()].flat())];
+  const textByItem = new Map<string, string>();
+  for (let i = 0; i < allItems.length; i += 100) {
+    const res = await hubspotFetch("/crm/v3/objects/line_items/batch/read", {
+      method: "POST",
+      body: JSON.stringify({ properties: ["name", "description"], inputs: allItems.slice(i, i + 100).map((id) => ({ id })) }),
+    });
+    if (!res.ok) throw new Error(`HubSpot line items failed: ${res.status}`);
+    const data = (await res.json()) as { results?: { id: string; properties: Record<string, string | null> }[] };
+    for (const li of data.results ?? []) textByItem.set(li.id, `${li.properties.name ?? ""} ${li.properties.description ?? ""}`);
+  }
+  return new Map([...itemsByDeal].map(([deal, items]) => [deal, items.map((id) => textByItem.get(id) ?? "").join(" | ")]));
 }
 
 async function loadOwners(): Promise<Record<string, string>> {
@@ -130,7 +193,9 @@ export async function computeBundle(): Promise<Bundle> {
   const firstWon = Math.min(...stages.filter((s) => rules.won.has(s.id)).map((s) => s.displayOrder));
   const quoteStart = stages.find((s) => s.id === rules.quoteStageId)?.displayOrder ?? stages.find((s) => /quote sent/i.test(s.label))?.displayOrder ?? firstWon;
   const quoting = stages.filter((s) => s.displayOrder >= quoteStart && s.displayOrder < firstWon && !rules.lost.has(s.id)).map((s) => s.id);
-  const [deals, owners, hubId] = await Promise.all([searchAll(rules.pipelineId), loadOwners(), loadHubId()]);
+  const [found, owners, hubId] = await Promise.all([searchAll(rules.pipelineId), loadOwners(), loadHubId()]);
+  const lineText = await loadLineItemText(found.map((d) => d.id));
+  const deals = found.map((d) => ({ ...d, scope: scopeFromText(lineText.get(d.id) ?? "") ?? d.scope }));
   return {
     deals,
     won: [...rules.won],
@@ -144,7 +209,7 @@ export async function computeBundle(): Promise<Bundle> {
 }
 
 /** Cached an hour. Errors aren't cached, so the next visit tries again. */
-export const loadDealBundle = unstable_cache(computeBundle, ["win-loss-deals-v1"], { revalidate: CACHE_SECONDS });
+export const loadDealBundle = unstable_cache(computeBundle, ["win-loss-deals-v3"], { revalidate: CACHE_SECONDS });
 
 export function dealUrl(hubId: string | null, dealId: string): string | null {
   return hubId ? `https://app.hubspot.com/contacts/${hubId}/record/0-3/${dealId}` : null;
@@ -228,8 +293,14 @@ const SIZE_BUCKETS = [
 
 export type Row = Stat & { key: string; label: string; href?: string | null };
 
+export type ScopeSqft = { scope: WorkScope; label: string; won: number | null; wonSamples: number; wonJobs: number; all: number | null };
+
 export type WinLossReport = {
   period: PeriodKey;
+  scope: WorkScope | null;
+  byScope: Row[];
+  /** Median $ per sq ft per type of work (always all types, for comparing) */
+  sqftByScope: ScopeSqft[];
   total: Stat;
   byGc: Row[];
   bySize: Row[];
@@ -297,8 +368,8 @@ export function staleQuotes(bundle: Bundle, now = new Date()): StaleQuote[] {
     }));
 }
 
-/** `preloaded` skips the cache, for checks run outside the app. */
-export async function loadWinLoss(period: PeriodKey, now = new Date(), preloaded?: Bundle): Promise<WinLossReport> {
+/** `scope` limits everything to one type of work. `preloaded` skips the cache, for checks run outside the app. */
+export async function loadWinLoss(period: PeriodKey, now = new Date(), preloaded?: Bundle, scope: WorkScope | null = null): Promise<WinLossReport> {
   const [bundle, companies] = await Promise.all([
     preloaded ?? loadDealBundle(),
     prisma.clientCompany.findMany({ select: { id: true, name: true, aliases: true } }),
@@ -307,7 +378,8 @@ export async function loadWinLoss(period: PeriodKey, now = new Date(), preloaded
   const match = companyMatcher(companies);
   const start = periodStart(period, now);
   const total = emptyStat();
-  const byGc = new Map(), bySize = new Map(), byQuarter = new Map();
+  const byGc = new Map(), bySize = new Map(), byQuarter = new Map(), byScope = new Map();
+  const scopeSqft = new Map<WorkScope, { won: number[]; all: number[]; wonJobs: number }>(WORK_SCOPES.map((k) => [k, { won: [], all: [], wonJobs: 0 }]));
   const reasons = new Map<string, { count: number; cents: number }>();
   const sqftAll: number[] = [], sqftWon: number[] = [];
 
@@ -315,7 +387,16 @@ export async function loadWinLoss(period: PeriodKey, now = new Date(), preloaded
     const created = Date.parse(d.created);
     if (!Number.isFinite(created) || created < start) continue;
     const outcome = outcomeOf(bundle, d.stageId);
+    // $ per sq ft by type of work compares all types, so it's counted before the filter.
+    const ss = scopeSqft.get(d.scope)!;
+    if (outcome === "won") ss.wonJobs++;
+    if (d.sqft && d.cents) {
+      ss.all.push(d.cents / 100 / d.sqft);
+      if (outcome === "won") ss.won.push(d.cents / 100 / d.sqft);
+    }
+    if (scope && d.scope !== scope) continue;
     addTo(total, outcome, d.cents);
+    bump(byScope, d.scope, WORK_SCOPE_LABELS[d.scope], outcome, d.cents);
     const gc = match(d);
     bump(byGc, gc?.key ?? "-", gc?.label ?? "No company", outcome, d.cents, gc?.companyId ? `/erp/companies/${gc.companyId}` : null);
     const size = SIZE_BUCKETS.findIndex((b) => d.cents < b.max);
@@ -342,6 +423,12 @@ export async function loadWinLoss(period: PeriodKey, now = new Date(), preloaded
   const lost = total.lost || 1;
   return {
     period,
+    scope,
+    byScope: WORK_SCOPES.map((k) => rows(byScope).find((r) => r.key === k)).filter((r): r is Row => !!r),
+    sqftByScope: WORK_SCOPES.map((k) => {
+      const v = scopeSqft.get(k)!;
+      return { scope: k, label: WORK_SCOPE_LABELS[k], won: median(v.won), wonSamples: v.won.length, wonJobs: v.wonJobs, all: median(v.all) };
+    }),
     total: finish(total),
     byGc: rows(byGc),
     bySize: rows(bySize).sort((a, b) => Number(a.key) - Number(b.key)),
@@ -360,6 +447,8 @@ export type GcScorecard = Stat & {
   gcNotAwarded: number;
   perSqftQuoted: number | null;
   perSqftWon: number | null;
+  /** Won $ per sq ft per type of work, only types with won jobs that have sq ft */
+  perSqftWonByScope: { label: string; value: number; samples: number }[];
   avgDaysToPay: number | null;
   paidInvoices: number;
   recent: { id: string; name: string; outcome: Outcome; cents: number; created: string; url: string | null }[];
@@ -394,13 +483,17 @@ export async function loadGcScorecard(companyId: string, preloaded?: Bundle): Pr
   const s = emptyStat();
   let gcNotAwarded = 0;
   const all: number[] = [], won: number[] = [];
+  const wonByScope = new Map<WorkScope, number[]>();
   for (const d of deals) {
     const o = outcomeOf(bundle, d.stageId);
     addTo(s, o, d.cents);
     if (o === "lost" && /gc not awarded/i.test(d.lostReason ?? "")) gcNotAwarded++;
     if (d.sqft && d.cents) {
       all.push(d.cents / 100 / d.sqft);
-      if (o === "won") won.push(d.cents / 100 / d.sqft);
+      if (o === "won") {
+        won.push(d.cents / 100 / d.sqft);
+        wonByScope.set(d.scope, [...(wonByScope.get(d.scope) ?? []), d.cents / 100 / d.sqft]);
+      }
     }
   }
   return {
@@ -408,6 +501,7 @@ export async function loadGcScorecard(companyId: string, preloaded?: Bundle): Pr
     gcNotAwarded,
     perSqftQuoted: median(all),
     perSqftWon: median(won),
+    perSqftWonByScope: WORK_SCOPES.filter((k) => wonByScope.has(k)).map((k) => ({ label: WORK_SCOPE_LABELS[k], value: median(wonByScope.get(k)!)!, samples: wonByScope.get(k)!.length })),
     avgDaysToPay: pay.avg,
     paidInvoices: pay.n,
     recent: [...deals]
@@ -415,4 +509,104 @@ export async function loadGcScorecard(companyId: string, preloaded?: Bundle): Pr
       .slice(0, 8)
       .map((d) => ({ id: d.id, name: d.name, outcome: outcomeOf(bundle, d.stageId), cents: d.cents, created: d.created, url: dealUrl(bundle.hubId, d.id) })),
   };
+}
+
+// ── Price check on open quotes ──────────────────────────────────────────────
+
+/** Fewer won jobs than this and the benchmark falls back to all bids of that type. */
+const MIN_BENCHMARK_JOBS = 5;
+/** Only quotes someone touched this recently are checked; older ones are on Stale quotes. */
+export const PRICE_CHECK_ACTIVE_DAYS = 30;
+/** This many times the middle price (or under 1 over it) is more likely a typo than a pricing call. */
+const TYPO_FACTOR = 3;
+
+export type PriceBenchmark = {
+  scope: WorkScope;
+  label: string;
+  /** Usual range: the middle half of the jobs it's based on (25th to 75th percentile), and the middle */
+  low: number;
+  mid: number;
+  high: number;
+  basis: "won" | "all bids";
+  samples: number;
+};
+
+export type PriceCheckRow = {
+  id: string;
+  name: string;
+  scopeLabel: string;
+  stage: string;
+  owner: string | null;
+  cents: number;
+  sqft: number;
+  perSqft: number;
+  benchmark: PriceBenchmark;
+  /** Quote vs the middle price, e.g. 0.42 = 42% above, -0.35 = 35% below */
+  diff: number;
+  url: string | null;
+};
+
+function percentile(sorted: number[], p: number): number {
+  const i = (sorted.length - 1) * p;
+  const lo = Math.floor(i), hi = Math.ceil(i);
+  return sorted[lo]! + (sorted[hi]! - sorted[lo]!) * (i - lo);
+}
+
+/**
+ * Open bids active in the last PRICE_CHECK_ACTIVE_DAYS with an amount and Area
+ * SQFT, compared with the usual range for that type of work: the middle half
+ * of won jobs (ERP contract value when the job is in the ERP), or of all bids
+ * of that type when there aren't MIN_BENCHMARK_JOBS won jobs.
+ * - outside: above or below that range.
+ * - checkNumbers: TYPO_FACTOR times the middle or more (or a third or less),
+ *   which is usually a wrong Area SQFT or amount in HubSpot.
+ * Unknown type of work isn't checked.
+ */
+export async function quotePriceCheck(
+  preloaded?: Bundle,
+  now = new Date(),
+): Promise<{ outside: PriceCheckRow[]; checkNumbers: PriceCheckRow[]; checked: number; benchmarks: PriceBenchmark[] }> {
+  const bundle = preloaded ?? (await loadDealBundle());
+  const { deals } = await withErpWonAmounts(bundle);
+  const per = (d: RawDeal) => (d.sqft && d.cents ? d.cents / 100 / d.sqft : null);
+
+  const benchmarks: PriceBenchmark[] = [];
+  for (const scope of WORK_SCOPES) {
+    if (scope === "UNKNOWN") continue;
+    const ofType = deals.filter((d) => d.scope === scope && per(d) != null);
+    const won = ofType.filter((d) => outcomeOf(bundle, d.stageId) === "won").map((d) => per(d)!);
+    const basis = won.length >= MIN_BENCHMARK_JOBS ? "won" : "all bids";
+    const values = (basis === "won" ? won : ofType.map((d) => per(d)!)).sort((a, b) => a - b);
+    if (values.length < MIN_BENCHMARK_JOBS) continue;
+    benchmarks.push({ scope, label: WORK_SCOPE_LABELS[scope], low: percentile(values, 0.25), mid: percentile(values, 0.5), high: percentile(values, 0.75), basis, samples: values.length });
+  }
+
+  const since = now.getTime() - PRICE_CHECK_ACTIVE_DAYS * DAY_MS;
+  let checked = 0;
+  const outside: PriceCheckRow[] = [], checkNumbers: PriceCheckRow[] = [];
+  for (const d of deals) {
+    if (outcomeOf(bundle, d.stageId) !== "open") continue;
+    if (Date.parse(d.lastActivity ?? d.created) < since) continue;
+    const p = per(d);
+    const b = benchmarks.find((x) => x.scope === d.scope);
+    if (p == null || !b) continue;
+    checked++;
+    const row: PriceCheckRow = {
+      id: d.id,
+      name: d.name,
+      scopeLabel: WORK_SCOPE_LABELS[d.scope],
+      stage: (bundle.stageLabels[d.stageId] ?? d.stageId).trim(),
+      owner: d.ownerId ? (bundle.owners[d.ownerId] ?? null) : null,
+      cents: d.cents,
+      sqft: d.sqft!,
+      perSqft: p,
+      benchmark: b,
+      diff: p / b.mid - 1,
+      url: dealUrl(bundle.hubId, d.id),
+    };
+    if (p >= b.mid * TYPO_FACTOR || p <= b.mid / TYPO_FACTOR) checkNumbers.push(row);
+    else if (p > b.high || p < b.low) outside.push(row);
+  }
+  const byDistance = (a: PriceCheckRow, b: PriceCheckRow) => Math.abs(b.diff) - Math.abs(a.diff);
+  return { outside: outside.sort(byDistance), checkNumbers: checkNumbers.sort(byDistance), checked, benchmarks };
 }
