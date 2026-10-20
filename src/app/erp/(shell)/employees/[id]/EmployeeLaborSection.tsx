@@ -252,7 +252,7 @@ export function EmployeeLaborSection({
                         </span>
                       ) : null}
                     </td>
-                    <td className="px-4 py-2.5 text-gray-500">{entry.role || "—"}</td>
+                    <td className="px-4 py-2.5 text-gray-500">{entry.role || "-"}</td>
                     <td className="px-4 py-2.5 text-right text-pink-600">{entry.hours.toFixed(1)}</td>
                     {canSeePay && <td className="px-4 py-2.5 text-right text-gray-500">{formatCurrency(entry.hourlyRateCents)}</td>}
                     {canSeePay && (
@@ -260,7 +260,7 @@ export function EmployeeLaborSection({
                         {formatCurrency(entry.hours * entry.hourlyRateCents)}
                       </td>
                     )}
-                    <td className="max-w-xs truncate px-4 py-2.5 text-gray-500">{entry.taskDescription || "—"}</td>
+                    <td className="max-w-xs truncate px-4 py-2.5 text-gray-500">{entry.taskDescription || "-"}</td>
                   </tr>
                 ))}
               </tbody>

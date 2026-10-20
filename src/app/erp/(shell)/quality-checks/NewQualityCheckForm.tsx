@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { uploadQualityCheckEvidenceFile } from "@/lib/firebaseStorage";
 import { SignaturePadInput } from "@/components/SignaturePad";
 import { SOVMultiCombobox, type SOVItemOption } from "@/app/erp/components/SOVCombobox";
+import { Button } from "@/app/erp/components/ui";
 
 type ProjectOption = { id: string; jobTitle: string };
 type TurnoverOption = { id: string; requestType: string; unitNumber: string | null; building: { name: string } };
@@ -354,8 +355,8 @@ export function NewQualityCheckForm({ defaultProjectId, defaultProjectTitle }: {
                     </label>
                     <p className="mb-1 text-xs text-gray-400">
                       {mode === "turnover"
-                        ? "Turnover requests don't have SOV items — briefly describe what this check covers."
-                        : "No SOV items on this project yet — briefly describe what this check covers."}
+                        ? "Turnover requests don't have SOV items - briefly describe what this check covers."
+                        : "No SOV items on this project yet - briefly describe what this check covers."}
                     </p>
                     <textarea
                       id="qc-scope"
@@ -451,13 +452,10 @@ export function NewQualityCheckForm({ defaultProjectId, defaultProjectTitle }: {
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-                >
+                <Button size="md" type="submit"
+                  disabled={loading}>
                   {loading ? "Saving…" : "Create quality check"}
-                </button>
+                </Button>
               </div>
             </form>
           </div>

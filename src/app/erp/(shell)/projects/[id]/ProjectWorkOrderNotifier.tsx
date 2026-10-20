@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SERVICE_TYPE_OPTIONS } from "@/lib/erp/serviceTypes";
+import { Button } from "@/app/erp/components/ui";
 
 const inputCls =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
@@ -412,7 +413,7 @@ export function ProjectWorkOrderNotifier({
               value={serviceTypeSelected}
               onChange={(e) => setServiceTypeSelected(e.target.value)}
             >
-              <option value="">— None —</option>
+              <option value="">- None -</option>
               {SERVICE_TYPE_OPTIONS.map((opt) => (
                 <option key={opt} value={opt}>{opt}</option>
               ))}
@@ -483,14 +484,11 @@ export function ProjectWorkOrderNotifier({
           <div className="flex flex-col gap-2">
             {error && <p className="text-xs text-red-500" role="alert">{error}</p>}
             {sendSuccess && <p className="text-xs text-green-600">Job brief sent.</p>}
-            <button
-              type="button"
+            <Button size="md" type="button"
               onClick={onSend}
-              disabled={sending || !selectedEmployeeId}
-              className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-            >
+              disabled={sending || !selectedEmployeeId}>
               {sending ? "Sending…" : "Send Job Brief"}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

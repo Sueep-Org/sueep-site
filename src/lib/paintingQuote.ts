@@ -89,7 +89,7 @@ export function computePaintingQuote(input: PaintingQuoteInput): PaintingQuoteRe
     baseMax = 1550;
     breakdown.push("Base range for interior repaint (typical room mix).");
   } else {
-    breakdown.push("General painting scope — blended interior/exterior assumptions.");
+    breakdown.push("General painting scope - blended interior/exterior assumptions.");
   }
 
   const sqMult: Record<SqFtBand, number> = {
@@ -160,7 +160,7 @@ export function computePaintingQuote(input: PaintingQuoteInput): PaintingQuoteRe
   const depositCents = Math.max(50_00, roundToNearest50Dollars(depositRaw));
 
   breakdown.push(
-    `Deposit (${formatUsd(depositCents)}): 50% of the midpoint of your planning range — reserves your schedule and allows us to order paint and materials. Remaining balance per your written agreement with Sueep.`
+    `Deposit (${formatUsd(depositCents)}): 50% of the midpoint of your planning range - reserves your schedule and allows us to order paint and materials. Remaining balance per your written agreement with Sueep.`
   );
 
   return {

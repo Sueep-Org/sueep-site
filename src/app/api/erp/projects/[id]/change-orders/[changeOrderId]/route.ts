@@ -278,7 +278,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
         if (project) {
           await notifyProjectRescheduled({
             projectId: id,
-            jobTitle: `${project.jobTitle} — ${updated.title}`,
+            jobTitle: `${project.jobTitle} - ${updated.title}`,
             oldDateKey: existing.startDate ? existing.startDate.toISOString().slice(0, 10) : null,
             newDateKey: updated.startDate.toISOString().slice(0, 10),
             supervisorUserId: project.supervisorUserId,

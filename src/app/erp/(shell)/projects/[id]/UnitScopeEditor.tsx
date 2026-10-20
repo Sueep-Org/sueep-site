@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { TurnoverPricingPackageQuestions } from "@/app/erp/(shell)/turnover-requests/TurnoverPricingPackageQuestions";
 import { formatUnitDisplay } from "@/lib/erp/unitDisplay";
 import { getTurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
+import { Button } from "@/app/erp/components/ui";
 
 type Props = {
   projectId: string;
@@ -218,7 +219,7 @@ export function UnitScopeEditor({
   return (
     <div className="rounded-md border border-gray-200 bg-gray-50 p-4 space-y-4">
       <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-        Unit scope{unitNumberVal ? ` — ${formatUnitDisplay(unitNumberVal)}` : ""}
+        Unit scope{unitNumberVal ? ` - ${formatUnitDisplay(unitNumberVal)}` : ""}
       </h2>
 
       <div>
@@ -337,16 +338,13 @@ export function UnitScopeEditor({
       />
 
       {error && <p className="text-xs text-red-500">{error}</p>}
-      {success && <p className="text-xs text-emerald-600">Saved — pricing updated.</p>}
+      {success && <p className="text-xs text-emerald-600">Saved - pricing updated.</p>}
 
-      <button
-        type="button"
+      <Button size="md" type="button"
         onClick={onSave}
-        disabled={saving}
-        className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-      >
+        disabled={saving}>
         {saving ? "Saving…" : "Save"}
-      </button>
+      </Button>
     </div>
   );
 }

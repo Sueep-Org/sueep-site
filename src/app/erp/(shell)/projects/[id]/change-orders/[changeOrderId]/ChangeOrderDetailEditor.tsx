@@ -10,7 +10,7 @@ import { ChangeOrderContractorsSection, type ContractorRow, type ContractorOptio
 import { ProjectSafetySection } from "../../ProjectSafetySection";
 import type { SafetyCheck } from "../../ProjectSafetySection";
 import { centsToDollars } from "@/lib/erp/money";
-import { inputClass, labelClass } from "@/app/erp/components/ui";
+import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
 import { computeChangeOrderLaborEstimate, deriveChangeOrderSupervisorCount, getChangeOrderLaborRates, ACTUAL_CHANGE_ORDER_LABOR_COST_RATES, CHANGE_ORDER_ESTIMATE_DAY_HOURS } from "@/lib/changeOrderLaborRates";
 
 const input = inputClass.md;
@@ -596,14 +596,11 @@ export function ChangeOrderDetailEditor({
               {error ? <p className="mt-3 text-sm text-red-600" role="alert">{error}</p> : null}
 
               <div className="mt-4 flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
+                <Button size="md" type="button"
                   disabled={saving}
-                  onClick={handleSave}
-                  className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-                >
+                  onClick={handleSave}>
                   {saving ? "Saving…" : "Save changes"}
-                </button>
+                </Button>
                 {confirmDelete ? (
                   <span className="inline-flex items-center gap-2">
                     <span className="text-sm text-gray-600">Delete this change order?</span>
@@ -751,14 +748,11 @@ export function ChangeOrderDetailEditor({
               {error ? <p className="mt-3 text-sm text-red-600" role="alert">{error}</p> : null}
 
               <div className="mt-6">
-                <button
-                  type="button"
+                <Button size="md" type="button"
                   disabled={saving}
-                  onClick={handleSave}
-                  className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-                >
+                  onClick={handleSave}>
                   {saving ? "Saving…" : "Save changes"}
-                </button>
+                </Button>
               </div>
             </>
           ),

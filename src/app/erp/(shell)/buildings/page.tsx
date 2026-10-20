@@ -50,9 +50,9 @@ export default async function BuildingsPage() {
                       <div>{building.builder || "Builder not set"}</div>
                       <div className="mt-0.5 text-xs text-gray-500">{building.address}</div>
                     </td>
-                    <td className="px-4 py-3 text-gray-900">{building.pmName || "—"}</td>
-                    <td className="px-4 py-3 text-gray-900">{building.pmEmail || "—"}</td>
-                    <td className="px-4 py-3 text-gray-900">{building.pmPhone || "—"}</td>
+                    <td className="px-4 py-3 text-gray-900">{building.pmName || "-"}</td>
+                    <td className="px-4 py-3 text-gray-900">{building.pmEmail || "-"}</td>
+                    <td className="px-4 py-3 text-gray-900">{building.pmPhone || "-"}</td>
                     <td className="px-4 py-3 text-gray-900">
                       {(() => {
                         const pricingPackage = getTurnoverPricingPackage(building.name, building.pricingPackage);

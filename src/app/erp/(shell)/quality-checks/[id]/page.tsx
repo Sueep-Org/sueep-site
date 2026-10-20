@@ -77,7 +77,7 @@ export default async function QualityCheckDetailPage({ params }: PageProps) {
               <dd>
                 {check.turnoverRequest
                   ? `${check.turnoverRequest.building.name} • ${check.turnoverRequest.requestType}`
-                  : (check.project?.jobTitle ?? "—")}
+                  : (check.project?.jobTitle ?? "-")}
               </dd>
             </div>
             {check.sovItems.length > 0 ? (
@@ -113,7 +113,7 @@ export default async function QualityCheckDetailPage({ params }: PageProps) {
                     View signature
                   </a>
                 ) : (
-                  "—"
+                  "-"
                 )}
               </dd>
             </div>

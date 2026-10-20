@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { subFieldName, type SubField } from "@/lib/erp/subcontractorQuestionnaire";
 import { subFieldInput } from "../../candidates/[id]/subcontractorFieldUi";
-import { InfoTip, inputClass, labelClass } from "@/app/erp/components/ui";
+import { Button, InfoTip, inputClass, labelClass } from "@/app/erp/components/ui";
 import { SUB_STATUS_STYLE, subCoverage } from "@/lib/erp/subCoverage";
 import { formatLimit } from "@/lib/erp/insurance";
 
@@ -411,13 +411,10 @@ export function ContractorInsuranceSection({ contractorId, initial, workersCompD
       {error ? <p className="text-xs text-red-500">{error}</p> : null}
       {ok ? <p className="text-xs text-emerald-600">{ok}</p> : null}
       <div className="flex flex-wrap items-center gap-4">
-        <button
-          type="submit"
-          disabled={loading}
-          className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-        >
+        <Button size="md" type="submit"
+          disabled={loading}>
           {loading ? "Saving…" : "Save insurance info"}
-        </button>
+        </Button>
         <button type="button" onClick={() => setEditing(false)} className="text-sm text-gray-500 hover:text-gray-700">
           Cancel
         </button>

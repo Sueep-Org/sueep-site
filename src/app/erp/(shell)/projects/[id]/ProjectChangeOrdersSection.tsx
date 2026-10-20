@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { centsToDollars } from "@/lib/erp/money";
-import { inputClass, labelClass } from "@/app/erp/components/ui";
+import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
 import { CHANGE_ORDER_ESTIMATE_DAY_HOURS, getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
 import { ChangeOrderLaborEstimator } from "./ChangeOrderLaborEstimator";
 import { LaborRateCardEditor } from "./LaborRateCardEditor";
@@ -415,13 +415,10 @@ export function ProjectChangeOrdersSection({
             {notifyResult.msg}
           </p>
         )}
-        <button
-          type="submit"
-          disabled={loading}
-          className="mt-4 rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-        >
+        <Button size="md" className="mt-4" type="submit"
+          disabled={loading}>
           {loading ? "Saving..." : "Create change order"}
-        </button>
+        </Button>
       </form>
 
       {!isEmployee ? (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { inputClass, labelClass } from "@/app/erp/components/ui";
+import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
 
 const input = inputClass.md;
 const label = labelClass.default;
@@ -96,13 +96,10 @@ export function EmployeeBankAccountSection({ employeeId, initial }: Props) {
         </div>
         {error ? <p className="text-xs text-red-500">{error}</p> : null}
         {ok ? <p className="text-xs text-emerald-600">{ok}</p> : null}
-        <button
-          type="submit"
-          disabled={loading}
-          className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-        >
+        <Button size="md" type="submit"
+          disabled={loading}>
           {loading ? "Saving…" : "Save bank info"}
-        </button>
+        </Button>
       </form>
   );
 }

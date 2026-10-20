@@ -573,7 +573,7 @@ export function DayAssignmentModal({
         const names = conflicts
           .map((c) => projects.find((p) => p.id === c.projectId)?.jobTitle ?? "another project")
           .join(", ");
-        setWorkerWarning(`Already scheduled on ${names} this day — add anyway?`);
+        setWorkerWarning(`Already scheduled on ${names} this day - add anyway?`);
         return;
       }
     }
@@ -778,10 +778,10 @@ export function DayAssignmentModal({
                         setComment("");
                       }}
                       className="block w-full truncate px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-pink-50"
-                      title={`${co.title} — ${co.projectTitle}`}
+                      title={`${co.title} - ${co.projectTitle}`}
                     >
                       <span className="font-medium">{co.title}</span>
-                      <span className="text-gray-400"> — {co.projectTitle}</span>
+                      <span className="text-gray-400"> - {co.projectTitle}</span>
                     </button>
                   ))}
                   {filteredCos.length === 0 ? (
@@ -960,7 +960,7 @@ export function DayAssignmentModal({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-600">Time (optional — leave blank for all-day)</label>
+            <label className="block text-xs font-medium text-gray-600">Time (optional - leave blank for all-day)</label>
             <div className="mt-1 flex items-center gap-2">
               <input
                 type="time"
@@ -993,13 +993,13 @@ export function DayAssignmentModal({
               />
               <p className="text-xs text-gray-500">
                 {pickedKeys.size === 0
-                  ? "This day is always included — tap more days to also duplicate onto, they don't need to be in a row."
+                  ? "This day is always included - tap more days to also duplicate onto, they don't need to be in a row."
                   : `Duplicates to ${allDateKeys!.length} days: ${allDateKeys!.join(", ")}`}
               </p>
             </CollapsibleField>
           ) : (
             <p className="text-[11px] text-gray-400">
-              Change orders are assigned one day at a time for now — repeat scheduling isn&apos;t available here yet.
+              Change orders are assigned one day at a time for now - repeat scheduling isn&apos;t available here yet.
             </p>
           )}
 
@@ -1053,9 +1053,9 @@ export function DayAssignmentModal({
                     >
                       <span className="truncate" title={co?.title}>
                         <span className="font-medium text-gray-800">{co?.title ?? "Unknown change order"}</span>
-                        <span className="text-gray-500"> — {workerLabel}</span>
+                        <span className="text-gray-500"> - {workerLabel}</span>
                         {noEmail ? (
-                          <span className="text-gray-400" title="No email on file — didn't get a schedule invite">
+                          <span className="text-gray-400" title="No email on file - didn't get a schedule invite">
                             {" "}
                             (no email)
                           </span>
@@ -1108,9 +1108,9 @@ export function DayAssignmentModal({
                   >
                     <span className="truncate" title={project?.jobTitle}>
                       <span className="font-medium text-gray-800">{project?.jobTitle ?? "Unknown project"}</span>
-                      <span className="text-gray-500"> — {workerLabel}</span>
+                      <span className="text-gray-500"> - {workerLabel}</span>
                       {noEmail ? (
-                        <span className="text-gray-400" title="No email on file — didn't get a schedule invite">
+                        <span className="text-gray-400" title="No email on file - didn't get a schedule invite">
                           {" "}
                           (no email)
                         </span>
@@ -1126,7 +1126,7 @@ export function DayAssignmentModal({
                           title="Which scope this worker is covering"
                           className="max-w-[90px] rounded border border-gray-300 bg-white px-1 py-0.5 text-[10px] text-gray-700"
                         >
-                          <option value="">— unassigned —</option>
+                          <option value="">- unassigned -</option>
                           {splitOptions.map((o) => (
                             <option key={o.id} value={o.id}>
                               {o.label}
@@ -1167,7 +1167,7 @@ export function DayAssignmentModal({
           )}
 
           <p className="text-[11px] text-gray-400">
-            Uses the {targetMode === "co" ? "change order" : "project"} selected above. Not emailed — for planning only.
+            Uses the {targetMode === "co" ? "change order" : "project"} selected above. Not emailed - for planning only.
           </p>
 
           {targetMode === "project" && splitOptions.length > 1 ? (

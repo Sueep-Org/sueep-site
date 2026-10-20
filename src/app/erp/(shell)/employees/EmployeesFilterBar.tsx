@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { OptionCombobox } from "@/app/erp/components/OptionCombobox";
+import { Button } from "@/app/erp/components/ui";
 
 type PayModeOption = { value: string; label: string; href: string };
 type StatusOption = { value: string; label: string };
@@ -99,7 +100,7 @@ export function EmployeesFilterBar({
         <div className="absolute right-0 z-20 mt-2 max-h-[85vh] w-72 overflow-y-auto rounded-lg border border-gray-200 bg-white p-3 shadow-lg">
           <form className="space-y-3">
             {/* Search by name lives outside this popover (always visible in
-                the header) — preserved here as a hidden field so clicking
+                the header) - preserved here as a hidden field so clicking
                 Apply doesn't silently clear whatever name search is active. */}
             <input type="hidden" name="name" value={nameFilter} />
             <input type="hidden" name="status" value={pendingStatus} />
@@ -116,7 +117,7 @@ export function EmployeesFilterBar({
             <div>
               <label className={labelCls} htmlFor="complianceFilter">Compliance</label>
               {/* "Inactive" used to live here as a workaround (compliance is
-                  forced to INACTIVE for any non-active employee) — now that
+                  forced to INACTIVE for any non-active employee) - now that
                   Status above is a real filter on its own, this only covers
                   genuine compliance states. */}
               <select id="complianceFilter" name="compliance" defaultValue={complianceFilter} className={inputCls}>
@@ -199,12 +200,9 @@ export function EmployeesFilterBar({
             <input type="hidden" name="sortDir" value={sortDir} />
 
             <div className="flex gap-2 pt-1">
-              <button
-                type="submit"
-                className="flex-1 rounded-md bg-pink-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-pink-500"
-              >
+              <Button size="xs" className="flex-1" type="submit">
                 Apply
-              </button>
+              </Button>
               {filtersActive ? (
                 <Link
                   href="/erp/employees"

@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TRANSPORTATION_METHOD_OPTIONS } from "@/lib/erp/transportationMethods";
-import { inputClass, labelClass } from "@/app/erp/components/ui";
+import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
 
 export type LaborEmployeeOption = {
   id: string;
@@ -269,7 +269,7 @@ export function BuildingLaborSection({ buildingId, units, employees }: Props) {
                     checked={selectedUnitIds.has(u.projectId)}
                     onChange={() => toggleUnit(u.projectId)}
                   />
-                  {u.unitNumber || "—"}
+                  {u.unitNumber || "-"}
                 </label>
               ))}
             </div>
@@ -340,13 +340,10 @@ export function BuildingLaborSection({ buildingId, units, employees }: Props) {
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 
-        <button
-          type="submit"
-          disabled={submitting}
-          className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-700 disabled:opacity-50"
-        >
+        <Button size="md" type="submit"
+          disabled={submitting}>
           {submitting ? "Logging…" : "Log hours"}
-        </button>
+        </Button>
       </form>
 
       {results && (
@@ -357,7 +354,7 @@ export function BuildingLaborSection({ buildingId, units, employees }: Props) {
           <ul className="space-y-1 text-sm">
             {results.map((r, i) => (
               <li key={i} className={r.ok ? "text-gray-600" : "text-red-600"}>
-                Unit {r.unitNumber || "—"} · {r.workerName}: {r.ok ? "logged" : r.error}
+                Unit {r.unitNumber || "-"} · {r.workerName}: {r.ok ? "logged" : r.error}
               </li>
             ))}
           </ul>

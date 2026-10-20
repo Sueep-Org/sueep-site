@@ -11,7 +11,7 @@ import { SERVICE_TYPE_OPTIONS } from "@/lib/erp/serviceTypes";
 import { getTurnoverPricingPackage, TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
 import { parseBuildingNameFromDealName, parseAddressFromDealName } from "@/lib/hubspot/dealNaming";
-import { inputClass, labelClass } from "@/app/erp/components/ui";
+import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { CHANGE_ORDER_ESTIMATE_DAY_HOURS, getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
 import { ChangeOrderLaborEstimator } from "../[id]/ChangeOrderLaborEstimator";
@@ -20,11 +20,11 @@ const input = inputClass.md;
 const label = labelClass.default;
 
 const fallbackJobTitles = [
-  "Blumberg Homes — 2323 Jefferson",
-  "Acme Tower — Lobby Refresh",
+  "Blumberg Homes - 2323 Jefferson",
+  "Acme Tower - Lobby Refresh",
   "Parkview Apartments Turnover Q2",
-  "Riverside Office Park — Common Areas",
-  "Harborview Condos — Unit Turns",
+  "Riverside Office Park - Common Areas",
+  "Harborview Condos - Unit Turns",
 ];
 const checkboxLabel = "ml-2 text-sm text-gray-700";
 const sectionHeader = "text-sm font-semibold text-gray-900";
@@ -1095,6 +1095,11 @@ export function NewProjectForm({
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
+    // The job title picker is searchable, so the browser's required check doesn't cover it.
+    if (!isTurnover && !jobTitle) {
+      setError("Pick a job title from the schedule, or choose Other.");
+      return;
+    }
     if (isMultiStep) {
       const stepError = validateStep(currentStep);
       if (stepError) { setError(stepError); return; }
@@ -1327,9 +1332,9 @@ export function NewProjectForm({
           </p>
         )}
         <div className="flex gap-3">
-          <button type="submit" disabled={loading} className="w-full rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50 sm:w-auto">
+          <Button size="md" className="w-full sm:w-auto" type="submit" disabled={loading}>
             {loading ? "Saving…" : `Create ${childRequestNoun}`}
-          </button>
+          </Button>
         </div>
       </form>
     );
@@ -1476,7 +1481,7 @@ export function NewProjectForm({
                       {dealSearchError && <p className="mt-1 text-xs text-red-600">{dealSearchError}</p>}
 
                       {hasSearchedDeal && !dealSearchLoading && dealCandidates.length === 0 && !dealSearchError && (
-                        <p className="mt-1 text-xs text-gray-400">No matching deals found — enter the building name manually below.</p>
+                        <p className="mt-1 text-xs text-gray-400">No matching deals found - enter the building name manually below.</p>
                       )}
 
                       {dealCandidates.length > 0 && (
@@ -1522,35 +1527,28 @@ export function NewProjectForm({
                 <label className={label} htmlFor="buildingAddress">
                   Building address
                 </label>
-                <select
+                {/* Searchable; the hidden field keeps the form's buildingAddress. Step 1 checks it's filled. */}
+                <input type="hidden" name="buildingAddress" value={isAddingAddress ? ADD_NEW_ADDRESS_VALUE : buildingAddress} />
+                <SearchableSelect
                   id="buildingAddress"
-                  name="buildingAddress"
-                  required
-                  className={input}
                   value={isAddingAddress ? ADD_NEW_ADDRESS_VALUE : buildingAddress}
-                  onChange={(e) => {
-                    if (e.target.value === ADD_NEW_ADDRESS_VALUE) {
+                  onChange={(v) => {
+                    if (v === ADD_NEW_ADDRESS_VALUE) {
                       setIsAddingAddress(true);
                       setBuildingAddress("");
                       return;
                     }
                     setIsAddingAddress(false);
-                    setBuildingAddress(e.target.value);
+                    setBuildingAddress(v);
                   }}
-                >
-                  <option value="">Select an address...</option>
-                  {addressOptions.length === 0 ? (
-                    <option value="" disabled>
-                      No addresses found
-                    </option>
-                  ) : null}
-                  {addressOptions.map((address) => (
-                    <option key={address} value={address}>
-                      {address}
-                    </option>
-                  ))}
-                  {!disableNewBuilding && <option value={ADD_NEW_ADDRESS_VALUE}>Add new address...</option>}
-                </select>
+                  options={[
+                    ...addressOptions.map((address) => ({ value: address, label: address })),
+                    ...(disableNewBuilding ? [] : [{ value: ADD_NEW_ADDRESS_VALUE, label: "Add new address..." }]),
+                  ]}
+                  placeholder="Search addresses…"
+                  allLabel="Select an address..."
+                  className="mt-1"
+                />
                 {isAddingAddress ? (
                   <div className="mt-2">
                     <label className={label} htmlFor="newBuildingAddress">
@@ -1615,7 +1613,7 @@ export function NewProjectForm({
 
           <div className={isMultiStep && currentStep !== 2 ? "hidden" : "space-y-3"}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className={sectionHeader}>Step 2 — Units & scope</p>
+              <p className={sectionHeader}>Step 2 - Units & scope</p>
               <button
                 type="button"
                 onClick={addUnitScope}
@@ -2092,22 +2090,17 @@ export function NewProjectForm({
             <label className={label} htmlFor="jobTitle">
               Job title *
             </label>
-            <select
+            {/* Searchable; the hidden field keeps the form's jobTitle. onSubmit checks one is picked. */}
+            <input type="hidden" name="jobTitle" value={jobTitle} />
+            <SearchableSelect
               id="jobTitle"
-              name="jobTitle"
-              required={!isCustomJob}
-              className={input}
               value={jobTitle}
-              onChange={(e) => setJobTitle(e.target.value)}
-            >
-              <option value="">— Select from schedule —</option>
-              {jobOptions.map((title) => (
-                <option key={title} value={title}>
-                  {title}
-                </option>
-              ))}
-              <option value="__custom__">Other / Enter custom job title…</option>
-            </select>
+              onChange={setJobTitle}
+              options={[...jobOptions.map((title) => ({ value: title, label: title })), { value: "__custom__", label: "Other / Enter custom job title…" }]}
+              placeholder="Search the schedule…"
+              allLabel="- Select from schedule -"
+              className="mt-1"
+            />
             {isCustomJob ? (
               <div className="mt-2">
                 <label className={label} htmlFor="customJobTitle">
@@ -2120,7 +2113,7 @@ export function NewProjectForm({
                   className={input}
                   value={customJobTitle}
                   onChange={(e) => setCustomJobTitle(e.target.value)}
-                  placeholder="e.g. Special Event Setup — Main Hall"
+                  placeholder="e.g. Special Event Setup - Main Hall"
                 />
               </div>
             ) : null}
@@ -2147,7 +2140,7 @@ export function NewProjectForm({
                 value={serviceType}
                 onChange={(e) => setServiceType(e.target.value)}
               >
-                <option value="">— Select —</option>
+                <option value="">- Select -</option>
                 {SERVICE_TYPE_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
                     {opt}
@@ -2300,13 +2293,10 @@ export function NewProjectForm({
               )}
             </>
           ) : (
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50 sm:w-auto"
-            >
+            <Button size="md" className="w-full sm:w-auto" type="submit"
+              disabled={loading}>
               {loading ? "Saving…" : submitLabel}
-            </button>
+            </Button>
           )}
         </div>
       )}

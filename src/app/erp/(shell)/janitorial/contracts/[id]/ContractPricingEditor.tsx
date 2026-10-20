@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useToast } from "@/app/erp/components/ui";
+import { Button, useToast } from "@/app/erp/components/ui";
 import { centsToDollars } from "@/lib/erp/money";
 import { calculatePricing, emptyPricing, type ContractPricing } from "@/lib/erp/janitorialPricing";
 import { PricingCalculator } from "../../PricingCalculator";
@@ -72,14 +72,11 @@ export function ContractPricingEditor({
             month added. Months already on the Billing tab keep their amount.
           </p>
         )}
-        <button
-          type="button"
+        <Button size="md" type="button"
           onClick={save}
-          disabled={saving || !dirty}
-          className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-        >
+          disabled={saving || !dirty}>
           {saving ? "Saving…" : "Save pricing"}
-        </button>
+        </Button>
       </div>
     </div>
   );

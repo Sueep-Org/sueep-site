@@ -27,7 +27,7 @@ function parseRequiredDocuments(value: unknown): string[] {
 }
 
 function centsToDollarsShort(cents: number | null): string {
-  if (cents == null) return "—";
+  if (cents == null) return "-";
   const dollars = cents / 100;
   if (dollars >= 1_000_000) return `$${(dollars / 1_000_000).toFixed(1)}M`;
   if (dollars >= 1_000) return `$${(dollars / 1_000).toFixed(0)}k`;
@@ -175,7 +175,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
         <div className="space-y-6">
           <div>
             <p className="text-sm text-gray-400">{today}</p>
-            <h1 className="mt-1 text-2xl font-bold text-pink-600">{greeting()}, {displayName}.</h1>
+            <h1 className="mt-1 text-2xl font-semibold text-gray-900">{greeting()}, {displayName}.</h1>
           </div>
           <DashboardTabsWithAlerts
             role={role}
@@ -389,7 +389,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
         <div className="space-y-6">
           <div>
             <p className="text-sm text-gray-400">{today}</p>
-            <h1 className="mt-1 text-2xl font-bold text-pink-600">{greeting()}, {displayName}.</h1>
+            <h1 className="mt-1 text-2xl font-semibold text-gray-900">{greeting()}, {displayName}.</h1>
           </div>
 
           {/* Stat strip */}
@@ -397,7 +397,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
             {[
               { label: "My Projects", value: myProjects.length, dot: "bg-blue-400", val: "text-blue-700", alert: false },
               { label: "Checks Today", value: `${projectsWithCheck}/${myProjects.length}`, dot: "bg-teal-400", val: "text-teal-700", alert: projectsMissingCheck > 0 },
-              { label: "Compliance", value: complianceRate !== null ? `${complianceRate}%` : "—", dot: "bg-emerald-400", val: "text-emerald-700", alert: complianceRate !== null && complianceRate < 100 },
+              { label: "Compliance", value: complianceRate !== null ? `${complianceRate}%` : "-", dot: "bg-emerald-400", val: "text-emerald-700", alert: complianceRate !== null && complianceRate < 100 },
               { label: "Missing Logs", value: missedLogCount, dot: "bg-red-400", val: "text-gray-900", alert: missedLogCount > 0 },
               { label: "Open Incidents", value: openIncidents.length, dot: "bg-red-400", val: "text-gray-900", alert: openIncidents.length > 0 },
             ].map((k, idx, arr) => (
@@ -469,7 +469,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
               <div className="border-b border-gray-100 px-4 py-3">
                 <h2 className="text-sm font-semibold text-gray-900" title="Yesterday through 5 days out">My projects</h2>
                 {scope.unlinked && (
-                  <p className="mt-0.5 text-xs text-amber-600">Not linked to an ERP supervisor account or employee record — showing all projects. Ask an admin to assign you in the project Setup tab.</p>
+                  <p className="mt-0.5 text-xs text-amber-600">Not linked to an ERP supervisor account or employee record - showing all projects. Ask an admin to assign you in the project Setup tab.</p>
                 )}
               </div>
               {visibleDayEntries.length === 0 ? (
@@ -563,7 +563,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-sm text-gray-400">{today}</p>
-            <h1 className="mt-1 text-2xl font-bold text-pink-600">{greeting()}, {displayName}.</h1>
+            <h1 className="mt-1 text-2xl font-semibold text-gray-900">{greeting()}, {displayName}.</h1>
           </div>
           <div className="flex gap-2">
             <Link href="/erp/projects/new" className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-700">
@@ -1118,7 +1118,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
         const noSupervisorWidget = (
           <div className="overflow-hidden rounded-xl border border-red-100 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-red-100 bg-red-50/60 px-4 py-3">
-              <h3 className="text-sm font-semibold text-gray-900" title="Never had a supervisor assigned, nothing ever logged — since Aug 1, 2026">
+              <h3 className="text-sm font-semibold text-gray-900" title="Never had a supervisor assigned, nothing ever logged - since Aug 1, 2026">
                 <span aria-hidden className="mr-1 text-red-600">⚠</span>No supervisor assigned
               </h3>
               {noSupervisorItems.length > 0 && (
@@ -1188,10 +1188,10 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
                   </Link>
                 ))}
               </div>
-              <div className="grid grid-cols-2 divide-x divide-y divide-gray-100 border-t border-gray-100 sm:grid-cols-4 sm:divide-y-0" title="Safety — today">
+              <div className="grid grid-cols-2 divide-x divide-y divide-gray-100 border-t border-gray-100 sm:grid-cols-4 sm:divide-y-0" title="Safety - today">
                 {[
                   { label: "Checks today", value: todaySafetyChecks.length, dot: "bg-teal-400", val: "text-teal-700", alert: false },
-                  { label: "Compliance", value: safetyComplianceRate !== null ? `${safetyComplianceRate}%` : "—", dot: "bg-emerald-400", val: "text-emerald-700", alert: safetyComplianceRate !== null && safetyComplianceRate < 100 },
+                  { label: "Compliance", value: safetyComplianceRate !== null ? `${safetyComplianceRate}%` : "-", dot: "bg-emerald-400", val: "text-emerald-700", alert: safetyComplianceRate !== null && safetyComplianceRate < 100 },
                   { label: "Incidents", value: openIncidentCount, dot: "bg-amber-400", val: "text-gray-900", alert: openIncidentCount > 0 },
                   { label: "Escalated", value: escalatedIncidentCount, dot: "bg-red-400", val: "text-gray-900", alert: escalatedIncidentCount > 0 },
                 ].map((k) => (
@@ -1213,7 +1213,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
               <h2 className={sectionLabelCls}><span className={`${sectionDotCls} bg-emerald-400`} />Today</h2>
               <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
                 <div className="border-b border-gray-100 bg-gray-50 px-4 py-3">
-                  <h3 className="text-sm font-semibold text-gray-900" title="Every project scheduled today — a supervisor or crew day-assignment, labor already logged, or a start/end date of today with nothing assigned yet">Where we are</h3>
+                  <h3 className="text-sm font-semibold text-gray-900" title="Every project scheduled today - a supervisor or crew day-assignment, labor already logged, or a start/end date of today with nothing assigned yet">Where we are</h3>
                 </div>
                 {scheduledToday.length === 0 ? (
                   <p className="px-4 py-6 text-center text-sm text-gray-400">
@@ -1269,7 +1269,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
                 {noSupervisorWidget}
 
                 {/* Same red-tinted chrome as its two neighbors above (noSupervisorWidget,
-                    needsLaborLoggedWidget) — all three are alerts in the same grid, so they
+                    needsLaborLoggedWidget) - all three are alerts in the same grid, so they
                     should read as one consistent set instead of two loud cards and one plain one. */}
                 <div className="overflow-hidden rounded-xl border border-red-100 bg-white shadow-sm">
                   <div className="flex items-center justify-between border-b border-red-100 bg-red-50/60 px-4 py-3">

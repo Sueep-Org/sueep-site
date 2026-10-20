@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { emptyPricing, type ContractPricing } from "@/lib/erp/janitorialPricing";
-import { InfoTip } from "@/app/erp/components/ui";
+import { Button, InfoTip } from "@/app/erp/components/ui";
 import { addOneYearKey } from "@/lib/erp/dates";
 import { PricingCalculator } from "./PricingCalculator";
 
@@ -222,9 +222,9 @@ export function NewContractForm({ buildings, employees }: { buildings: Option[];
         <Link href="/erp/janitorial" className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm text-gray-600 hover:bg-gray-50">
           Cancel
         </Link>
-        <button type="submit" disabled={saving} className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50">
+        <Button size="md" type="submit" disabled={saving}>
           {saving ? "Saving…" : "Create contract"}
-        </button>
+        </Button>
       </div>
     </form>
   );

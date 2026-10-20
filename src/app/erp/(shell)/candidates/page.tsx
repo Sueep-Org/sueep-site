@@ -87,7 +87,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-pink-600">Candidates</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Candidates</h1>
 
         <div className="mt-3 flex items-center justify-between gap-4">
           <form>
@@ -145,8 +145,8 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
                   <td className="px-4 py-3 text-gray-700">
                     <a href={`mailto:${c.email}`} className="hover:underline">{c.email}</a>
                   </td>
-                  <td className="px-4 py-3 text-gray-700">{c.phone ?? "—"}</td>
-                  <td className="px-4 py-3 text-gray-700">{c.positionInterest ?? "—"}</td>
+                  <td className="px-4 py-3 text-gray-700">{c.phone ?? "-"}</td>
+                  <td className="px-4 py-3 text-gray-700">{c.positionInterest ?? "-"}</td>
                   <td className="px-4 py-3">
                     {(c.responses as Record<string, unknown> | null)?.[SUBCONTRACTOR_GATE_FIELD] === "Yes" ? (
                       <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">

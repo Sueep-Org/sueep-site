@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
-import { getErpAuth, canEditPricing, canSeeFinancials, canOverrideQualityChecklist, canOverrideSafetyCheck, canManageInsurance, canManageCommunications, canViewCompanies, canEditCompanies } from "@/lib/erpAuth";
+import { getErpAuth, canEditPricing, canSeeFinancials, canOverrideQualityChecklist, canOverrideSafetyCheck, canManageInsurance, canManageCommunications, canViewCompanies, canEditCompanies, isPmLevel } from "@/lib/erpAuth";
 import { companyOptionLabel, overrideFromColumns } from "@/lib/erp/clientCompanies";
 import { loadCompanyOptions } from "@/lib/erp/clientCompaniesServer";
 import { loadProjectInvoiceDestination } from "@/lib/erp/invoiceDestination";
@@ -944,7 +944,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           id: check.id,
           label: check.turnoverRequest
             ? `${check.turnoverRequest.building.name} • ${check.turnoverRequest.requestType}${check.turnoverRequest.unitNumber ? ` • ${check.turnoverRequest.unitNumber}` : ""}`
-            : check.project?.jobTitle ?? "—",
+            : check.project?.jobTitle ?? "-",
           supervisorName: check.supervisorName,
           pmApproval: check.pmApproval,
           evidencePhotoCount: Array.isArray(check.evidencePhotos) ? check.evidencePhotos.length : 0,
@@ -1030,7 +1030,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         <ProjectsBackLink />
         <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <ProjectJobTitleEditor projectId={project.id} jobTitle={project.jobTitle} hubspotDealId={project.hubspotDealId} />
+            <ProjectJobTitleEditor projectId={project.id} jobTitle={project.jobTitle} hubspotDealId={project.hubspotDealId} canLinkDeal={!!auth && isPmLevel(auth.role) && project.segment !== "JANITORIAL_TURNOVER_REQUESTS"} />
             {coiWarning && (
               <span
                 title={`${coiWarning.holderName}. The GC may hold payment until they get a new one. See the COIs tab.`}

@@ -79,7 +79,7 @@ export function ContractorApplicationLinkSection({ contractorId, linkedApplicati
           </button>
         </div>
       ) : linkableApplications.length === 0 ? (
-        <p className="mt-3 text-xs text-gray-400">No unlinked subcontractor applications found — enter details manually in the sections below.</p>
+        <p className="mt-3 text-xs text-gray-400">No unlinked subcontractor applications found - enter details manually in the sections below.</p>
       ) : (
         <div className="mt-3 flex items-end gap-3">
           <div className="max-w-sm flex-1">
@@ -87,9 +87,9 @@ export function ContractorApplicationLinkSection({ contractorId, linkedApplicati
             <SearchableSelect
               value={selected}
               onChange={setSelected}
-              options={linkableApplications.map((a) => ({ value: a.id, label: `${a.fullName} — ${a.email}` }))}
+              options={linkableApplications.map((a) => ({ value: a.id, label: `${a.fullName} - ${a.email}` }))}
               placeholder="Search applications…"
-              allLabel="— None —"
+              allLabel="- None -"
             />
           </div>
           <button

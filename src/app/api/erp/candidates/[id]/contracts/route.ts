@@ -60,7 +60,7 @@ export async function POST(req: Request, ctx: Ctx) {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Auth-Token": process.env.DOCUSEAL_API_KEY! },
       body: JSON.stringify({
-        name: `${candidate.fullName} — ${file.name}`,
+        name: `${candidate.fullName} - ${file.name}`,
         documents: [{ name: file.name, file: bytes.toString("base64") }],
       }),
     });

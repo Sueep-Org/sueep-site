@@ -97,7 +97,7 @@ export default async function InboxPage({ searchParams }: PageProps) {
   return (
     <div className="mx-auto max-w-4xl space-y-5">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="text-2xl font-bold text-pink-600">Notifications</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Notifications</h1>
         <InfoTip text="Emails the ERP has sent you, newest first. Click one to see it exactly as sent. Sign-in codes aren't listed." />
         {unread > 0 && <span className="rounded-full bg-pink-100 px-2 py-0.5 text-xs font-medium text-pink-700">{unread} unread</span>}
         <div className="ml-auto">{unread > 0 && <MarkAllReadButton />}</div>

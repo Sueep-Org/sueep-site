@@ -133,6 +133,24 @@ function DocumentIcon({ className = iconCls }: IconProps) {
     </svg>
   );
 }
+function ColumnsIcon({ className = iconCls }: IconProps) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.75}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4.5 4.5h4v15h-4zM10 4.5h4v10h-4zM15.5 4.5h4v12.5h-4z"
+      />
+    </svg>
+  );
+}
 function UsersIcon({ className = iconCls }: IconProps) {
   return (
     <svg
@@ -510,6 +528,7 @@ const projectGroupItems: NavItem[] = [
   // New projects are started from the Projects page's New project button.
   { href: "/erp/projects", label: "Projects", roles: ALL, icon: FolderIcon },
   { href: "/erp/schedule", label: "Schedule", roles: ALL, icon: CalendarIcon },
+  { href: "/erp/pipeline", label: "Pipeline", roles: PM_EST, icon: ColumnsIcon },
   { href: "/erp/janitorial", label: "Janitorial Contracts", roles: PM_SALES, icon: BroomIcon },
 ];
 
@@ -533,6 +552,10 @@ const billingGroupItems: NavItem[] = [
     roles: ["ADMIN", "BUSINESS_MANAGER"],
     icon: DocumentIcon,
   },
+];
+
+/** Paying people and staying insured. Finance section, next to Billing. */
+const payGroupItems: NavItem[] = [
   {
     href: "/erp/payroll",
     label: "Compensation",
@@ -566,12 +589,6 @@ const employmentGroupItems: NavItem[] = [
     roles: PM_SALES,
     icon: BriefcaseIcon,
   },
-  {
-    href: "/erp/franchise",
-    label: "Franchise Inquiries",
-    roles: PM_ADMIN,
-    icon: StoreIcon,
-  },
 ];
 
 const adminGroupItems: NavItem[] = [
@@ -589,9 +606,17 @@ const adminGroupItems: NavItem[] = [
   },
   {
     href: "/erp/notifications",
-    label: "Notification Management",
+    // The inbox is "Notifications"; this page is which emails go out and to whom.
+    label: "Email Settings",
     roles: PM_ADMIN,
     icon: BellIcon,
+  },
+  {
+    // Leads from people wanting to buy a franchise, not staff, so not under Team.
+    href: "/erp/franchise",
+    label: "Franchise Inquiries",
+    roles: PM_ADMIN,
+    icon: StoreIcon,
   },
 ];
 
@@ -907,6 +932,8 @@ export function ErpNav({ role }: { role: ErpRole }) {
   const visibleProjectItems = projectGroupItems.filter((i) => allowed(i, role));
   const visibleClientItems = clientGroupItems.filter((i) => allowed(i, role));
   const visibleBillingItems = billingGroupItems.filter((i) => allowed(i, role));
+  const visiblePayItems = payGroupItems.filter((i) => allowed(i, role));
+  const hasFinanceSection = visibleBillingItems.length > 0 || visiblePayItems.length > 0;
   const visibleTeamItems = employmentGroupItems.filter((i) => allowed(i, role));
   const hasTeamSection = visibleTeamItems.length > 0;
   const visibleAdminItems = adminGroupItems.filter((i) => allowed(i, role));
@@ -936,16 +963,25 @@ export function ErpNav({ role }: { role: ErpRole }) {
               pathname={pathname}
               role={role}
             />
+            {/* Estimating leads to projects, so it sits with them. Opens the separate estimator app. */}
+            {showEstimator && <NavLink item={estimatorItem} pathname={pathname} />}
           </>
         )}
 
-        {visibleBillingItems.length > 0 && (
+        {hasFinanceSection && (
           <>
             <SectionLabel>Finance</SectionLabel>
             <NavGroup
               label="Billing"
               icon={CreditCardIcon}
               items={billingGroupItems}
+              pathname={pathname}
+              role={role}
+            />
+            <NavGroup
+              label="Pay & Insurance"
+              icon={BanknotesIcon}
+              items={payGroupItems}
               pathname={pathname}
               role={role}
             />
@@ -965,8 +1001,6 @@ export function ErpNav({ role }: { role: ErpRole }) {
           </>
         )}
 
-
-        {showEstimator && <NavLink item={estimatorItem} pathname={pathname} />}
 
         {visibleAdminItems.length > 0 && (
           <>
@@ -1016,7 +1050,7 @@ export function ErpNav({ role }: { role: ErpRole }) {
           <RailLink item={notificationsItem} pathname={pathname} badge={unread} />
 
           {(visibleProjectItems.length > 0 ||
-            visibleBillingItems.length > 0 ||
+            hasFinanceSection ||
             hasTeamSection ||
             visibleAdminItems.length > 0) && (
             <div className="my-1 h-px w-8 shrink-0 bg-gray-100" />
@@ -1033,11 +1067,17 @@ export function ErpNav({ role }: { role: ErpRole }) {
               pathname={pathname}
             />
           )}
-          {visibleBillingItems.length > 0 && (
+          {showEstimator && (
+            <RailLink item={estimatorItem} pathname={pathname} />
+          )}
+          {hasFinanceSection && (
             <RailGroup
               label="Finance"
               icon={CreditCardIcon}
-              items={visibleBillingItems}
+              sections={[
+                { label: "Billing", items: visibleBillingItems },
+                { label: "Pay & Insurance", items: visiblePayItems },
+              ]}
               pathname={pathname}
             />
           )}
@@ -1048,9 +1088,6 @@ export function ErpNav({ role }: { role: ErpRole }) {
               items={visibleTeamItems}
               pathname={pathname}
             />
-          )}
-          {showEstimator && (
-            <RailLink item={estimatorItem} pathname={pathname} />
           )}
           {visibleAdminItems.length > 0 && (
             <RailGroup

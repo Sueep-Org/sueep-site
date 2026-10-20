@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { InfoTip, inputClass, labelClass, useConfirm, useToast } from "@/app/erp/components/ui";
+import { Button, InfoTip, inputClass, labelClass, useConfirm, useToast } from "@/app/erp/components/ui";
 
 const input = inputClass.md;
 const label = labelClass.default;
@@ -156,13 +156,10 @@ export function ContractorProfileEditor({ contractorId, initial }: Props) {
         {error ? <p className="text-xs text-red-500">{error}</p> : null}
         {ok ? <p className="text-xs text-emerald-600">{ok}</p> : null}
         <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={loading || deleting}
-            className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-          >
+          <Button size="md" type="submit"
+            disabled={loading || deleting}>
             {loading ? "Saving…" : "Save profile"}
-          </button>
+          </Button>
           <button
             type="button"
             onClick={() => void handleDelete()}

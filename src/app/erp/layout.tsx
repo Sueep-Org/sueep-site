@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: { default: "Operations", template: "%s | Sueep" },
-  description: "Internal operations — projects, labor, and costs.",
+  description: "Internal operations - projects, labor, and costs.",
   robots: { index: false, follow: false },
   icons: {
     icon: [

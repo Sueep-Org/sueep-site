@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
-import { inputClass, labelClass } from "@/app/erp/components/ui";
+import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
 
 type Props = {
   buildingId: string;
@@ -370,13 +370,10 @@ export function AddUnitForm({ buildingId, existingUnitNumbers = [] }: Props) {
 
       {error ? <p className="text-xs text-red-500">{error}</p> : null}
 
-      <button
-        type="submit"
-        disabled={saving}
-        className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-      >
+      <Button size="md" type="submit"
+        disabled={saving}>
         {saving ? "Adding…" : "Add unit"}
-      </button>
+      </Button>
     </form>
   );
 }

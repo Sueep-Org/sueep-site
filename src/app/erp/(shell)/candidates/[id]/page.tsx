@@ -83,14 +83,14 @@ export default async function CandidateDetailPage({ params }: PageProps) {
 
   function formatExperience(exp: string | undefined, years: string | undefined): string {
     return exp === "yes"
-      ? `Yes${years ? ` — ${years} yr${Number(years) !== 1 ? "s" : ""}` : ""}`
+      ? `Yes${years ? ` - ${years} yr${Number(years) !== 1 ? "s" : ""}` : ""}`
       : exp === "no"
       ? "No"
-      : "—";
+      : "-";
   }
 
   function formatYesNo(val: string | undefined): string {
-    return val === "yes" ? "Yes" : val === "no" ? "No" : "—";
+    return val === "yes" ? "Yes" : val === "no" ? "No" : "-";
   }
 
   return (
@@ -120,7 +120,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
           )}
         </div>
         {/* Available regardless of how they answered the subcontractor
-            questionnaire gate question — staff can override manually. */}
+            questionnaire gate question - staff can override manually. */}
         <ConvertToContractorButton applicationId={row.id} existingContractorId={row.contractor?.id ?? null} />
       </div>
 
@@ -140,20 +140,20 @@ export default async function CandidateDetailPage({ params }: PageProps) {
                 </div>
                 <div>
                   <dt className="text-pink-500">Phone</dt>
-                  <dd className="mt-0.5 text-zinc-500">{row.phone || "—"}</dd>
+                  <dd className="mt-0.5 text-zinc-500">{row.phone || "-"}</dd>
                 </div>
                 <div>
                   <dt className="text-pink-500">Location</dt>
-                  <dd className="mt-0.5 text-zinc-500">{location || "—"}</dd>
+                  <dd className="mt-0.5 text-zinc-500">{location || "-"}</dd>
                 </div>
                 <div>
                   <dt className="text-pink-500">Position interest</dt>
-                  <dd className="mt-0.5 text-zinc-500">{row.positionInterest || "—"}</dd>
+                  <dd className="mt-0.5 text-zinc-500">{row.positionInterest || "-"}</dd>
                 </div>
                 <div>
                   <dt className="text-pink-500">Has vehicle</dt>
                   <dd className="mt-0.5 text-zinc-500">
-                    {hasVehicle === "yes" ? "Yes" : hasVehicle === "no" ? "No" : "—"}
+                    {hasVehicle === "yes" ? "Yes" : hasVehicle === "no" ? "No" : "-"}
                   </dd>
                 </div>
                 {cleaningExperience !== undefined && (
@@ -175,7 +175,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
                 {cleaningExperience === undefined && paintingExperience === undefined && (
                   <div>
                     <dt className="text-pink-500">Experience</dt>
-                    <dd className="mt-0.5 text-zinc-500">—</dd>
+                    <dd className="mt-0.5 text-zinc-500">-</dd>
                   </div>
                 )}
                 {supervisingYears !== undefined && (
@@ -184,7 +184,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
                     <dd className="mt-0.5 text-zinc-500">
                       {supervisingYears
                         ? `${supervisingYears} yr${Number(supervisingYears) !== 1 ? "s" : ""}`
-                        : "—"}
+                        : "-"}
                     </dd>
                   </div>
                 )}
@@ -202,7 +202,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
                 )}
                 <div className="sm:col-span-2">
                   <dt className="text-pink-500">Additional comments</dt>
-                  <dd className="mt-0.5 text-zinc-500 whitespace-pre-wrap">{row.additionalNotes || "—"}</dd>
+                  <dd className="mt-0.5 text-zinc-500 whitespace-pre-wrap">{row.additionalNotes || "-"}</dd>
                 </div>
               </dl>
               <p className="mt-4 text-xs text-zinc-600 font-mono">id: {row.id}</p>

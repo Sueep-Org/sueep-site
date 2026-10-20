@@ -7,6 +7,7 @@ import { InfoTip } from "@/app/erp/components/ui";
 import { useInsuranceCheck } from "@/app/erp/components/useInsuranceCheck";
 import { turnoverScopeLabel } from "@/lib/erp/turnoverScope";
 import { inputClass, labelClass, Modal, Button } from "@/app/erp/components/ui";
+import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 
 export type ContractorRow = {
   id: string;
@@ -81,6 +82,7 @@ export function ProjectContractorSection({
   const checkInsurance = useInsuranceCheck(contractors);
   const [assignments, setAssignments] = useState(initialAssignments);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [addContractorId, setAddContractorId] = useState("");
   const [editFields, setEditFields] = useState<EditFields>({ contractorId: "", role: "", startDate: "", endDate: "", costDollars: "", taskDescription: "", sovItemIds: [] });
   const [addError, setAddError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -319,6 +321,7 @@ export function ProjectContractorSection({
       }
       setAssignments((prev) => [row, ...prev]);
       form.reset();
+      setAddContractorId("");
       setSovPicks([]);
       setSovMarkCompleteIds(new Set());
       setScopeMarkCompleteIds(new Set());
@@ -352,12 +355,17 @@ export function ProjectContractorSection({
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div className="sm:col-span-2 lg:col-span-2">
             <label className={label} htmlFor="c-contractor">Contractor *</label>
-            <select id="c-contractor" name="contractorId" required className={input}>
-              <option value="" disabled>Select contractor…</option>
-              {activeContractors.map((c) => (
-                <option key={c.id} value={c.id}>{c.insuranceShort ? `${c.name} · ${c.insuranceShort}` : c.name}</option>
-              ))}
-            </select>
+            {/* Searchable; the hidden field keeps the form's contractorId. onAdd checks one is picked. */}
+            <input type="hidden" name="contractorId" value={addContractorId} />
+            <SearchableSelect
+              id="c-contractor"
+              value={addContractorId}
+              onChange={setAddContractorId}
+              options={activeContractors.map((c) => ({ value: c.id, label: c.insuranceShort ? `${c.name} · ${c.insuranceShort}` : c.name }))}
+              placeholder="Search contractors…"
+              allLabel="Select contractor…"
+              className="mt-1"
+            />
           </div>
           <div>
             <label className={label} htmlFor="c-role">Role</label>
@@ -472,13 +480,10 @@ export function ProjectContractorSection({
           </div>
         )}
         {addError ? <p className="mt-3 text-sm text-red-400" role="alert">{addError}</p> : null}
-        <button
-          type="submit"
-          disabled={loading}
-          className="mt-4 rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-        >
+        <Button size="md" className="mt-4" type="submit"
+          disabled={loading}>
           {loading ? "Adding…" : "Add contractor"}
-        </button>
+        </Button>
       </form>}
 
       {/* Table */}
@@ -529,18 +534,16 @@ export function ProjectContractorSection({
                   editingId === a.id ? (
                     <tr key={a.id} className="bg-yellow-50">
                       <td className="py-1 pr-2">
-                        <select
-                          className={editInput}
+                        <SearchableSelect
                           value={editFields.contractorId}
-                          onChange={(e) => setEditFields((f) => ({ ...f, contractorId: e.target.value }))}
-                        >
-                          {contractors.map((c) => (
-                            <option key={c.id} value={c.id}>{c.insuranceShort ? `${c.name} · ${c.insuranceShort}` : c.name}</option>
-                          ))}
-                        </select>
+                          onChange={(v) => v && setEditFields((f) => ({ ...f, contractorId: v }))}
+                          options={contractors.map((c) => ({ value: c.id, label: c.insuranceShort ? `${c.name} · ${c.insuranceShort}` : c.name }))}
+                          placeholder="Search contractors…"
+                          allLabel="Select contractor…"
+                        />
                       </td>
                       <td className="py-1 pr-2">
-                        <input type="text" className={editInput} placeholder="—" value={editFields.role} onChange={(e) => setEditFields((f) => ({ ...f, role: e.target.value }))} />
+                        <input type="text" className={editInput} placeholder="-" value={editFields.role} onChange={(e) => setEditFields((f) => ({ ...f, role: e.target.value }))} />
                       </td>
                       <td className="py-1 pr-2">
                         <input type="date" className={editInput} value={editFields.startDate} onChange={(e) => setEditFields((f) => ({ ...f, startDate: e.target.value }))} />
@@ -597,7 +600,7 @@ export function ProjectContractorSection({
                             )}
                           </div>
                         ) : (
-                          <input type="text" className={editInput} placeholder="—" value={editFields.taskDescription} onChange={(e) => setEditFields((f) => ({ ...f, taskDescription: e.target.value }))} />
+                          <input type="text" className={editInput} placeholder="-" value={editFields.taskDescription} onChange={(e) => setEditFields((f) => ({ ...f, taskDescription: e.target.value }))} />
                         )}
                       </td>
                       <td className="py-1 pr-2">
@@ -631,13 +634,13 @@ export function ProjectContractorSection({
                           )}
                         </span>
                       </td>
-                      <td className="py-2 pr-2 text-gray-500">{a.role || "—"}</td>
+                      <td className="py-2 pr-2 text-gray-500">{a.role || "-"}</td>
                       {/* startDate/endDate are stored as UTC midnight for the intended calendar day — formatting without
                           timeZone: "UTC" re-interprets it in the viewer's local timezone, rolling it back a day for
                           anyone west of UTC (e.g. a contractor's 8/11 assignment showing as 8/10 here in Eastern). */}
-                      <td className="py-2 pr-2 text-gray-600">{a.startDate ? new Date(a.startDate).toLocaleDateString("en-US", { timeZone: "UTC" }) : "—"}</td>
-                      <td className="py-2 pr-2 text-gray-600">{a.endDate ? new Date(a.endDate).toLocaleDateString("en-US", { timeZone: "UTC" }) : "—"}</td>
-                      <td className="py-2 pr-2 tabular-nums text-gray-700">{a.costCents != null ? fmt(a.costCents) : "—"}</td>
+                      <td className="py-2 pr-2 text-gray-600">{a.startDate ? new Date(a.startDate).toLocaleDateString("en-US", { timeZone: "UTC" }) : "-"}</td>
+                      <td className="py-2 pr-2 text-gray-600">{a.endDate ? new Date(a.endDate).toLocaleDateString("en-US", { timeZone: "UTC" }) : "-"}</td>
+                      <td className="py-2 pr-2 tabular-nums text-gray-700">{a.costCents != null ? fmt(a.costCents) : "-"}</td>
                       <td className="py-2 pr-2">
                         {a.sovItemIds.length > 0 ? (
                           <div className="space-y-1">
@@ -651,14 +654,14 @@ export function ProjectContractorSection({
                                   className="h-4 w-4 shrink-0 rounded border-gray-300 text-pink-600 focus:ring-pink-500 cursor-pointer"
                                 />
                                 <span className={`text-xs ${sovCompletedMap[sovItemId] ? "line-through text-gray-400" : "text-gray-700"}`}>
-                                  {sovItems.find((s) => s.id === sovItemId)?.description ?? "—"}
+                                  {sovItems.find((s) => s.id === sovItemId)?.description ?? "-"}
                                 </span>
                               </div>
                             ))}
                             {a.taskDescription ? <span className="block text-xs text-gray-500">{a.taskDescription}</span> : null}
                           </div>
                         ) : (
-                          <span className="text-gray-500">{a.taskDescription || "—"}</span>
+                          <span className="text-gray-500">{a.taskDescription || "-"}</span>
                         )}
                       </td>
                       <td className="py-2 pr-2">

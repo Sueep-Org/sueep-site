@@ -27,7 +27,7 @@ export function MyNotifications() {
 
       <Callout type="tip">
         Emails sent before October 5, 2026, sign-in codes, and emails that failed or were turned off aren&apos;t listed. Bcc
-        recipients are never shown. Admins and PMs can see failed emails in the Email Log on Notification Management.
+        recipients are never shown. Admins and PMs can see failed emails in the Email Log on Email Settings.
       </Callout>
     </>
   );

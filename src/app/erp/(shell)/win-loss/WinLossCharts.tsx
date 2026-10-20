@@ -72,7 +72,10 @@ function RowsTable({ rows, first }: { rows: Row[]; first: string }) {
       <tbody className="divide-y divide-gray-100">
         {rows.map((r) => (
           <tr key={r.key}>
-            <td className="py-1.5 pr-2 text-gray-900">{r.label}</td>
+            <td className="py-1.5 pr-2 text-gray-900">
+              {r.label}
+              {r.note && <span className="block text-[11px] text-gray-400">{r.note}</span>}
+            </td>
             <td className="px-2 py-1.5 text-right tabular-nums">{r.bids}</td>
             <td className="px-2 py-1.5 text-right tabular-nums">{r.won}</td>
             <td className="px-2 py-1.5 text-right tabular-nums">{r.lost}</td>
@@ -126,14 +129,17 @@ export function StackedBars({ rows, first, limit }: { rows: Row[]; first: string
                 onFocus={() => setHover(r.key)}
                 onBlur={() => setHover(null)}
               >
-                <span className="truncate text-gray-900" title={r.label}>
-                  {r.href ? (
-                    <Link href={r.href} className="text-pink-600 hover:underline">
-                      {r.label}
-                    </Link>
-                  ) : (
-                    r.label
-                  )}
+                <span className="min-w-0 text-gray-900" title={r.note ? `${r.label}\n${r.note}` : r.label}>
+                  <span className="block truncate">
+                    {r.href ? (
+                      <Link href={r.href} className="text-pink-600 hover:underline">
+                        {r.label}
+                      </Link>
+                    ) : (
+                      r.label
+                    )}
+                  </span>
+                  {r.note && <span className="block truncate text-[11px] text-gray-400">{r.note}</span>}
                 </span>
                 <span className="flex h-5 items-center" style={{ gap: GAP }}>
                   {(
@@ -161,7 +167,11 @@ export function StackedBars({ rows, first, limit }: { rows: Row[]; first: string
           })}
         </ul>
       )}
-      {limit && rows.length > limit && <p className="text-xs text-gray-500">Top {limit} of {rows.length} by bids. The number after each bar is bids; the right column is the win rate.</p>}
+      {limit && rows.length > limit && (
+        <p className="text-xs text-gray-500">
+          Top {limit} of {rows.length} by bids. The number after each bar is bids; the right column is the win rate.
+        </p>
+      )}
     </div>
   );
 }
@@ -170,7 +180,9 @@ export function StackedBars({ rows, first, limit }: { rows: Row[]; first: string
 export function QuarterColumns({ rows }: { rows: Row[] }) {
   const [hover, setHover] = useState<number | null>(null);
   const [showTable, setShowTable] = useState(false);
-  const W = 640, H = 220, PAD = { top: 22, right: 8, bottom: 26, left: 8 };
+  const W = 640,
+    H = 220,
+    PAD = { top: 22, right: 8, bottom: 26, left: 8 };
   const plotH = H - PAD.top - PAD.bottom;
   const band = (W - PAD.left - PAD.right) / Math.max(1, rows.length);
   const barW = Math.min(24, band - 6);
@@ -232,7 +244,14 @@ export function QuarterColumns({ rows }: { rows: Row[] }) {
             ))}
           </svg>
           {active && hover != null && (
-            <div className="pointer-events-none absolute top-0" style={hover / rows.length > 0.6 ? { right: `${100 - ((hover + 0.5) / rows.length) * 100 + 4}%` } : { left: `${((hover + 0.5) / rows.length) * 100 + 4}%` }}>
+            <div
+              className="pointer-events-none absolute top-0"
+              style={
+                hover / rows.length > 0.6
+                  ? { right: `${100 - ((hover + 0.5) / rows.length) * 100 + 4}%` }
+                  : { left: `${((hover + 0.5) / rows.length) * 100 + 4}%` }
+              }
+            >
               <div className="relative">
                 <Tip row={active} extra={active.open ? `${active.open} still open, not in the bar.` : undefined} />
               </div>
@@ -250,7 +269,13 @@ function topRounded(x: number, y: number, w: number, h: number): string {
 }
 
 /** Single-color bars for a list of counts (loss reasons). Value at the bar's tip. */
-export function CountBars({ items, color = LOST }: { items: { label: string; count: number; cents: number; share: number; muted?: boolean }[]; color?: string }) {
+export function CountBars({
+  items,
+  color = LOST,
+}: {
+  items: { label: string; count: number; cents: number; share: number; muted?: boolean }[];
+  color?: string;
+}) {
   const [showTable, setShowTable] = useState(false);
   const max = Math.max(1, ...items.map((i) => i.count));
   return (
@@ -274,7 +299,11 @@ export function CountBars({ items, color = LOST }: { items: { label: string; cou
       ) : (
         <ul className="space-y-1.5">
           {items.map((i) => (
-            <li key={i.label} className="grid grid-cols-[minmax(0,11rem)_1fr] items-center gap-2 text-sm" title={`${i.count} lost bids, ${pct(i.share)} of losses${i.cents ? `, ${centsToDollars(i.cents)}` : ""}`}>
+            <li
+              key={i.label}
+              className="grid grid-cols-[minmax(0,11rem)_1fr] items-center gap-2 text-sm"
+              title={`${i.count} lost bids, ${pct(i.share)} of losses${i.cents ? `, ${centsToDollars(i.cents)}` : ""}`}
+            >
               <span className={`truncate ${i.muted ? "text-gray-500" : "text-gray-900"}`}>{i.label}</span>
               <span className="flex h-5 items-center gap-1.5">
                 <span className="h-full rounded-r" style={{ width: `${(i.count / max) * 85}%`, backgroundColor: i.muted ? OPEN : color }} />

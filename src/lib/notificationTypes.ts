@@ -356,6 +356,20 @@ export const NOTIFICATIONS = {
     automatic: "Every Admin, PM and Business Manager. Sales and Estimation get one with only the Bids category",
   }),
 
+  PIPELINE_FOLLOW_UPS: def({
+    label: "Pipeline follow-ups",
+    group: "Reminders",
+    when: "Monday about 8am: your deals with an overdue next step, one due this week, or none yet in a stage that needs one",
+    automatic: "Each HubSpot deal owner who has an ERP login with the same email",
+  }),
+  PIPELINE_FOLLOW_UPS_SUMMARY: def({
+    label: "Pipeline follow-ups summary",
+    group: "Reminders",
+    when: "Monday about 8am: next steps for everyone, including deals owned by people no longer in HubSpot",
+    automatic: "Every Admin",
+    ccEditable: true,
+  }),
+
   LIEN_ALERTS: def({
     label: "Lien alerts",
     group: "Reminders",

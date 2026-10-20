@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { inputClass, labelClass } from "@/app/erp/components/ui";
+import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
 
 const input = inputClass.md;
 const label = labelClass.default;
@@ -191,13 +191,10 @@ export function SupervisorChangeOrderRequestForm({
             {notifyResult.msg}
           </p>
         ) : null}
-        <button
-          type="submit"
-          disabled={loading}
-          className="mt-4 rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-        >
+        <Button size="md" className="mt-4" type="submit"
+          disabled={loading}>
           {loading ? "Sending…" : "Request change order"}
-        </button>
+        </Button>
       </form>
 
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">

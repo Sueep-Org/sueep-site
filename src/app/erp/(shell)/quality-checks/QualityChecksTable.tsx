@@ -102,13 +102,13 @@ export function QualityChecksTable({ checks }: { checks: QualityCheckRow[] }) {
                     ) : check.scopeDescription ? (
                       <span className="text-gray-600">{check.scopeDescription.slice(0, 60)}</span>
                     ) : (
-                      "—"
+                      "-"
                     )}
                   </td>
                   <td className="px-4 py-3 text-gray-900">{check.supervisorName}</td>
                   <td className="px-4 py-3 text-gray-900">{check.pmApproval ? "Yes" : "No"}</td>
                   <td className="px-4 py-3 text-gray-900">{check.evidencePhotoCount}</td>
-                  <td className="px-4 py-3 text-gray-900">{check.notes ? check.notes.slice(0, 60) : "—"}</td>
+                  <td className="px-4 py-3 text-gray-900">{check.notes ? check.notes.slice(0, 60) : "-"}</td>
                   <td className="px-4 py-3">
                     <Link
                       href={`/erp/quality-checks/${check.id}`}

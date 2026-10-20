@@ -4,8 +4,8 @@ import type { SubField } from "@/lib/erp/subcontractorQuestionnaire";
  * for read-only display — shared by SubcontractorInfoSection and the
  * Contractor profile's Company profile / Insurance / Licensing cards. */
 export function formatSubValue(v: unknown): string {
-  if (v == null || v === "") return "—";
-  if (Array.isArray(v)) return v.length > 0 ? v.join(", ") : "—";
+  if (v == null || v === "") return "-";
+  if (Array.isArray(v)) return v.length > 0 ? v.join(", ") : "-";
   return String(v);
 }
 
@@ -57,7 +57,7 @@ export function subFieldInput(field: SubField, value: string, onChange: (v: stri
   if (field.type === "select") {
     return (
       <select value={value} onChange={(e) => onChange(e.target.value)} className={subInputCls}>
-        <option value="">— Select —</option>
+        <option value="">- Select -</option>
         {(field.options ?? []).map((opt) => (
           <option key={opt} value={opt}>
             {opt}

@@ -118,7 +118,7 @@ export function QualityCheckProfileEditor({ checkId, initial }: Props) {
           <div className="space-y-1">
             <label className="block text-xs font-medium text-gray-600">Project</label>
             <div className="mt-1 w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
-              {initial.projectName ?? "—"}
+              {initial.projectName ?? "-"}
             </div>
           </div>
         )}
@@ -136,8 +136,8 @@ export function QualityCheckProfileEditor({ checkId, initial }: Props) {
             </label>
             <p className="text-xs text-gray-500">
               {initial.turnoverRequestId
-                ? "Turnover requests don't have SOV items — briefly describe what this check covers."
-                : "No SOV items on this project yet — briefly describe what this check covers."}
+                ? "Turnover requests don't have SOV items - briefly describe what this check covers."
+                : "No SOV items on this project yet - briefly describe what this check covers."}
             </p>
             <textarea
               id="qc-edit-scope"

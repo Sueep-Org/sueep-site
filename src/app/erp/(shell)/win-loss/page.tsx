@@ -1,11 +1,14 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
-import { getErpAuth, canViewCompanies } from "@/lib/erpAuth";
+import { getErpAuth, canEditCompanies, canViewCompanies } from "@/lib/erpAuth";
+import Link from "next/link";
 import { InfoTip } from "@/app/erp/components/ui";
 import { centsToDollars, centsToDollarsCompact } from "@/lib/erp/money";
-import { PERIODS, STALE_DAYS, WORK_SCOPES, WORK_SCOPE_LABELS, loadWinLoss, type PeriodKey, type WinLossReport, type WorkScope } from "@/lib/erp/winLoss";
+import { PERIODS, STALE_DAYS, loadWinLoss, type PeriodKey, type WinLossReport } from "@/lib/erp/winLoss";
+import { WORK_SCOPES, WORK_SCOPE_LABELS, type WorkScope } from "@/lib/erp/postConDeals";
 import { CountBars, QuarterColumns, StackedBars } from "./WinLossCharts";
+import { WinLossFilter } from "./WinLossFilter";
+import { PriceDots } from "./PriceDots";
 
 export const metadata: Metadata = { title: "Win/loss" };
 export const dynamic = "force-dynamic";
@@ -37,19 +40,29 @@ function Card({ title, info, children, className = "" }: { title: string; info: 
   );
 }
 
-function Body({ r }: { r: WinLossReport }) {
+function Body({ r, canLink }: { r: WinLossReport; canLink: boolean }) {
   const decided = r.total.won + r.total.lost;
   return (
     <>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Tile label="Win rate" value={pct(r.total.winRate)} sub={`${r.total.won} won of ${decided} decided, ${r.total.open} still open`} info="Won divided by won plus lost. Open bids aren't counted. Won means Quote Approved or any later stage." />
+        <Tile
+          label="Win rate"
+          value={pct(r.total.winRate)}
+          sub={`${r.total.won} won of ${decided} decided, ${r.total.open} still open`}
+          info="Won divided by won plus lost. Open bids aren't counted. Won means Quote Approved or any later stage."
+        />
         <Tile
           label="Won"
           value={centsToDollarsCompact(r.total.wonCents)}
           sub={`${r.total.won} jobs`}
           info={`Won jobs added up. A won job that's a project in the ERP uses its ERP contract value (${r.wonFromErp} jobs, any time); the rest use the HubSpot deal Amount.`}
         />
-        <Tile label="Lost" value={centsToDollarsCompact(r.total.lostCents)} sub={`${r.total.lost} bids`} info="HubSpot deal amounts of bids marked Deal Lost." />
+        <Tile
+          label="Lost"
+          value={centsToDollarsCompact(r.total.lostCents)}
+          sub={`${r.total.lost} bids`}
+          info="HubSpot deal amounts of bids marked Deal Lost."
+        />
         <Tile
           label={r.scope ? `$ per sq ft (won, ${WORK_SCOPE_LABELS[r.scope].toLowerCase()})` : "$ per sq ft (won)"}
           value={r.perSqft.won == null ? "-" : `$${r.perSqft.won.toFixed(2)}`}
@@ -86,13 +99,28 @@ function Body({ r }: { r: WinLossReport }) {
         </Card>
       </div>
 
-      <Card title="Win rate by quarter" info="Bids by the quarter they came in: won and lost stacked, win rate on top. Open bids aren't in the bars because they aren't decided yet, so the latest quarters fill in over time. Hover a quarter for details.">
+      <Card
+        title="Price: won vs lost"
+        info="Each dot is a won or lost bid in the period, placed by its price per sq ft (amount divided by HubSpot's Area SQFT), one strip per type of work. The dark line in each row is the median. Lost for Price are lost bids whose reason was Price (they're in Lost too). Bids priced 3 times the middle or more (or a third or less) are left out as likely typos. Hover a dot for the deal; click to open it in HubSpot."
+      >
+        <PriceDots scopes={r.priceDots} />
+      </Card>
+
+      <Card
+        title="Win rate by quarter"
+        info="Bids by the quarter they came in: won and lost stacked, win rate on top. Open bids aren't in the bars because they aren't decided yet, so the latest quarters fill in over time. Hover a quarter for details."
+      >
         <QuarterColumns rows={r.byQuarter} />
       </Card>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Card title="Why we lose" info="HubSpot's Deal Lost Reason on lost bids, with each reason's share of all losses. No reason given (gray) means the field was left blank in HubSpot.">
-          <CountBars items={r.lossReasons.map((x) => ({ label: x.reason, count: x.count, cents: x.cents, share: x.share, muted: x.reason === "No reason given" }))} />
+        <Card
+          title="Why we lose"
+          info="HubSpot's Deal Lost Reason on lost bids, with each reason's share of all losses. No reason given (gray) means the field was left blank in HubSpot."
+        >
+          <CountBars
+            items={r.lossReasons.map((x) => ({ label: x.reason, count: x.count, cents: x.cents, share: x.share, muted: x.reason === "No reason given" }))}
+          />
         </Card>
         <Card title="By job size" info="Bids grouped by amount. Bar length is the number of bids; the right column is the win rate. Hover for dollars.">
           <StackedBars rows={r.bySize} first="Amount" />
@@ -100,16 +128,130 @@ function Body({ r }: { r: WinLossReport }) {
       </div>
 
       <Card
+        title="Re-bids with the GC that won"
+        info="Bids in the period lost because our GC wasn't awarded the job. With winner: someone recorded which GC got it (Mark lost or Who won? on the Pipeline board). Re-bids: new deals made from those with the winning GC, and how they turned out. Any period's re-bid can still be open."
+      >
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            { label: "GC not awarded", value: String(r.rebids.gcNotAwarded) },
+            { label: "With winner", value: String(r.rebids.withWinner) },
+            { label: "Re-bids", value: String(r.rebids.rebids) },
+            {
+              label: "Re-bids won",
+              value: `${r.rebids.won}`,
+              sub: r.rebids.rebids
+                ? `${r.rebids.lost} lost, ${r.rebids.open} open${r.rebids.wonCents ? `, ${centsToDollarsCompact(r.rebids.wonCents)}` : ""}`
+                : undefined,
+            },
+          ].map((x) => (
+            <div key={x.label} className="rounded-md bg-gray-50 p-3">
+              <p className="text-xs text-gray-500">{x.label}</p>
+              <p className="text-xl font-semibold text-gray-900">{x.value}</p>
+              {x.sub && <p className="text-xs text-gray-500">{x.sub}</p>}
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <Card
         title="By GC"
-        info="The deal's Company, matched to Companies by name or other names, or the GC at the end of the deal name. Bar length is the number of bids; the right column is the win rate. Linked names open the company's scorecard. Add other spellings on a company to merge them."
+        info="General contractors only: the deal's Company, matched to Companies by name or other names, or the GC at the end of the deal name. Not linked: a GC name that matches no company (see Link companies). No company: the deal has no GC at all, often a direct or existing client job. Bar length is the number of bids; the right column is the win rate. Linked names open the company's scorecard."
       >
         <StackedBars rows={r.byGc} first="Company" limit={15} />
       </Card>
 
+      <Card
+        title="By property manager and owner"
+        info="Clients who hire us directly (company type Property manager or Owner). Bids and win rate cover their deals in both pipelines that came in during the period; the type of work filter doesn't apply here. Buildings, janitorial contracts (active, with monthly value), turnovers finished in the last 90 days and average days to pay are as of today."
+      >
+        {r.byClient.length === 0 ? (
+          <p className="text-sm text-gray-500">No property manager or owner companies yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-gray-500">
+                  <th className="pb-1 pr-2 font-medium">Company</th>
+                  <th className="px-2 pb-1 text-right font-medium">Bids</th>
+                  <th className="px-2 pb-1 text-right font-medium">Win rate</th>
+                  <th className="px-2 pb-1 text-right font-medium">Buildings</th>
+                  <th className="px-2 pb-1 text-right font-medium">Janitorial</th>
+                  <th className="px-2 pb-1 text-right font-medium">Turnovers 90d</th>
+                  <th className="pb-1 pl-2 text-right font-medium">Days to pay</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {r.byClient.map((c) => (
+                  <tr key={c.companyId}>
+                    <td className="py-1.5 pr-2">
+                      <Link href={`/erp/companies/${c.companyId}`} className="text-gray-900 hover:text-pink-600">
+                        {c.name}
+                      </Link>
+                    </td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">{c.bids || "-"}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">
+                      {pct(c.winRate)}
+                      {c.won + c.lost > 0 && (
+                        <span className="ml-1 text-xs text-gray-400">
+                          {c.won}/{c.won + c.lost}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">{c.buildings || "-"}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">
+                      {c.contracts ? (
+                        <>
+                          {c.contracts}
+                          <span className="ml-1 text-xs text-gray-500">{centsToDollarsCompact(c.contractMonthlyCents)}/mo</span>
+                        </>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">{c.turnovers90 || "-"}</td>
+                    <td className="py-1.5 pl-2 text-right tabular-nums">{c.avgDaysToPay != null ? Math.round(c.avgDaysToPay) : "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {canLink && r.unlinked.length > 0 && (
+        <Card
+          title="Link companies"
+          info="Company names on deals in the period that match no company in the ERP, most bids first. Linking them (add the company, or add the name as another name on an existing one) puts their deals under the right GC or property manager everywhere. Only Admins and the Business Manager see this."
+        >
+          <table className="w-full text-sm">
+            <tbody className="divide-y divide-gray-100">
+              {r.unlinked.map((u) => (
+                <tr key={`${u.pipeline}-${u.name}`}>
+                  <td className="py-1.5 pr-2 text-gray-900">
+                    {u.name}
+                    {u.pipeline === "janitorial" && <span className="ml-1 text-xs text-gray-400">janitorial</span>}
+                  </td>
+                  <td className="px-2 py-1.5 text-right text-xs text-gray-500">
+                    {u.bids} bids{u.won ? `, ${u.won} won` : ""}
+                  </td>
+                  <td className="py-1.5 pl-2 text-right">
+                    <Link href={`/erp/companies?q=${encodeURIComponent(u.name)}`} className="text-xs text-pink-600 hover:underline">
+                      Link
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
+
       <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
         <h2 className="flex items-center gap-1 text-sm font-semibold text-gray-900">
           Stale quotes ({r.stale.length})
-          <InfoTip text={`Bids in Quote Sent, Negotiation or Competitive Quote with no activity in HubSpot for ${STALE_DAYS} days or more, biggest first. Any time, not just the period above.`} />
+          <InfoTip
+            text={`Bids in Quote Sent, Negotiation or Competitive Quote with no activity in HubSpot for ${STALE_DAYS} days or more, biggest first. Any time, not just the period above.`}
+          />
         </h2>
         {r.stale.length === 0 ? (
           <p className="mt-2 text-sm text-gray-500">None.</p>
@@ -145,12 +287,6 @@ function Body({ r }: { r: WinLossReport }) {
   );
 }
 
-function filterHref(period: PeriodKey, scope: WorkScope | null): string {
-  return `/erp/win-loss?period=${period}${scope ? `&type=${scope}` : ""}`;
-}
-
-const pill = (on: boolean) => `rounded-md px-3 py-1.5 ${on ? "bg-pink-600 text-white" : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`;
-
 export default async function WinLossPage({ searchParams }: { searchParams: Promise<{ period?: string; type?: string }> }) {
   const auth = await getErpAuth();
   if (!auth || !canViewCompanies(auth.role)) redirect("/erp");
@@ -173,32 +309,25 @@ export default async function WinLossPage({ searchParams }: { searchParams: Prom
           Win/loss
           <InfoTip text="Post-construction bids from HubSpot, counted by when they came in. Read live from HubSpot and refreshed every hour." />
         </h1>
-      </div>
-      {/* Filters scope everything below them. */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-        <nav className="flex flex-wrap gap-1" aria-label="Period">
-          {PERIODS.map((p) => (
-            <Link key={p.key} href={filterHref(p.key, scope)} className={pill(p.key === period)}>
-              {p.label}
-            </Link>
-          ))}
-        </nav>
-        <nav className="flex flex-wrap gap-1" aria-label="Type of work">
-          <Link href={filterHref(period, null)} className={pill(scope === null)}>
-            All work
-          </Link>
-          {WORK_SCOPES.filter((k) => k !== "UNKNOWN").map((k) => (
-            <Link key={k} href={filterHref(period, k)} className={pill(scope === k)}>
-              {WORK_SCOPE_LABELS[k]}
-            </Link>
-          ))}
-        </nav>
+        {/* The filter scopes everything below it; this says what's picked. */}
+        <span className="text-sm text-gray-500">
+          {PERIODS.find((p) => p.key === period)?.label} · {scope ? WORK_SCOPE_LABELS[scope] : "All work"}
+        </span>
+        <div className="ml-auto">
+          <WinLossFilter
+            period={period}
+            scope={scope ?? ""}
+            defaultPeriod="12m"
+            periods={PERIODS.map((p) => ({ value: p.key, label: p.label }))}
+            scopes={[{ value: "", label: "All work" }, ...WORK_SCOPES.filter((k) => k !== "UNKNOWN").map((k) => ({ value: k, label: WORK_SCOPE_LABELS[k] }))]}
+          />
+        </div>
       </div>
       {error || !report ? (
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">Couldn&apos;t read HubSpot: {error}</p>
       ) : (
         <>
-          <Body r={report} />
+          <Body r={report} canLink={canEditCompanies(auth.role)} />
           <p className="text-xs text-gray-400">From HubSpot as of {new Date(report.fetchedAt).toLocaleString("en-US", { timeZone: "America/New_York" })}.</p>
         </>
       )}

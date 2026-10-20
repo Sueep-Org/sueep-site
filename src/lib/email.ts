@@ -190,7 +190,7 @@ export function wrapEmailLayout(body: string, type: EmailType): string {
   const footer =
     def.sender === "erp"
       ? `You got this "${escapeHtml(def.label)}" email from the Sueep ERP.${
-          base ? ` Admins and PMs can change who gets it on the <a href="${escapeHtml(base)}/erp/notifications" style="color:#6b7280">Notification Management page</a>.` : ""
+          base ? ` Admins and PMs can change who gets it on the <a href="${escapeHtml(base)}/erp/notifications" style="color:#6b7280">Email Settings page</a>.` : ""
         }`
       : `Sueep. Questions? Email <a href="mailto:${escapeHtml(contact)}" style="color:#6b7280">${escapeHtml(contact)}</a>.`;
   return `<!doctype html>

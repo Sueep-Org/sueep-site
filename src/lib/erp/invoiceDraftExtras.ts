@@ -61,7 +61,8 @@ async function loadDraft(kind: DraftKind, rowId: string): Promise<LoadedDraft | 
   return {
     hubspotInvoiceId: d.hubspotInvoiceId,
     title: d.title,
-    invoiceDateKey: invoiceDate ? utcDateKey(invoiceDate) : todayEasternKey(d.createdAt),
+    // Dated on Approve, so a due date can't be set before today.
+    invoiceDateKey: [invoiceDate ? utcDateKey(invoiceDate) : todayEasternKey(d.createdAt), todayEasternKey()].sort().pop()!,
     dueDateKey: dueDate ? dueDate.slice(0, 10) : null,
     lines,
     destination: d.groupType === "PROJECT" ? await loadProjectInvoiceDestination(d.groupId) : await loadBuildingInvoiceDestination(d.groupId),

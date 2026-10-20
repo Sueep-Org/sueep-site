@@ -31,7 +31,7 @@ export default async function ContractorsPage() {
 
   return (
     <div className="space-y-6">
-      <NewContractorForm title={<h1 className="text-2xl font-bold text-pink-600">Contractor Verification</h1>} />
+      <NewContractorForm title={<h1 className="text-2xl font-semibold text-gray-900">Contractor Verification</h1>} />
       
       {contractors.length === 0 ? (
         <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-10 text-center text-sm text-gray-500">
@@ -72,10 +72,10 @@ export default async function ContractorsPage() {
                         {c.email}
                       </a>
                     ) : (
-                      "—"
+                      "-"
                     )}
                   </td>
-                  <td className="px-4 py-3 text-gray-700">{c.role || "—"}</td>
+                  <td className="px-4 py-3 text-gray-700">{c.role || "-"}</td>
                   <td className="px-4 py-3">
                     <span
                       className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${

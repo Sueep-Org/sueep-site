@@ -58,7 +58,7 @@ export default async function FranchisePage({ searchParams }: PageProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-pink-600">Franchise Inquiries</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Franchise Inquiries</h1>
 
         <div className="mt-3 flex items-center justify-between gap-4">
           <form>

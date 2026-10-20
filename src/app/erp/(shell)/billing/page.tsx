@@ -4,7 +4,7 @@ import { createContext, useContext, useState, useEffect, useRef, useId } from "r
 import Link from "next/link";
 import { formatUnitDisplay } from "@/lib/erp/unitDisplay";
 import { UnitInvoiceChips, expectedBillingStatus, type UnitInvoiceChip } from "@/app/erp/components/UnitInvoiceChips";
-import { InfoTip } from "@/app/erp/components/ui";
+import { Button, InfoTip } from "@/app/erp/components/ui";
 import { LienDeadlinePill, LienWarningIcon, lienDetailText } from "@/app/erp/components/LienDeadlinePill";
 import type { LienWatchRow } from "@/lib/erp/lienWatch";
 import { LIEN_STAGE_RANK, lienDecisionCloses } from "@/lib/erp/lienDeadline";
@@ -607,18 +607,15 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
   return (
     <div className="space-y-4">
       <BillingFilters status={status} onStatus={setStatus} flagOptions={POST_CON_FLAGS} flags={flags} onFlags={setFlags}>
-        <button
-          type="button"
+        <Button size="xs" className="flex items-center gap-2" type="button"
           onClick={downloadCsv}
-          disabled={shownRows.length === 0}
-          className="flex items-center gap-2 rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 disabled:opacity-40"
-        >
+          disabled={shownRows.length === 0}>
           <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
             <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z" />
             <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
           </svg>
           Download CSV
-        </button>
+        </Button>
       </BillingFilters>
 
       <LienWatchStrip rows={lienRows} />
@@ -676,7 +673,7 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
                           <CoiWarningPill warning={project.coiWarning} />
                           <LienWarningIcon row={lienByProject[project.projectId]} className="ml-1.5" />
                         </td>
-                        <td className="px-4 py-3 text-gray-400">—</td>
+                        <td className="px-4 py-3 text-gray-400">-</td>
                         <td className="px-4 py-3 text-right tabular-nums font-medium text-gray-900">
                           {fmt(project.contractValueCents)}
                         </td>
@@ -781,7 +778,7 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
               <tfoot className="border-t-2 border-gray-300 bg-gray-100 text-xs font-semibold text-gray-700">
                 <tr>
                   <td className="px-4 py-3" colSpan={2}>
-                    Total — {allItems.length} SOV item{allItems.length !== 1 ? "s" : ""}
+                    Total - {allItems.length} SOV item{allItems.length !== 1 ? "s" : ""}
                     {allCOs.length > 0 ? ` + ${allCOs.length} change order${allCOs.length !== 1 ? "s" : ""}` : ""}
                     {wholeProjectRows.length > 0 ? ` + ${wholeProjectRows.length} project total${wholeProjectRows.length !== 1 ? "s" : ""}` : ""}
                     {" "}across {shownRows.length} project{shownRows.length !== 1 ? "s" : ""}
@@ -853,7 +850,7 @@ function buildJanCsv(rows: JanBuildingRow[], start: string, end: string): string
   const dataRows: string[] = [];
   for (const building of rows) {
     for (const unit of building.units) {
-      const bedbath = [unit.bedrooms != null ? `${unit.bedrooms}bd` : null, unit.bathrooms != null ? `${unit.bathrooms}ba` : null].filter(Boolean).join("/") || "—";
+      const bedbath = [unit.bedrooms != null ? `${unit.bedrooms}bd` : null, unit.bathrooms != null ? `${unit.bathrooms}ba` : null].filter(Boolean).join("/") || "-";
       const unitLabel = formatUnitDisplay(unit.unitNumber) ?? unit.jobTitle;
       if (!unit.contextOnly) dataRows.push([
         escape(building.buildingName),
@@ -868,7 +865,7 @@ function buildJanCsv(rows: JanBuildingRow[], start: string, end: string): string
       for (const co of (unit.changeOrders ?? [])) {
         dataRows.push([
           escape(building.buildingName),
-          escape(`${unitLabel} — CO: ${co.title}`),
+          escape(`${unitLabel} - CO: ${co.title}`),
           escape(bedbath),
           escape(""),
           escape(co.completedAt.slice(0, 10)),
@@ -1011,18 +1008,15 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
   return (
     <div className="space-y-4">
       <BillingFilters status={status} onStatus={setStatus} flagOptions={JAN_FLAGS} flags={flags} onFlags={setFlags}>
-        <button
-          type="button"
+        <Button size="xs" className="flex items-center gap-2" type="button"
           onClick={downloadCsv}
-          disabled={shownRows.length === 0}
-          className="flex items-center gap-2 rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 disabled:opacity-40"
-        >
+          disabled={shownRows.length === 0}>
           <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
             <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z" />
             <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
           </svg>
           Download CSV
-        </button>
+        </Button>
       </BillingFilters>
 
       <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
@@ -1083,14 +1077,14 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
                         )}
                       </td>
                       <td className="px-4 py-3 text-gray-500 text-xs">
-                        {[row.unit.bedrooms != null ? `${row.unit.bedrooms} bd` : null, row.unit.bathrooms != null ? `${row.unit.bathrooms} ba` : null].filter(Boolean).join(" / ") || "—"}
+                        {[row.unit.bedrooms != null ? `${row.unit.bedrooms} bd` : null, row.unit.bathrooms != null ? `${row.unit.bathrooms} ba` : null].filter(Boolean).join(" / ") || "-"}
                       </td>
                       <td className="px-4 py-3 text-gray-500 text-xs tabular-nums">
                         {new Date(row.type === "unit" ? row.unit.completedAt : row.co.completedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums font-medium text-gray-900">
                         {row.type === "unit"
-                          ? (row.unit.contractCents > 0 ? fmt(row.unit.contractCents) : <span className="text-gray-400">—</span>)
+                          ? (row.unit.contractCents > 0 ? fmt(row.unit.contractCents) : <span className="text-gray-400">-</span>)
                           : fmt(row.co.contractValueCents)}
                       </td>
                       <td className="px-4 py-3">
@@ -1128,7 +1122,7 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
               <tfoot className="border-t-2 border-gray-300 bg-gray-100 text-xs font-semibold text-gray-700">
                 <tr>
                   <td className="px-4 py-3" colSpan={4}>
-                    Total — {allUnits.length} unit{allUnits.length !== 1 ? "s" : ""}
+                    Total - {allUnits.length} unit{allUnits.length !== 1 ? "s" : ""}
                     {allCOs.length > 0 ? ` + ${allCOs.length} change order${allCOs.length !== 1 ? "s" : ""}` : ""}
                     {" "}across {shownRows.length} building{shownRows.length !== 1 ? "s" : ""}
                   </td>
@@ -1292,18 +1286,15 @@ function RecurringTab({ start, end, search }: { start: string; end: string; sear
   return (
     <div className="space-y-4">
       <BillingFilters status={status} onStatus={setStatus} flagOptions={RECURRING_FLAGS} flags={flags} onFlags={setFlags}>
-        <button
-          type="button"
+        <Button size="xs" className="flex items-center gap-2" type="button"
           onClick={downloadCsv}
-          disabled={shownRows.length === 0}
-          className="flex items-center gap-2 rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 disabled:opacity-40"
-        >
+          disabled={shownRows.length === 0}>
           <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
             <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z" />
             <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
           </svg>
           Download CSV
-        </button>
+        </Button>
       </BillingFilters>
 
       <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
@@ -1385,7 +1376,7 @@ function RecurringTab({ start, end, search }: { start: string; end: string; sear
               <tfoot className="border-t-2 border-gray-300 bg-gray-100 text-xs font-semibold text-gray-700">
                 <tr>
                   <td className="px-4 py-3" colSpan={2}>
-                    Total — {allPeriods.length} month{allPeriods.length !== 1 ? "s" : ""} across {shownRows.length} building{shownRows.length !== 1 ? "s" : ""}
+                    Total - {allPeriods.length} month{allPeriods.length !== 1 ? "s" : ""} across {shownRows.length} building{shownRows.length !== 1 ? "s" : ""}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">{fmt(totalCents)}</td>
                   <td className="px-4 py-3" colSpan={2} />
@@ -1457,7 +1448,7 @@ export default function BillingPage() {
     <BillingControlsContext.Provider value={controls}>
     <div className="space-y-5">
       {/* Header */}
-      <h1 className="text-2xl font-semibold text-pink-600">Project Billing</h1>
+      <h1 className="text-2xl font-semibold text-gray-900">Project Billing</h1>
 
       {/* Tabs */}
       <div className="border-b border-gray-200">

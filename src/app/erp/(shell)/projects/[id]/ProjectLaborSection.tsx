@@ -171,7 +171,7 @@ function EmployeeCombobox({
             onMouseDown={(e) => { e.preventDefault(); handleSelect(OTHER_VALUE); }}
             className="cursor-pointer border-t border-gray-100 px-3 py-2 text-gray-500 hover:bg-pink-50 hover:text-pink-700"
           >
-            Other (not in roster — type name)
+            Other (not in roster - type name)
           </li>
         </ul>
       )}
@@ -871,7 +871,7 @@ export function ProjectLaborSection({
             <p className="mt-1 rounded-md border border-gray-200 bg-gray-100 px-3 py-2 text-sm text-gray-800">
               {clockInStr && clockOutStr && calcHours(clockInStr, clockOutStr) > 0
                 ? `${calcHours(clockInStr, clockOutStr).toFixed(2)} hrs`
-                : <span className="text-gray-400">—</span>}
+                : <span className="text-gray-400">-</span>}
             </p>
           </div>
           <div>
@@ -897,7 +897,7 @@ export function ProjectLaborSection({
               value={transportationMethodStr}
               onChange={(e) => setTransportationMethodStr(e.target.value)}
             >
-              <option value="" disabled>— Select —</option>
+              <option value="" disabled>- Select -</option>
               {TRANSPORTATION_METHOD_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
@@ -1029,13 +1029,10 @@ export function ProjectLaborSection({
             {error}
           </p>
         ) : null}
-        <button
-          type="submit"
-          disabled={loading}
-          className="mt-4 rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-        >
+        <Button size="md" className="mt-4" type="submit"
+          disabled={loading}>
           {loading ? "Adding…" : "Add entry"}
-        </button>
+        </Button>
       </form>}
 
       <div id="labor-log" className="rounded-lg border border-gray-200 bg-gray-50 p-4">
@@ -1155,7 +1152,7 @@ export function ProjectLaborSection({
                         )}
                       </td>
                       <td className="py-1 pr-2">
-                        <input type="text" className={editInput} placeholder="—" value={editFields.role} onChange={(e) => setEditFields((f) => ({ ...f, role: e.target.value }))} />
+                        <input type="text" className={editInput} placeholder="-" value={editFields.role} onChange={(e) => setEditFields((f) => ({ ...f, role: e.target.value }))} />
                       </td>
                       <td className="py-1 pr-2">
                         <div className="flex items-center gap-1">
@@ -1163,7 +1160,7 @@ export function ProjectLaborSection({
                           <span className="text-gray-400 text-xs">–</span>
                           <input type="time" className={editInput} value={editFields.clockOut} onChange={(e) => setEditFields((f) => ({ ...f, clockOut: e.target.value }))} />
                           <span className="ml-1 shrink-0 text-xs text-gray-500">
-                            {calcHours(editFields.clockIn, editFields.clockOut) > 0 ? `${calcHours(editFields.clockIn, editFields.clockOut).toFixed(2)}h` : "—"}
+                            {calcHours(editFields.clockIn, editFields.clockOut) > 0 ? `${calcHours(editFields.clockIn, editFields.clockOut).toFixed(2)}h` : "-"}
                           </span>
                         </div>
                       </td>
@@ -1183,13 +1180,13 @@ export function ProjectLaborSection({
                           value={editFields.transportationMethod}
                           onChange={(e) => setEditFields((f) => ({ ...f, transportationMethod: e.target.value }))}
                         >
-                          <option value="" disabled>— Transport —</option>
+                          <option value="" disabled>- Transport -</option>
                           {TRANSPORTATION_METHOD_OPTIONS.map((opt) => (
                             <option key={opt.value} value={opt.value}>{opt.label}</option>
                           ))}
                         </select>
                       </td>
-                      <td className="py-1 pr-2 text-xs text-gray-400">—</td>
+                      <td className="py-1 pr-2 text-xs text-gray-400">-</td>
                       {showFinancials && (
                         <td className="py-1 pr-2">
                           <input type="text" className={editInput} value={editFields.hourlyRate} onChange={(e) => setEditFields((f) => ({ ...f, hourlyRate: e.target.value }))} />
@@ -1244,7 +1241,7 @@ export function ProjectLaborSection({
                             )}
                           </div>
                         ) : (
-                          <input type="text" className={editInput} placeholder="—" value={editFields.taskDescription} onChange={(e) => setEditFields((f) => ({ ...f, taskDescription: e.target.value }))} />
+                          <input type="text" className={editInput} placeholder="-" value={editFields.taskDescription} onChange={(e) => setEditFields((f) => ({ ...f, taskDescription: e.target.value }))} />
                         )}
                       </td>
                       <td className="py-1 pr-2">
@@ -1287,10 +1284,10 @@ export function ProjectLaborSection({
                           </span>
                         </div>
                       </td>
-                      <td className="py-2 pr-2 text-gray-500">{r.role || "—"}</td>
+                      <td className="py-2 pr-2 text-gray-500">{r.role || "-"}</td>
                       <td className="py-2 pr-2 text-gray-700">{r.hours}</td>
                       <td className="py-2 pr-2 text-gray-500">
-                        {r.commuteHours != null ? `${Math.round(r.commuteHours * 60)} min` : <span className="text-gray-300">—</span>}
+                        {r.commuteHours != null ? `${Math.round(r.commuteHours * 60)} min` : <span className="text-gray-300">-</span>}
                         {transportationMethodShortLabel(r.transportationMethod) && (
                           <span className="block text-[11px] text-gray-400">{transportationMethodShortLabel(r.transportationMethod)}</span>
                         )}
@@ -1298,7 +1295,7 @@ export function ProjectLaborSection({
                       <td className="py-2 pr-2">
                         {r.otHours > 0
                           ? <span className="font-medium text-amber-600">{r.otHours.toFixed(2)}</span>
-                          : <span className="text-gray-300">—</span>}
+                          : <span className="text-gray-300">-</span>}
                       </td>
                       {showFinancials && <td className="py-2 pr-2 text-gray-600">{centsToDollars(r.hourlyRateCents)}/hr</td>}
                       {showFinancials && <td className="py-2 pr-2 text-gray-800">{centsToDollars(lineCostCents(r.regHours, r.otHours, r.hourlyRateCents))}</td>}
@@ -1321,14 +1318,14 @@ export function ProjectLaborSection({
                                   </span>
                                 )}
                                 <span className={`text-xs ${sovCompletedMap[sovItemId] ? "line-through text-gray-400" : "text-gray-700"}`}>
-                                  {sovItems.find((s) => s.id === sovItemId)?.description ?? "—"}
+                                  {sovItems.find((s) => s.id === sovItemId)?.description ?? "-"}
                                 </span>
                               </div>
                             ))}
                             {r.taskDescription ? <span className="block text-xs text-gray-500">{r.taskDescription}</span> : null}
                           </div>
                         ) : (
-                          <span className="text-gray-500">{r.taskDescription || "—"}</span>
+                          <span className="text-gray-500">{r.taskDescription || "-"}</span>
                         )}
                       </td>
                       <td className="py-2 pr-2">
@@ -1447,7 +1444,7 @@ export function ProjectLaborSection({
           <p className="mt-2 text-sm text-gray-600">
             You typed &quot;{pendingNameMatch.typedName}&quot;, which looks like it could be{" "}
             <span className="font-medium text-gray-800">{employeeLabel(pendingNameMatch.match)}</span>, already in
-            the roster. Picking them keeps these hours linked to their profile and payroll — logging as a new name
+            the roster. Picking them keeps these hours linked to their profile and payroll - logging as a new name
             won&apos;t.
           </p>
           <div className="mt-4 flex justify-end gap-2">

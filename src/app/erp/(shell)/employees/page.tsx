@@ -49,7 +49,7 @@ function parseWorkedDateOnly(value: string): Date | null {
 }
 
 function formatHourlyPay(cents: number | null): string {
-  if (cents == null) return "—";
+  if (cents == null) return "-";
   return `$${(cents / 100).toFixed(2)}`;
 }
 
@@ -280,7 +280,7 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-pink-600">Employees</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Employees</h1>
 
         <div className="mt-3 flex items-center justify-between gap-4">
           <form>
@@ -368,14 +368,14 @@ export default async function EmployeesPage({ searchParams }: PageProps) {
                         {r.firstName} {r.lastName}
                       </Link>
                     </td>
-                    <td className="px-3 py-2 text-gray-900">{r.role || "—"}</td>
+                    <td className="px-3 py-2 text-gray-900">{r.role || "-"}</td>
                     {canSeePay && <td className="px-3 py-2 text-gray-900">{formatHourlyPay(r.hourlyPayCents)}</td>}
                     <td className="px-3 py-2">
                       <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs ${activityStatusBadgeClasses(r.status)}`}>
                         {activityStatusLabel(r.status, r.statusSource)}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-gray-600">{r.email || r.phone || "—"}</td>
+                    <td className="px-3 py-2 text-gray-600">{r.email || r.phone || "-"}</td>
                   </tr>
                 ))
               )}

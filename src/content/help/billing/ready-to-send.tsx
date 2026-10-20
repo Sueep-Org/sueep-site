@@ -88,7 +88,7 @@ export function ReadyToSendHelp() {
           item&apos;s value, mark it Paid by hand when the client pays.
         </LI>
         <LI>
-          Click <strong>Draft invoice</strong>. You get one HubSpot draft per building or job, one line per item, dated today,
+          Click <strong>Draft invoice</strong>. You get one HubSpot draft per building or job, one line per item, dated the day you approve it,
           on that building&apos;s or job&apos;s HubSpot deal.
         </LI>
         <LI>

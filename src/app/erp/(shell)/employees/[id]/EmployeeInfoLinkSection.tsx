@@ -13,7 +13,7 @@ type Props = {
 };
 
 function formatDt(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   try {
     return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(iso));
   } catch {
