@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { dayKey } from "@/lib/erp/schedule";
-import { notifyProjectCrew, sendDayInvite } from "@/lib/erp/scheduleInvites";
+import { notifyProjectCrew, sendDayInvite, sendSubLeadInvite } from "@/lib/erp/scheduleInvites";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -56,6 +56,20 @@ export async function DELETE(_req: Request, ctx: Ctx) {
       uid: `day-assignment-${id}@sueep.com`,
       to: existing.supervisorUser.email,
       role: "Supervising",
+      title: existing.project.jobTitle,
+      dateKey: dayKey(existing.date),
+      startTime: existing.startTime,
+      endTime: existing.endTime,
+      location,
+      cancelled: true,
+    });
+  }
+  // A sub who was running the day gets a cancellation too (sendSubLeadInvite only cancels one that was sent).
+  if (existing.supervisorContractorId) {
+    await sendSubLeadInvite({
+      kind: "day",
+      assignmentId: id,
+      contractorId: existing.supervisorContractorId,
       title: existing.project.jobTitle,
       dateKey: dayKey(existing.date),
       startTime: existing.startTime,

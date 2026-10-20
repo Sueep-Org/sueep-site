@@ -186,17 +186,22 @@ export function ScheduleCalendarOverview() {
           that project/day, and warns you the same way the event card does if a worker&apos;s
           already booked elsewhere that day.
           <Img src="/help/schedule_calendar_overview/schedule_calendar_overview_8.png" alt="Workers scheduled section with search" />
-          <Callout type="warning">
-            Worker assignments are for planning only. Unlike the supervisor assignment, no email
-            or calendar invite is sent to workers (yet).
+          <Callout type="info">
+            Everyone put on a day gets a &quot;You&apos;re scheduled&quot; email with a calendar invite:
+            the supervisor, each worker, and a subcontractor running the day in the
+            supervisor&apos;s place. A sub added to a project&apos;s or change order&apos;s subs also
+            gets a &quot;You&apos;ve been assigned&quot; email with the job, address, work and dates
+            (never the cost). Changing a day&apos;s time or scope sends an update; nothing is sent
+            for past days or to someone with no email on file.
           </Callout>
         </Step>
 
         <Step n={9} title="Removing an assignment">
           Both supervisor and worker assignments can be removed with the small{" "}
           <strong>×</strong> button next to their name, either from inside the day panel or
-          directly on a dashed chip&apos;s calendar entry. Removing a supervisor assignment also
-          sends a cancellation to their calendar invite.
+          directly on a dashed chip&apos;s calendar entry. Removing anyone (supervisor, worker or
+          sub), or replacing the sub running a day, sends them a cancellation for their calendar
+          invite.
           <Img src="/help/schedule_calendar_overview/schedule_calendar_overview_9.png" alt="Removing an assignment with the x button" size="sm" />
         </Step>
 

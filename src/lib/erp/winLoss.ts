@@ -16,6 +16,7 @@ import { prisma } from "@/lib/prisma";
 import { normalizeCompanyName } from "./clientCompanies";
 import { median } from "./stats";
 import { loadLostReasonOptions, splitReasons } from "./dealLostReasons";
+import { LOSS_GROUPS, type LossGroup, type LossQuarter } from "./lossGroups";
 import {
   WORK_SCOPES,
   WORK_SCOPE_LABELS,
@@ -144,6 +145,8 @@ export type WinLossReport = {
   rebids: RebidStats;
   /** Won vs lost $ per sq ft per type of work (WIN_INSIGHTS_PLAN Phase 1) */
   priceDots: PriceDotScope[];
+  /** Lost deals per quarter since LOSS_TREND_FROM by main reason, any period (WIN_INSIGHTS_PLAN Phase 4) */
+  lossTrend: LossQuarter[];
   fetchedAt: string;
 };
 
@@ -160,6 +163,16 @@ export type ClientRow = Stat & {
 
 const CLIENT_TYPES = new Set(["PROPERTY_MANAGER", "OWNER"]);
 const UNLINKED_SHOWN = 15;
+
+/** Reasons were filled in on nearly every lost deal from 2023 on (user decision 2026-10-20). */
+const LOSS_TREND_FROM = Date.UTC(2023, 0, 1);
+
+/** A deal with several reasons counts once, under the first named group it has (in LOSS_GROUPS order). */
+function lossGroupOf(raw: string | null): LossGroup {
+  const rs = splitReasons(raw);
+  if (!rs.length) return "none";
+  return (LOSS_GROUPS.slice(0, 4).find((g) => rs.includes(g.key))?.key ?? "other") as LossGroup;
+}
 
 export type PriceDot = { id: string; name: string; perSqft: number; cents: number; sqft: number; url: string | null };
 export type PriceDotRow = { key: "won" | "lost" | "lostPrice"; label: string; dots: PriceDot[]; median: number | null };
@@ -413,6 +426,30 @@ export async function loadWinLoss(
     wonFromErp: fromErp,
     stale,
     rebids,
+    lossTrend: (() => {
+      const q = new Map<string, LossQuarter>();
+      for (const d of deals) {
+        const created = Date.parse(d.created);
+        if (!Number.isFinite(created) || created < LOSS_TREND_FROM || outcomeOf(bundle, d.stageId) !== "lost" || (scope && d.scope !== scope)) continue;
+        const c = new Date(created);
+        const key = `${c.getUTCFullYear()} Q${Math.floor(c.getUTCMonth() / 3) + 1}`;
+        const e = q.get(key) ?? { key, total: 0, parts: Object.fromEntries(LOSS_GROUPS.map((g) => [g.key, 0])) as Record<LossGroup, number> };
+        e.total++;
+        e.parts[lossGroupOf(d.lostReason)]++;
+        q.set(key, e);
+      }
+      // Every quarter from the start to today, so a quarter with no losses shows as empty instead of missing.
+      const out: LossQuarter[] = [];
+      for (
+        let y = 2023, qn = 1;
+        y < now.getUTCFullYear() || (y === now.getUTCFullYear() && qn <= Math.floor(now.getUTCMonth() / 3) + 1);
+        qn === 4 ? (y++, (qn = 1)) : qn++
+      ) {
+        const key = `${y} Q${qn}`;
+        out.push(q.get(key) ?? { key, total: 0, parts: Object.fromEntries(LOSS_GROUPS.map((g) => [g.key, 0])) as Record<LossGroup, number> });
+      }
+      return out;
+    })(),
     priceDots: WORK_SCOPES.filter((k) => dotsByScope.has(k)).map((k) => {
       const all = dotsByScope.get(k)!;
       const mid = median(all.map((x) => x.per))!;

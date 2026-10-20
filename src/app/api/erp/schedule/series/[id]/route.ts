@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { dayKey } from "@/lib/erp/schedule";
-import { resolveWorkerContact, sendDayInvite } from "@/lib/erp/scheduleInvites";
+import { resolveWorkerContact, sendDayInvite, sendSubLeadInvite } from "@/lib/erp/scheduleInvites";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -23,7 +23,7 @@ export async function DELETE(_req: Request, ctx: Ctx) {
       // cancellation (each was sent its own individual invite — see the
       // day-assignments/worker-assignments POST routes — not one combined
       // recurring invite for the whole range).
-      dayAssignments: { select: { id: true, date: true } },
+      dayAssignments: { select: { id: true, date: true, supervisorContractorId: true } },
       workerAssignments: { select: { id: true, date: true, employeeId: true, contractorId: true } },
     },
   });
@@ -60,6 +60,25 @@ export async function DELETE(_req: Request, ctx: Ctx) {
       );
     }
   }
+
+  // A sub who was running any of these days gets a cancellation per day (each day's own sub, in case one was changed).
+  await Promise.all(
+    series.dayAssignments
+      .filter((a) => a.supervisorContractorId)
+      .map((a) =>
+        sendSubLeadInvite({
+          kind: "day",
+          assignmentId: a.id,
+          contractorId: a.supervisorContractorId!,
+          title: series.project.jobTitle,
+          dateKey: dayKey(a.date),
+          startTime: series.startTime,
+          endTime: series.endTime,
+          location,
+          cancelled: true,
+        }),
+      ),
+  );
 
   // One cancellation per crew row (not per unique worker) — each occurrence
   // was sent its own invite, so each gets its own cancellation.

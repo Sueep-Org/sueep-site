@@ -44,6 +44,16 @@ export function WinLossHelp() {
         </LI>
       </UL>
 
+      <H3>Why we lose, by quarter</H3>
+      <P>
+        One bar per quarter since 2023 (when lost reasons started being filled in), showing what share of that
+        quarter&apos;s losses had each main reason: <strong>GC not awarded</strong> (orange), <strong>Price</strong>{" "}
+        (violet, same as on the price chart), <strong>No answer</strong> (yellow), <strong>Did not move forward</strong>{" "}
+        (green), <strong>Other reasons</strong> (gray) and <strong>No reason</strong> (light gray). The number on top is how
+        many deals were lost. A deal with several reasons counts once, under the first of those four. It follows the type
+        of work filter but not the period. Hover a segment for its count, or use Show table.
+      </P>
+
       <H3>Price: won vs lost</H3>
       <P>
         This chart answers &quot;are we losing on price?&quot;. Each dot is a won or lost bid in the period, placed by its

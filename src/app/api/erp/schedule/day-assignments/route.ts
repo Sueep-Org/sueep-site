@@ -4,7 +4,7 @@ import { dayKey } from "@/lib/erp/schedule";
 import { computeSeriesDates, parseDatesList, SeriesDateRangeError } from "@/lib/erp/scheduleSeries";
 import { formatTurnoverHoursBudgetText } from "@/lib/erp/turnoverHoursBudget";
 import { isTurnoverScopeValue, parseCompletedScopeItems, turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
-import { appUrl, notifyProjectCrew, scopeText, sendDayInvite } from "@/lib/erp/scheduleInvites";
+import { appUrl, notifyProjectCrew, scopeText, sendDayInvite, sendSubLeadInvite } from "@/lib/erp/scheduleInvites";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   const projectManagerUserId = String(body.projectManagerUserId || "").trim() || null;
   // Same idea, but an outside Contractor covered the day instead of a
   // supervisor (e.g. a subcontractor running the site solo). Also not
-  // synced onto Project, also no calendar-invite email.
+  // synced onto Project. The sub does get a calendar invite (sendSubLeadInvite).
   const supervisorContractorId = String(body.supervisorContractorId || "").trim() || null;
   const dateRaw = String(body.date || "").trim();
   const comment = typeof body.comment === "string" && body.comment.trim() ? body.comment.trim() : null;
@@ -199,6 +199,20 @@ export async function POST(req: Request) {
 
   const url = appUrl() ? `${appUrl()}/erp/projects/${projectId}` : undefined;
 
+  // A sub running a day gets the same calendar invite as a supervisor. Who
+  // ran each day before this save, so a sub who's replaced gets a cancellation.
+  const before = await prisma.projectDayAssignment.findMany({
+    where: { projectId, date: { in: seriesDates ?? [date] } },
+    select: { date: true, supervisorContractorId: true },
+  });
+  const prevSub = new Map(before.map((b) => [dayKey(b.date), b.supervisorContractorId]));
+  async function notifySubLead(a: { id: string; date: Date; startTime: string | null; endTime: string | null }) {
+    const invite = { kind: "day" as const, assignmentId: a.id, title: project!.jobTitle, dateKey: dayKey(a.date), startTime: a.startTime, endTime: a.endTime, location, scopeText: dayScopeText, url };
+    const prev = prevSub.get(dayKey(a.date)) ?? null;
+    if (prev && prev !== supervisorContractorId) await sendSubLeadInvite({ ...invite, contractorId: prev, cancelled: true });
+    if (supervisorContractorId) await sendSubLeadInvite({ ...invite, contractorId: supervisorContractorId });
+  }
+
   if (seriesDates && repeatUntil) {
     const series = await prisma.projectScheduleSeries.create({
       data: { projectId, supervisorUserId, projectManagerUserId, supervisorContractorId, startDate: date, endDate: repeatUntil, repeatDays, startTime, endTime },
@@ -261,6 +275,8 @@ export async function POST(req: Request) {
       );
     }
 
+    await Promise.all(assignments.map((a) => notifySubLead(a)));
+
     // Refreshes the invite for every crew member already on one of these
     // days — their own time/scope may have just changed even though their
     // ProjectWorkerDayAssignment row wasn't touched by this request.
@@ -320,6 +336,8 @@ export async function POST(req: Request) {
       extraHtml: hoursBudgetText ? `<p>${hoursBudgetText.replace(/\n/g, "<br>")}</p>` : undefined,
     });
   }
+
+  await notifySubLead(assignment);
 
   // Same refresh as the series branch above, just for this one day.
   await notifyProjectCrew({

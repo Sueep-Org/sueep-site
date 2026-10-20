@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { sendSubAssignedEmail } from "@/lib/erp/scheduleInvites";
 import { prisma } from "@/lib/prisma";
 import { markSovItemsCompleted, syncSovPercentDone } from "@/lib/sovSync";
 
@@ -26,7 +27,10 @@ export async function GET(_req: Request, ctx: Ctx) {
 
 export async function POST(req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
-  const project = await prisma.project.findUnique({ where: { id }, select: { id: true } });
+  const project = await prisma.project.findUnique({
+    where: { id },
+    select: { id: true, jobTitle: true, building: { select: { address: true } }, workOrderRecord: { select: { siteAddress: true } } },
+  });
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   let body: Record<string, unknown>;
@@ -68,6 +72,16 @@ export async function POST(req: Request, ctx: Ctx) {
         sovItems: sovItemIds.length > 0 ? { connect: sovItemIds.map((sovId) => ({ id: sovId })) } : undefined,
       },
       include: { contractor: { select: { id: true, name: true } }, sovItems: { select: { id: true } } },
+    });
+    // Tell the sub they're on the job (never the cost). Logged and skipped on failure, the assignment still saves.
+    await sendSubAssignedEmail({
+      contractorId,
+      jobTitle: project.jobTitle,
+      location: project.building?.address || project.workOrderRecord?.siteAddress || null,
+      task: assignment.taskDescription,
+      role: assignment.role,
+      startDate: assignment.startDate,
+      endDate: assignment.endDate,
     });
     const idsToComplete = sovItemIds.filter((sovId) => sovCompletedIds.has(sovId));
     if (idsToComplete.length > 0) {

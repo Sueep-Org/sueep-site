@@ -9,6 +9,7 @@ import { WORK_SCOPES, WORK_SCOPE_LABELS, type WorkScope } from "@/lib/erp/postCo
 import { CountBars, QuarterColumns, StackedBars } from "./WinLossCharts";
 import { WinLossFilter } from "./WinLossFilter";
 import { PriceDots } from "./PriceDots";
+import { LossTrend } from "./LossTrend";
 
 export const metadata: Metadata = { title: "Win/loss" };
 export const dynamic = "force-dynamic";
@@ -111,6 +112,13 @@ function Body({ r, canLink }: { r: WinLossReport; canLink: boolean }) {
         info="Bids by the quarter they came in: won and lost stacked, win rate on top. Open bids aren't in the bars because they aren't decided yet, so the latest quarters fill in over time. Hover a quarter for details."
       >
         <QuarterColumns rows={r.byQuarter} />
+      </Card>
+
+      <Card
+        title="Why we lose, by quarter"
+        info="Lost deals that came in each quarter since 2023 (when lost reasons started being filled in), split by their main reason. Each bar is 100% of that quarter's losses; the number on top is how many. A deal with several reasons counts once, under the first of GC not awarded, Price, No answer, Did not move forward. Follows the type of work filter, not the period. Hover a segment for its count."
+      >
+        <LossTrend quarters={r.lossTrend} />
       </Card>
 
       <div className="grid gap-4 xl:grid-cols-2">
