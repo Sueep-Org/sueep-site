@@ -36,6 +36,7 @@ import { calendarSegmentGroup, type CalendarSegmentGroup } from "@/lib/erp/proje
 import { TURNOVER_SCOPE_OPTIONS, turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
 import { SOVMultiCombobox, SOVPriceSummary } from "@/app/erp/components/SOVCombobox";
 import { centsToDollars } from "@/lib/erp/money";
+import { AnswerMark, answerUid, answersSummary, type Answers } from "./AnswerMark";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -562,6 +563,7 @@ export function SchedulePlanner({
   initialWorkerAssignments,
   initialCoDayAssignments,
   initialCoWorkerAssignments,
+  answers = {},
 }: {
   projects: ScheduleProject[];
   supervisors: Person[];
@@ -575,6 +577,8 @@ export function SchedulePlanner({
   initialWorkerAssignments: ScheduleWorkerAssignment[];
   initialCoDayAssignments: ScheduleCoDayAssignment[];
   initialCoWorkerAssignments: ScheduleCoWorkerAssignment[];
+  /** Confirm / Can't make it answers by invite uid (AnswerMark.tsx), loaded with the page */
+  answers?: Answers;
 }) {
   // Anchors the whole calendar (which month/day is "today") to Eastern time,
   // not the viewer's own device timezone — otherwise a viewer far enough
@@ -3147,11 +3151,17 @@ export function SchedulePlanner({
                               ) : null}
                             </>
                           ) : coSupervisor ? (
-                            <div className="mt-1 text-gray-300">Supervisor: {coSupervisor.displayName}</div>
+                            <div className="mt-1 text-gray-300">
+                              Supervisor: {coSupervisor.displayName}
+                              {coAssignment ? <AnswerMark dark status={answers[answerUid.coDay(coAssignment.id)]} /> : null}
+                            </div>
                           ) : coPm ? (
                             <div className="mt-1 text-gray-300">PM: {coPm.displayName}</div>
                           ) : coContractor ? (
-                            <div className="mt-1 text-gray-300">Contractor: {coContractor.displayName}</div>
+                            <div className="mt-1 text-gray-300">
+                              Contractor: {coContractor.displayName}
+                              {coAssignment?.supervisorContractorId ? <AnswerMark dark status={answers[answerUid.coDaySub(coAssignment.id, coAssignment.supervisorContractorId)]} /> : null}
+                            </div>
                           ) : needsSupervisor ? (
                             <div className="mt-1 text-amber-300">No supervisor assigned yet - click to assign one</div>
                           ) : null}
@@ -3467,17 +3477,28 @@ export function SchedulePlanner({
                         {supervisor ? (
                           <div className="flex items-center gap-1 text-gray-300">
                             Supervisor: {supervisor.displayName}
+                            <AnswerMark dark status={answers[answerUid.day(assignment.id)]} />
                           </div>
                         ) : pm ? (
                           <div className="text-gray-300">PM: {pm.displayName}</div>
                         ) : contractor ? (
-                          <div className="text-gray-300">Contractor: {contractor.displayName}</div>
+                          <div className="text-gray-300">
+                            Contractor: {contractor.displayName}
+                            {assignment.supervisorContractorId ? <AnswerMark dark status={answers[answerUid.daySub(assignment.id, assignment.supervisorContractorId)]} /> : null}
+                          </div>
                         ) : (
                           <div className="text-amber-400">No supervisor assigned yet</div>
                         )}
                         {plannedWorkers.length > 0 ? (
                           <div className="mt-1 text-gray-300">Planned workers: {plannedWorkers.join(", ")}</div>
                         ) : null}
+                        {(() => {
+                          // Crew answers to their invites for this project and day.
+                          const crew = answersSummary(
+                            workerAssignments.filter((w) => w.projectId === project.id && w.dateKey === k).map((w) => answers[answerUid.worker(w.id)]),
+                          );
+                          return crew ? <div className="text-gray-300">Crew: {crew}</div> : null;
+                        })()}
                         {assignmentSovDescriptions.length > 0 ? (
                           <div className="mt-1 text-gray-300">SOV: {assignmentSovDescriptions.join(", ")}</div>
                         ) : null}
@@ -3888,6 +3909,7 @@ export function SchedulePlanner({
           projectManagers={projectManagers}
           employees={employees}
           contractors={contractors}
+          answers={answers}
           existingWorkers={workerAssignments.filter((a) => a.dateKey === openDayKey)}
           existingCoWorkers={coWorkerAssignments.filter((a) => a.dateKey === openDayKey)}
           initialProjectId={openDayInitialProjectId ?? undefined}

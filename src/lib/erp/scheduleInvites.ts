@@ -5,6 +5,7 @@ import { buildDayAssignmentInvite } from "@/lib/calendarInvite";
 import { dayKey } from "@/lib/erp/schedule";
 import { todayEasternKey } from "@/lib/erp/dates";
 import { turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
+import { cancelConfirmation, markInviteSent, prepareConfirmation, responseButtonsHtml, responseUrl } from "@/lib/erp/scheduleConfirmations";
 
 /** Shared "you're on the schedule" notification path — used by both the
  * supervisor day-assignment routes and the crew (employee/contractor)
@@ -101,6 +102,8 @@ function inviteHtml(params: {
   /** Extra HTML paragraph(s) inserted right after the main sentence — e.g.
    * the turnover crew-hours-budget note, supervisor-only. */
   extraHtml?: string;
+  /** Confirm / Can't make it page (scheduleConfirmations.ts) */
+  respondUrl?: string | null;
 }): string {
   const verb = params.role === "Supervising" ? "assigned to supervise" : params.role === "Running" ? "assigned to run" : "scheduled to work on";
   const title = escapeHtml(params.title);
@@ -111,6 +114,7 @@ function inviteHtml(params: {
     params.extraHtml ?? "",
     params.scopeText ? `<p><strong>Scope:</strong> ${escapeHtml(params.scopeText)}</p>` : "",
     params.location ? `<p><strong>Address:</strong> ${escapeHtml(params.location)}</p>` : "",
+    !params.cancelled && params.respondUrl ? responseButtonsHtml(params.respondUrl) : "",
     !params.cancelled ? `<p>Add the attached invite to your calendar.</p>` : "",
   ];
   return lines.filter(Boolean).join("");
@@ -165,6 +169,25 @@ export async function sendDayInvite(params: {
     const last = await prisma.scheduleInviteSent.findUnique({ where: { uid: params.uid } });
     if (params.cancelled ? !last || last.cancelled : last && !last.cancelled && last.fingerprint === fingerprint) return;
 
+    // Confirm / Can't make it: a response link per invite. A changed day asks again.
+    let respondUrl: string | null = null;
+    if (!params.cancelled) {
+      const path = params.url ? new URL(params.url, "https://x").pathname : undefined;
+      const token = await prepareConfirmation({
+        uid: params.uid,
+        to: params.to,
+        name: params.attendeeName,
+        title: params.title,
+        dateKey: params.dateKey,
+        link: path,
+        changed: !!last && !last.cancelled,
+      }).catch((e) => {
+        console.error("Schedule confirmation link failed", { uid: params.uid }, e);
+        return null;
+      });
+      respondUrl = token ? responseUrl(token) : null;
+    }
+
     const ics = buildDayAssignmentInvite({
       uid: params.uid,
       dateKey: params.dateKey,
@@ -187,12 +210,14 @@ export async function sendDayInvite(params: {
       link: params.url ? new URL(params.url, "https://x").pathname : undefined,
       to: params.to,
       subject: `${params.cancelled ? "Cancelled" : "You're scheduled"}: ${params.title}, ${when}`,
-      html: inviteHtml({ ...params, when }),
+      html: inviteHtml({ ...params, when, respondUrl }),
       attachments: [{ filename: "invite.ics", content: Buffer.from(ics) }],
     });
     // Only remember invites that really went out, so turning email back on
     // (or a test copy with email not set up) doesn't swallow the next one.
+    if (params.cancelled) await cancelConfirmation(params.uid).catch(() => {});
     if (result !== "SENT") return;
+    if (!params.cancelled) await markInviteSent(params.uid).catch(() => {});
     const cancelled = !!params.cancelled;
     await prisma.scheduleInviteSent.upsert({
       where: { uid: params.uid },

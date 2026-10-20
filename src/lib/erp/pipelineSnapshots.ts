@@ -8,7 +8,8 @@
 import { prisma } from "@/lib/prisma";
 import { todayEasternKey } from "./dates";
 import { addDaysKey } from "./manualHoursRepeat";
-import { loadDealBundle, loadJanitorialDealBundle, outcomeOf, type Bundle, type PipelineKey } from "./postConDeals";
+import { outcomeOf, type Bundle, type PipelineKey } from "./postConDeals";
+import { loadDeals, loadJanitorialDeals } from "./dealEdits";
 
 /** Two years (user decision 2026-10-19). */
 const KEEP_DAYS = 730;
@@ -18,8 +19,8 @@ export type SnapshotRow = { day: string; pipeline: PipelineKey; hubspotDealId: s
 /** Today's rows, without saving them. */
 export async function buildSnapshotRows(day: string = todayEasternKey(), preloaded?: { pipeline: PipelineKey; bundle: Bundle }[]): Promise<SnapshotRow[]> {
   const bundles = preloaded ?? [
-    { pipeline: "post-con" as const, bundle: await loadDealBundle() },
-    { pipeline: "janitorial" as const, bundle: await loadJanitorialDealBundle() },
+    { pipeline: "post-con" as const, bundle: await loadDeals() },
+    { pipeline: "janitorial" as const, bundle: await loadJanitorialDeals() },
   ];
   return bundles.flatMap(({ pipeline, bundle }) =>
     bundle.deals

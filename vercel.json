@@ -51,6 +51,10 @@
     {
       "path": "/api/cron/email-failure-alert",
       "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/schedule-confirmations",
+      "schedule": "0 18 * * *"
     }
   ]
 }

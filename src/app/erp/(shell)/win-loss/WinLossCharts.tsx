@@ -4,16 +4,17 @@ import { useState } from "react";
 import Link from "next/link";
 import { centsToDollars, centsToDollarsCompact } from "@/lib/erp/money";
 import type { Row } from "@/lib/erp/winLoss";
+import { CHART } from "@/lib/erp/pipelineUi";
 
 /**
  * Win/loss charts. Won and lost are categorical slots 1 and 2 of the dataviz
  * palette (same as the cash forecast chart), validated on the white card.
  * Open is a neutral gray: not decided yet, not a third category.
  */
-const WON = "#2a78d6";
-const LOST = "#eb6834";
-const OPEN = "#d1d5db";
-const GRID = "#e5e7eb";
+const WON = CHART.won;
+const LOST = CHART.lost;
+const OPEN = CHART.muted;
+const GRID = CHART.grid;
 const GAP = 2;
 
 const pct = (x: number | null) => (x == null ? "-" : `${Math.round(x * 100)}%`);

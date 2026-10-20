@@ -114,6 +114,22 @@ export const NOTIFICATIONS = {
     automatic: "The subcontractor (when they have an email on file)",
     sender: "sueep",
   }),
+  SCHEDULE_DECLINED: def({
+    label: "Schedule declined",
+    group: "Projects & schedule",
+    when: "Someone scheduled on a day clicks Can't make it in their invite (or changes back to Confirm). They stay on the schedule, marked declined.",
+    toMode: "recipients",
+    defaultTo: () => ["jennifer@sueep.com", "edwin@sueep.com", "david@sueep.com", "nick@sueep.com"],
+    ccEditable: true,
+  }),
+  SCHEDULE_UNANSWERED: def({
+    label: "Schedule not confirmed",
+    group: "Reminders",
+    when: "About 2pm, when people scheduled for tomorrow haven't clicked Confirm or Can't make it yet",
+    toMode: "recipients",
+    defaultTo: () => ["jennifer@sueep.com", "edwin@sueep.com", "david@sueep.com", "nick@sueep.com"],
+    ccEditable: true,
+  }),
   READY_TO_BILL: def({
     label: "Ready to bill",
     group: "Projects & schedule",

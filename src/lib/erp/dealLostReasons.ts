@@ -14,8 +14,8 @@
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { hubspotFetch } from "@/lib/hubspot/client";
-import { loadRules } from "@/lib/hubspot/pipelineRules";
 import type { PipelineKey } from "./postConDeals";
+import { patchDeal, readDealForChange } from "./dealGuard";
 
 export const GC_NOT_AWARDED = "GC Not Awarded";
 const MAX_PRICE_CENTS = 100_000_000_00;
@@ -69,20 +69,13 @@ export async function setLostReason(input: SetLostReasonInput): Promise<SetLostR
     }
   }
 
-  const rules = (await loadRules()).find((r) => r.key === input.pipeline);
-  if (!rules) return { error: "Pipeline not found in HubSpot." };
+  const deal = await readDealForChange(input.dealId, input.pipeline, ["deal_lost_reason"]);
+  if ("error" in deal) return deal;
+  const { rules, props: p, stageId: fromStage } = deal;
   const lostStage = [...rules.lost][0];
   if (!lostStage) return { error: "This pipeline has no lost stage in HubSpot." };
-
-  const res = await hubspotFetch(`/crm/v3/objects/deals/${encodeURIComponent(input.dealId)}?properties=dealname,dealstage,pipeline,deal_lost_reason`);
-  if (res.status === 404) return { error: "This deal is no longer in HubSpot." };
-  if (!res.ok) return { error: `Couldn't read the deal from HubSpot (${res.status}).` };
-  const deal = (await res.json()) as { properties: Record<string, string | null> };
-  const p = deal.properties;
-  if (p.pipeline !== rules.pipelineId) return { error: "This deal moved to another pipeline in HubSpot. Reload the page." };
-  const fromStage = p.dealstage ?? "";
-  const isLost = rules.lost.has(fromStage);
-  if (rules.won.has(fromStage)) return { error: "This deal is won in HubSpot, so it can't be marked lost here." };
+  const isLost = deal.outcome === "lost";
+  if (deal.outcome === "won") return { error: "This deal is won in HubSpot, so it can't be marked lost here." };
   if (!isLost && !input.markLost) return { error: "This deal is open in HubSpot. Use Mark lost instead." };
 
   // The log table must exist before HubSpot changes, or the change would go unrecorded.
@@ -90,11 +83,8 @@ export async function setLostReason(input: SetLostReasonInput): Promise<SetLostR
 
   const patch: Record<string, string> = { deal_lost_reason: reasons.join(";") };
   if (!isLost) patch.dealstage = lostStage;
-  const upd = await hubspotFetch(`/crm/v3/objects/deals/${encodeURIComponent(input.dealId)}`, { method: "PATCH", body: JSON.stringify({ properties: patch }) });
-  if (!upd.ok) {
-    const msg = ((await upd.json().catch(() => null)) as { message?: string } | null)?.message;
-    return { error: `HubSpot didn't save it${msg ? `: ${msg}` : ` (${upd.status})`}.` };
-  }
+  const saved = await patchDeal(input.dealId, patch);
+  if ("error" in saved) return saved;
   const toStage = isLost ? fromStage : lostStage;
 
   await prisma.dealLostChange.create({

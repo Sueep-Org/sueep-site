@@ -32,6 +32,8 @@ import { JanitorialCalendar } from "./JanitorialCalendar";
 import { ManagementCalendar } from "./ManagementCalendar";
 import { ProjectGantt } from "./ProjectGantt";
 import { MasterCalendar, type MasterProject } from "./MasterCalendar";
+import { statusesByUid } from "@/lib/erp/scheduleConfirmations";
+import { answerUid, type Answers } from "@/lib/erp/scheduleAnswerUids";
 
 export const metadata: Metadata = {
   title: "Schedule",
@@ -757,6 +759,21 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     if (a.supervisorContractorId) addDay(`c:${a.supervisorContractorId}`, pid, dayKey(a.date), false);
   }
 
+  // Confirm / Can't make it answers for everyone on the visible days (scheduleConfirmations.ts).
+  const answerUids = [
+    ...visibleDayAssignments.flatMap((a) => [
+      ...(a.supervisorUserId ? [answerUid.day(a.id)] : []),
+      ...(a.supervisorContractorId ? [answerUid.daySub(a.id, a.supervisorContractorId)] : []),
+    ]),
+    ...visibleWorkerAssignments.map((w) => answerUid.worker(w.id)),
+    ...visibleCoDayAssignments.flatMap((a) => [
+      ...(a.supervisorUserId ? [answerUid.coDay(a.id)] : []),
+      ...(a.supervisorContractorId ? [answerUid.coDaySub(a.id, a.supervisorContractorId)] : []),
+    ]),
+    ...visibleCoWorkerAssignments.map((w) => answerUid.coWorker(w.id)),
+  ];
+  const answers: Answers = Object.fromEntries(await statusesByUid(answerUids).catch(() => new Map()));
+
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -769,6 +786,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
 
       {/* Project Schedule */}
       <SchedulePlanner
+        answers={answers}
         projects={visibleProjects}
         supervisors={supervisors}
         projectManagers={projectManagers}

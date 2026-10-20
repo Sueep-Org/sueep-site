@@ -42,7 +42,9 @@ export function WinLossFilter({
   function go(next: { period?: string; scope?: string }) {
     const p = next.period ?? period;
     const s = next.scope ?? scope;
-    router.push(`/erp/win-loss?period=${p}${s ? `&type=${s}` : ""}`);
+    // Keep the open tab (Overview, Price, Losses, Clients) when the filter changes.
+    const tab = new URLSearchParams(window.location.search).get("tab");
+    router.push(`/erp/win-loss?period=${p}${s ? `&type=${s}` : ""}${tab ? `&tab=${encodeURIComponent(tab)}` : ""}`);
   }
 
   const radios = (title: string, group: string, options: Option[], value: string, onPick: (v: string) => void) => (

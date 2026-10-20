@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import type { CardRow, DashboardCardData } from "@/app/erp/(shell)/_dashboard/DashboardCard";
 import { todayEasternAsUtcMidnight, todayEasternKey, utcDateKey } from "./dates";
 import { findCrewConflicts, type CrewConflict, type ScheduledDay, type TimeOffSpan } from "./crewConflicts";
+import { confirmationIssues } from "./scheduleConfirmations";
 
 /**
  * Jobs tab (DASHBOARDS_PLAN.md Phase 7): Waiting on others, and Crew
@@ -222,13 +223,24 @@ function conflictRow(c: CrewConflict): CardRow {
 }
 
 export async function loadCrewConflicts(): Promise<DashboardCardData> {
-  const { double, timeOff } = await loadConflicts();
+  const [{ double, timeOff }, answers] = await Promise.all([loadConflicts(), confirmationIssues(LOOKAHEAD_DAYS)]);
   const approvedOff = timeOff.filter((c) => c.firm).length;
+  // People who clicked Can't make it, or haven't answered their invite yet (scheduleConfirmations.ts).
+  const answerRow = (r: (typeof answers.declined)[number]): CardRow => ({
+    id: `answer-${r.uid}`,
+    href: r.link ?? "/erp/schedule",
+    title: r.personName,
+    note: r.status === "DECLINED" ? `${r.title}${r.reason ? `. Reason: ${r.reason}` : ""}` : r.title,
+    value: shortDate(r.dateKey),
+    negative: r.status === "DECLINED",
+  });
   return {
-    alertCount: double.length + approvedOff,
+    alertCount: double.length + approvedOff + answers.declined.length,
     sections: [
       { key: "double", label: "Double-booked", rows: double.map(conflictRow), alertCount: double.length, empty: `Nobody is on two jobs the same day in the next ${LOOKAHEAD_DAYS} days.`, href: "/erp/schedule" },
       { key: "time-off", label: "Time off", rows: timeOff.map(conflictRow), alertCount: approvedOff, empty: `Nobody is scheduled on a day off in the next ${LOOKAHEAD_DAYS} days.`, href: "/erp/schedule" },
+      { key: "declined", label: "Declined", rows: answers.declined.map(answerRow), alertCount: answers.declined.length, empty: `Nobody has said they can't make it in the next ${LOOKAHEAD_DAYS} days.`, href: "/erp/schedule" },
+      { key: "no-answer", label: "No answer", rows: answers.pending.map(answerRow), empty: `Everyone scheduled in the next ${LOOKAHEAD_DAYS} days has answered.`, href: "/erp/schedule" },
     ],
   };
 }
