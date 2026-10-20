@@ -70,6 +70,7 @@ export async function POST(req: Request) {
     if (jobTitle) {
       await sendSubAssignedEmail({
         contractorId,
+        projectId: assignment.projectId,
         jobTitle,
         location: project?.building?.address || project?.workOrderRecord?.siteAddress || building?.address || null,
         role: assignment.role,

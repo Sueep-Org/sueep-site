@@ -4,6 +4,7 @@ import { sendEmail } from "@/lib/email";
 import { buildDayAssignmentInvite } from "@/lib/calendarInvite";
 import { dayKey } from "@/lib/erp/schedule";
 import { todayEasternKey } from "@/lib/erp/dates";
+import { centsToDollars } from "@/lib/erp/money";
 import { turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
 import { cancelConfirmation, markInviteSent, prepareConfirmation, responseButtonsHtml, responseUrl } from "@/lib/erp/scheduleConfirmations";
 
@@ -355,6 +356,16 @@ export async function notifyChangeOrderCrew(params: {
  * and the one replaced can be sent a cancellation. Skipped when the sub has
  * no email on file. Same rules as every other invite (sendDayInvite).
  */
+/** A sub's estimated pay on a janitorial turnover: half the contract value. Only the dollar amount is shown, never how it's worked out. */
+const TURNOVER_SUB_PAY_SHARE = 0.5;
+
+async function turnoverSubPayHtml(projectId: string | null | undefined): Promise<string | undefined> {
+  if (!projectId) return undefined;
+  const p = await prisma.project.findUnique({ where: { id: projectId }, select: { segment: true, contractValueCents: true } });
+  if (p?.segment !== "JANITORIAL_TURNOVER_REQUESTS" || !p.contractValueCents) return undefined;
+  return `<p><strong>Estimated pay:</strong> ${centsToDollars(Math.round(p.contractValueCents * TURNOVER_SUB_PAY_SHARE))}</p>`;
+}
+
 export async function sendSubLeadInvite(params: {
   kind: "day" | "co-day";
   assignmentId: string;
@@ -370,6 +381,13 @@ export async function sendSubLeadInvite(params: {
 }): Promise<void> {
   const contact = await resolveWorkerContact(null, params.contractorId);
   if (!contact) return;
+  const extraHtml =
+    params.kind === "day" && !params.cancelled
+      ? await prisma.projectDayAssignment
+          .findUnique({ where: { id: params.assignmentId }, select: { projectId: true } })
+          .then((a) => turnoverSubPayHtml(a?.projectId))
+          .catch(() => undefined)
+      : undefined;
   await sendDayInvite({
     uid: `${params.kind}-assignment-${params.assignmentId}-sub-${params.contractorId}@sueep.com`,
     to: contact.email,
@@ -383,6 +401,7 @@ export async function sendSubLeadInvite(params: {
     scopeText: params.scopeText,
     url: params.url,
     cancelled: params.cancelled,
+    extraHtml,
   });
 }
 
@@ -392,11 +411,14 @@ function dayLabel(d: Date | null | undefined): string | null {
 
 /**
  * "You've been assigned" email when a sub is added to a job's or change
- * order's Subs list (no specific day yet). Never includes the cost. Errors
+ * order's Subs list (no specific day yet). Never includes the cost entered
+ * on the assignment; a janitorial turnover shows the estimated pay. Errors
  * are logged, never thrown, so the assignment itself always saves.
  */
 export async function sendSubAssignedEmail(params: {
   contractorId: string;
+  /** The job, for the turnover estimated pay. Left out for change orders. */
+  projectId?: string | null;
   jobTitle: string;
   changeOrderTitle?: string | null;
   location?: string | null;
@@ -417,6 +439,7 @@ export async function sendSubAssignedEmail(params: {
       params.task || params.role ? `<p><strong>Work:</strong> ${escapeHtml([params.role, params.task].filter(Boolean).join(": "))}</p>` : "",
       dates ? `<p><strong>Dates:</strong> ${escapeHtml(dates)}</p>` : "",
       params.location ? `<p><strong>Address:</strong> ${escapeHtml(params.location)}</p>` : "",
+      params.changeOrderTitle ? "" : ((await turnoverSubPayHtml(params.projectId)) ?? ""),
       `<p>You'll get a separate calendar invite for each day you're scheduled.</p>`,
     ];
     await sendEmail({ type: "SUB_ASSIGNED", to: contact.email, subject: `You've been assigned: ${what}`, html: lines.filter(Boolean).join("") });

@@ -76,6 +76,7 @@ export async function POST(req: Request, ctx: Ctx) {
     // Tell the sub they're on the job (never the cost). Logged and skipped on failure, the assignment still saves.
     await sendSubAssignedEmail({
       contractorId,
+      projectId: id,
       jobTitle: project.jobTitle,
       location: project.building?.address || project.workOrderRecord?.siteAddress || null,
       task: assignment.taskDescription,
