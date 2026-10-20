@@ -3088,8 +3088,10 @@ export function SchedulePlanner({
                   // instead of floating separately — see the
                   // coNeedsSupervisorIds split above.
                   const needsSupervisor = coNeedsSupervisorIds.has(co.id);
+                  const declined = coDayDeclined(co.id, coAssignment);
                   const warningIcons = (
                     <>
+                      {declined ? <span aria-hidden title="Someone can't make it" className="shrink-0 font-bold text-red-600">✕</span> : null}
                       {needsSupervisor ? <span aria-hidden>⚠</span> : null}
                       {isOverdue ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : null}
                     </>
@@ -3418,8 +3420,10 @@ export function SchedulePlanner({
                   const assignmentScopeLabels = assignment.scopeItems.map((v) => turnoverScopeDisplayLabel(v, project.otherScopeDescription));
                   const noSupervisor =
                     !isOverdue && !supervisor && !pm && !contractor && !projectSoloCoverage.dayPairs.has(`${project.id}:${k}`);
+                  const declinedMark = dayDeclined(assignment) ? <span aria-hidden title="Someone can't make it" className="shrink-0 font-bold text-red-600">✕</span> : null;
                   const chipContent = (
                     <>
+                      {declinedMark}
                       {isOverdue ? (
                         <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span>
                       ) : noSupervisor ? (
@@ -3452,7 +3456,7 @@ export function SchedulePlanner({
                       } ${completionChipClass(project.status === "COMPLETE")}`}
                       style={seg ? laneButtonStyle(seg) : undefined}
                     >
-                      {seg ? (seg.labelSpanDays ? null : <>{isOverdue ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : noSupervisor ? <span aria-hidden title="No supervisor assigned" className="shrink-0 text-amber-950">⚠</span> : null}</>) : chipContent}
+                      {seg ? (seg.labelSpanDays ? null : <>{declinedMark}{isOverdue ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : noSupervisor ? <span aria-hidden title="No supervisor assigned" className="shrink-0 text-amber-950">⚠</span> : null}</>) : chipContent}
                     </button>
                     {seg ? laneLabelOverlay(seg, chipContent, noSupervisor ? "text-amber-950" : groupTextClass(calendarSegmentGroup(project.segment)), project.status === "COMPLETE") : null}
                     {renderEventPopover(k, project)}
@@ -3520,6 +3524,20 @@ export function SchedulePlanner({
                 }
 
 
+                // True when anyone on this job and day (supervisor, sub
+                // running it or crew) answered Can't make it to their invite.
+                function dayDeclined(assignment: ScheduleDayAssignment): boolean {
+                  if (answers[answerUid.day(assignment.id)] === "DECLINED") return true;
+                  if (assignment.supervisorContractorId && answers[answerUid.daySub(assignment.id, assignment.supervisorContractorId)] === "DECLINED") return true;
+                  return workerAssignments.some((w) => w.projectId === assignment.projectId && w.dateKey === k && answers[answerUid.worker(w.id)] === "DECLINED");
+                }
+
+                function coDayDeclined(coId: string, coAssignment: (typeof coDayAssignments)[number] | undefined): boolean {
+                  if (coAssignment && answers[answerUid.coDay(coAssignment.id)] === "DECLINED") return true;
+                  if (coAssignment?.supervisorContractorId && answers[answerUid.coDaySub(coAssignment.id, coAssignment.supervisorContractorId)] === "DECLINED") return true;
+                  return coWorkerAssignments.some((w) => w.changeOrderId === coId && w.dateKey === k && answers[answerUid.coWorker(w.id)] === "DECLINED");
+                }
+
                 // Worst-state-wins, using the exact same severity levels the
                 // ungrouped chips already use — a group is only as "healthy"
                 // as its least-done unit, so nothing bad hides behind the
@@ -3544,6 +3562,7 @@ export function SchedulePlanner({
                 function renderBuildingGroupChip(group: BuildingGroup, seg?: LaneSegment) {
                   const { buildingId, buildingName, entries } = group;
                   const severity = buildingGroupSeverity(entries);
+                  const declinedMark = entries.some((e) => e.kind === "planned" && dayDeclined(e.assignment)) ? <span aria-hidden title="Someone can't make it" className="shrink-0 font-bold text-red-600">✕</span> : null;
                   const groupKey = `${k}:${buildingId}`;
                   const run = seg?.entry.kind === "buildingGroup" ? seg.entry : null;
                   const isExpanded = run ? run.expanded : expandedBuildingGroups.has(groupKey);
@@ -3561,6 +3580,7 @@ export function SchedulePlanner({
                       : CALENDAR_GROUP_CHIP_CLASS.JANITORIAL_TURNOVER_REQUESTS;
                   const chipContent = (
                     <>
+                      {declinedMark}
                       {severity === "needsSupervisor" ? <span aria-hidden>⚠</span> : null}
                       {severity === "overdue" ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : null}
                       <CompletionStatusIcon complete={allComplete} />
@@ -3597,7 +3617,7 @@ export function SchedulePlanner({
                         className={`relative flex w-full items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-8 text-[10px] font-medium shadow-sm transition-colors ${severityClass} ${completionChipClass(allComplete)}`}
                         style={seg ? laneButtonStyle(seg) : undefined}
                       >
-                        {seg ? (seg.labelSpanDays ? null : <>{severity === "needsSupervisor" ? <span aria-hidden>⚠</span> : severity === "overdue" ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : null}</>) : chipContent}
+                        {seg ? (seg.labelSpanDays ? null : <>{declinedMark}{severity === "needsSupervisor" ? <span aria-hidden>⚠</span> : severity === "overdue" ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : null}</>) : chipContent}
                       </button>
                       {seg ? laneLabelOverlay(seg, chipContent, severity === "needsSupervisor" ? "font-bold text-amber-950" : groupTextClass("JANITORIAL_TURNOVER_REQUESTS"), allComplete) : null}
                       {inMonth ? (

@@ -199,7 +199,8 @@ export function ScheduleCalendarOverview() {
             needed; they can add a reason). If someone can&apos;t make it, Jennifer, Edwin, David and Nick get an email
             right away (change the list on the Notifications page under Schedule declined), and the person stays on the
             schedule so a PM can swap someone in. At about 2pm, the same people get a list of anyone scheduled for
-            tomorrow who hasn&apos;t answered. On the calendar, hover a chip to see each person&apos;s answer: ✓ confirmed,
+            tomorrow who hasn&apos;t answered. A red ✕ at the start of a calendar chip means someone on that job that day
+            can&apos;t make it. Hover a chip to see each person&apos;s answer: ✓ confirmed,
             ✕ can&apos;t make it, ? no answer yet. The day panel shows the same next to each worker, and the
             dashboard&apos;s Crew conflicts card has Declined and No answer tabs.
           </Callout>
