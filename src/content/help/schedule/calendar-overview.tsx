@@ -194,6 +194,15 @@ export function ScheduleCalendarOverview() {
             (never the cost). Changing a day&apos;s time or scope sends an update; nothing is sent
             for past days or to someone with no email on file.
           </Callout>
+          <Callout type="tip">
+            Every schedule email has <strong>Confirm</strong> and <strong>Can&apos;t make it</strong> buttons (no login
+            needed; they can add a reason). If someone can&apos;t make it, Jennifer, Edwin, David and Nick get an email
+            right away (change the list on the Notifications page under Schedule declined), and the person stays on the
+            schedule so a PM can swap someone in. At about 2pm, the same people get a list of anyone scheduled for
+            tomorrow who hasn&apos;t answered. On the calendar, hover a chip to see each person&apos;s answer: ✓ confirmed,
+            ✕ can&apos;t make it, ? no answer yet. The day panel shows the same next to each worker, and the
+            dashboard&apos;s Crew conflicts card has Declined and No answer tabs.
+          </Callout>
         </Step>
 
         <Step n={9} title="Removing an assignment">

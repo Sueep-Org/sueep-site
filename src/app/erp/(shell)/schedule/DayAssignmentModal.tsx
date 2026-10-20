@@ -16,6 +16,7 @@ import { useInsuranceCheck } from "@/app/erp/components/useInsuranceCheck";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { centsToDollars } from "@/lib/erp/money";
 import { MiniCalendarPicker } from "./MiniCalendarPicker";
+import { AnswerMark, answerUid, type Answers } from "./AnswerMark";
 
 /** The specific things a single crew member on a day could be split onto —
  * an SOV item for Post-Construction, a turnover scope category for
@@ -111,6 +112,7 @@ export function DayAssignmentModal({
   contractors,
   existingWorkers,
   existingCoWorkers,
+  answers = {},
   initialProjectId,
   onClose,
   onCreated,
@@ -133,6 +135,8 @@ export function DayAssignmentModal({
   contractors: WorkerPerson[];
   existingWorkers: ScheduleWorkerAssignment[];
   existingCoWorkers: ScheduleCoWorkerAssignment[];
+  /** Confirm / Can't make it answers by invite uid (AnswerMark.tsx) */
+  answers?: Answers;
   /** Pre-selects a project — e.g. jumping here from the "needs a supervisor" alert chip for a specific project. */
   initialProjectId?: string;
   onClose: () => void;
@@ -1054,6 +1058,7 @@ export function DayAssignmentModal({
                       <span className="truncate" title={co?.title}>
                         <span className="font-medium text-gray-800">{co?.title ?? "Unknown change order"}</span>
                         <span className="text-gray-500"> - {workerLabel}</span>
+                        <AnswerMark status={answers[answerUid.coWorker(w.id)]} />
                         {noEmail ? (
                           <span className="text-gray-400" title="No email on file - didn't get a schedule invite">
                             {" "}
@@ -1109,6 +1114,7 @@ export function DayAssignmentModal({
                     <span className="truncate" title={project?.jobTitle}>
                       <span className="font-medium text-gray-800">{project?.jobTitle ?? "Unknown project"}</span>
                       <span className="text-gray-500"> - {workerLabel}</span>
+                      <AnswerMark status={answers[answerUid.worker(w.id)]} />
                       {noEmail ? (
                         <span className="text-gray-400" title="No email on file - didn't get a schedule invite">
                           {" "}

@@ -25,6 +25,13 @@ export function WinLossHelp() {
       </UL>
 
       <H2>What&apos;s on the page</H2>
+      <P>
+        The four numbers at the top are always shown. Below them, four tabs: <strong>Overview</strong> (win rate by quarter,
+        by type of work, by job size), <strong>Price</strong> (won vs lost price chart, $ per sq ft by type of work),{" "}
+        <strong>Losses</strong> (why we lose by quarter and overall, re-bids, stale quotes) and <strong>Clients</strong> (by
+        GC, property managers and owners, link companies). The filter applies to every tab, and the tab you&apos;re on stays
+        open when you change it. Green means won and orange means lost on every chart, here and on the Pipeline board.
+      </P>
       <UL>
         <LI>
           Win rate, won and lost dollars, and the median price per square foot of won jobs. Jobs without Area SQFT in HubSpot
@@ -49,7 +56,7 @@ export function WinLossHelp() {
         One bar per quarter since 2023 (when lost reasons started being filled in), showing what share of that
         quarter&apos;s losses had each main reason: <strong>GC not awarded</strong> (orange), <strong>Price</strong>{" "}
         (violet, same as on the price chart), <strong>No answer</strong> (yellow), <strong>Did not move forward</strong>{" "}
-        (green), <strong>Other reasons</strong> (gray) and <strong>No reason</strong> (light gray). The number on top is how
+        (pink), <strong>Other reasons</strong> (gray) and <strong>No reason</strong> (light gray). The number on top is how
         many deals were lost. A deal with several reasons counts once, under the first of those four. It follows the type
         of work filter but not the period. Hover a segment for its count, or use Show table.
       </P>
@@ -58,7 +65,7 @@ export function WinLossHelp() {
       <P>
         This chart answers &quot;are we losing on price?&quot;. Each dot is a won or lost bid in the period, placed by its
         price per square foot: HubSpot&apos;s quoted Amount divided by Area SQFT. There&apos;s one strip per type of work,
-        with three rows: <strong>Won</strong> (blue), <strong>Lost</strong> (orange) and <strong>Lost for Price</strong>{" "}
+        with three rows: <strong>Won</strong> (green), <strong>Lost</strong> (orange) and <strong>Lost for Price</strong>{" "}
         (violet, the lost bids whose reason was Price). The dark line in each row is the median, and the sentence above
         says how far apart won and lost bids were.
       </P>

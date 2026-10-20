@@ -10,7 +10,8 @@ import { centsToDollars, centsToDollarsCompact } from "./money";
 import { todayEasternKey } from "./dates";
 import { addDaysKey } from "./manualHoursRepeat";
 import { STALE_DAYS, staleQuotes } from "./winLoss";
-import { dealUrl, loadDealBundle, loadJanitorialDealBundle, outcomeOf, type Bundle, type RawDeal } from "./postConDeals";
+import { dealUrl, outcomeOf, type Bundle, type RawDeal } from "./postConDeals";
+import { loadDeals, loadJanitorialDeals } from "./dealEdits";
 import { openNextSteps } from "./dealFollowUps";
 import { loadWinBands, type WinBand } from "./winChance";
 import { loadPipelineBoard } from "./pipelineBoard";
@@ -97,7 +98,7 @@ function staleSection(bundle: Bundle): CardSection {
  * matched to their login); Admin and PM level see everyone's.
  */
 async function followUpSection(ctx: CardContext, todayKey: string): Promise<CardSection> {
-  const [steps, pc, jan] = await Promise.all([openNextSteps(), loadDealBundle(), loadJanitorialDealBundle()]);
+  const [steps, pc, jan] = await Promise.all([openNextSteps(), loadDeals(), loadJanitorialDeals()]);
   const mineOnly = ctx.role === "SALES" || ctx.role === "ESTIMATION";
   const me = ctx.email.toLowerCase();
   const weekEnd = addDaysKey(todayKey, 6);
@@ -144,7 +145,7 @@ async function followUpSection(ctx: CardContext, todayKey: string): Promise<Card
 /** Estimation Queue tab: bid due dates and job walks coming up, and next steps. */
 export async function loadBidsDue(ctx: CardContext): Promise<DashboardCardData> {
   const today = todayEasternKey();
-  const bundle = await loadDealBundle();
+  const bundle = await loadDeals();
   const [bands, followUps] = await Promise.all([loadWinBands(bundle), followUpSection(ctx, today)]);
   const section = bidsDueSection(bundle, today, bands);
   return { alertCount: section.alertCount, sections: [section, followUps] };
@@ -152,7 +153,7 @@ export async function loadBidsDue(ctx: CardContext): Promise<DashboardCardData> 
 
 /** Sales tab "Bids" card: due soon, quotes nobody has touched in STALE_DAYS, and next steps. */
 export async function loadSalesBids(ctx: CardContext): Promise<DashboardCardData> {
-  const bundle = await loadDealBundle();
+  const bundle = await loadDeals();
   const today = todayEasternKey();
   const due = bidsDueSection(bundle, today, await loadWinBands(bundle));
   return { alertCount: due.alertCount, sections: [due, staleSection(bundle), await followUpSection(ctx, today)] };
@@ -160,7 +161,7 @@ export async function loadSalesBids(ctx: CardContext): Promise<DashboardCardData
 
 /** Red number on the tab: bids due within URGENT_DAYS. Same for everyone, so it's safe to cache per role. */
 export async function countBidsDueAlerts(): Promise<number> {
-  return bidsDueSection(await loadDealBundle(), todayEasternKey()).alertCount ?? 0;
+  return bidsDueSection(await loadDeals(), todayEasternKey()).alertCount ?? 0;
 }
 
 // ── Price check (Estimation Queue tab) ──────────────────────────────────────

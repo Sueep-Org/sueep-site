@@ -11,10 +11,9 @@
  *   companies).
  */
 import { prisma } from "@/lib/prisma";
-import { hubspotFetch } from "@/lib/hubspot/client";
-import { loadRules } from "@/lib/hubspot/pipelineRules";
 import { normalizeCompanyName } from "./clientCompanies";
 import type { PipelineKey } from "./postConDeals";
+import { isActiveOwner, patchDeal, readDealForChange } from "./dealGuard";
 
 const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_CENTS = 1_000_000_000_00;
@@ -86,20 +85,12 @@ export async function saveDealInfo(input: SaveDealInfoInput): Promise<{ error: s
   const built = toHubSpot(input.changes);
   if ("error" in built) return built;
 
-  const rules = (await loadRules()).find((r) => r.key === input.pipeline);
-  if (!rules) return { error: "Pipeline not found in HubSpot." };
-  const res = await hubspotFetch(`/crm/v3/objects/deals/${encodeURIComponent(input.dealId)}?properties=dealname,dealstage,pipeline,${INFO_PROPS.join(",")}`);
-  if (res.status === 404) return { error: "This deal is no longer in HubSpot." };
-  if (!res.ok) return { error: `Couldn't read the deal from HubSpot (${res.status}).` };
-  const p = ((await res.json()) as { properties: Record<string, string | null> }).properties;
-  if (p.pipeline !== rules.pipelineId) return { error: "This deal moved to another pipeline in HubSpot. Reload the page." };
-  if (rules.won.has(p.dealstage ?? "") || rules.lost.has(p.dealstage ?? ""))
-    return { error: "This deal is closed in HubSpot. Edit won and lost deals in HubSpot." };
-
-  if (built.patch.hubspot_owner_id) {
-    const owner = await hubspotFetch(`/crm/v3/owners/${built.patch.hubspot_owner_id}?archived=false`);
-    if (!owner.ok) return { error: "That owner isn't active in HubSpot. Pick another." };
-  }
+  const deal = await readDealForChange(input.dealId, input.pipeline, [...INFO_PROPS]);
+  if ("error" in deal) return deal;
+  const p = deal.props;
+  if (deal.outcome !== "open") return { error: "This deal is closed in HubSpot. Edit won and lost deals in HubSpot." };
+  if (built.patch.hubspot_owner_id && !(await isActiveOwner(built.patch.hubspot_owner_id)))
+    return { error: "That owner isn't active in HubSpot. Pick another." };
 
   const changed = (Object.keys(built.patch) as InfoProp[]).filter((k) => !same(k, p[k], built.patch[k]!));
   let aliasCompany: { id: string; aliases: string[] } | null = null;
@@ -115,11 +106,8 @@ export async function saveDealInfo(input: SaveDealInfoInput): Promise<{ error: s
   await prisma.dealInfoChange.findFirst({ select: { id: true } });
   if (changed.length) {
     const properties = Object.fromEntries(changed.map((k) => [k, built.patch[k]!]));
-    const upd = await hubspotFetch(`/crm/v3/objects/deals/${encodeURIComponent(input.dealId)}`, { method: "PATCH", body: JSON.stringify({ properties }) });
-    if (!upd.ok) {
-      const msg = ((await upd.json().catch(() => null)) as { message?: string } | null)?.message;
-      return { error: `HubSpot didn't save it${msg ? `: ${msg}` : ` (${upd.status})`}.` };
-    }
+    const saved = await patchDeal(input.dealId, properties);
+    if ("error" in saved) return saved;
     await prisma.dealInfoChange.createMany({
       data: changed.map((k) => ({
         hubspotDealId: input.dealId,

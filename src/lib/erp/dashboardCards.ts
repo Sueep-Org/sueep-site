@@ -154,7 +154,7 @@ export const DASHBOARD_CARDS: readonly DashboardCardDef[] = [
     title: "Crew conflicts",
     tab: "jobs",
     roles: ["PROJECT_MANAGER", "BUSINESS_MANAGER", "ADMIN"],
-    info: "Next 14 days. Double-booked: an employee on two different jobs the same day (subs can run more than one crew, so they aren't flagged). Time off: crew or supervisors scheduled on a day they have approved or requested time off.",
+    info: "Next 14 days. Double-booked: an employee on two different jobs the same day (subs can run more than one crew, so they aren't flagged). Time off: crew or supervisors scheduled on a day they have approved or requested time off. Declined: people who clicked Can't make it in their schedule invite (they're still on the schedule). No answer: invites not confirmed yet.",
   },
   // Money (Project Managers, Business Manager, Admin)
   {

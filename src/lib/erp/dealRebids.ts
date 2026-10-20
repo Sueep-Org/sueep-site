@@ -15,9 +15,9 @@
  */
 import { prisma } from "@/lib/prisma";
 import { hubspotFetch } from "@/lib/hubspot/client";
-import { loadRules } from "@/lib/hubspot/pipelineRules";
 import { normalizeCompanyName } from "./clientCompanies";
 import { splitReasons, GC_NOT_AWARDED } from "./dealLostReasons";
+import { isActiveOwner, pipelineStages, readDealForChange } from "./dealGuard";
 
 /** "Ardmore House II - Harkins Builders" with winner "HIGH" becomes "Ardmore House II - HIGH". */
 export function rebidName(name: string, oldGc: string | null, winner: string): string {
@@ -36,28 +36,16 @@ export async function createRebid(input: CreateRebidInput): Promise<{ error: str
   const winner = await prisma.dealLostWinner.findUnique({ where: { hubspotDealId: input.fromDealId } });
   if (!winner) return { error: "Record which GC won first (Who won?)." };
 
-  const rules = (await loadRules()).find((r) => r.key === "post-con");
-  if (!rules) return { error: "Post-construction pipeline not found in HubSpot." };
-  const res = await hubspotFetch(
-    `/crm/v3/objects/deals/${encodeURIComponent(input.fromDealId)}?properties=dealname,dealstage,pipeline,deal_lost_reason,amount,area_sqft,type_of_business`,
-  );
-  if (res.status === 404) return { error: "The lost deal is no longer in HubSpot." };
-  if (!res.ok) return { error: `Couldn't read the deal from HubSpot (${res.status}).` };
-  const p = ((await res.json()) as { properties: Record<string, string | null> }).properties;
-  if (p.pipeline !== rules.pipelineId || !rules.lost.has(p.dealstage ?? "")) return { error: "Only lost post-construction deals can be re-bid." };
+  const deal = await readDealForChange(input.fromDealId, "post-con", ["deal_lost_reason", "amount", "area_sqft", "type_of_business"]);
+  if ("error" in deal) return deal;
+  const { rules, props: p } = deal;
+  if (deal.outcome !== "lost") return { error: "Only lost post-construction deals can be re-bid." };
   if (!splitReasons(p.deal_lost_reason).includes(GC_NOT_AWARDED)) return { error: "Only deals lost as GC Not Awarded can be re-bid." };
 
-  if (input.ownerId) {
-    if (!/^\d+$/.test(input.ownerId)) return { error: "Pick an owner from the list." };
-    const owner = await hubspotFetch(`/crm/v3/owners/${input.ownerId}?archived=false`);
-    if (!owner.ok) return { error: "That owner isn't active in HubSpot. Pick another." };
-  }
+  if (input.ownerId && !(await isActiveOwner(input.ownerId))) return { error: "That owner isn't active in HubSpot. Pick another." };
 
-  const pipes = await hubspotFetch(`/crm/v3/pipelines/deals/${encodeURIComponent(rules.pipelineId)}`);
-  if (!pipes.ok) return { error: `Couldn't read HubSpot's stages (${pipes.status}).` };
-  const stages = (((await pipes.json()) as { stages?: { id: string; label: string; displayOrder: number }[] }).stages ?? []).sort(
-    (a, b) => a.displayOrder - b.displayOrder,
-  );
+  const stages = await pipelineStages(rules.pipelineId);
+  if ("error" in stages) return stages;
   const lead = stages.find((s) => /^\s*lead\s*$/i.test(s.label)) ?? stages[0];
   if (!lead) return { error: "The post-construction pipeline has no stages." };
 

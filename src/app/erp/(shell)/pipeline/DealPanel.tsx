@@ -8,7 +8,8 @@ import { centsToDollars, centsToDollarsCompact } from "@/lib/erp/money";
 import type { BoardCard, BoardColumn, PipelineBoard } from "@/lib/erp/pipelineBoard";
 import type { ActivityKind, DealPanelData } from "@/lib/erp/dealPanel";
 import type { WinBacktest } from "@/lib/erp/winChance";
-import { MISSING_LABELS } from "@/lib/erp/pipelineMissing";
+import { CHART, BAND_COLOR, BAND_TEXT, fullDate, pct, shortDay } from "@/lib/erp/pipelineUi";
+import { TONE_BOX, type Attention, type AttentionAction } from "@/lib/erp/dealAttention";
 
 const KIND_LABEL: Record<ActivityKind, string> = { email: "Email", call: "Call", note: "Note", task: "Task", meeting: "Meeting" };
 const KIND_DOT: Record<ActivityKind, string> = {
@@ -18,23 +19,10 @@ const KIND_DOT: Record<ActivityKind, string> = {
   task: "bg-violet-400",
   meeting: "bg-pink-400",
 };
-/** Same won and lost colors as the This week bar (checked with the dataviz palette validator). */
-const WON = "#1baf7a";
-const LOST = "#eb6834";
-const FACTOR = "#2a78d6";
-const BAND_TEXT: Record<string, string> = { Strong: "text-emerald-700", Fair: "text-gray-700", "Long shot": "text-gray-500" };
-const BAND_FILL: Record<string, string> = { Strong: "#1baf7a", Fair: "#9ca3af", "Long shot": "#d1d5db" };
-
-const pct = (x: number) => `${Math.round(x * 100)}%`;
-
-function when(iso: string): string {
-  const t = Date.parse(iso);
-  return Number.isFinite(t) ? new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" }) : "";
-}
-
-function shortDay(day: string): string {
-  return new Date(`${day}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-}
+const WON = CHART.won;
+const LOST = CHART.lost;
+const FACTOR = CHART.moved;
+const when = fullDate;
 
 function Section({ title, info, children, right }: { title: string; info: string; children: React.ReactNode; right?: React.ReactNode }) {
   return (
@@ -67,14 +55,6 @@ function Folded<T>({ items, first, render, more }: { items: T[]; first: number; 
   );
 }
 
-type Todo = { text: string; tone: "red" | "amber" | "gray" | "green"; action?: { label: string; onClick: () => void } };
-const TODO_TONE = {
-  red: "border-red-200 bg-red-50 text-red-800",
-  amber: "border-amber-200 bg-amber-50 text-amber-900",
-  gray: "border-gray-200 bg-gray-50 text-gray-700",
-  green: "border-emerald-200 bg-emerald-50 text-emerald-800",
-};
-
 /**
  * Side panel for one deal, built around what helps us win it: the chance to
  * win and why, what to do next, the price against our usual range, and the
@@ -86,7 +66,7 @@ export function DealPanel({
   card,
   column,
   pipeline,
-  today,
+  attention,
   labelOf,
   winBacktest,
   winBase,
@@ -101,7 +81,8 @@ export function DealPanel({
   card: BoardCard;
   column: BoardColumn | undefined;
   pipeline: "post-con" | "janitorial";
-  today: string;
+  /** What needs attention, from the board (dealAttention.ts), so the panel and the card agree */
+  attention: Attention[];
   labelOf: (reason: string) => string;
   winBacktest: WinBacktest | null;
   winBase: number | null;
@@ -145,45 +126,16 @@ export function DealPanel({
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  // What would most help win (or close out) this deal, most urgent first, at most 3.
-  const todos: Todo[] = [];
-  if (outcome === "open") {
-    if (card.nextStep && card.nextStep.dueDate < today)
-      todos.push({ text: `Next step is late: ${card.nextStep.text}`, tone: "red", action: { label: "Update", onClick: onNextStep } });
-    if (card.cleanup)
-      todos.push({ text: `No movement in ${card.daysInStage} days. Is it still alive?`, tone: "red", action: { label: "Mark lost", onClick: onLost } });
-    else if (card.stuck)
-      todos.push({
-        text: `${card.daysInStage} days in ${column?.label ?? "this stage"}. Push it forward or close it out.`,
-        tone: "amber",
-        action: { label: "Move to", onClick: onMoveTo },
-      });
-    if (!card.nextStep) todos.push({ text: "No next step. Decide what happens next and when.", tone: "amber", action: { label: "Add", onClick: onNextStep } });
-    if (card.missing.length)
-      todos.push({
-        text: `Missing ${card.missing.map((m) => (m === "company" ? companyWord : MISSING_LABELS[m])).join(", ")}`,
-        tone: "amber",
-        action: { label: "Fix", onClick: onEditInfo },
-      });
-    if (card.priceFlag)
-      todos.push({
-        text:
-          card.priceFlag.kind === "check"
-            ? "Price looks far off. Check Area SQFT and the amount."
-            : `Price is ${pct(Math.abs(card.priceFlag.diff))} ${card.priceFlag.kind === "high" ? "above" : "below"} what we usually charge.`,
-        tone: "amber",
-      });
-    if (card.gcRecord?.skip) todos.push({ text: `We've bid ${card.gcRecord.bids} times with this GC and never won. Worth the effort?`, tone: "gray" });
-    if (card.stale && !card.stuck && !card.cleanup)
-      todos.push({ text: `Quiet for ${card.daysQuiet} days. Follow up with the GC.`, tone: "amber", action: { label: "Next step", onClick: onNextStep } });
-  } else if (outcome === "lost") {
-    if (!card.lostReasons.length) todos.push({ text: "No lost reason yet.", tone: "amber", action: { label: "Add reason", onClick: onLost } });
-    else if (card.gcNotAwarded && !card.winner)
-      todos.push({ text: "Our GC lost the job. Which GC won it?", tone: "amber", action: { label: "Who won?", onClick: onLost } });
-    else if (card.gcNotAwarded && card.winner && !card.rebid && onRebid)
-      todos.push({ text: `${card.winner.name} won the job and still needs a sub.`, tone: "green", action: { label: "Re-bid", onClick: onRebid } });
-  }
-  const shownTodos = todos.slice(0, 3);
+  // Do next: the shared attention list (dealAttention.ts), top 3, each with the button that handles it.
+  const handlers: Record<AttentionAction, (() => void) | undefined> = {
+    nextStep: onNextStep,
+    editInfo: onEditInfo,
+    moveTo: onMoveTo,
+    markLost: onLost,
+    lostReason: onLost,
+    rebid: onRebid,
+  };
+  const shownTodos = attention.slice(0, 3);
 
   const range = card.perSqft != null ? priceRanges.find((r) => r.scope === card.scope) : undefined;
   const gc = data?.gc ?? null;
@@ -243,7 +195,7 @@ export function DealPanel({
                 </p>
                 {/* Meter: share of 100%, with a tick at our average win rate. */}
                 <div className="relative mt-1 h-2 rounded-full bg-gray-100">
-                  <div className="h-2 rounded-full" style={{ width: `${Math.max(3, card.chance.p * 100)}%`, background: BAND_FILL[card.chance.band] }} />
+                  <div className="h-2 rounded-full" style={{ width: `${Math.max(3, card.chance.p * 100)}%`, background: BAND_COLOR[card.chance.band] }} />
                   {winBase != null && <span aria-hidden className="absolute -top-0.5 h-3 w-0.5 bg-gray-700" style={{ left: `${winBase * 100}%` }} />}
                 </div>
                 {winBase != null && <p className="mt-0.5 text-[10px] text-gray-400">line = our average {pct(winBase)}</p>}
@@ -261,24 +213,27 @@ export function DealPanel({
                 <InfoTip text="The few things that would help most with this deal right now, most urgent first." />
               </h3>
               {shownTodos.length === 0 ? (
-                <p className={`rounded-md border px-3 py-2 text-xs ${TODO_TONE.green}`}>
+                <p className={`rounded-md border px-3 py-2 text-xs ${TONE_BOX.green}`}>
                   {outcome === "open" ? `On track${card.nextStep ? `: ${card.nextStep.text}, ${shortDay(card.nextStep.dueDate)}` : ""}` : "Nothing left to do."}
                 </p>
               ) : (
                 <ul className="space-y-1.5">
-                  {shownTodos.map((t) => (
-                    <li key={t.text} className={`flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-xs ${TODO_TONE[t.tone]}`}>
-                      <span>{t.text}</span>
-                      {t.action && (
-                        <Button size="xs" variant="secondary" onClick={t.action.onClick} className="shrink-0">
-                          {t.action.label}
-                        </Button>
-                      )}
-                    </li>
-                  ))}
+                  {shownTodos.map((t) => {
+                    const run = t.action ? handlers[t.action] : undefined;
+                    return (
+                      <li key={t.key} className={`flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-xs ${TONE_BOX[t.tone]}`}>
+                        <span>{t.text}</span>
+                        {run && (
+                          <Button size="xs" variant="secondary" onClick={run} className="shrink-0">
+                            {t.actionLabel}
+                          </Button>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
-              {outcome === "open" && card.nextStep && card.nextStep.dueDate >= today && shownTodos.length > 0 && (
+              {outcome === "open" && card.nextStep && !attention.some((a) => a.key === "lateStep") && shownTodos.length > 0 && (
                 <p className="mt-1.5 text-xs text-gray-500">
                   Next step: {card.nextStep.text}, {shortDay(card.nextStep.dueDate)}
                 </p>

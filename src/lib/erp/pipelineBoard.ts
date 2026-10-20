@@ -36,9 +36,9 @@ import {
 } from "./postConDeals";
 import { companyMatcher, staleQuotes } from "./winLoss";
 import { quotePriceCheck } from "./quotePriceCheck";
-import { lostChangesSince, splitReasons } from "./dealLostReasons";
+import { splitReasons } from "./dealLostReasons";
 import { nextStepStages, openNextSteps, type NextStep } from "./dealFollowUps";
-import { infoChangesSince } from "./dealInfo";
+import { applyErpEdits } from "./dealEdits";
 import { buildWinModel, type GcRecordShort, type WinBacktest, type WinChance } from "./winChance";
 import { loadRebids, rebidName } from "./dealRebids";
 import { GC_NOT_AWARDED } from "./dealLostReasons";
@@ -156,34 +156,8 @@ export async function loadPipelineBoard(
     openNextSteps(pipeline),
     pipeline === "post-con" ? loadRebids() : Promise.resolve(new Map<string, { newDealId: string; winningName: string }>()),
   ]);
-  // Lost reasons, Mark lost and info edits saved since the cached HubSpot read show right away.
-  const [changes, edits] = await Promise.all([lostChangesSince(pipeline, cached.fetchedAt), infoChangesSince(pipeline, cached.fetchedAt)]);
-  const latest = new Map(changes.map((c) => [c.hubspotDealId, c]));
-  const editsOf = new Map<string, typeof edits>();
-  for (const e of edits) editsOf.set(e.hubspotDealId, [...(editsOf.get(e.hubspotDealId) ?? []), e]);
-  const bundle: Bundle =
-    latest.size || editsOf.size
-      ? {
-          ...cached,
-          deals: cached.deals.map((d) => {
-            let next = d;
-            const c = latest.get(d.id);
-            if (c) next = { ...next, stageId: c.toStageId, lostReason: c.reasons.join(";"), lastActivity: c.createdAt.toISOString() };
-            for (const e of editsOf.get(d.id) ?? []) {
-              const v = e.toValue;
-              if (e.property === "hubspot_owner_id") next = { ...next, ownerId: v || null };
-              else if (e.property === "company") next = { ...next, company: v || null };
-              else if (e.property === "bid_date") next = { ...next, bidDate: v || null };
-              else if (e.property === "completion_date") next = { ...next, walkDate: v || null };
-              else if (e.property === "amount") next = { ...next, cents: v ? Math.round(Number(v) * 100) : 0 };
-              else if (e.property === "area_sqft") next = { ...next, sqft: v && Number(v) > 0 ? Number(v) : null };
-              else if (e.property === "dealstage")
-                next = { ...next, stageId: v, stageEnteredAt: e.createdAt.toISOString(), lastActivity: e.createdAt.toISOString() };
-            }
-            return next;
-          }),
-        }
-      : cached;
+  // ERP changes since the cached HubSpot read show right away (dealEdits.ts).
+  const bundle = await applyErpEdits(cached, pipeline);
   const winnerOf = new Map(winners.map((w) => [w.hubspotDealId, { name: w.winningName, priceCents: w.winningPriceCents }]));
   const match = companyMatcher(companies);
   const companyType = new Map(companies.map((c) => [c.id, c.type]));

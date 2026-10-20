@@ -15,21 +15,11 @@
 import { prisma } from "@/lib/prisma";
 import { normalizeCompanyName } from "./clientCompanies";
 import { median } from "./stats";
+import { isLikelyPriceTypo } from "./quotePriceCheck";
 import { loadLostReasonOptions, splitReasons } from "./dealLostReasons";
 import { LOSS_GROUPS, type LossGroup, type LossQuarter } from "./lossGroups";
-import {
-  WORK_SCOPES,
-  WORK_SCOPE_LABELS,
-  dealUrl,
-  loadDealBundle,
-  loadJanitorialDealBundle,
-  outcomeOf,
-  withErpWonAmounts,
-  type Bundle,
-  type Outcome,
-  type RawDeal,
-  type WorkScope,
-} from "./postConDeals";
+import { WORK_SCOPES, WORK_SCOPE_LABELS, dealUrl, outcomeOf, withErpWonAmounts, type Bundle, type Outcome, type RawDeal, type WorkScope } from "./postConDeals";
+import { loadDeals, loadJanitorialDeals } from "./dealEdits";
 
 const DAY_MS = 86_400_000;
 export const STALE_DAYS = 30;
@@ -179,9 +169,6 @@ export type PriceDotRow = { key: "won" | "lost" | "lostPrice"; label: string; do
 /** One type of work: won, lost and lost-for-Price rows, and how many likely typos were left out. */
 export type PriceDotScope = { scope: WorkScope; label: string; rows: PriceDotRow[]; excluded: number };
 
-/** 3x the middle price or more (or a third or less) is usually a wrong Area SQFT or amount, same as the price check. */
-const PRICE_TYPO_FACTOR = 3;
-
 // ── Price per sq ft per GC (WIN_INSIGHTS_PLAN Phase 3) ──────────────────────
 
 const money2 = (v: number) => `$${v.toFixed(2)}`;
@@ -205,7 +192,7 @@ export type GcPrice = { scope: WorkScope; label: string; quoted: number; quotedN
  * Per company and type of work: median quoted $ per sq ft (HubSpot Amount,
  * like the price chart) with GC_PRICE_MIN+ priced bids, their median winning
  * price once they have GC_PRICE_MIN+ wins, and our usual winning price for that
- * type of work across all companies. Likely typos (PRICE_TYPO_FACTOR off the
+ * type of work across all companies. Likely typos (3 times off the
  * type's middle) are left out.
  */
 export function gcPrices(
@@ -222,7 +209,7 @@ export function gcPrices(
   const perCompany = new Map<string, Map<WorkScope, { q: number[]; w: number[] }>>();
   for (const [scope, list] of byScope) {
     const mid = median(list.map((x) => x.per))!;
-    const kept = list.filter((x) => x.per < mid * PRICE_TYPO_FACTOR && x.per > mid / PRICE_TYPO_FACTOR);
+    const kept = list.filter((x) => !isLikelyPriceTypo(x.per, mid));
     usualWon.set(scope, median(kept.filter((x) => x.won).map((x) => x.per)));
     for (const x of kept) {
       const id = match(x.d)?.companyId;
@@ -305,12 +292,12 @@ export async function loadWinLoss(
   preloadedJan?: Bundle,
 ): Promise<WinLossReport> {
   const [bundle, companies, reasonOptions, janBundle] = await Promise.all([
-    preloaded ?? loadDealBundle(),
+    preloaded ?? loadDeals(),
     prisma.clientCompany.findMany({ select: { id: true, name: true, aliases: true, type: true } }),
     // HubSpot's labels for its stored values ("Proyecto en HOLD" is "Did Not Move Forward"). Raw values if HubSpot can't be read.
     loadLostReasonOptions().catch(() => []),
     // Property managers' win rates come mostly from janitorial deals. If HubSpot can't be read, that list is just post-con.
-    preloadedJan ?? loadJanitorialDealBundle().catch(() => null),
+    preloadedJan ?? loadJanitorialDeals().catch(() => null),
   ]);
   const companyType = new Map(companies.map((c) => [c.id, c.type]));
   const unlinkedNames = new Map<string, { name: string; bids: number; won: number; pipeline: "post-con" | "janitorial" }>();
@@ -453,7 +440,7 @@ export async function loadWinLoss(
     priceDots: WORK_SCOPES.filter((k) => dotsByScope.has(k)).map((k) => {
       const all = dotsByScope.get(k)!;
       const mid = median(all.map((x) => x.per))!;
-      const kept = all.filter((x) => x.per < mid * PRICE_TYPO_FACTOR && x.per > mid / PRICE_TYPO_FACTOR);
+      const kept = all.filter((x) => !isLikelyPriceTypo(x.per, mid));
       const dot = (x: (typeof all)[number]): PriceDot => ({
         id: x.d.id,
         name: x.d.name,
@@ -591,7 +578,7 @@ async function daysToPay(companyId: string): Promise<{ avg: number | null; n: nu
 
 export async function loadGcScorecard(companyId: string, preloaded?: Bundle): Promise<GcScorecard | null> {
   const [bundle, companies, pay] = await Promise.all([
-    preloaded ?? loadDealBundle(),
+    preloaded ?? loadDeals(),
     prisma.clientCompany.findMany({ select: { id: true, name: true, aliases: true } }),
     daysToPay(companyId),
   ]);

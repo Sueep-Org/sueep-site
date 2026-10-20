@@ -14,7 +14,8 @@ import { escapeHtml, sendEmail } from "@/lib/email";
 import { todayEasternKey } from "./dates";
 import { addDaysKey } from "./manualHoursRepeat";
 import { centsToDollarsCompact } from "./money";
-import { dealUrl, loadDealBundle, loadJanitorialDealBundle, outcomeOf, type Bundle, type PipelineKey } from "./postConDeals";
+import { dealUrl, outcomeOf, type Bundle, type PipelineKey } from "./postConDeals";
+import { loadDeals, loadJanitorialDeals } from "./dealEdits";
 import { nextStepStages, openNextSteps, type NextStep } from "./dealFollowUps";
 import { loadWinBands, type WinBand } from "./winChance";
 
@@ -121,8 +122,8 @@ export async function buildFollowUpEmails(
   preloaded?: { pipeline: PipelineKey; bundle: Bundle }[],
 ): Promise<FollowUpEmail[]> {
   const bundles = preloaded ?? [
-    { pipeline: "post-con" as const, bundle: await loadDealBundle() },
-    { pipeline: "janitorial" as const, bundle: await loadJanitorialDealBundle() },
+    { pipeline: "post-con" as const, bundle: await loadDeals() },
+    { pipeline: "janitorial" as const, bundle: await loadJanitorialDeals() },
   ];
   const lists = await collect(todayKey, bundles);
   const users = await prisma.erpUser.findMany({ select: { email: true, role: true } });

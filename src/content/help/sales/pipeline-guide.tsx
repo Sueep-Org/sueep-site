@@ -56,7 +56,7 @@ export function PipelineGuide() {
       <P>Do this once so the board only shows deals that are really live. After that, the weekly routine keeps it clean.</P>
       <Steps>
         <Step n={1} title="Close out dead deals">
-          Open Pipeline, click the filter button and tick <strong>Only show &gt; Clean up</strong>. These deals have sat in one
+          Open Pipeline and click the <strong>Clean up</strong> quick view above the board. These deals have sat in one
           stage for 180 days or more. For each one: if it&apos;s dead, click <strong>⋯ &gt; Mark lost</strong> and pick the
           reason. If it&apos;s still alive, add a next step instead.
         </Step>
@@ -67,7 +67,7 @@ export function PipelineGuide() {
         </Step>
         <Step n={3} title="Fill in missing info">
           Tick <strong>Only show &gt; Missing info</strong>. The counts above the board show what&apos;s missing most (owner,
-          GC, Bid Date, amount, sq ft). Click <strong>Fix</strong> on a card to fill it in. Amounts and square footage feed the
+          GC, Bid Date, amount, sq ft). Click the blue <strong>Missing</strong> flag on a card to fill it in. Amounts and square footage feed the
           price flags and Win/Loss, so start with live quotes.
         </Step>
         <Step n={4} title="Fill in old lost reasons (when there's time)">
@@ -87,7 +87,7 @@ export function PipelineGuide() {
           <strong>Follow-ups</strong> tab of the Bids card.
         </Step>
         <Step n={3} title="Clear the red">
-          Filter <strong>Only show &gt; Overdue next step</strong>. Click a card to open its panel: the latest calls and notes,
+          Click the <strong>My to-dos</strong> quick view. Late next steps show in red. Click a card to open its panel: the latest calls and notes,
           the quote&apos;s line items and the GC&apos;s record are all there. Do the step, click <strong>Done</strong>, and add
           what comes next. If it can&apos;t happen yet, move the date.
         </Step>
@@ -99,8 +99,8 @@ export function PipelineGuide() {
           A <strong>Stuck</strong> or <strong>Quiet</strong> flag means the deal isn&apos;t moving. Call, then drag the card
           to its new stage (or use <strong>⋯ &gt; Move to</strong>), or mark it lost if it&apos;s over.
         </Step>
-        <Step n={6} title="Fix any blue badges">
-          A blue <strong>Fix</strong> flag means the deal is missing something its stage needs, like a Bid Date once you&apos;re
+        <Step n={6} title="Fill in missing info">
+          A blue <strong>Missing</strong> flag means the deal is missing something its stage needs, like a Bid Date once you&apos;re
           bidding or an amount once the quote is out. Click it and fill it in.
         </Step>
       </Steps>
@@ -116,7 +116,8 @@ export function PipelineGuide() {
       <P>
         The GC that won still needs a sub, so go after them. On the lost card, click <strong>Who won?</strong> and fill it
         in, then <strong>Re-bid with ...</strong>. That creates a new deal in Lead with the same job details and the new GC,
-        ready to work like any other lead. Once a week, check <strong>Only show &gt; Who won?</strong> and{" "}
+        ready to work like any other lead. Once a week, click the <strong>Lost follow-up</strong> quick view, or check{" "}
+        <strong>Only show &gt; Who won?</strong> and{" "}
         <strong>Ready to re-bid</strong> so none slip by.
       </P>
       <H3>A bid is coming up</H3>

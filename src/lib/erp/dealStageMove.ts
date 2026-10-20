@@ -17,32 +17,23 @@
  *   (or an Undo after someone else moved it) can't overwrite a newer move.
  */
 import { prisma } from "@/lib/prisma";
-import { hubspotFetch } from "@/lib/hubspot/client";
-import { loadRules } from "@/lib/hubspot/pipelineRules";
 import type { PipelineKey } from "./postConDeals";
+import { patchDeal, pipelineStages, readDealForChange } from "./dealGuard";
 
 export type MoveStageInput = { dealId: string; pipeline: PipelineKey; fromStageId: string; toStageId: string; confirmWon: boolean; byEmail: string };
 
 export async function moveDealStage(input: MoveStageInput): Promise<{ error: string } | { stageId: string }> {
   if (input.fromStageId === input.toStageId) return { stageId: input.toStageId };
-  const rules = (await loadRules()).find((r) => r.key === input.pipeline);
-  if (!rules) return { error: "Pipeline not found in HubSpot." };
+  const deal = await readDealForChange(input.dealId, input.pipeline);
+  if ("error" in deal) return deal;
+  const { rules, props: p, stageId: current } = deal;
   if (rules.lost.has(input.toStageId)) return { error: "Use Mark lost, which asks for the reason." };
-
-  const pipes = await hubspotFetch(`/crm/v3/pipelines/deals/${encodeURIComponent(rules.pipelineId)}`);
-  if (!pipes.ok) return { error: `Couldn't read HubSpot's stages (${pipes.status}).` };
-  const stages = ((await pipes.json()) as { stages?: { id: string; displayOrder: number }[] }).stages ?? [];
+  const stages = await pipelineStages(rules.pipelineId);
+  if ("error" in stages) return stages;
   const orderOf = new Map(stages.map((s) => [s.id, s.displayOrder]));
   if (!orderOf.has(input.toStageId)) return { error: "That stage isn't in this pipeline. Reload the page." };
   if (rules.won.has(input.toStageId) && !input.confirmWon) return { error: "Moving to a won stage needs a confirm." };
-
-  const res = await hubspotFetch(`/crm/v3/objects/deals/${encodeURIComponent(input.dealId)}?properties=dealname,dealstage,pipeline`);
-  if (res.status === 404) return { error: "This deal is no longer in HubSpot." };
-  if (!res.ok) return { error: `Couldn't read the deal from HubSpot (${res.status}).` };
-  const p = ((await res.json()) as { properties: Record<string, string | null> }).properties;
-  if (p.pipeline !== rules.pipelineId) return { error: "This deal moved to another pipeline in HubSpot. Reload the page." };
-  const current = p.dealstage ?? "";
-  if (rules.lost.has(current)) return { error: "Lost deals can't be moved here. Reopen them in HubSpot." };
+  if (deal.outcome === "lost") return { error: "Lost deals can't be moved here. Reopen them in HubSpot." };
   if (rules.won.has(current) && (!rules.won.has(input.toStageId) || (orderOf.get(input.toStageId) ?? 0) <= (orderOf.get(current) ?? 0))) {
     return { error: "Won deals can only move forward to a later won stage." };
   }
@@ -50,14 +41,8 @@ export async function moveDealStage(input: MoveStageInput): Promise<{ error: str
 
   // The log table must exist before HubSpot changes, or the move would go unrecorded.
   await prisma.dealInfoChange.findFirst({ select: { id: true } });
-  const upd = await hubspotFetch(`/crm/v3/objects/deals/${encodeURIComponent(input.dealId)}`, {
-    method: "PATCH",
-    body: JSON.stringify({ properties: { dealstage: input.toStageId } }),
-  });
-  if (!upd.ok) {
-    const msg = ((await upd.json().catch(() => null)) as { message?: string } | null)?.message;
-    return { error: `HubSpot didn't move it${msg ? `: ${msg}` : ` (${upd.status})`}.` };
-  }
+  const saved = await patchDeal(input.dealId, { dealstage: input.toStageId }, "move it");
+  if ("error" in saved) return saved;
   await prisma.dealInfoChange.create({
     data: {
       hubspotDealId: input.dealId,

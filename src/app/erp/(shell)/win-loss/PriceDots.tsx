@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { centsToDollars } from "@/lib/erp/money";
 import type { PriceDotRow, PriceDotScope } from "@/lib/erp/winLoss";
+import { CHART } from "@/lib/erp/pipelineUi";
 
 /** Same won and lost colors as the other Win/Loss charts; the three checked with the dataviz palette validator. */
-const COLOR: Record<PriceDotRow["key"], string> = { won: "#2a78d6", lost: "#eb6834", lostPrice: "#4a3aa7" };
-const GRID = "#e5e7eb";
+const COLOR: Record<PriceDotRow["key"], string> = { won: CHART.won, lost: CHART.lost, lostPrice: CHART.price };
+const GRID = CHART.grid;
 /** Rows need a few bids before their medians are worth comparing. */
 const MIN_TO_COMPARE = 3;
 

@@ -22,7 +22,9 @@ function isPublicAppPath(pathname: string): boolean {
     // COI request links sent to GCs and property managers
     pathname.startsWith("/coi-request/") ||
     // Property managers' private turnover calendar links
-    pathname.startsWith("/pm/")
+    pathname.startsWith("/pm/") ||
+    // Confirm / Can't make it page from schedule invites (no login, the link is the key).
+    pathname.startsWith("/schedule-response/")
   );
 }
 

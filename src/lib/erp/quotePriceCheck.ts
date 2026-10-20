@@ -8,13 +8,13 @@ import {
   WORK_SCOPES,
   WORK_SCOPE_LABELS,
   dealUrl,
-  loadDealBundle,
   outcomeOf,
   withErpWonAmounts,
   type Bundle,
   type RawDeal,
   type WorkScope,
 } from "./postConDeals";
+import { loadDeals } from "./dealEdits";
 
 const DAY_MS = 86_400_000;
 
@@ -22,8 +22,13 @@ const DAY_MS = 86_400_000;
 const MIN_BENCHMARK_JOBS = 5;
 /** Only quotes someone touched this recently are checked; older ones are on Stale quotes. */
 export const PRICE_CHECK_ACTIVE_DAYS = 30;
-/** This many times the middle price (or under 1 over it) is more likely a typo than a pricing call. */
-const TYPO_FACTOR = 3;
+/** This many times the middle price (or under 1 over it) is more likely a typo than a pricing call. Shared with Win/Loss. */
+export const PRICE_TYPO_FACTOR = 3;
+
+/** A $ per sq ft that far from the middle is usually a wrong Area SQFT or amount in HubSpot. */
+export function isLikelyPriceTypo(perSqft: number, middle: number): boolean {
+  return perSqft >= middle * PRICE_TYPO_FACTOR || perSqft <= middle / PRICE_TYPO_FACTOR;
+}
 
 export type PriceBenchmark = {
   scope: WorkScope;
@@ -57,7 +62,7 @@ export type PriceCheckRow = {
  * of won jobs (ERP contract value when the job is in the ERP), or of all bids
  * of that type when there aren't MIN_BENCHMARK_JOBS won jobs.
  * - outside: above or below that range.
- * - checkNumbers: TYPO_FACTOR times the middle or more (or a third or less),
+ * - checkNumbers: PRICE_TYPO_FACTOR times the middle or more (or a third or less),
  *   which is usually a wrong Area SQFT or amount in HubSpot.
  * Unknown type of work isn't checked.
  */
@@ -65,7 +70,7 @@ export async function quotePriceCheck(
   preloaded?: Bundle,
   now = new Date(),
 ): Promise<{ outside: PriceCheckRow[]; checkNumbers: PriceCheckRow[]; checked: number; benchmarks: PriceBenchmark[] }> {
-  const bundle = preloaded ?? (await loadDealBundle());
+  const bundle = preloaded ?? (await loadDeals());
   const { deals } = await withErpWonAmounts(bundle);
   const per = (d: RawDeal) => (d.sqft && d.cents ? d.cents / 100 / d.sqft : null);
 
@@ -104,7 +109,7 @@ export async function quotePriceCheck(
       diff: p / b.mid - 1,
       url: dealUrl(bundle.hubId, d.id),
     };
-    if (p >= b.mid * TYPO_FACTOR || p <= b.mid / TYPO_FACTOR) checkNumbers.push(row);
+    if (isLikelyPriceTypo(p, b.mid)) checkNumbers.push(row);
     else if (p > b.high || p < b.low) outside.push(row);
   }
   const byDistance = (a: PriceCheckRow, b: PriceCheckRow) => Math.abs(b.diff) - Math.abs(a.diff);

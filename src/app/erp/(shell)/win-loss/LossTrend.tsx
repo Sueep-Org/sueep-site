@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { LOSS_GROUPS, type LossGroup, type LossQuarter } from "@/lib/erp/lossGroups";
+import { CHART } from "@/lib/erp/pipelineUi";
 
 /**
  * Colors per reason group, in stacking order (bottom first). The four named
@@ -10,12 +11,12 @@ import { LOSS_GROUPS, type LossGroup, type LossQuarter } from "@/lib/erp/lossGro
  * are neutral grays, not categories.
  */
 const COLOR: Record<LossGroup, string> = {
-  "GC Not Awarded": "#eb6834",
-  Price: "#4a3aa7",
-  "No Answer": "#eda100",
-  "Proyecto en HOLD": "#1baf7a",
-  other: "#9ca3af",
-  none: "#e5e7eb",
+  "GC Not Awarded": CHART.lost,
+  Price: CHART.price,
+  "No Answer": CHART.noAnswer,
+  "Proyecto en HOLD": CHART.didNotMoveForward,
+  other: CHART.otherReasons,
+  none: CHART.noReason,
 };
 
 const short = (key: string) => {

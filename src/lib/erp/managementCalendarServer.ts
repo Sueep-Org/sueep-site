@@ -13,7 +13,8 @@ import { DEFAULT_PAYROLL_ANCHOR, anchorDate, biweeklyIndex, biweeklyRange } from
 import { utcDateKey } from "./dates";
 import { COMPANY_INFO_SECTIONS } from "./companyInfo";
 import { checkerName, namesByEmail } from "./janitorialQualityChecks";
-import { dealUrl, loadDealBundle, outcomeOf } from "./postConDeals";
+import { dealUrl, outcomeOf } from "./postConDeals";
+import { loadDeals } from "./dealEdits";
 import { centsToDollarsCompact } from "./money";
 import { cutoffsBetween, loadCutoffJobs } from "./billingCutoffs";
 import {
@@ -382,7 +383,7 @@ export async function loadManagementItems(
   if (want("BIDS")) {
     // From HubSpot (cached an hour). A HubSpot problem leaves the category empty instead of breaking the calendar.
     try {
-      const bundle = await loadDealBundle();
+      const bundle = await loadDeals();
       for (const d of bundle.deals) {
         if (outcomeOf(bundle, d.stageId) === "lost") continue;
         const detail = [bundle.stageLabels[d.stageId]?.trim(), d.ownerId ? bundle.owners[d.ownerId] : null, d.cents ? centsToDollarsCompact(d.cents) : null].filter(Boolean).join(" · ");

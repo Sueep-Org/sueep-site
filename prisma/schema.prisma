@@ -3862,3 +3862,35 @@ model DealRebid {
   winningName      String
   byEmail          String
 }
+
+/// A person's answer to one schedule invite (one person, one day): Confirm or
+/// Can't make it, from the links in the invite email. Keyed by the invite's
+/// uid (see scheduleInvites.ts), so it follows the same day through updates.
+model ScheduleConfirmation {
+  uid           String    @id
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  /// day | co-day | worker | co-worker | day-sub | co-day-sub
+  kind          String
+  assignmentId  String
+  /// Secret for the response link (no login needed)
+  token         String    @unique
+  personName    String
+  personEmail   String
+  /// Job title as shown in the invite
+  title         String
+  /// "YYYY-MM-DD", Eastern
+  dateKey       String
+  /// ERP page for the job, for alerts and the dashboard
+  link          String?
+  /// PENDING | CONFIRMED | DECLINED | CANCELLED
+  status        String    @default("PENDING")
+  reason        String?
+  respondedAt   DateTime?
+  /// When the invite with these links actually went out
+  inviteSentAt  DateTime?
+  /// When this was in a "no answer yet" alert, so it's only sent once
+  unansweredAlertAt DateTime?
+
+  @@index([dateKey, status])
+}

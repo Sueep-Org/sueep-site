@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getErpAuth, canEditCompanies, canViewPipelineBoard } from "@/lib/erpAuth";
 import { InfoTip } from "@/app/erp/components/ui";
-import { CLEANUP_DAYS, CLOSED_DAYS, loadPipelineBoard, type PipelineBoard } from "@/lib/erp/pipelineBoard";
+import { CLOSED_DAYS, loadPipelineBoard, type PipelineBoard } from "@/lib/erp/pipelineBoard";
 import { WORK_SCOPES, WORK_SCOPE_LABELS, type PipelineKey } from "@/lib/erp/postConDeals";
 import { loadLostReasonOptions, type LostReasonOption } from "@/lib/erp/dealLostReasons";
 import { prisma } from "@/lib/prisma";
@@ -61,7 +61,6 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
             key={pipeline}
             board={board}
             closedDays={CLOSED_DAYS}
-            cleanupDays={CLEANUP_DAYS}
             reasonOptions={reasonOptions}
             mayEditCompanies={canEditCompanies(auth.role)}
             companies={companies.map((c) => ({ value: c.id, label: c.name }))}

@@ -13,7 +13,8 @@ import { prisma } from "@/lib/prisma";
 import { hubspotFetch } from "@/lib/hubspot/client";
 import { centsToDollars } from "./money";
 import { companyMatcher, gcPrices, type GcPrice } from "./winLoss";
-import { loadDealBundle, loadJanitorialDealBundle, outcomeOf, type Bundle, type PipelineKey } from "./postConDeals";
+import { outcomeOf, type Bundle, type PipelineKey } from "./postConDeals";
+import { loadDeals, loadJanitorialDeals } from "./dealEdits";
 import { loadLostReasonOptions } from "./dealLostReasons";
 
 const MAX_ACTIVITY = 40;
@@ -168,7 +169,7 @@ const PROP_LABELS: Record<string, string> = {
 /** `preloaded` skips the cache, for checks run outside the app. */
 export async function loadDealPanel(dealId: string, pipeline: PipelineKey, preloaded?: Bundle): Promise<DealPanelData> {
   const [bundle, companies, activity, lineItems, lost, info, steps, reasonOptions] = await Promise.all([
-    preloaded ?? (pipeline === "janitorial" ? loadJanitorialDealBundle() : loadDealBundle()),
+    preloaded ?? (pipeline === "janitorial" ? loadJanitorialDeals() : loadDeals()),
     prisma.clientCompany.findMany({ select: { id: true, name: true, aliases: true } }),
     loadActivity(dealId),
     loadLineItems(dealId),

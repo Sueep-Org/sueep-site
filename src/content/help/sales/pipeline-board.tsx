@@ -54,11 +54,21 @@ export function PipelineBoardHelp() {
         </LI>
       </UL>
 
+      <H2>Quick views</H2>
+      <P>
+        The buttons above the board set the filters for you in one click: <strong>Everything</strong>,{" "}
+        <strong>My deals</strong>, <strong>My to-dos</strong> (your open deals that need something),{" "}
+        <strong>Clean up</strong>, <strong>Lost follow-up</strong> (lost deals that need a reason, a winner or a re-bid, including older ones) and{" "}
+        <strong>Bids this week</strong>. They only set the filters, so the filter menu always shows what a view did; change
+        anything to make your own view. Sales and Estimation start on My deals.
+      </P>
+
       <H2>This week and the forecast</H2>
       <UL>
         <LI>
           The row above the board compares today with the pipeline saved a week ago. A colored bar shows what happened to
-          last week&apos;s open deals: <strong>Moved forward</strong> (blue), <strong>Won</strong> (green),{" "}
+          last week&apos;s open deals: <strong>Moved forward</strong> (blue), <strong>Won</strong> (green, the same green as
+          won everywhere),{" "}
           <strong>Closed lost</strong> (orange) and <strong>Same stage</strong> (gray), with the count for each below it.
           Next to it: <strong>New</strong> deals and their $, and <strong>Open pipeline</strong> with a line showing the last
           30 days. The ERP saves the pipeline every morning, so this starts a day after it goes live and compares a full
@@ -87,7 +97,7 @@ export function PipelineBoardHelp() {
         </LI>
         <LI>
           <strong>One flag</strong>, the thing that needs attention most, in this order: <strong>Clean up</strong>, a bid due
-          in the next 3 days (<strong>Bid Oct 22</strong>), <strong>Stuck</strong>, <strong>Fix</strong> (missing info),{" "}
+          in the next 3 days (<strong>Bid Oct 22</strong>), <strong>Stuck</strong>, <strong>Missing</strong> (missing info),{" "}
           <strong>Quiet</strong>, a price flag (like <strong>+40% price</strong> or <strong>Check price</strong>), then{" "}
           <strong>Skip?</strong>. Each is explained below.
         </LI>
@@ -138,7 +148,7 @@ export function PipelineBoardHelp() {
         </LI>
         <LI>
           <strong>Sort &gt; Chance to win</strong> in the filter puts the best odds on top of each column.{" "}
-          <strong>Only show &gt; Strong chance</strong> shows just those.
+          <strong>Only show &gt; Chance &gt; Strong chance</strong> shows just those.
         </LI>
         <LI>
           <strong>Bid or skip:</strong> on Lead, Contact Established and Bidding deals, the hover text and panel show the
@@ -191,13 +201,13 @@ export function PipelineBoardHelp() {
       <H2>Missing info and Edit info</H2>
       <UL>
         <LI>
-          A blue <strong>Fix</strong> flag (with a number) means an open deal is missing something its stage needs. Every
+          A blue <strong>Missing</strong> flag (with a number) means an open deal is missing something its stage needs. Every
           open deal needs an active owner and a GC. From Bidding on, post-construction deals need a Bid Date. In the quote
           stages (Proposal on janitorial) they need an amount, and post-construction ones also need Area SQFT. Hover the card
           to see what&apos;s missing.
         </LI>
         <LI>
-          Click <strong>Fix</strong>, or <strong>⋯ &gt; Edit info</strong>, to change the owner, GC, Bid Date, Job Walk Date,
+          Click the <strong>Missing</strong> flag, or <strong>⋯ &gt; Edit info</strong>, to change the owner, GC, Bid Date, Job Walk Date,
           amount or Area SQFT. Saving updates the HubSpot deal; only the fields you change are sent. Leave a field blank to
           clear it.
         </LI>
@@ -211,7 +221,7 @@ export function PipelineBoardHelp() {
           count for it from then on.
         </LI>
         <LI>
-          <strong>Only show &gt; Missing info</strong> lists every deal with a Fix badge, with a count per field above the
+          <strong>Only show &gt; Missing info</strong> lists every deal with a Missing flag, with a count per field above the
           board. Click a count to see only those.
         </LI>
         <LI>Only open deals can be edited here. Change won and lost deals in HubSpot.</LI>
@@ -231,7 +241,7 @@ export function PipelineBoardHelp() {
         <LI>
           Next steps are expected from Bidding through Competitive Quote (Walkthrough and Proposal on janitorial). Cards there
           without one are listed by <strong>Only show &gt; No next step</strong>.{" "}
-          <strong>Overdue next step</strong> lists the late ones.
+          <strong>Next step late</strong> lists the late ones.
         </LI>
         <LI>
           Next steps are saved in the ERP only; they don&apos;t show in HubSpot. Anyone who can see the board can add or finish
@@ -327,9 +337,9 @@ export function PipelineBoardHelp() {
         <LI>
           The filter button (top right) narrows the board by owner, GC, company type (GCs, property managers and owners,
           not linked, no company), type of work, older deals, and{" "}
-          <strong>Only show</strong> Who won?, Ready to re-bid, Strong chance, Missing info, Overdue next step, No next step, Stuck, Clean up, stale quotes, price flags or Needs a
-          reason. It turns pink when anything other than
-          the starting view is picked. Reset filters goes back to the starting view.
+          <strong>Only show</strong>, in three groups: Needs attention (Anything, Next step late, No next step, Stuck, Clean up,
+          Quiet, Missing info), Lost deals (Anything, Needs a reason, Who won?, Ready to re-bid) and Chance (Strong chance,
+          Price flags). Cards must match everything ticked.
         </LI>
         <LI>
           <strong>Bid due</strong> uses HubSpot&apos;s Bid Date: next 7 days, next 30 days, past due, no bid date, or your own
