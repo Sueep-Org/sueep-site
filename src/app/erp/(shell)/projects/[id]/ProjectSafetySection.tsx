@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/app/erp/components/ui";
 
 type Employee = { id: string; firstName: string; lastName: string };
 
@@ -492,14 +493,11 @@ function CheckCard({
                   >
                     Cancel
                   </button>
-                  <button
-                    type="button"
+                  <Button size="xs" type="button"
                     onClick={addWorker}
-                    disabled={savingWorker || !newName.trim()}
-                    className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-                  >
+                    disabled={savingWorker || !newName.trim()}>
                     {savingWorker ? "Adding…" : "Add"}
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}

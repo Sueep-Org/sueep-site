@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { inputClass, labelClass, useConfirm, useToast } from "@/app/erp/components/ui";
+import { Button, inputClass, labelClass, useConfirm, useToast } from "@/app/erp/components/ui";
 import { WEEKDAY_SHORT, formatTime12, shiftHours } from "@/lib/erp/janitorialSchedule";
 import { formatHours, formatShortDate } from "@/lib/erp/schedule";
 import { todayEasternKey } from "@/lib/erp/dates";
@@ -385,13 +385,10 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, payHistory
         {error ? <p className="text-xs text-red-500">{error}</p> : null}
         {ok ? <p className="text-xs text-emerald-600">{ok}</p> : null}
         <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={loading || deleting}
-            className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-          >
+          <Button size="md" type="submit"
+            disabled={loading || deleting}>
             {loading ? "Saving…" : "Save profile"}
-          </button>
+          </Button>
           <button
             type="button"
             onClick={() => void handleDelete()}

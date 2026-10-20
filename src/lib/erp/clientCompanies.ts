@@ -105,10 +105,6 @@ export type BillingOverride = {
 
 export const EMPTY_OVERRIDE: BillingOverride = { method: null, portalUrl: null, sendTo: [], cc: [], note: null };
 
-export function hasOverride(o: BillingOverride): boolean {
-  return !!(o.method || o.portalUrl || o.sendTo.length || o.cc.length || o.note);
-}
-
 // ── Parsing ─────────────────────────────────────────────────────────────
 
 function text(v: unknown, max = 2000): string | null {

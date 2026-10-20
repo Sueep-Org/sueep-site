@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { inputClass, labelClass } from "@/app/erp/components/ui";
+import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
 
 export type ContractorRow = {
   id: string;
@@ -227,13 +227,10 @@ export function ChangeOrderContractorsSection({
           </div>
         </div>
         {addError ? <p className="mt-3 text-sm text-red-400" role="alert">{addError}</p> : null}
-        <button
-          type="submit"
-          disabled={loading}
-          className="mt-4 rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-        >
+        <Button size="md" className="mt-4" type="submit"
+          disabled={loading}>
           {loading ? "Adding…" : "Add contractor"}
-        </button>
+        </Button>
       </form>}
 
       {/* Table */}
@@ -286,7 +283,7 @@ export function ChangeOrderContractorsSection({
                         </select>
                       </td>
                       <td className="py-1 pr-2">
-                        <input type="text" className={editInput} placeholder="—" value={editFields.role} onChange={(e) => setEditFields((f) => ({ ...f, role: e.target.value }))} />
+                        <input type="text" className={editInput} placeholder="-" value={editFields.role} onChange={(e) => setEditFields((f) => ({ ...f, role: e.target.value }))} />
                       </td>
                       <td className="py-1 pr-2">
                         <input type="date" className={editInput} value={editFields.startDate} onChange={(e) => setEditFields((f) => ({ ...f, startDate: e.target.value }))} />
@@ -298,7 +295,7 @@ export function ChangeOrderContractorsSection({
                         <input type="number" min="0" step="0.01" className={editInput} placeholder="0.00" value={editFields.costDollars} onChange={(e) => setEditFields((f) => ({ ...f, costDollars: e.target.value }))} />
                       </td>
                       <td className="py-1 pr-2">
-                        <input type="text" className={editInput} placeholder="—" value={editFields.notes} onChange={(e) => setEditFields((f) => ({ ...f, notes: e.target.value }))} />
+                        <input type="text" className={editInput} placeholder="-" value={editFields.notes} onChange={(e) => setEditFields((f) => ({ ...f, notes: e.target.value }))} />
                       </td>
                       <td className="py-1 text-right whitespace-nowrap">
                         <button type="button" onClick={() => onSaveEdit(a.id)} className="text-xs font-medium text-pink-600 hover:text-pink-800">Save</button>
@@ -309,14 +306,14 @@ export function ChangeOrderContractorsSection({
                   ) : (
                     <tr key={a.id}>
                       <td className="py-2 pr-2 font-medium text-gray-900">{a.contractorName}</td>
-                      <td className="py-2 pr-2 text-gray-500">{a.role || "—"}</td>
+                      <td className="py-2 pr-2 text-gray-500">{a.role || "-"}</td>
                       {/* startDate/endDate are stored as UTC midnight for the intended calendar day — formatting without
                           timeZone: "UTC" re-interprets it in the viewer's local timezone, rolling it back a day for
                           anyone west of UTC (e.g. a contractor's 8/11 assignment showing as 8/10 here in Eastern). */}
-                      <td className="py-2 pr-2 text-gray-600">{a.startDate ? new Date(a.startDate).toLocaleDateString("en-US", { timeZone: "UTC" }) : "—"}</td>
-                      <td className="py-2 pr-2 text-gray-600">{a.endDate ? new Date(a.endDate).toLocaleDateString("en-US", { timeZone: "UTC" }) : "—"}</td>
-                      <td className="py-2 pr-2 tabular-nums text-gray-700">{a.costCents != null ? fmt(a.costCents) : "—"}</td>
-                      <td className="py-2 pr-2 text-gray-500">{a.notes || "—"}</td>
+                      <td className="py-2 pr-2 text-gray-600">{a.startDate ? new Date(a.startDate).toLocaleDateString("en-US", { timeZone: "UTC" }) : "-"}</td>
+                      <td className="py-2 pr-2 text-gray-600">{a.endDate ? new Date(a.endDate).toLocaleDateString("en-US", { timeZone: "UTC" }) : "-"}</td>
+                      <td className="py-2 pr-2 tabular-nums text-gray-700">{a.costCents != null ? fmt(a.costCents) : "-"}</td>
+                      <td className="py-2 pr-2 text-gray-500">{a.notes || "-"}</td>
                       <td className="py-2 text-right whitespace-nowrap">
                         <button type="button" onClick={() => startEdit(a)} className="text-xs text-gray-500 hover:text-gray-700">Edit</button>
                         <button type="button" onClick={() => onDelete(a.id)} className="ml-2 text-xs text-red-500 hover:text-red-700">Delete</button>

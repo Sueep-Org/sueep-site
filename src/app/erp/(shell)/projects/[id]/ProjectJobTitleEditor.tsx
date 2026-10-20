@@ -2,14 +2,18 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Button } from "@/app/erp/components/ui";
+import { LinkHubSpotDealButton } from "./LinkHubSpotDealButton";
 
 type Props = {
   projectId: string;
   jobTitle: string;
   hubspotDealId: string | null;
+  /** Admin/PM on a manually created, non-turnover project. */
+  canLinkDeal?: boolean;
 };
 
-export function ProjectJobTitleEditor({ projectId, jobTitle, hubspotDealId }: Props) {
+export function ProjectJobTitleEditor({ projectId, jobTitle, hubspotDealId, canLinkDeal = false }: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(jobTitle);
@@ -51,8 +55,9 @@ export function ProjectJobTitleEditor({ projectId, jobTitle, hubspotDealId }: Pr
         >
           {jobTitle}
         </h1>
-        <p className="mt-0.5 text-xs text-gray-400">
+        <p className="mt-0.5 flex items-center gap-2 text-xs text-gray-400">
           {hubspotDealId ? "Synced from HubSpot" : "Manually created"}
+          {!hubspotDealId && canLinkDeal && <LinkHubSpotDealButton projectId={projectId} jobTitle={jobTitle} />}
         </p>
       </div>
     );
@@ -69,13 +74,10 @@ export function ProjectJobTitleEditor({ projectId, jobTitle, hubspotDealId }: Pr
         style={{ minWidth: "20rem" }}
       />
       <div className="flex items-center gap-2">
-        <button
-          type="submit"
-          disabled={loading || !value.trim()}
-          className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-        >
+        <Button size="xs" type="submit"
+          disabled={loading || !value.trim()}>
           {loading ? "Saving…" : "Save"}
-        </button>
+        </Button>
         <button
           type="button"
           onClick={() => setEditing(false)}

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { Button } from "@/app/erp/components/ui";
 
 type Props = {
   search: string;
@@ -92,12 +93,9 @@ export function FranchiseFilterBar({ search, status, market }: Props) {
             </div>
 
             <div className="flex gap-2 pt-1">
-              <button
-                type="submit"
-                className="flex-1 rounded-md bg-pink-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-pink-500"
-              >
+              <Button size="xs" className="flex-1" type="submit">
                 Apply
-              </button>
+              </Button>
               {filtersActive ? (
                 <Link
                   href={search ? `/erp/franchise?search=${encodeURIComponent(search)}` : "/erp/franchise"}

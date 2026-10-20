@@ -518,7 +518,7 @@ function DuplicateToMoreDaysSection({
           <MiniCalendarPicker selectedKeys={pickedKeys} onToggle={togglePicked} minDateKey={startFromKey} initialMonthAnchor={startFromKey} />
           <p className="text-[9px] text-gray-400">
             {sortedKeys.length === 0
-              ? "Tap the days to duplicate to — they don't need to be in a row."
+              ? "Tap the days to duplicate to - they don't need to be in a row."
               : `${sortedKeys.length} day${sortedKeys.length === 1 ? "" : "s"} picked: ${sortedKeys.join(", ")}`}
           </p>
           {!hasCoverage ? (
@@ -529,7 +529,7 @@ function DuplicateToMoreDaysSection({
                 onChange={setFallbackSupervisorId}
                 options={supervisors.map((s) => ({ value: s.id, label: s.displayName }))}
                 placeholder="Search…"
-                allLabel="— None —"
+                allLabel="- None -"
                 className="mt-0.5"
               />
             </div>
@@ -716,7 +716,7 @@ export function SchedulePlanner({
       if (!res.ok) throw new Error("Failed to clear");
       router.refresh();
     } catch {
-      setDragError("Couldn't clear that date — try again");
+      setDragError("Couldn't clear that date - try again");
     } finally {
       setClearingSpanDateKey(null);
     }
@@ -1135,7 +1135,7 @@ export function SchedulePlanner({
         if (!res.ok) throw new Error("Failed to reschedule");
         router.refresh();
       } catch {
-        setDragError(`Couldn't move "${chip.jobTitle}" — try again`);
+        setDragError(`Couldn't move "${chip.jobTitle}" - try again`);
       }
       return;
     }
@@ -1149,13 +1149,13 @@ export function SchedulePlanner({
         if (!res.ok) throw new Error("Failed to reschedule");
         router.refresh();
       } catch {
-        setDragError(`Couldn't move "${chip.jobTitle}" — try again`);
+        setDragError(`Couldn't move "${chip.jobTitle}" - try again`);
       }
       return;
     }
     if (chip.kind === "coPlanned") {
       const result = await moveCoPlannedAssignment(chip.changeOrderId, chip.assignmentId, chip.fromKey, toKey);
-      if (!result.ok) setDragError(`Couldn't move "${chip.jobTitle}" — ${result.error ?? "try again"}`);
+      if (!result.ok) setDragError(`Couldn't move "${chip.jobTitle}" - ${result.error ?? "try again"}`);
       // dayAssignments/coDayAssignments update optimistically above, but a
       // change order attached to a project's own planned day (see
       // ProjectDayAssignment.changeOrders in page.tsx) is keyed off the
@@ -1175,7 +1175,7 @@ export function SchedulePlanner({
       existingAssignment?.startTime ?? null,
       existingAssignment?.endTime ?? null,
     );
-    if (!result.ok) setDragError(`Couldn't move "${chip.jobTitle}" — ${result.error ?? "try again"}`);
+    if (!result.ok) setDragError(`Couldn't move "${chip.jobTitle}" - ${result.error ?? "try again"}`);
     // Same reason as the coPlanned branch above — resyncs `changeOrders` so
     // any CO attached to this unit's day (via its changeOrderIds) reflects
     // the new day instead of the one it just left.
@@ -1265,7 +1265,7 @@ export function SchedulePlanner({
                         <span className="truncate font-medium">{e.workerName}</span>
                         <span className="shrink-0 text-gray-500">
                           {e.contractorOnly ? (
-                            <span title="Contractor engagement — no shift-level hours logged">Confirmed</span>
+                            <span title="Contractor engagement - no shift-level hours logged">Confirmed</span>
                           ) : (
                             <>
                               {formatHours(e.hours)}
@@ -1548,7 +1548,7 @@ export function SchedulePlanner({
       setApplyCrewResult(
         failed === 0
           ? { ok: true, msg: `Applied to ${succeeded} other unit${succeeded === 1 ? "" : "s"}.` }
-          : { ok: false, msg: `Applied to ${succeeded} of ${targetIds.length} units — ${failed} had a conflict (e.g. time off) and were skipped.` }
+          : { ok: false, msg: `Applied to ${succeeded} of ${targetIds.length} units - ${failed} had a conflict (e.g. time off) and were skipped.` }
       );
       router.refresh();
     } catch {
@@ -1582,7 +1582,7 @@ export function SchedulePlanner({
       const conflicts = findWorkerConflicts(k, projectId, eventWorkerType, eventWorkerId);
       if (conflicts.length > 0) {
         const names = conflicts.map((c) => projectById.get(c.projectId)?.jobTitle ?? "another project").join(", ");
-        setEventWorkerWarning(`Already scheduled on ${names} this day — add anyway?`);
+        setEventWorkerWarning(`Already scheduled on ${names} this day - add anyway?`);
         return;
       }
     }
@@ -1808,7 +1808,7 @@ export function SchedulePlanner({
               />
             </label>
             <label className="block text-[10px] font-medium text-gray-500">
-              Time (optional — leave blank for all-day)
+              Time (optional - leave blank for all-day)
               <div className="mt-0.5 flex items-center gap-1.5">
                 <input
                   type="time"
@@ -1938,7 +1938,7 @@ export function SchedulePlanner({
                 onChange={setEventDaySupervisorId}
                 options={supervisors.map((s) => ({ value: s.id, label: s.displayName }))}
                 placeholder="Search…"
-                allLabel="— None —"
+                allLabel="- None -"
                 className="mt-0.5"
               />
             </div>
@@ -1949,7 +1949,7 @@ export function SchedulePlanner({
                 onChange={setEventDayPmId}
                 options={projectManagers.filter((pm) => pm.pickable !== false || pm.id === eventDayPmId).map((pm) => ({ value: pm.id, label: pm.displayName }))}
                 placeholder="Search…"
-                allLabel="— None —"
+                allLabel="- None -"
                 className="mt-0.5"
               />
             </div>
@@ -1960,7 +1960,7 @@ export function SchedulePlanner({
                 onChange={setEventDaySupervisorContractorId}
                 options={contractors.map((c) => ({ value: c.id, label: c.displayName }))}
                 placeholder="Search…"
-                allLabel="— None —"
+                allLabel="- None -"
                 className="mt-0.5"
               />
             </div>
@@ -2060,7 +2060,7 @@ export function SchedulePlanner({
           <label className="block text-[10px] font-medium text-gray-500">Workers scheduled this day</label>
           {eventSplitOptions.length > 1 ? (
             <p className="mt-0.5 text-[9px] text-gray-400">
-              {eventSplitOptions.length} scopes on this day — tag each worker with which one they&apos;re covering.
+              {eventSplitOptions.length} scopes on this day - tag each worker with which one they&apos;re covering.
             </p>
           ) : null}
           {dayWorkers.length > 0 ? (
@@ -2084,7 +2084,7 @@ export function SchedulePlanner({
                     <span className="flex min-w-0 items-center gap-1.5 truncate">
                       <span className="truncate">{worker?.displayName ?? "Unknown worker"}</span>
                       {worker && !worker.email ? (
-                        <span className="shrink-0 text-gray-400" title="No email on file — didn't get a schedule invite">
+                        <span className="shrink-0 text-gray-400" title="No email on file - didn't get a schedule invite">
                           (no email)
                         </span>
                       ) : null}
@@ -2100,7 +2100,7 @@ export function SchedulePlanner({
                           title="Which scope this worker is covering"
                           className="max-w-[100px] rounded border border-gray-300 bg-white px-1 py-0.5 text-[9px] text-gray-700 focus:border-pink-400 focus:outline-none"
                         >
-                          <option value="">— unassigned —</option>
+                          <option value="">- unassigned -</option>
                           {eventSplitOptions.map((o) => (
                             <option key={o.id} value={o.id}>
                               {o.label}
@@ -3153,17 +3153,17 @@ export function SchedulePlanner({
                           ) : coContractor ? (
                             <div className="mt-1 text-gray-300">Contractor: {coContractor.displayName}</div>
                           ) : needsSupervisor ? (
-                            <div className="mt-1 text-amber-300">No supervisor assigned yet — click to assign one</div>
+                            <div className="mt-1 text-amber-300">No supervisor assigned yet - click to assign one</div>
                           ) : null}
                           {isOverdue ? <div className="mt-1 text-red-400">Scheduled but never logged</div> : null}
                           {summary ? (
                             <div className="mt-1 text-gray-300">Logged for this day, not draggable</div>
                           ) : role === "start" ? (
-                            <div className="mt-1 text-gray-300">Starts this day — drag to reschedule</div>
+                            <div className="mt-1 text-gray-300">Starts this day - drag to reschedule</div>
                           ) : role === "end" ? (
-                            <div className="mt-1 text-gray-300">Ends this day — drag to reschedule</div>
+                            <div className="mt-1 text-gray-300">Ends this day - drag to reschedule</div>
                           ) : isPlannedOnly ? (
-                            <div className="mt-1 text-gray-300">Planned, not yet logged — drag to reschedule</div>
+                            <div className="mt-1 text-gray-300">Planned, not yet logged - drag to reschedule</div>
                           ) : (
                             <div className="mt-1 text-gray-300">Logged for this day, not draggable</div>
                           )}
@@ -3204,7 +3204,7 @@ export function SchedulePlanner({
                       {inMonth ? (
                         <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                           <div className="font-semibold">{p.jobTitle}</div>
-                          <div className="text-gray-300">Not otherwise scheduled this day — shown for its change order below</div>
+                          <div className="text-gray-300">Not otherwise scheduled this day - shown for its change order below</div>
                         </div>
                       ) : null}
                     </li>
@@ -3248,8 +3248,8 @@ export function SchedulePlanner({
                           <div className="font-semibold">{p.jobTitle}</div>
                           <div className="text-amber-300">
                             {isFutureOrToday
-                              ? `${role === "end" ? (isToday ? "Ends today" : "Ends this day") : isToday ? "Starts today" : "Starts this day"} — no supervisor assigned yet`
-                              : `${role === "end" ? "Ended" : "Started"} ${formatShortDate(k)} — never logged, no supervisor assigned`}
+                              ? `${role === "end" ? (isToday ? "Ends today" : "Ends this day") : isToday ? "Starts today" : "Starts this day"} - no supervisor assigned yet`
+                              : `${role === "end" ? "Ended" : "Started"} ${formatShortDate(k)} - never logged, no supervisor assigned`}
                           </div>
                           <div className="mt-1 text-gray-300">Click to view or assign one</div>
                         </div>
@@ -3317,8 +3317,8 @@ export function SchedulePlanner({
                           <div className="font-semibold">{p.jobTitle}</div>
                           <div className={isOverdue ? "text-red-400" : "text-gray-300"}>
                             {isOverdue
-                              ? `${role === "end" ? "Ended" : "Started"} ${formatShortDate(k)} — nothing ever logged`
-                              : `${role === "end" ? "Ends on this day" : "Starts on this day"} — not otherwise scheduled`}
+                              ? `${role === "end" ? "Ended" : "Started"} ${formatShortDate(k)} - nothing ever logged`
+                              : `${role === "end" ? "Ends on this day" : "Starts on this day"} - not otherwise scheduled`}
                           </div>
                           <div className="mt-1 text-gray-300">Click to view or schedule it</div>
                         </div>
@@ -3583,7 +3583,7 @@ export function SchedulePlanner({
                         <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                           <div className="font-semibold">{buildingName}</div>
                           <div className="text-gray-300">
-                            {entries.length} turnover units this day{allComplete ? " — all complete" : ""}
+                            {entries.length} turnover units this day{allComplete ? " - all complete" : ""}
                           </div>
                           <ul className="mt-1 space-y-0.5">
                             {entries.map((e) => (
@@ -3722,8 +3722,8 @@ export function SchedulePlanner({
                                 <div className="text-gray-300">{CHANGE_ORDER_LABEL}</div>
                                 <div className="text-amber-300">
                                   {isFutureOrToday
-                                    ? `${role === "end" ? (isToday ? "Ends today" : "Ends this day") : isToday ? "Starts today" : "Starts this day"} — no supervisor assigned yet`
-                                    : `${role === "end" ? "Ended" : "Started"} ${formatShortDate(k)} — never logged, no supervisor assigned`}
+                                    ? `${role === "end" ? (isToday ? "Ends today" : "Ends this day") : isToday ? "Starts today" : "Starts this day"} - no supervisor assigned yet`
+                                    : `${role === "end" ? "Ended" : "Started"} ${formatShortDate(k)} - never logged, no supervisor assigned`}
                                 </div>
                                 <div className="mt-1 text-gray-300">Click to view or assign one</div>
                               </div>
@@ -3872,7 +3872,7 @@ export function SchedulePlanner({
             {legendShowsGroupingTip ? (
               <p className="flex items-center gap-1.5 text-[11px] text-gray-400">
                 <span className={`h-2.5 w-2.5 shrink-0 rounded-sm ${CALENDAR_GROUP_SWATCH_CLASS.JANITORIAL_TURNOVER_REQUESTS}`} />
-                Tip: same-building turnover units on a shared day group into one chip — click to expand.
+                Tip: same-building turnover units on a shared day group into one chip - click to expand.
               </p>
             ) : null}
           </div>

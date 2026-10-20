@@ -426,12 +426,12 @@ export function EmployeeDocumentsSection({
                 sortedDocs.map((d) => (
                   <tr key={d.id}>
                     <td className="px-3 py-2 text-gray-800">{d.documentType}</td>
-                    <td className="px-3 py-2 text-gray-700">{d.title ?? "—"}</td>
+                    <td className="px-3 py-2 text-gray-700">{d.title ?? "-"}</td>
                     <td className="px-3 py-2 text-gray-700">
-                      {d.issuedAt ? new Date(d.issuedAt).toLocaleDateString() : "—"}
+                      {d.issuedAt ? new Date(d.issuedAt).toLocaleDateString() : "-"}
                     </td>
                     <td className="px-3 py-2 text-gray-700">
-                      {d.expiresAt ? new Date(d.expiresAt).toLocaleDateString("en-US", { timeZone: "UTC" }) : "—"}
+                      {d.expiresAt ? new Date(d.expiresAt).toLocaleDateString("en-US", { timeZone: "UTC" }) : "-"}
                     </td>
                     <td className="px-3 py-2 text-gray-700">
                       {d.fileUrl ? (
@@ -439,7 +439,7 @@ export function EmployeeDocumentsSection({
                           Open
                         </a>
                       ) : (
-                        "—"
+                        "-"
                       )}
                     </td>
                     <td className="px-3 py-2">

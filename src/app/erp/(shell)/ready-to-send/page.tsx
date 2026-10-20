@@ -127,8 +127,15 @@ export default async function ReadyToSendPage() {
       note: draft.note,
       discardedBy: null,
       hubspotInvoiceId: draft.hubspotInvoiceId,
-      invoiceDateKey: todayEasternKey(draft.createdAt),
-      dueDate: dueDate?.toISOString().slice(0, 10) ?? null,
+      // Ready to bill invoices are dated the day they're approved (itemInvoiceDrafts.ts),
+      // so show today, and the due date it would get if approved today.
+      invoiceDateKey: todayKey,
+      dueDate: (() => {
+        const terms = destinations.get(`${draft.groupType}:${draft.groupId}`)?.paymentTermsDays;
+        if (terms != null) return addDaysKey(todayKey, terms);
+        const set = dueDate?.toISOString().slice(0, 10) ?? null;
+        return set && set > todayKey ? set : todayKey;
+      })(),
       lines: lines.map(({ name, description, amountCents }) => ({ name, description, amountCents })),
       amountCents: total,
       charges: [],

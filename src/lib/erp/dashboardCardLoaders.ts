@@ -5,7 +5,7 @@ import { loadWins } from "./dashboardWins";
 import { countRenewalAlerts, loadContractRenewals, loadMyCommission } from "./dashboardSales";
 import { countNeedsActionAlerts, loadChecks, loadNeedsAction } from "./dashboardMoney";
 import { loadCashForecast } from "./dashboardCashForecast";
-import { countBidsDueAlerts, countPriceCheckAlerts, loadBidsDue, loadPriceCheck, loadSalesBids } from "./dashboardStaleQuotes";
+import { countBidsDueAlerts, countPriceCheckAlerts, loadBidsDue, loadPipelineWeek, loadPriceCheck, loadSalesBids } from "./dashboardBids";
 import { countRedJobs, loadJobStatusBoard } from "./dashboardJobs";
 import { countCrewConflicts, loadCrewConflicts, loadWaitingOnOthers } from "./dashboardJobsWaiting";
 
@@ -34,6 +34,7 @@ export const CARD_LOADERS: Record<string, CardLoader> = {
   // Card id kept from when it was only stale quotes, so saved layouts still find it.
   "stale-quotes": { load: loadSalesBids, alertCount: countBidsDueAlerts },
   "bids-due": { load: loadBidsDue, alertCount: countBidsDueAlerts },
+  "pipeline-week": { load: loadPipelineWeek },
   "quote-price-check": { load: loadPriceCheck, alertCount: countPriceCheckAlerts },
   "needs-action": { load: (ctx) => loadNeedsAction(ctx.role), alertCount: (ctx) => countNeedsActionAlerts(ctx.role) },
   "cash-forecast": { load: async (ctx) => ({ sections: [], forecast: await loadCashForecast(ctx.role) }) },

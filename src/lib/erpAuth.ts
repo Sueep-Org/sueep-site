@@ -125,6 +125,11 @@ export function canSeeFranchiseInquiries(role: ErpRole): boolean {
   return isPmLevel(role);
 }
 
+/** Post-construction pipeline board (read-only view of HubSpot deals). */
+export function canViewPipelineBoard(role: ErpRole): boolean {
+  return isPmLevel(role) || role === "SALES" || role === "ESTIMATION";
+}
+
 export function canAddLaborLogs(role: ErpRole): boolean {
   return isPmLevel(role) || role === "SALES" || role === "SUPERVISOR";
 }

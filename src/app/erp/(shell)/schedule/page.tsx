@@ -59,7 +59,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
   if (calendar === "management" && showManagement) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-pink-600">Schedule</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Schedule</h1>
         <ScheduleCalendarTabs active="management" showManagement />
         <ManagementCalendar readOnly={managementReadOnly} />
       </div>
@@ -69,7 +69,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
   if (calendar === "janitorial") {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-pink-600">Schedule</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Schedule</h1>
         <ScheduleCalendarTabs active="janitorial" showManagement={showManagement} />
         <JanitorialCalendar initialContractId={contract ?? ""} />
       </div>
@@ -694,7 +694,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
       }));
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-pink-600">Schedule</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Schedule</h1>
         <ScheduleCalendarTabs active="master" showManagement={showManagement} />
         <MasterCalendar projects={masterProjects} showManagement={showManagement} />
       </div>
@@ -761,7 +761,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     <div className="space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-pink-600">Schedule</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">Schedule</h1>
         </div>
       </div>
 

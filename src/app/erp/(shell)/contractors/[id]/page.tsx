@@ -97,7 +97,7 @@ export default async function ContractorDetailPage({ params }: PageProps) {
 
   const generalInfoStatus = `${contractor.status === "ACTIVE" ? "Active" : "Inactive"}${contractor.email ? ` · ${contractor.email}` : ""}`;
 
-  const applicationStatus = contractor.candidateApplication ? `Linked to ${contractor.candidateApplication.fullName}` : "Not linked — enter manually below";
+  const applicationStatus = contractor.candidateApplication ? `Linked to ${contractor.candidateApplication.fullName}` : "Not linked - enter manually below";
   const applicationTone = contractor.candidateApplication ? "complete" : "neutral";
 
   const companyStatusInfo = questionnaireSectionStatus("company", companyFields);

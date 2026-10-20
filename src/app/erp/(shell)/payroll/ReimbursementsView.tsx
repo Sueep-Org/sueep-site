@@ -277,7 +277,7 @@ export function ReimbursementsView({ employees, reimbursements }: { employees: E
                           View
                         </a>
                       ) : (
-                        <span className="text-gray-400">—</span>
+                        <span className="text-gray-400">-</span>
                       )}
                     </td>
                     <td className="px-4 py-3">

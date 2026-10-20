@@ -24,7 +24,7 @@ const inputClass =
 const DRAWINGS_LABEL: Record<string, string> = { YES: "Yes", NO: "No", ASKED: "Asked" };
 
 function formatDate(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 }
 
@@ -212,7 +212,7 @@ export function BidsView({ employees, rows: initialRows }: { employees: Employee
             <div>
               <label className="block text-xs font-medium text-gray-600" htmlFor="sb-drawings">Drawings</label>
               <select id="sb-drawings" value={formDrawings} onChange={(e) => setFormDrawings(e.target.value)} className={inputClass}>
-                <option value="">—</option>
+                <option value="">-</option>
                 <option value="YES">Yes</option>
                 <option value="NO">No</option>
                 <option value="ASKED">Asked</option>
@@ -223,7 +223,7 @@ export function BidsView({ employees, rows: initialRows }: { employees: Employee
               <input id="sb-payout" type="text" placeholder="$0.00" value={formPayout} onChange={(e) => setFormPayout(e.target.value)} className={inputClass} />
             </div>
           </div>
-          <p className="text-xs text-gray-500">New bids start as &quot;Not sent&quot; — mark sent from the table once submitted, and it&apos;ll count toward that week&apos;s bid bonus.</p>
+          <p className="text-xs text-gray-500">New bids start as &quot;Not sent&quot; - mark sent from the table once submitted, and it&apos;ll count toward that week&apos;s bid bonus.</p>
           {formError && <p className="text-xs text-red-500">{formError}</p>}
           <button
             type="submit"
@@ -263,9 +263,9 @@ export function BidsView({ employees, rows: initialRows }: { employees: Employee
                     <td className="px-4 py-3 tabular-nums text-gray-700">{formatDate(row.projectStartDate)}</td>
                     <td className="px-4 py-3 font-medium text-gray-900">{row.employeeName}</td>
                     <td className="px-4 py-3 text-gray-700">{row.company}</td>
-                    <td className="px-4 py-3 text-gray-700">{row.deal ?? "—"}</td>
-                    <td className="px-4 py-3 text-gray-700">{row.description ?? "—"}</td>
-                    <td className="px-4 py-3 text-gray-700">{row.drawings ? DRAWINGS_LABEL[row.drawings] : "—"}</td>
+                    <td className="px-4 py-3 text-gray-700">{row.deal ?? "-"}</td>
+                    <td className="px-4 py-3 text-gray-700">{row.description ?? "-"}</td>
+                    <td className="px-4 py-3 text-gray-700">{row.drawings ? DRAWINGS_LABEL[row.drawings] : "-"}</td>
                     <td className="px-4 py-3">
                       <button
                         type="button"

@@ -395,7 +395,7 @@ export function TurnoverPricingPackageQuestions({
         </div>
         {touchUpPaintChecked && (
           <label className="mt-3 block text-xs font-medium text-gray-600">
-            Touch-up paint — how many rooms?
+            Touch-up paint - how many rooms?
             <input
               name="touchUpPaint"
               value={touchUpPaint}
@@ -408,7 +408,7 @@ export function TurnoverPricingPackageQuestions({
         )}
         {compoundingChecked && (
           <label className="mt-3 block text-xs font-medium text-gray-600">
-            Compounding — how many spots?
+            Compounding - how many spots?
             <input
               name="compounding"
               value={compounding}

@@ -64,7 +64,7 @@ export default function ErpLoginPage() {
             ERP auth is not configured on this deployment. In the Vercel project → Settings → Environment Variables,
             add <code className="text-amber-900">ERP_SESSION_SECRET</code> (min 16 characters) and all Firebase environment
             variables, then redeploy. For data storage, set{" "}
-            <code className="text-amber-900">DATABASE_URL</code> to PostgreSQL (e.g. Neon) — see{" "}
+            <code className="text-amber-900">DATABASE_URL</code> to PostgreSQL (e.g. Neon) - see{" "}
             <code className="text-amber-900">.env.example</code>.
           </div>
         ) : null}
@@ -72,7 +72,7 @@ export default function ErpLoginPage() {
         <p className="mt-6 text-center text-[10px] text-gray-600">
           Local: PostgreSQL <code className="text-gray-700">DATABASE_URL</code> (see <code className="text-gray-700">docker-compose.yml</code>), Firebase credentials in{" "}
           <code className="text-gray-700">.env.local</code>, plus{" "}
-          <code className="text-gray-700">ERP_SESSION_SECRET</code> — see{" "}
+          <code className="text-gray-700">ERP_SESSION_SECRET</code> - see{" "}
           <code className="text-gray-700">.env.example</code>.
         </p>
         <p className="mt-4 text-center text-[10px] text-gray-600">

@@ -29,6 +29,8 @@ import {
   findBillingParties,
   openInvoice,
   replaceInvoiceLines,
+  setInvoiceDates,
+  snapshotColumns,
   type InvoiceSnapshot,
 } from "@/lib/hubspot/invoiceDrafts";
 
@@ -186,20 +188,6 @@ export async function loadBillableGroups(only?: Set<string>): Promise<BillableGr
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function snapshotColumns(s: InvoiceSnapshot) {
-  const d = (v: string | null) => (v ? new Date(v) : null);
-  return {
-    invoiceNumber: s.number,
-    status: s.status,
-    invoiceDate: d(s.invoiceDate),
-    dueDate: d(s.dueDate),
-    invoiceTotalCents: s.totalCents,
-    balanceDueCents: s.balanceDueCents,
-    viewUrl: s.viewUrl,
-    pdfUrl: s.pdfUrl,
-  };
-}
-
 export type DraftItemsResult = { group: string; ok: boolean; note?: string };
 
 /**
@@ -285,6 +273,14 @@ export async function approveItemDraft(draftId: string, email: string): Promise<
   if (!draft || draft.status !== "DRAFT") return { error: "This draft isn't waiting anymore." };
   let snap: InvoiceSnapshot;
   try {
+    // Dated the day it's approved, since that's when the client gets it. Due
+    // date: today + the company's terms, else the date set on the draft (moved
+    // up to today if it's already past), else due on receipt.
+    const todayKey = todayEasternKey();
+    const dest = draft.groupType === "BUILDING" ? await loadBuildingInvoiceDestination(draft.groupId) : await loadProjectInvoiceDestination(draft.groupId);
+    const setDue = (await invoiceLinesFor(draft.hubspotInvoiceId)).dueDate?.slice(0, 10) ?? null;
+    const dueDateKey = dest?.paymentTermsDays != null ? addDaysKey(todayKey, dest.paymentTermsDays) : setDue && setDue > todayKey ? setDue : todayKey;
+    await setInvoiceDates(draft.hubspotInvoiceId, { invoiceDateKey: todayKey, dueDateKey });
     await openInvoice(draft.hubspotInvoiceId);
     snap = await fetchInvoiceSnapshot(draft.hubspotInvoiceId);
   } catch (e) {

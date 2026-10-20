@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/app/erp/components/ui";
 
 export function NewBuildingForm() {
   const router = useRouter();
@@ -98,13 +99,10 @@ export function NewBuildingForm() {
 
           {error ? <p className="text-xs text-red-500">{error}</p> : null}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="rounded-md bg-pink-600 px-4 py-2 text-sm font-semibold text-white hover:bg-pink-500 disabled:opacity-50"
-          >
+          <Button size="md" type="submit"
+            disabled={loading}>
             {loading ? "Saving…" : "Save building"}
-          </button>
+          </Button>
         </form>
       ) : null}
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { InfoTip, inputClass, labelClass } from "@/app/erp/components/ui";
+import { Button, InfoTip, inputClass, labelClass } from "@/app/erp/components/ui";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { LienDeadlinePill, lienDetailText } from "@/app/erp/components/LienDeadlinePill";
 import { LIEN_DECISION_OPTIONS, LIEN_ROLE_OPTIONS, LIEN_STATE_OPTIONS, formatLienDay } from "@/lib/erp/lienDeadline";
@@ -253,14 +253,11 @@ export function ProjectLienEditor({
 
       {error ? <p className="text-xs text-red-400" role="alert">{error}</p> : null}
 
-      <button
-        type="button"
+      <Button size="xs" type="button"
         onClick={save}
-        disabled={saving}
-        className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-      >
+        disabled={saving}>
         {saving ? "Saving…" : "Save"}
-      </button>
+      </Button>
 
       {row?.readiness ? (
         <div className="rounded-md border border-gray-200 bg-white p-3">

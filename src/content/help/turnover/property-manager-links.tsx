@@ -147,7 +147,7 @@ export function PropertyManagerLinks() {
       <UL>
         <LI>
           <strong>For staff:</strong> weekday mornings, if any request or change has waited over a business day, the people set
-          on the Notification Management page get a <strong>Property manager requests waiting</strong> email. It repeats each weekday until
+          on the Email Settings page get a <strong>Property manager requests waiting</strong> email. It repeats each weekday until
           they&apos;re answered.
         </LI>
         <LI>
@@ -205,7 +205,7 @@ export function PropertyManagerLinks() {
 
       <H2>Emails</H2>
       <P>
-        All of these are on the <A href="/erp/help/notifications/notifications-overview">Notification Management</A> page, under Turnovers
+        All of these are on the <A href="/erp/help/notifications/notifications-overview">Email Settings</A> page, under Turnovers
         or Reminders.
       </P>
       <Table>
@@ -229,7 +229,7 @@ export function PropertyManagerLinks() {
           </tr>
           <tr>
             <TD>Property manager turnover request</TD>
-            <TD>Staff set on the Notification Management page</TD>
+            <TD>Staff set on the Email Settings page</TD>
             <TD>Someone books on their page or the website form. Replying goes straight to them.</TD>
           </tr>
           <tr>
@@ -239,7 +239,7 @@ export function PropertyManagerLinks() {
           </tr>
           <tr>
             <TD>Property manager turnover change</TD>
-            <TD>Staff set on the Notification Management page</TD>
+            <TD>Staff set on the Email Settings page</TD>
             <TD>They cancel or move a request, ask to cancel or move a confirmed turnover, or take back an ask.</TD>
           </tr>
           <tr>
@@ -254,7 +254,7 @@ export function PropertyManagerLinks() {
           </tr>
           <tr>
             <TD>Property manager requests waiting</TD>
-            <TD>Staff set on the Notification Management page</TD>
+            <TD>Staff set on the Email Settings page</TD>
             <TD>Weekday mornings, when something has waited over a business day.</TD>
           </tr>
         </tbody>

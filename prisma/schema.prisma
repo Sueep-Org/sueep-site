@@ -3749,3 +3749,116 @@ model InvoiceDelivery {
 
   @@index([status])
 }
+
+/// Lost reasons set and deals marked lost from the pipeline board (PIPELINE_PLAN Phase 2).
+/// One row per change, so it's clear who did what. HubSpot holds the current
+/// values; the board also applies rows newer than its cached HubSpot read.
+model DealLostChange {
+  id               String   @id @default(cuid())
+  createdAt        DateTime @default(now())
+  hubspotDealId    String
+  /// post-con | janitorial
+  pipeline         String
+  dealName         String
+  /// REASON (deal was already lost) | MARK_LOST (moved an open deal to lost)
+  action           String
+  fromStageId      String
+  toStageId        String
+  /// HubSpot deal_lost_reason values after the change
+  reasons          String[] @default([])
+  /// deal_lost_reason before the change, as HubSpot had it
+  previousReasons  String?
+  byEmail          String
+
+  @@index([hubspotDealId])
+  @@index([createdAt])
+}
+
+/// Who won a job we lost as GC Not Awarded, and their price. ERP only (no
+/// HubSpot properties, user decision 2026-10-19). Feeds PIPELINE_PLAN Phase 5.
+model DealLostWinner {
+  hubspotDealId     String   @id
+  /// ClientCompany id when picked from Companies; no foreign key so deleting a company keeps the record
+  winningCompanyId  String?
+  /// Company name at the time, or the typed name when Other
+  winningName       String
+  winningPriceCents Int?
+  updatedAt         DateTime @updatedAt
+  updatedByEmail    String
+}
+
+/// Next step on a pipeline deal (PIPELINE_PLAN Phase 3): what to do and by
+/// when. ERP only (user decision 2026-10-19). One open next step per deal;
+/// done ones are kept for history.
+model DealFollowUp {
+  id             String    @id @default(cuid())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  hubspotDealId  String
+  /// post-con | janitorial
+  pipeline       String
+  dealName       String
+  text           String
+  /// "YYYY-MM-DD", Eastern
+  dueDate        String
+  createdByEmail String
+  updatedByEmail String
+  doneAt         DateTime?
+  doneByEmail    String?
+
+  @@index([hubspotDealId])
+  @@index([doneAt])
+}
+
+/// Deal info edited from the pipeline board (PIPELINE_PLAN Phase 7): one row
+/// per field changed, so it's clear who changed what. HubSpot holds the
+/// current value; the board also applies rows newer than its cached read.
+model DealInfoChange {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  hubspotDealId String
+  /// post-con | janitorial
+  pipeline      String
+  dealName      String
+  /// HubSpot property: hubspot_owner_id, company, bid_date, completion_date, amount, area_sqft
+  property      String
+  /// Values as HubSpot had them before and after ("" for blank)
+  fromValue     String
+  toValue       String
+  byEmail       String
+
+  @@index([hubspotDealId])
+  @@index([createdAt])
+}
+
+/// One row per open pipeline deal per day (PIPELINE_PLAN Phase 8 groundwork),
+/// for the weekly summary and forecast. Kept two years.
+model PipelineSnapshot {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  /// "YYYY-MM-DD", Eastern
+  day           String
+  /// post-con | janitorial
+  pipeline      String
+  hubspotDealId String
+  stageId       String
+  cents         Int
+  ownerId       String?
+
+  @@unique([day, hubspotDealId])
+  @@index([day])
+}
+
+/// A new HubSpot deal made to re-bid a job we lost as GC Not Awarded, with
+/// the GC that won it (PIPELINE_PLAN Phase 5). One re-bid per lost deal.
+model DealRebid {
+  id               String   @id @default(cuid())
+  createdAt        DateTime @default(now())
+  /// The lost deal
+  fromDealId       String   @unique
+  /// The new deal in Lead
+  newDealId        String   @unique
+  winningCompanyId String?
+  winningName      String
+  byEmail          String
+}

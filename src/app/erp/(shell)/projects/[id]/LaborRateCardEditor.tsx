@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { inputClass, labelClass } from "@/app/erp/components/ui";
+import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
 import { centsToDollars, parseMoneyInput } from "@/lib/erp/money";
 import {
   DEFAULT_CHANGE_ORDER_LABOR_RATES,
@@ -145,14 +145,11 @@ export function LaborRateCardEditor({ projectId, initialRateCard, canEdit }: Pro
         </p>
       ) : null}
 
-      <button
-        type="button"
+      <Button size="md" className="mt-4" type="button"
         onClick={onSave}
-        disabled={!canEdit || loading}
-        className="mt-4 rounded-md bg-pink-600 px-4 py-2 text-sm font-semibold text-white hover:bg-pink-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-      >
+        disabled={!canEdit || loading}>
         {loading ? "Saving…" : "Save labor rates"}
-      </button>
+      </Button>
     </section>
   );
 }

@@ -32,6 +32,8 @@ import { CompanyInfoOverview } from "./company-info/company-info-overview";
 import { CompaniesOverview } from "./companies/companies-overview";
 import { RolesAndPermissions } from "./people/roles-and-permissions";
 import { WinLossHelp } from "./sales/win-loss";
+import { PipelineBoardHelp } from "./sales/pipeline-board";
+import { PipelineGuide } from "./sales/pipeline-guide";
 
 export type ArticleEntry = {
   slug: string;
@@ -257,6 +259,24 @@ export const registry: ArticleEntry[] = [
     order: 9,
     component: WinLossHelp,
     roles: [...PM_LEVEL_ROLES, "SALES"],
+  },
+  {
+    slug: "sales/pipeline-guide",
+    title: "Pipeline Guide: Win More Deals",
+    category: "Projects",
+    description: "Why we have the pipeline board and what to do with it: a one-time clean up, the Monday routine, and what to do when a deal is lost.",
+    order: 10,
+    component: PipelineGuide,
+    roles: [...PM_LEVEL_ROLES, "SALES", "ESTIMATION"],
+  },
+  {
+    slug: "sales/pipeline-board",
+    title: "Pipeline Board",
+    category: "Projects",
+    description: "Post-construction and janitorial HubSpot deals as cards by stage, with GC, dates, stale quotes and price flags.",
+    order: 11,
+    component: PipelineBoardHelp,
+    roles: [...PM_LEVEL_ROLES, "SALES", "ESTIMATION"],
   },
   {
     slug: "buildings/buildings-overview",

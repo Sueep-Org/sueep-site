@@ -95,7 +95,7 @@ export function EmployeeSsnSection({ employeeId, hasSsn }: { employeeId: string;
         ) : (
           <div className="mt-1 flex items-center gap-2">
             <div className="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-mono text-gray-800">
-              {revealed != null ? (revealed || "—") : savedHasSsn ? "***-**-****" : "Not set"}
+              {revealed != null ? (revealed || "-") : savedHasSsn ? "***-**-****" : "Not set"}
             </div>
             {savedHasSsn && revealed == null && (
               <button

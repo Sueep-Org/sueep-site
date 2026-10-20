@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { dayKey } from "@/lib/erp/schedule";
-import { appUrl, notifyChangeOrderCrew, sendDayInvite } from "@/lib/erp/scheduleInvites";
+import { appUrl, notifyChangeOrderCrew, sendDayInvite, sendSubLeadInvite } from "@/lib/erp/scheduleInvites";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -83,6 +83,10 @@ export async function POST(req: Request) {
   const location =
     changeOrder.project.building?.address || changeOrder.project.workOrderRecord?.siteAddress || undefined;
 
+  // Who ran this day before the save, so a sub who's replaced gets a cancellation.
+  const prevSub = (await prisma.changeOrderDayAssignment.findUnique({ where: { changeOrderId_date: { changeOrderId, date } }, select: { supervisorContractorId: true } }))
+    ?.supervisorContractorId ?? null;
+
   const writeAssignment = prisma.changeOrderDayAssignment.upsert({
     where: { changeOrderId_date: { changeOrderId, date } },
     create: { changeOrderId, date, supervisorUserId, projectManagerUserId, supervisorContractorId, startTime, endTime, comment },
@@ -121,6 +125,11 @@ export async function POST(req: Request) {
       url,
     });
   }
+
+  // A sub running the day gets the same calendar invite as a supervisor.
+  const subInvite = { kind: "co-day" as const, assignmentId: assignment.id, title, dateKey: dayKey(assignment.date), startTime: assignment.startTime, endTime: assignment.endTime, location, url };
+  if (prevSub && prevSub !== supervisorContractorId) await sendSubLeadInvite({ ...subInvite, contractorId: prevSub, cancelled: true });
+  if (supervisorContractorId) await sendSubLeadInvite({ ...subInvite, contractorId: supervisorContractorId });
 
   // Refreshes every crew member already planned on this CO/day too — their
   // time may have just changed even though their own row wasn't touched.

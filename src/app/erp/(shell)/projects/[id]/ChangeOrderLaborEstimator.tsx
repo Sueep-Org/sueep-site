@@ -156,7 +156,7 @@ export function ChangeOrderLaborEstimator({
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md bg-gray-50 px-3 py-2">
         <div className="text-sm text-gray-700">
           <div>
-            Price: <span className="font-semibold text-gray-900">{priceEstimate ? centsToDollars(priceEstimate.totalCents) : "—"}</span>
+            Price: <span className="font-semibold text-gray-900">{priceEstimate ? centsToDollars(priceEstimate.totalCents) : "-"}</span>
             {pricingRates ? (
               <span className="ml-1 text-xs text-gray-400">
                 ({centsToDollars(pricingRates.cleanerHourlyRateCents)}/hr cleaner, {centsToDollars(pricingRates.foremanHourlyRateCents)}/hr
@@ -170,7 +170,7 @@ export function ChangeOrderLaborEstimator({
             Labor cost: <span className="font-semibold text-gray-900">{centsToDollars(costEstimate.totalCents)}</span>
             <span className="ml-1 text-xs text-gray-400">
               ({centsToDollars(ACTUAL_CHANGE_ORDER_LABOR_COST_RATES.cleanerHourlyRateCents)}/hr cleaner,{" "}
-              {centsToDollars(ACTUAL_CHANGE_ORDER_LABOR_COST_RATES.foremanHourlyRateCents)}/hr supervisor — actual pay)
+              {centsToDollars(ACTUAL_CHANGE_ORDER_LABOR_COST_RATES.foremanHourlyRateCents)}/hr supervisor - actual pay)
             </span>
           </div>
         </div>

@@ -88,7 +88,8 @@ export async function resolveWorkerContact(
   return null;
 }
 
-type InviteRole = "Supervising" | "Working";
+/** Running: a sub covering the day in the supervisor's spot (no Sueep supervisor on site). */
+type InviteRole = "Supervising" | "Working" | "Running";
 
 function inviteHtml(params: {
   role: InviteRole;
@@ -101,7 +102,7 @@ function inviteHtml(params: {
    * the turnover crew-hours-budget note, supervisor-only. */
   extraHtml?: string;
 }): string {
-  const verb = params.role === "Supervising" ? "assigned to supervise" : "scheduled to work on";
+  const verb = params.role === "Supervising" ? "assigned to supervise" : params.role === "Running" ? "assigned to run" : "scheduled to work on";
   const title = escapeHtml(params.title);
   const lines = [
     params.cancelled
@@ -320,4 +321,81 @@ export async function notifyChangeOrderCrew(params: {
       });
     })
   );
+}
+
+/**
+ * Invite (or cancellation) for a sub running a day in the supervisor's spot,
+ * on a project day ("day") or a change order day ("co-day"). The uid includes
+ * the contractor, so a different sub on the same day gets their own invite
+ * and the one replaced can be sent a cancellation. Skipped when the sub has
+ * no email on file. Same rules as every other invite (sendDayInvite).
+ */
+export async function sendSubLeadInvite(params: {
+  kind: "day" | "co-day";
+  assignmentId: string;
+  contractorId: string;
+  title: string;
+  dateKey: string;
+  startTime?: string | null;
+  endTime?: string | null;
+  location?: string;
+  scopeText?: string | null;
+  url?: string;
+  cancelled?: boolean;
+}): Promise<void> {
+  const contact = await resolveWorkerContact(null, params.contractorId);
+  if (!contact) return;
+  await sendDayInvite({
+    uid: `${params.kind}-assignment-${params.assignmentId}-sub-${params.contractorId}@sueep.com`,
+    to: contact.email,
+    attendeeName: contact.name,
+    role: "Running",
+    title: params.title,
+    dateKey: params.dateKey,
+    startTime: params.startTime,
+    endTime: params.endTime,
+    location: params.location,
+    scopeText: params.scopeText,
+    url: params.url,
+    cancelled: params.cancelled,
+  });
+}
+
+function dayLabel(d: Date | null | undefined): string | null {
+  return d ? d.toLocaleDateString("en-US", { weekday: "short", month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }) : null;
+}
+
+/**
+ * "You've been assigned" email when a sub is added to a job's or change
+ * order's Subs list (no specific day yet). Never includes the cost. Errors
+ * are logged, never thrown, so the assignment itself always saves.
+ */
+export async function sendSubAssignedEmail(params: {
+  contractorId: string;
+  jobTitle: string;
+  changeOrderTitle?: string | null;
+  location?: string | null;
+  task?: string | null;
+  role?: string | null;
+  startDate?: Date | null;
+  endDate?: Date | null;
+}): Promise<void> {
+  try {
+    const contact = await resolveWorkerContact(null, params.contractorId);
+    if (!contact) return;
+    const what = params.changeOrderTitle ? `${params.changeOrderTitle} (change order on ${params.jobTitle})` : params.jobTitle;
+    const start = dayLabel(params.startDate), end = dayLabel(params.endDate);
+    const dates = start && end && start !== end ? `${start} to ${end}` : start ?? end;
+    const lines = [
+      `<p>Hi ${escapeHtml(contact.name)},</p>`,
+      `<p>You've been assigned to <strong>${escapeHtml(what)}</strong>.</p>`,
+      params.task || params.role ? `<p><strong>Work:</strong> ${escapeHtml([params.role, params.task].filter(Boolean).join(": "))}</p>` : "",
+      dates ? `<p><strong>Dates:</strong> ${escapeHtml(dates)}</p>` : "",
+      params.location ? `<p><strong>Address:</strong> ${escapeHtml(params.location)}</p>` : "",
+      `<p>You'll get a separate calendar invite for each day you're scheduled.</p>`,
+    ];
+    await sendEmail({ type: "SUB_ASSIGNED", to: contact.email, subject: `You've been assigned: ${what}`, html: lines.filter(Boolean).join("") });
+  } catch (e) {
+    console.error("Failed to send sub assigned email", { contractorId: params.contractorId }, e);
+  }
 }

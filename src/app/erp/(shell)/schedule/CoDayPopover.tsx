@@ -441,7 +441,7 @@ export function CoDayPopover({
                         <span className="truncate">
                           {worker?.displayName ?? "Unknown worker"}
                           {worker && !worker.email ? (
-                            <span className="text-gray-400" title="No email on file — didn't get a schedule invite">
+                            <span className="text-gray-400" title="No email on file - didn't get a schedule invite">
                               {" "}
                               (no email)
                             </span>

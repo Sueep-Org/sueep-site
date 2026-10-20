@@ -3,6 +3,8 @@ import { sendManagementReminders } from "@/lib/erp/managementReminders";
 import { sendQualityCheckReminders } from "@/lib/erp/janitorialQualityChecks";
 import { sendLienAlerts } from "@/lib/erp/lienAlerts";
 import { sendBillingCutoffReminders } from "@/lib/erp/billingCutoffs";
+import { sendPipelineFollowUpEmails } from "@/lib/erp/pipelineFollowUpEmails";
+import { savePipelineSnapshot } from "@/lib/erp/pipelineSnapshots";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +14,9 @@ export const dynamic = "force-dynamic";
  * reach one of their category's reminder days today, plus the quality check
  * emails (tomorrow's checks to whoever does them, and overdue ones) and the
  * lien alerts (jobs that reached a new lien stage), and billing cutoff
- * reminders to each job's PM 5 days before the GC's cutoff.
+ * reminders to each job's PM 5 days before the GC's cutoff. On Mondays, the
+ * pipeline follow-up emails (deal owners, plus a summary for Admins). Every
+ * day, a snapshot of open pipeline deals for the weekly summary.
  */
 export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");
@@ -25,5 +29,7 @@ export async function GET(req: Request) {
   const qualityChecks = await sendQualityCheckReminders();
   const lienAlerts = await sendLienAlerts().catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
   const billingCutoffs = await sendBillingCutoffReminders().catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
-  return NextResponse.json({ ...result, qualityChecks, lienAlerts, billingCutoffs });
+  const pipelineFollowUps = await sendPipelineFollowUpEmails().catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+  const pipelineSnapshot = await savePipelineSnapshot().catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+  return NextResponse.json({ ...result, qualityChecks, lienAlerts, billingCutoffs, pipelineFollowUps, pipelineSnapshot });
 }

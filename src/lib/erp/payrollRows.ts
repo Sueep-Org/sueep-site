@@ -473,7 +473,7 @@ export async function computePayrollRows(periodStart: Date, periodEnd: Date) {
       regHours: 0,
       otHours: 0,
       grossPayCents: 0,
-      projects: "—",
+      projects: "-",
       entries: [] as { date: string; hours: number; project: string; rateCents: number }[],
       commissionCents: commission.totalCents,
       commissionBreakdown: commission.breakdown,

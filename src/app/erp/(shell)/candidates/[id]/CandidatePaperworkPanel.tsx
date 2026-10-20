@@ -17,7 +17,7 @@ type Props = {
 };
 
 function formatDt(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   try {
     return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(
       new Date(iso)
@@ -73,7 +73,7 @@ export function CandidatePaperworkPanel({
     <div className="space-y-4">
       <p className="text-xs text-zinc-400 leading-relaxed">
         When status is set to Onboarding and documents are configured above, send the candidate a
-        secure upload link. No ERP login required — the link expires after 7 days.
+        secure upload link. No ERP login required - the link expires after 7 days.
       </p>
 
       {!isOnboarding && (

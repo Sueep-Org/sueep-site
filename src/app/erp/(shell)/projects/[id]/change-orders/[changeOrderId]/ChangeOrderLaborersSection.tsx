@@ -23,7 +23,7 @@ export type ChangeOrderLaborerRow = {
 };
 
 const QUALITY_OPTIONS = [
-  { value: "", label: "—" },
+  { value: "", label: "-" },
   { value: "EXCELLENT", label: "Excellent" },
   { value: "GOOD", label: "Good" },
   { value: "FAIR", label: "Fair" },
@@ -140,7 +140,7 @@ function EmployeeCombobox({
             onMouseDown={(e) => { e.preventDefault(); handleSelect(OTHER_VALUE); }}
             className="cursor-pointer border-t border-gray-100 px-3 py-2 text-gray-500 hover:bg-pink-50 hover:text-pink-700"
           >
-            Other (not in roster — type name)
+            Other (not in roster - type name)
           </li>
         </ul>
       )}
@@ -456,7 +456,7 @@ export function ChangeOrderLaborersSection({
             <p className="mt-1 rounded-md border border-gray-200 bg-gray-100 px-3 py-2 text-sm text-gray-800">
               {clockInStr && clockOutStr && calcHours(clockInStr, clockOutStr) > 0
                 ? `${calcHours(clockInStr, clockOutStr).toFixed(2)} hrs`
-                : <span className="text-gray-400">—</span>}
+                : <span className="text-gray-400">-</span>}
             </p>
           </div>
           <div>
@@ -470,9 +470,9 @@ export function ChangeOrderLaborersSection({
         </div>
         {error ? <p className="mt-3 text-sm text-red-400" role="alert">{error}</p> : null}
         <div className="mt-4 flex flex-wrap items-center gap-4">
-          <button type="submit" disabled={loading} className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50">
+          <Button size="md" type="submit" disabled={loading}>
             {loading ? "Adding…" : "Add entry"}
-          </button>
+          </Button>
           <label className="flex cursor-pointer items-center gap-2 text-xs text-gray-600">
             <input
               type="checkbox"
@@ -602,7 +602,7 @@ export function ChangeOrderLaborersSection({
                         <input type="text" className={editInput} value={editFields.name} onChange={(e) => setEditFields((f) => ({ ...f, name: e.target.value }))} />
                       </td>
                       <td className="py-1 pr-2">
-                        <input type="text" className={editInput} placeholder="—" value={editFields.role} onChange={(e) => setEditFields((f) => ({ ...f, role: e.target.value }))} />
+                        <input type="text" className={editInput} placeholder="-" value={editFields.role} onChange={(e) => setEditFields((f) => ({ ...f, role: e.target.value }))} />
                       </td>
                       <td className="py-1 pr-2">
                         <div className="flex items-center gap-1">
@@ -610,11 +610,11 @@ export function ChangeOrderLaborersSection({
                           <span className="text-gray-400 text-xs">–</span>
                           <input type="time" className={editInput} value={editFields.clockOut} onChange={(e) => setEditFields((f) => ({ ...f, clockOut: e.target.value }))} />
                           <span className="ml-1 shrink-0 text-xs text-gray-500">
-                            {calcHours(editFields.clockIn, editFields.clockOut) > 0 ? `${calcHours(editFields.clockIn, editFields.clockOut).toFixed(2)}h` : "—"}
+                            {calcHours(editFields.clockIn, editFields.clockOut) > 0 ? `${calcHours(editFields.clockIn, editFields.clockOut).toFixed(2)}h` : "-"}
                           </span>
                         </div>
                       </td>
-                      <td className="py-1 pr-2 text-xs text-gray-400">—</td>
+                      <td className="py-1 pr-2 text-xs text-gray-400">-</td>
                       {showFinancials && (
                         <td className="py-1 pr-2">
                           <input type="text" className={editInput} value={editFields.hourlyRate} onChange={(e) => setEditFields((f) => ({ ...f, hourlyRate: e.target.value }))} />
@@ -624,7 +624,7 @@ export function ChangeOrderLaborersSection({
                         <td className="py-1 pr-2 text-gray-800 text-xs">{centsToDollars(lineCostCents(calcHours(editFields.clockIn, editFields.clockOut), 0, Number(editFields.hourlyRate) * 100))}<span className="ml-1 text-gray-400">(est.)</span></td>
                       )}
                       <td className="py-1 pr-2">
-                        <input type="text" className={editInput} placeholder="—" value={editFields.taskDescription} onChange={(e) => setEditFields((f) => ({ ...f, taskDescription: e.target.value }))} />
+                        <input type="text" className={editInput} placeholder="-" value={editFields.taskDescription} onChange={(e) => setEditFields((f) => ({ ...f, taskDescription: e.target.value }))} />
                       </td>
                       <td className="py-1 pr-2">
                         <select
@@ -666,16 +666,16 @@ export function ChangeOrderLaborersSection({
                           )}
                         </span>
                       </td>
-                      <td className="py-2 pr-2 text-gray-500">{l.role || "—"}</td>
+                      <td className="py-2 pr-2 text-gray-500">{l.role || "-"}</td>
                       <td className="py-2 pr-2 text-gray-700">{l.hours}</td>
                       <td className="py-2 pr-2">
                         {l.otHours > 0
                           ? <span className="font-medium text-amber-600">{l.otHours.toFixed(2)}</span>
-                          : <span className="text-gray-300">—</span>}
+                          : <span className="text-gray-300">-</span>}
                       </td>
                       {showFinancials && <td className="py-2 pr-2 text-gray-600">{centsToDollars(l.hourlyRateCents)}/hr</td>}
                       {showFinancials && <td className="py-2 pr-2 text-gray-800">{centsToDollars(lineCostCents(l.regHours, l.otHours, l.hourlyRateCents))}</td>}
-                      <td className="py-2 pr-2 text-gray-500">{l.taskDescription || "—"}</td>
+                      <td className="py-2 pr-2 text-gray-500">{l.taskDescription || "-"}</td>
                       <td className="py-2 pr-2">
                         {canEdit ? (
                           <select
@@ -687,7 +687,7 @@ export function ChangeOrderLaborersSection({
                           </select>
                         ) : (
                           <span className={`text-xs ${QUALITY_COLORS[quality] ?? "text-gray-400"}`}>
-                            {QUALITY_OPTIONS.find((o) => o.value === quality)?.label ?? "—"}
+                            {QUALITY_OPTIONS.find((o) => o.value === quality)?.label ?? "-"}
                           </span>
                         )}
                       </td>

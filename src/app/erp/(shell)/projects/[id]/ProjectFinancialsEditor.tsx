@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { BILLING_STATUS_OPTIONS, normalizeBillingStatus } from "@/lib/erp/billingStatus";
+import { Button } from "@/app/erp/components/ui";
 
 const inputCls =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
@@ -210,7 +211,7 @@ export function ProjectFinancialsEditor({
                   ) : (
                     <>
                       <input id="fin-act-lab" type="number" min={0} step={0.01} className={inputCls} value={actLab} onChange={(e) => setActLab(e.target.value)} placeholder="0.00" />
-                      <p className="mt-0.5 text-xs text-gray-400">Manual fallback — no work logs yet</p>
+                      <p className="mt-0.5 text-xs text-gray-400">Manual fallback - no work logs yet</p>
                     </>
                   )}
                 </div>
@@ -260,7 +261,7 @@ export function ProjectFinancialsEditor({
                   ) : (
                     <>
                       <input id="fin-act-hrs" type="number" min={0} step={0.5} className={inputCls} value={actHrs} onChange={(e) => setActHrs(e.target.value)} placeholder="0" />
-                      <p className="mt-0.5 text-xs text-gray-400">Manual fallback — no work logs yet</p>
+                      <p className="mt-0.5 text-xs text-gray-400">Manual fallback - no work logs yet</p>
                     </>
                   )}
                 </div>
@@ -293,9 +294,9 @@ export function ProjectFinancialsEditor({
         </div>
 
         {error ? <p className="text-xs text-red-400" role="alert">{error}</p> : null}
-        <button type="submit" disabled={loading} className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 disabled:opacity-50">
+        <Button size="xs" type="submit" disabled={loading}>
           {loading ? "Saving…" : "Save"}
-        </button>
+        </Button>
       </form>
     </>
   );

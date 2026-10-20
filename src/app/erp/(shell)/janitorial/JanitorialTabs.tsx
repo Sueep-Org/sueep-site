@@ -11,7 +11,7 @@ export function JanitorialHeader({ active, action }: { active: (typeof TABS)[num
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-pink-600">Janitorial Contracts</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Janitorial Contracts</h1>
         {action}
       </div>
       <nav className="flex gap-1 border-b border-gray-200" aria-label="Janitorial sections">

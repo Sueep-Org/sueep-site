@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
-import { InfoTip, inputClass, labelClass, useToast } from "@/app/erp/components/ui";
+import { Button, InfoTip, inputClass, labelClass, useToast } from "@/app/erp/components/ui";
 import { centsToDollars } from "@/lib/erp/money";
 
 const input = inputClass.md;
@@ -158,13 +158,10 @@ export function ContractDetailsForm({
 
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex justify-end">
-        <button
-          type="submit"
-          disabled={saving}
-          className="rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-        >
+        <Button size="md" type="submit"
+          disabled={saving}>
           {saving ? "Saving…" : "Save changes"}
-        </button>
+        </Button>
       </div>
     </form>
   );

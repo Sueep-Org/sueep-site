@@ -107,6 +107,13 @@ export const NOTIFICATIONS = {
     automatic: "The scheduled person",
     sender: "sueep",
   }),
+  SUB_ASSIGNED: def({
+    label: "Sub assigned to a job",
+    group: "Projects & schedule",
+    when: "A subcontractor is added to a project's or change order's subs. Each day they're scheduled also sends a Schedule invite.",
+    automatic: "The subcontractor (when they have an email on file)",
+    sender: "sueep",
+  }),
   READY_TO_BILL: def({
     label: "Ready to bill",
     group: "Projects & schedule",
@@ -354,6 +361,20 @@ export const NOTIFICATIONS = {
     group: "Reminders",
     when: "About 8am, when calendar items reach their category's reminder days",
     automatic: "Every Admin, PM and Business Manager. Sales and Estimation get one with only the Bids category",
+  }),
+
+  PIPELINE_FOLLOW_UPS: def({
+    label: "Pipeline follow-ups",
+    group: "Reminders",
+    when: "Monday about 8am: your deals with an overdue next step, one due this week, or none yet in a stage that needs one",
+    automatic: "Each HubSpot deal owner who has an ERP login with the same email",
+  }),
+  PIPELINE_FOLLOW_UPS_SUMMARY: def({
+    label: "Pipeline follow-ups summary",
+    group: "Reminders",
+    when: "Monday about 8am: next steps for everyone, including deals owned by people no longer in HubSpot",
+    automatic: "Every Admin",
+    ccEditable: true,
   }),
 
   LIEN_ALERTS: def({

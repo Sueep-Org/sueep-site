@@ -26,8 +26,8 @@ function formatDateHeading(iso: string) {
   yesterday.setDate(yesterday.getDate() - 1);
   const yesterdayIso = yesterday.toISOString().slice(0, 10);
 
-  if (iso === today) return "Today — " + d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
-  if (iso === yesterdayIso) return "Yesterday — " + d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  if (iso === today) return "Today - " + d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  if (iso === yesterdayIso) return "Yesterday - " + d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
   return d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 }
 

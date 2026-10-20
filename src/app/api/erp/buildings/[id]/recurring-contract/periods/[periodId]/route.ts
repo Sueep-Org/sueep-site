@@ -46,13 +46,13 @@ export async function PATCH(req: Request, ctx: Ctx) {
             paidAt: period.commissionPaidAt ?? new Date(),
             sourceType: "RECURRING_PERIOD",
             sourceId: period.id,
-            sourceLabel: `${period.recurringContract.building.name} — ${monthLabel}`,
+            sourceLabel: `${period.recurringContract.building.name} - ${monthLabel}`,
           },
           update: {
             employeeId: period.recurringContract.commissionEmployeeId,
             amountCents: commissionCents,
             paidAt: period.commissionPaidAt ?? new Date(),
-            sourceLabel: `${period.recurringContract.building.name} — ${monthLabel}`,
+            sourceLabel: `${period.recurringContract.building.name} - ${monthLabel}`,
           },
         });
       }

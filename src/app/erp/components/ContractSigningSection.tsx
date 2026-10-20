@@ -176,7 +176,7 @@ export function ContractSigningSection({
       if (presignedFileRef.current) presignedFileRef.current.value = "";
       router.refresh();
     } catch {
-      setPresignedError("Upload failed — please try again.");
+      setPresignedError("Upload failed - please try again.");
     } finally {
       setPresignedUploading(false);
     }
@@ -210,7 +210,7 @@ export function ContractSigningSection({
       ]);
       router.refresh();
     } catch {
-      setUploadError("Network error — please try again");
+      setUploadError("Network error - please try again");
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";

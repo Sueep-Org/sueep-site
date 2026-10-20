@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import { deriveProjectLifecycle, type ProjectLifecycle } from "@/lib/erp/projectLifecycle";
 import { PROJECT_SEGMENT_OPTIONS } from "@/lib/erp/projectSegments";
-import { inputClass, labelClass } from "@/app/erp/components/ui";
+import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
+import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 
 const input = inputClass.md;
 const label = labelClass.default;
@@ -221,19 +222,15 @@ export function ProjectSetupEditor({
           {erpSupervisors.length > 0 && (
             <div>
               <label className={label} htmlFor="ps-supervisor-user">Assigned Supervisor (ERP)</label>
-              <select
+              <SearchableSelect
                 id="ps-supervisor-user"
-                className={input}
                 value={selectedSupervisorUserId}
-                onChange={(e) => {
-                  setSelectedSupervisorUserId(e.target.value);
-                }}
-              >
-                <option value="">— Unassigned —</option>
-                {erpSupervisors.map((s) => (
-                  <option key={s.id} value={s.id}>{s.displayName} ({s.email})</option>
-                ))}
-              </select>
+                onChange={setSelectedSupervisorUserId}
+                options={erpSupervisors.map((s) => ({ value: s.id, label: `${s.displayName} (${s.email})` }))}
+                placeholder="Search supervisors…"
+                allLabel="- Unassigned -"
+                className="mt-1"
+              />
             </div>
           )}
           <div className="relative">
@@ -305,13 +302,10 @@ export function ProjectSetupEditor({
 
       {error ? <p className="text-xs text-red-400" role="alert">{error}</p> : null}
 
-      <button
-        type="submit"
-        disabled={loading}
-        className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-      >
+      <Button size="xs" type="submit"
+        disabled={loading}>
         {loading ? "Saving…" : "Save"}
-      </button>
+      </Button>
     </form>
   );
 }

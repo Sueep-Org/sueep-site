@@ -13,7 +13,7 @@ import { DEFAULT_PAYROLL_ANCHOR, anchorDate, biweeklyIndex, biweeklyRange } from
 import { utcDateKey } from "./dates";
 import { COMPANY_INFO_SECTIONS } from "./companyInfo";
 import { checkerName, namesByEmail } from "./janitorialQualityChecks";
-import { dealUrl, loadDealBundle, outcomeOf } from "./winLoss";
+import { dealUrl, loadDealBundle, outcomeOf } from "./postConDeals";
 import { centsToDollarsCompact } from "./money";
 import { cutoffsBetween, loadCutoffJobs } from "./billingCutoffs";
 import {

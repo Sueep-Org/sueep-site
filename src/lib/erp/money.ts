@@ -5,7 +5,7 @@ export function dollarsToCents(d: number): number {
 }
 
 export function centsToDollars(c: number | null | undefined): string {
-  if (c == null) return "—";
+  if (c == null) return "-";
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(c / 100);
 }
 

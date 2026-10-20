@@ -46,7 +46,6 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
   const projects = await prisma.project.findMany({
     where: projectWhere,
     orderBy: [{ projectDate: "desc" }, { updatedAt: "desc" }],
-    take: 300,
     include: {
       laborEntries: {
         select: {
@@ -371,7 +370,7 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-bold text-pink-600">Projects</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Projects</h1>
         <div className="flex items-center gap-2">
           {isSupervisor && (
             <div className="inline-flex rounded-md border border-gray-200 bg-white p-0.5 text-xs">

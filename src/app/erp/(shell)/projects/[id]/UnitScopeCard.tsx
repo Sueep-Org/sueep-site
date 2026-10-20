@@ -137,7 +137,7 @@ export function UnitScopeCard({
       {isPartialTurn && (
         <div className="bg-amber-50 border-b border-amber-100 px-4 py-2">
           <span className="text-sm font-semibold text-amber-800">
-            Partial Turn{partialTurnLayout ? ` — working on ${PARTIAL_TURN_LAYOUT_LABELS[partialTurnLayout] ?? partialTurnLayout}` : ""}
+            Partial Turn{partialTurnLayout ? ` - working on ${PARTIAL_TURN_LAYOUT_LABELS[partialTurnLayout] ?? partialTurnLayout}` : ""}
           </span>
         </div>
       )}

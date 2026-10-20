@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SearchableSelect } from "../../components/SearchableSelect";
-import { useConfirm, useToast } from "../../components/ui";
+import { Button, useConfirm, useToast } from "../../components/ui";
 
 type DealCandidate = { id: string; name: string };
 
@@ -251,7 +251,7 @@ export function BuildingProfileEditor({ buildingId, initial, commissionEmployeeI
           {dealSearchError && <p className="mt-1 text-xs text-red-600">{dealSearchError}</p>}
 
           {hasSearchedDeal && !dealSearchLoading && dealCandidates.length === 0 && !dealSearchError && (
-            <p className="mt-1 text-xs text-gray-400">No matching deals found for &quot;{dealQuery}&quot; — try a different search term, or enter the deal ID manually below.</p>
+            <p className="mt-1 text-xs text-gray-400">No matching deals found for &quot;{dealQuery}&quot; - try a different search term, or enter the deal ID manually below.</p>
           )}
 
           {dealCandidates.length > 0 && (
@@ -313,13 +313,10 @@ export function BuildingProfileEditor({ buildingId, initial, commissionEmployeeI
       {success ? <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">{success}</div> : null}
 
       <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="submit"
-          disabled={loading}
-          className="rounded-md bg-pink-600 px-4 py-2 text-sm font-semibold text-white hover:bg-pink-500 disabled:opacity-50"
-        >
+        <Button size="md" type="submit"
+          disabled={loading}>
           {loading ? "Saving…" : "Save building"}
-        </button>
+        </Button>
         <button
           type="button"
           onClick={onDelete}

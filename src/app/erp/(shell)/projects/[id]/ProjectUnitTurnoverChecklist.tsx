@@ -5,6 +5,7 @@ import { UNIT_CHECKLIST_SECTIONS } from "@/lib/erp/unitTurnoverChecklistTemplate
 import type { ChecklistSection } from "@/lib/erp/unitTurnoverChecklistTemplate";
 import { SignaturePadInput } from "@/components/SignaturePad";
 import { MAX_UPLOAD_BYTES, shrinkImage } from "@/lib/shrinkImage";
+import { Button } from "@/app/erp/components/ui";
 
 type SectionPhotos = Record<string, { before: string[]; after: string[] }>;
 
@@ -563,9 +564,9 @@ export function ProjectUnitTurnoverChecklist({ projectId, buildingName }: { proj
         </div>
 
         <div className="flex items-center gap-3">
-          <button type="submit" disabled={infoSaving} className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 disabled:opacity-50">
+          <Button size="xs" type="submit" disabled={infoSaving}>
             {infoSaving ? "Saving…" : "Save info"}
-          </button>
+          </Button>
           {infoSaved && <span className="text-xs text-emerald-600">Saved</span>}
         </div>
       </form>

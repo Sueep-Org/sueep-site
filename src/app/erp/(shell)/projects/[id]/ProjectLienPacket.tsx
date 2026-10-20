@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { InfoTip, inputClass, labelClass } from "@/app/erp/components/ui";
+import { Button, InfoTip, inputClass, labelClass } from "@/app/erp/components/ui";
 import { buildZip } from "@/lib/zipStore";
 import type { LienFactSheetData, LienPacketFile } from "@/lib/erp/lienFactSheet";
 
@@ -175,9 +175,9 @@ export function ProjectLienPacket({ projectId, onPrepared }: { projectId: string
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={downloadPacket} disabled={busy !== ""} className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-500 disabled:opacity-50">
+            <Button size="xs" type="button" onClick={downloadPacket} disabled={busy !== ""}>
               {busy === "packet" ? "Gathering files…" : `Download packet (${files.length + 1} files)`}
-            </button>
+            </Button>
             <button type="button" onClick={downloadSheet} disabled={busy !== ""} className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
               {busy === "sheet" ? "Building…" : "Fact sheet only"}
             </button>

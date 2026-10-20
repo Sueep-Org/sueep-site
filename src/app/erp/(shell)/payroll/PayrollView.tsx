@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { Modal, useConfirm, useToast } from "@/app/erp/components/ui";
+import { Button, Modal, useConfirm, useToast } from "@/app/erp/components/ui";
 import { EmployeeCombobox, type EmployeeOption } from "@/app/erp/components/EmployeeCombobox";
 import { splitHoursOverWorkingDays } from "@/lib/erp/manualHours";
 import { DEFAULT_PAYROLL_ANCHOR, anchorDate, biweeklyIndex, biweeklyRange } from "@/lib/erp/payPeriods";
@@ -663,13 +663,10 @@ export function PayrollView({ canReopen = false, employees = [] }: { canReopen?:
             <button type="button" onClick={() => setAddOpen(false)} className="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={adding || !addForm.employeeId}
-              className="rounded-md bg-pink-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-pink-700 disabled:opacity-50"
-            >
+            <Button size="sm" type="submit"
+              disabled={adding || !addForm.employeeId}>
               {adding ? "Adding..." : "Add hours"}
-            </button>
+            </Button>
           </div>
         </form>
       </Modal>
@@ -715,9 +712,9 @@ export function PayrollView({ canReopen = false, employees = [] }: { canReopen?:
               <button type="button" onClick={() => setEditing(null)} className="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
                 Cancel
               </button>
-              <button type="submit" disabled={savingEdit} className="rounded-md bg-pink-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-pink-700 disabled:opacity-50">
+              <Button size="sm" type="submit" disabled={savingEdit}>
                 {savingEdit ? "Saving..." : "Save"}
-              </button>
+              </Button>
             </div>
           </form>
         )}
@@ -786,14 +783,11 @@ export function PayrollView({ canReopen = false, employees = [] }: { canReopen?:
       ) : periodHasEnded && data.rows.length > 0 ? (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm">
           <p className="text-gray-600">Once this period is paid, close it so these numbers are saved and can&apos;t change later.</p>
-          <button
-            type="button"
+          <Button size="xs" type="button"
             onClick={closePeriod}
-            disabled={closing}
-            className="rounded-md bg-pink-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-pink-700 disabled:opacity-50"
-          >
+            disabled={closing}>
             {closing ? "Closing..." : "Close period as paid"}
-          </button>
+          </Button>
         </div>
       ) : null)}
 
@@ -848,19 +842,19 @@ export function PayrollView({ canReopen = false, employees = [] }: { canReopen?:
                       ) : null}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums text-gray-700">
-                      {row.isContractor ? <span className="text-gray-400">—</span> : fmtHours(row.regHours)}
+                      {row.isContractor ? <span className="text-gray-400">-</span> : fmtHours(row.regHours)}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums">
                       {row.isContractor ? (
-                        <span className="text-gray-400">—</span>
+                        <span className="text-gray-400">-</span>
                       ) : row.otHours > 0 ? (
                         <span className="font-medium text-amber-600">{fmtHours(row.otHours)}</span>
                       ) : (
-                        <span className="text-gray-400">—</span>
+                        <span className="text-gray-400">-</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums font-medium text-gray-900">
-                      {row.isContractor ? <span className="text-gray-400">—</span> : fmtHours(row.totalHours)}
+                      {row.isContractor ? <span className="text-gray-400">-</span> : fmtHours(row.totalHours)}
                       {row.hasJanitorialHours && row.employeeId ? (
                         <div>
                           <Link
@@ -948,7 +942,7 @@ export function PayrollView({ canReopen = false, employees = [] }: { canReopen?:
                 <tr>
                   <td className="px-4 py-3" colSpan={1}>Totals</td>
                   <td className="px-4 py-3 text-right tabular-nums">{fmtHours(filteredRows.reduce((s, r) => s + r.regHours, 0))}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-amber-600">{fmtHours(filteredRows.reduce((s, r) => s + r.otHours, 0)) || "—"}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-amber-600">{fmtHours(filteredRows.reduce((s, r) => s + r.otHours, 0)) || "-"}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{fmtHours(totalHours)}</td>
                   <td className="px-4 py-3" />
                   <td className="px-4 py-3 text-right tabular-nums">

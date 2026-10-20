@@ -79,13 +79,12 @@ async function fetchAllOwners(): Promise<Map<string, OwnerRecord>> {
 
 async function isDealClosedLost(dealId: string): Promise<boolean> {
   try {
-    const res = await hubspotFetch(`/crm/v3/objects/deals/${dealId}?properties=hs_is_closed,hs_deal_stage_probability`);
+    // HubSpot's own flag. Stage probability is a 0 to 1 fraction, so Work
+    // Completed (1.0) used to pass an old "under 5" check and read as lost.
+    const res = await hubspotFetch(`/crm/v3/objects/deals/${dealId}?properties=hs_is_closed_lost`);
     if (!res.ok) return false;
-    const data = (await res.json()) as { properties?: { hs_is_closed?: string; hs_deal_stage_probability?: string } };
-    const props = data.properties ?? {};
-    if (props.hs_is_closed !== "true") return false;
-    const prob = parseFloat(props.hs_deal_stage_probability ?? "");
-    return Number.isFinite(prob) && prob < 5;
+    const data = (await res.json()) as { properties?: { hs_is_closed_lost?: string } };
+    return data.properties?.hs_is_closed_lost === "true";
   } catch {
     return false;
   }

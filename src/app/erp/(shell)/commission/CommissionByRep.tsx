@@ -6,7 +6,7 @@ import { centsToDollars } from "@/lib/erp/money";
 import { marginTierFor, recurringCommissionRateForMonth, ANNUAL_ACCELERATOR_THRESHOLD_CENTS } from "@/lib/erp/commission";
 import { calendarSegmentGroup, type CalendarSegmentGroup } from "@/lib/erp/projectSegments";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
-import { InfoTip, Modal } from "@/app/erp/components/ui";
+import { Button, InfoTip, Modal } from "@/app/erp/components/ui";
 import { UnitInvoiceChips, type UnitInvoiceChip } from "@/app/erp/components/UnitInvoiceChips";
 import { todayEasternKey } from "@/lib/erp/dates";
 import { payPeriodForDay, TWO_WEEKS_MS } from "@/lib/erp/payPeriods";
@@ -522,13 +522,10 @@ function PaidDateModal({
               <button type="button" onClick={onClose} className="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
                 Cancel
               </button>
-              <button
-                type="submit"
-                disabled={!validDay}
-                className="rounded-md bg-pink-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-pink-700 disabled:opacity-50"
-              >
+              <Button size="sm" type="submit"
+                disabled={!validDay}>
                 {target.row.paidAt ? "Save date" : "Mark paid"}
-              </button>
+              </Button>
             </div>
           </div>
         </form>
@@ -585,10 +582,10 @@ function CombinedRowTr({
         <td className="px-3 py-2 text-right tabular-nums text-gray-500">{formatDate(d.completedAt)}</td>
         <td className="px-3 py-2 text-right tabular-nums text-gray-700">{centsToDollars(d.contractValueCents)}</td>
         <td className={`px-3 py-2 text-right tabular-nums ${d.marginCents != null && d.marginCents < 0 ? "text-red-600" : "text-gray-700"}`}>
-          {d.marginCents == null ? "—" : centsToDollars(d.marginCents)}
+          {d.marginCents == null ? "-" : centsToDollars(d.marginCents)}
         </td>
         <td className="px-3 py-2 text-right tabular-nums text-gray-500">
-          {marginPct == null || tier == null ? "—" : `${marginPct.toFixed(0)}% → ${(tier.baseRate * 100).toFixed(0)}%`}
+          {marginPct == null || tier == null ? "-" : `${marginPct.toFixed(0)}% → ${(tier.baseRate * 100).toFixed(0)}%`}
         </td>
         <td className="px-3 py-2 text-right tabular-nums font-medium text-gray-900">{centsToDollars(d.commissionCents)}</td>
         <td className="px-3 py-2">
@@ -619,7 +616,7 @@ function CombinedRowTr({
       </td>
       <td className="px-3 py-2 text-right tabular-nums text-gray-500">{formatMonth(r.periodStart)}</td>
       <td className="px-3 py-2 text-right tabular-nums text-gray-700">{centsToDollars(r.monthlyRateCents)}</td>
-      <td className="px-3 py-2 text-right tabular-nums text-gray-400">—</td>
+      <td className="px-3 py-2 text-right tabular-nums text-gray-400">-</td>
       <td className="px-3 py-2 text-right tabular-nums text-gray-500">{recurringTierLabel(r.monthIndex)}</td>
       <td className="px-3 py-2 text-right tabular-nums font-medium text-gray-900">{centsToDollars(r.commissionCents)}</td>
       <td className="px-3 py-2">
@@ -716,7 +713,7 @@ function RepPanel({
               const buildingCell =
                 entry.row.kind === "deal" && janitorialBuildingKey(entry.row)
                   ? <span className="font-medium text-gray-900">{entry.row.deal.buildingName}</span>
-                  : <span className="text-gray-300 select-none">—</span>;
+                  : <span className="text-gray-300 select-none">-</span>;
               return (
                 <CombinedRowTr
                   key={combinedRowKey(entry.row)}

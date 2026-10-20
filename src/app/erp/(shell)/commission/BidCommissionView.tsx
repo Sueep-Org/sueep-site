@@ -98,7 +98,7 @@ export function BidCommissionView({ rows: initialRows }: { rows: BidBonusRow[] }
               {visibleRows.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
-                    No bonuses yet — mark bids as &quot;Sent&quot; on the Bids tab to populate this table.
+                    No bonuses yet - mark bids as &quot;Sent&quot; on the Bids tab to populate this table.
                   </td>
                 </tr>
               ) : (

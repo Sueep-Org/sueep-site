@@ -20,7 +20,7 @@ export default async function UsersPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold text-pink-600">User Management</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">User Management</h1>
         <p className="mt-1 text-sm text-gray-500">Manage ERP user roles. Users are created automatically on first login.</p>
       </div>
       <UsersTable

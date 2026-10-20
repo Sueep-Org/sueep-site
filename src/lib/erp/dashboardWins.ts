@@ -1,8 +1,9 @@
 import { unstable_cache } from "next/cache";
 import { hubspotFetch } from "@/lib/hubspot/client";
-import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
+import { loadRules } from "@/lib/hubspot/pipelineRules";
 import type { CardRow, DashboardCardData } from "@/app/erp/(shell)/_dashboard/DashboardCard";
 import { centsToDollarsCompact } from "./money";
+import { median } from "./stats";
 
 /**
  * Estimation Wins tab (DASHBOARDS_PLAN.md Phase 8): win rate and quote
@@ -23,55 +24,12 @@ const PERIODS = [
   { key: "90d", label: "Last 90 days", days: 90 },
   { key: "12m", label: "Last 12 months", days: 365 },
 ] as const;
-const LOST_LABEL = /deal lost|not awarded/i;
-/** HubSpot's built-in id for the default pipeline's "Quote Sent" stage. */
-const DEFAULT_QUOTE_SENT_STAGE = "presentationscheduled";
-
-export type PipelineRules = {
-  key: "post-con" | "janitorial";
-  label: string;
-  pipelineId: string;
-  /** Stage ids that count as won / lost. */
-  won: Set<string>;
-  lost: Set<string>;
-  /** The "quote sent" stage for turnaround, when known. */
-  quoteStageId: string | null;
-};
-
 type DealStats = { won: number; lost: number; open: number; wonCents: number; lostCents: number; turnaroundDays: number[] };
 
 export type WinsSummary = {
   pipelines: { key: string; label: string; hasQuoteStage: boolean; periods: Record<string, DealStats> }[];
   fetchedAt: string;
 };
-
-type HubSpotStage = { id: string; label: string; displayOrder: number };
-
-/** Won/lost stage sets per pipeline, from HubSpot's own stage order. Also used by the Win/loss page. */
-export async function loadRules(): Promise<PipelineRules[]> {
-  const cfg = parseHubSpotPipelineStageMap();
-  if (!cfg) throw new Error("HUBSPOT_PIPELINE_STAGE_MAP is not set");
-  const res = await hubspotFetch("/crm/v3/pipelines/deals");
-  if (!res.ok) throw new Error(`HubSpot pipelines failed: ${res.status}`);
-  const data = (await res.json()) as { results?: { id: string; stages?: HubSpotStage[] }[] };
-  const stagesOf = (pipelineId: string) => (data.results ?? []).find((p) => p.id === pipelineId)?.stages ?? [];
-
-  const build = (key: PipelineRules["key"], label: string, pipelineId: string, firstWonStageId: string | undefined, quoteStageId: string | null): PipelineRules => {
-    const stages = stagesOf(pipelineId);
-    const lost = new Set(stages.filter((s) => LOST_LABEL.test(s.label)).map((s) => s.id));
-    const firstWon = stages.find((s) => s.id === firstWonStageId);
-    const won = new Set(firstWon ? stages.filter((s) => s.displayOrder >= firstWon.displayOrder && !lost.has(s.id)).map((s) => s.id) : []);
-    return { key, label, pipelineId, won, lost, quoteStageId: quoteStageId && stages.some((s) => s.id === quoteStageId) ? quoteStageId : null };
-  };
-
-  const pc = cfg.postConstruction;
-  const jan = cfg.janitorial;
-  const pcQuote = pc.stages.quoteSent?.trim() || (pc.pipelineId === "default" ? DEFAULT_QUOTE_SENT_STAGE : null);
-  return [
-    build("post-con", "Post-construction", pc.pipelineId, pc.stages.quoteApproved, pcQuote),
-    build("janitorial", "Janitorial", jan.pipelineId, jan.stages.activeTurnovers || jan.stages.quoteApproved, jan.stages.proposal?.trim() || null),
-  ];
-}
 
 type Deal = { properties: Record<string, string | null> };
 
@@ -146,13 +104,6 @@ async function computeWins(): Promise<WinsSummary> {
 
 /** Cached an hour. A HubSpot error isn't cached, so the next visit tries again. */
 const cachedWins = unstable_cache(computeWins, ["dashboard-wins-v1"], { revalidate: CACHE_SECONDS });
-
-function median(values: number[]): number | null {
-  if (!values.length) return null;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-}
 
 function quoteStageName(key: string): string {
   return key === "post-con" ? "Quote Sent" : "Proposal";

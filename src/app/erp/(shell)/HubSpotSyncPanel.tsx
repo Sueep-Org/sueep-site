@@ -30,7 +30,7 @@ export function HubSpotSyncPanel({ id }: HubSpotSyncPanelProps) {
       setPreview(
         n === 0
           ? "HubSpot search: 0 deals in your configured stages right now. Move a test deal into Quote Approved / Confirmed / Awarded (or WIP) and sync again."
-          : `HubSpot search: ${n} deal(s) in configured stages — click Sync to copy them into Projects.`,
+          : `HubSpot search: ${n} deal(s) in configured stages - click Sync to copy them into Projects.`,
       );
     } catch {
       setPreviewError("Could not load HubSpot preview.");
@@ -65,13 +65,13 @@ export function HubSpotSyncPanel({ id }: HubSpotSyncPanelProps) {
       const errN = data.errors?.length ?? 0;
       const zeroHint =
         n === 0
-          ? " Nothing new to write — either no deals matched those stages, or they were already imported. Check the preview line above."
+          ? " Nothing new to write - either no deals matched those stages, or they were already imported. Check the preview line above."
           : "";
       setMessage(
-        `Synced ${n} deal(s) into projects.${zeroHint}${r > 0 ? ` Marked ${r} janitorial project(s) complete (no longer in active HubSpot stages).` : ""}${errN > 0 ? ` ${errN} warning(s) — check browser devtools Network response for details.` : ""}`,
+        `Synced ${n} deal(s) into projects.${zeroHint}${r > 0 ? ` Marked ${r} janitorial project(s) complete (no longer in active HubSpot stages).` : ""}${errN > 0 ? ` ${errN} warning(s) - check browser devtools Network response for details.` : ""}`,
       );
       if (data.contactScopesError) {
-        setError(`Contact sync disabled — missing HubSpot scope: ${data.contactScopesError}`);
+        setError(`Contact sync disabled - missing HubSpot scope: ${data.contactScopesError}`);
         setLoading(false);
         return;
       }

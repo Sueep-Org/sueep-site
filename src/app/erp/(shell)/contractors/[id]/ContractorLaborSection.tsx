@@ -28,12 +28,12 @@ const input = inputClass.xs;
 const label = labelClass.compact;
 
 function formatCurrency(cents: number | null): string {
-  if (cents == null) return "—";
+  if (cents == null) return "-";
   return `$${(cents / 100).toFixed(2)}`;
 }
 
 function formatDate(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 }
 
@@ -240,7 +240,7 @@ export function ContractorLaborSection({
                       ) : entry.buildingName ? (
                         <span className="text-gray-700">{entry.buildingName}</span>
                       ) : (
-                        <span className="text-gray-400">—</span>
+                        <span className="text-gray-400">-</span>
                       )}
                       {entry.source === "CHANGE_ORDER" ? (
                         <span
@@ -251,9 +251,9 @@ export function ContractorLaborSection({
                         </span>
                       ) : null}
                     </td>
-                    <td className="px-4 py-2.5 text-gray-500">{entry.role || "—"}</td>
+                    <td className="px-4 py-2.5 text-gray-500">{entry.role || "-"}</td>
                     <td className="px-4 py-2.5 text-right text-emerald-600">{formatCurrency(entry.costCents)}</td>
-                    <td className="truncate px-4 py-2.5 text-gray-500" title={entry.taskDescription ?? undefined}>{entry.taskDescription || "—"}</td>
+                    <td className="truncate px-4 py-2.5 text-gray-500" title={entry.taskDescription ?? undefined}>{entry.taskDescription || "-"}</td>
                   </tr>
                 ))}
               </tbody>

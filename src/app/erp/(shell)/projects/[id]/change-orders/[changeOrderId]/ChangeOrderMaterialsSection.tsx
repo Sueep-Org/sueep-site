@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { centsToDollars } from "@/lib/erp/money";
-import { inputClass, labelClass } from "@/app/erp/components/ui";
+import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
 
 export type CoMaterialRow = {
   id: string;
@@ -180,13 +180,10 @@ export function ChangeOrderMaterialsSection({
           </div>
         </div>
         {error && <p className="mt-3 text-sm text-red-400" role="alert">{error}</p>}
-        <button
-          type="submit"
-          disabled={loading}
-          className="mt-4 rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-        >
+        <Button size="md" className="mt-4" type="submit"
+          disabled={loading}>
           {loading ? "Adding…" : "Add material"}
-        </button>
+        </Button>
       </form>
 
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
@@ -263,13 +260,13 @@ export function ChangeOrderMaterialsSection({
                         <input type="text" className={editInput} value={editFields.itemName} onChange={(e) => setEditFields((f) => ({ ...f, itemName: e.target.value }))} />
                       </td>
                       <td className="py-1 pr-2">
-                        <input type="text" className={editInput} placeholder="—" value={editFields.quantity} onChange={(e) => setEditFields((f) => ({ ...f, quantity: e.target.value }))} />
+                        <input type="text" className={editInput} placeholder="-" value={editFields.quantity} onChange={(e) => setEditFields((f) => ({ ...f, quantity: e.target.value }))} />
                       </td>
                       <td className="py-1 pr-2">
                         <input type="text" className={editInput} value={editFields.cost} onChange={(e) => setEditFields((f) => ({ ...f, cost: e.target.value }))} />
                       </td>
                       <td className="py-1 pr-2">
-                        <input type="text" className={editInput} placeholder="—" value={editFields.notes} onChange={(e) => setEditFields((f) => ({ ...f, notes: e.target.value }))} />
+                        <input type="text" className={editInput} placeholder="-" value={editFields.notes} onChange={(e) => setEditFields((f) => ({ ...f, notes: e.target.value }))} />
                       </td>
                       <td className="py-1 text-right whitespace-nowrap">
                         <button type="button" onClick={() => onSaveEdit(r.id)} className="text-xs font-medium text-pink-600 hover:text-pink-800">Save</button>
@@ -284,10 +281,10 @@ export function ChangeOrderMaterialsSection({
                       <td className="py-2 pr-2 text-gray-500">{categoryLabel[r.category] ?? r.category}</td>
                       <td className="py-2 pr-2 text-gray-900">{r.itemName}</td>
                       <td className="py-2 pr-2 text-gray-700">
-                        {r.quantity != null ? `${r.quantity}${r.unit ? ` ${r.unit}` : ""}` : "—"}
+                        {r.quantity != null ? `${r.quantity}${r.unit ? ` ${r.unit}` : ""}` : "-"}
                       </td>
                       <td className="py-2 pr-2 text-gray-800">{centsToDollars(r.costCents)}</td>
-                      <td className="py-2 pr-2 text-gray-500">{r.notes || "—"}</td>
+                      <td className="py-2 pr-2 text-gray-500">{r.notes || "-"}</td>
                       <td className="py-2 text-right whitespace-nowrap">
                         <button type="button" onClick={() => startEdit(r)} className="text-xs text-gray-500 hover:text-gray-700">Edit</button>
                         <button type="button" onClick={() => onDelete(r.id)} className="ml-2 text-xs text-red-500 hover:text-red-700">Delete</button>

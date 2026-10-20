@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { Button } from "@/app/erp/components/ui";
 
 type Props = {
   search: string;
@@ -51,7 +52,7 @@ export function CandidatesFilterBar({ search, status, position, type }: Props) {
         <div className="absolute right-0 z-20 mt-2 w-72 rounded-lg border border-gray-200 bg-white p-3 shadow-lg">
           <form className="space-y-3">
             {/* Search by name lives outside this popover (always visible in
-                the header) — preserved here as a hidden field so clicking
+                the header) - preserved here as a hidden field so clicking
                 Apply doesn't silently clear whatever name search is active,
                 same reasoning as EmployeesFilterBar's hidden "name" field. */}
             <input type="hidden" name="search" value={search} />
@@ -87,12 +88,9 @@ export function CandidatesFilterBar({ search, status, position, type }: Props) {
             </div>
 
             <div className="flex gap-2 pt-1">
-              <button
-                type="submit"
-                className="flex-1 rounded-md bg-pink-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-pink-500"
-              >
+              <Button size="xs" className="flex-1" type="submit">
                 Apply
-              </button>
+              </Button>
               {filtersActive ? (
                 <Link
                   href={search ? `/erp/candidates?search=${encodeURIComponent(search)}` : "/erp/candidates"}

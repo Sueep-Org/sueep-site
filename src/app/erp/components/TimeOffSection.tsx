@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { InfoTip, inputClass, labelClass } from "@/app/erp/components/ui";
+import { Button, InfoTip, inputClass, labelClass } from "@/app/erp/components/ui";
 
 export type TimeOffRow = {
   id: string;
@@ -382,13 +382,10 @@ export function TimeOffSection({
             <div className="sm:col-span-2 lg:col-span-4">
               {error ? <p className="mb-2 text-xs text-red-500">{error}</p> : null}
               {overLimit ? overridePanel(overLimit, loading, (o) => void addTimeOff(o)) : null}
-              <button
-                type="submit"
-                disabled={loading}
-                className="mt-2 rounded-md bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-              >
+              <Button size="md" className="mt-2" type="submit"
+                disabled={loading}>
                 {loading ? "Submitting…" : "Submit request"}
-              </button>
+              </Button>
             </div>
           </form>
         </section>

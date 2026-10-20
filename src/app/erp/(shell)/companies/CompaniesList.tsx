@@ -7,8 +7,8 @@ import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { CompanyForm } from "@/app/erp/components/companies/CompanyForm";
 import { BILLING_METHOD_LABELS, COMPANY_TYPES, COMPANY_TYPE_LABELS, companyMatchesQuery, type CompanyListRow } from "@/lib/erp/clientCompanies";
 
-export function CompaniesList({ rows, canEdit }: { rows: CompanyListRow[]; canEdit: boolean }) {
-  const [query, setQuery] = useState("");
+export function CompaniesList({ rows, canEdit, initialQuery = "" }: { rows: CompanyListRow[]; canEdit: boolean; initialQuery?: string }) {
+  const [query, setQuery] = useState(initialQuery);
   const [type, setType] = useState("");
   const [showArchived, setShowArchived] = useState(false);
   const [adding, setAdding] = useState(false);

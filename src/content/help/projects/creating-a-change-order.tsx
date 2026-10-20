@@ -13,7 +13,7 @@ export function CreatingAChangeOrder() {
         <H2>Steps</H2>
         <Steps>
             <Step n={1} title="Go to Project">
-            Navigate to the projects tab. It is the first tab under the Project Information drop down.
+            Navigate to the projects tab. It is the first link under Projects, then Project Info.
             </Step>
 
             <Step n={2} title="Methods of Creating a Change Order">

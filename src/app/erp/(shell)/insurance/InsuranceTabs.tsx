@@ -24,7 +24,7 @@ export function InsuranceHeader({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-bold text-pink-600">Insurance &amp; COIs</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">Insurance &amp; COIs</h1>
           <InfoTip text="Our insurance policies and the GCs and property managers we send COIs to. COIs are still made in CoverDash; this page tracks what CoverDash doesn't." />
         </div>
         {action}

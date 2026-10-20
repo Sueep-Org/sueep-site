@@ -26,9 +26,9 @@ import {
   findBillingParties,
   openInvoice,
   replaceInvoiceLines,
+  snapshotColumns,
   setInvoiceDates,
   type DraftLine,
-  type InvoiceSnapshot,
 } from "@/lib/hubspot/invoiceDrafts";
 
 export const DRAFT_LEAD_DAYS = 3;
@@ -66,20 +66,6 @@ export function draftLines(
 
 export function linesTotal(lines: DraftLine[]): number {
   return lines.reduce((s, l) => s + l.amountCents, 0);
-}
-
-function snapshotColumns(s: InvoiceSnapshot) {
-  const d = (v: string | null) => (v ? new Date(v) : null);
-  return {
-    invoiceNumber: s.number,
-    status: s.status,
-    invoiceDate: d(s.invoiceDate),
-    dueDate: d(s.dueDate),
-    invoiceTotalCents: s.totalCents,
-    balanceDueCents: s.balanceDueCents,
-    viewUrl: s.viewUrl,
-    pdfUrl: s.pdfUrl,
-  };
 }
 
 const periodInclude = {

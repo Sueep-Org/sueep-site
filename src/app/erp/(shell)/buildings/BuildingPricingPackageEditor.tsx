@@ -12,6 +12,7 @@ import {
   type CustomLineItemType,
   type TurnoverPricingPackage,
 } from "@/lib/turnoverPricingPackages";
+import { Button } from "@/app/erp/components/ui";
 
 type CustomLineItemDraft = {
   id: string;
@@ -354,14 +355,11 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
       {error ? <p className="mt-3 text-xs text-red-600" role="alert">{error}</p> : null}
       {message ? <p className="mt-3 text-xs text-emerald-700" role="status">{message}</p> : null}
 
-      <button
-        type="button"
+      <Button size="md" className="mt-4" type="button"
         onClick={savePackage}
-        disabled={!canEdit || loading}
-        className="mt-4 rounded-md bg-pink-600 px-4 py-2 text-sm font-semibold text-white hover:bg-pink-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-      >
+        disabled={!canEdit || loading}>
         {loading ? "Saving..." : "Save pricing package"}
-      </button>
+      </Button>
     </section>
   );
 }

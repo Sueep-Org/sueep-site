@@ -102,6 +102,21 @@ export type InvoiceSnapshot = {
 
 const cents = (v: string | null | undefined) => (v == null || v === "" ? null : Math.round(Number(v) * 100));
 
+/** The snapshot as the ERP's invoice link columns (HubSpotContractInvoice, HubSpotUnitInvoice, HubSpotSovInvoice). */
+export function snapshotColumns(s: InvoiceSnapshot) {
+  const d = (v: string | null) => (v ? new Date(v) : null);
+  return {
+    invoiceNumber: s.number,
+    status: s.status,
+    invoiceDate: d(s.invoiceDate),
+    dueDate: d(s.dueDate),
+    invoiceTotalCents: s.totalCents,
+    balanceDueCents: s.balanceDueCents,
+    viewUrl: s.viewUrl,
+    pdfUrl: s.pdfUrl,
+  };
+}
+
 export async function fetchInvoiceSnapshot(invoiceId: string): Promise<InvoiceSnapshot> {
   const props = ["hs_number", "hs_invoice_status", "hs_invoice_date", "hs_due_date", "hs_amount_billed", "hs_balance_due", "hs_invoice_link", "hs_pdf_download_link"];
   const r = await hsJson<{ properties: Record<string, string | null> }>(
