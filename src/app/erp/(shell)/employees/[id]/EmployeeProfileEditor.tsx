@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Button, inputClass, labelClass, useConfirm, useToast } from "@/app/erp/components/ui";
+import { Button, InfoTip, inputClass, labelClass, useConfirm, useToast } from "@/app/erp/components/ui";
+import { LANGUAGE_OPTIONS } from "@/lib/erp/language";
 import { WEEKDAY_SHORT, formatTime12, shiftHours } from "@/lib/erp/janitorialSchedule";
 import { formatHours, formatShortDate } from "@/lib/erp/schedule";
 import { todayEasternKey } from "@/lib/erp/dates";
@@ -51,6 +52,7 @@ type Props = {
     lastName: string;
     email: string | null;
     phone: string | null;
+    language: string;
     address: string | null;
     dateOfBirth: string | null;
     role: string | null;
@@ -107,6 +109,7 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, payHistory
       lastName: fd.get("lastName"),
       email: fd.get("email") || null,
       phone: fd.get("phone") || null,
+      language: fd.get("language"),
       address: fd.get("address") || null,
       dateOfBirth: fd.get("dateOfBirth") || null,
       role: fd.get("role") || null,
@@ -204,6 +207,19 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, payHistory
               Phone
             </label>
             <input id="phone" name="phone" defaultValue={initial.phone ?? ""} className={input} />
+          </div>
+          <div>
+            <label className={`${label} flex items-center gap-1`} htmlFor="language">
+              Language
+              <InfoTip text="Emails we send them, and the pages those emails open, use this language. Anything typed by staff (notes, job names) stays as typed." />
+            </label>
+            <select id="language" name="language" defaultValue={initial.language} className={input}>
+              {LANGUAGE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className={label} htmlFor="dateOfBirth">

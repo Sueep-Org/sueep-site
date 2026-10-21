@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { moveCandidateToEmployee } from "@/lib/erp/candidateHandoff";
+import { officeCandidateGuard } from "@/lib/erp/officeHiringAccess";
 
 /** Only overwrites a field on the target Employee when it's currently empty
  * — merging into an existing profile should fill gaps, not clobber data
@@ -15,6 +16,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const blocked = await officeCandidateGuard(id);
+  if (blocked) return blocked;
   const body = (await req.json().catch(() => ({}))) as { mergeIntoEmployeeId?: unknown };
   const mergeIntoEmployeeId = typeof body.mergeIntoEmployeeId === "string" ? body.mergeIntoEmployeeId : null;
 
@@ -26,6 +29,7 @@ export async function POST(
       email: true,
       phone: true,
       positionInterest: true,
+      jobOpening: { select: { title: true } },
       status: true,
       bankAccountType: true,
       bankAccountNumber: true,
@@ -112,9 +116,10 @@ export async function POST(
       data: {
         firstName,
         lastName,
-        email: candidate.email.trim().toLowerCase(),
+        email: candidate.email?.trim().toLowerCase() || null,
         phone: candidate.phone ?? null,
-        role: candidate.positionInterest ?? null,
+        // Office hires have no positionInterest; their opening's title is the role.
+        role: candidate.positionInterest ?? candidate.jobOpening?.title ?? null,
         status: "ACTIVE",
         hireDate: new Date(),
         bankAccountType: candidate.bankAccountType ?? null,
@@ -125,7 +130,7 @@ export async function POST(
       select: { id: true },
     });
   } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002" && candidate.email) {
       // Email already exists — find and return the existing employee so the
       // UI can offer "view" or "merge" instead of failing silently.
       const existing = await prisma.employee.findUnique({

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { getErpAuth, canViewSsn } from "@/lib/erpAuth";
 import { inputToCents } from "@/lib/erp/money";
+import { parseLang } from "@/lib/erp/language";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -130,6 +131,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
   if (body.workersCompExempt !== undefined) data.workersCompExempt = body.workersCompExempt === true;
   if (body.runsWithoutSupervisor !== undefined) data.runsWithoutSupervisor = body.runsWithoutSupervisor === true;
+  if (body.language !== undefined) data.language = parseLang(body.language);
 
   // The sub's other policies (from their certificate of insurance).
   for (const field of ["glCarrier", "glPolicyNumber"] as const) {

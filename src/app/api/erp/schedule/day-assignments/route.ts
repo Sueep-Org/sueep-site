@@ -5,6 +5,7 @@ import { computeSeriesDates, parseDatesList, SeriesDateRangeError } from "@/lib/
 import { formatTurnoverHoursBudgetText } from "@/lib/erp/turnoverHoursBudget";
 import { isTurnoverScopeValue, parseCompletedScopeItems, turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
 import { appUrl, notifyProjectCrew, scopeText, sendDayInvite, sendSubLeadInvite } from "@/lib/erp/scheduleInvites";
+import { notifyProjectDayRequester, requesterFromBody } from "@/lib/erp/scheduleRequester";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -28,6 +29,11 @@ export async function POST(req: Request) {
   const supervisorContractorId = String(body.supervisorContractorId || "").trim() || null;
   const dateRaw = String(body.date || "").trim();
   const comment = typeof body.comment === "string" && body.comment.trim() ? body.comment.trim() : null;
+  // Staff-only note, never sent in invites. Left as is when not sent, so
+  // callers that only move or copy a day don't wipe it.
+  const internalNote = "internalNote" in body ? (typeof body.internalNote === "string" && body.internalNote.trim() ? body.internalNote.trim() : null) : undefined;
+  // The client to tell once everyone confirms; left as is when not sent
+  const requester = requesterFromBody(body);
   if (!projectId) return NextResponse.json({ error: "projectId is required" }, { status: 400 });
 
   // An explicit, possibly non-consecutive list of dates (the calendar's
@@ -203,9 +209,16 @@ export async function POST(req: Request) {
   // ran each day before this save, so a sub who's replaced gets a cancellation.
   const before = await prisma.projectDayAssignment.findMany({
     where: { projectId, date: { in: seriesDates ?? [date] } },
-    select: { date: true, supervisorContractorId: true },
+    select: { date: true, supervisorContractorId: true, requesterEmail: true },
   });
   const prevSub = new Map(before.map((b) => [dayKey(b.date), b.supervisorContractorId]));
+  const prevRequester = new Map(before.map((b) => [dayKey(b.date), b.requesterEmail]));
+  // A different requester hasn't been told yet
+  const requesterUpdate = (d: Date) =>
+    !requester ? {} : { ...requester, ...(prevRequester.get(dayKey(d)) !== requester.requesterEmail ? { requesterNotifiedFor: null } : {}) };
+  async function notifyRequester(a: { id: string }) {
+    await notifyProjectDayRequester(a.id).catch((e) => console.error("Requester confirmed email failed", { dayId: a.id }, e));
+  }
   async function notifySubLead(a: { id: string; date: Date; startTime: string | null; endTime: string | null }) {
     const invite = { kind: "day" as const, assignmentId: a.id, title: project!.jobTitle, dateKey: dayKey(a.date), startTime: a.startTime, endTime: a.endTime, location, scopeText: dayScopeText, url };
     const prev = prevSub.get(dayKey(a.date)) ?? null;
@@ -228,13 +241,13 @@ export async function POST(req: Request) {
         where: { projectId_date: { projectId, date: d } },
         create: {
           projectId, date: d, supervisorUserId, projectManagerUserId, supervisorContractorId, startTime, endTime, seriesId: series.id,
-          scopeItems, comment,
+          scopeItems, comment, internalNote, ...requester,
           sovItems: sovItemIds.length > 0 ? { connect: sovItemIds.map((id) => ({ id })) } : undefined,
           changeOrders: changeOrderIds.length > 0 ? { connect: changeOrderIds.map((id) => ({ id })) } : undefined,
         },
         update: {
           supervisorUserId, projectManagerUserId, supervisorContractorId, startTime, endTime, seriesId: series.id,
-          scopeItems, comment,
+          scopeItems, comment, internalNote, ...requesterUpdate(d),
           sovItems: { set: sovItemIds.map((id) => ({ id })) },
           changeOrders: { set: changeOrderIds.map((id) => ({ id })) },
         },
@@ -292,6 +305,9 @@ export async function POST(req: Request) {
       url,
     });
 
+    // A day that's already fully confirmed tells a newly set requester now
+    await Promise.all(assignments.map(notifyRequester));
+
     return NextResponse.json({ seriesId: series.id, assignments }, { status: 201 });
   }
 
@@ -299,13 +315,13 @@ export async function POST(req: Request) {
     where: { projectId_date: { projectId, date } },
     create: {
       projectId, date, supervisorUserId, projectManagerUserId, supervisorContractorId, startTime, endTime,
-      scopeItems, comment,
+      scopeItems, comment, internalNote, ...requester,
       sovItems: sovItemIds.length > 0 ? { connect: sovItemIds.map((id) => ({ id })) } : undefined,
       changeOrders: changeOrderIds.length > 0 ? { connect: changeOrderIds.map((id) => ({ id })) } : undefined,
     },
     update: {
       supervisorUserId, projectManagerUserId, supervisorContractorId, startTime, endTime,
-      scopeItems, comment,
+      scopeItems, comment, internalNote, ...requesterUpdate(date),
       sovItems: { set: sovItemIds.map((id) => ({ id })) },
       changeOrders: { set: changeOrderIds.map((id) => ({ id })) },
     },
@@ -351,6 +367,8 @@ export async function POST(req: Request) {
     dayScopeLabels: scopeItems.map(scopeLabel),
     url,
   });
+
+  await notifyRequester(assignment);
 
   return NextResponse.json(assignment, { status: 201 });
 }

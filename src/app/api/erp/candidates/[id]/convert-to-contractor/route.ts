@@ -2,11 +2,14 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { moveCandidateToContractor } from "@/lib/erp/candidateHandoff";
+import { officeCandidateGuard } from "@/lib/erp/officeHiringAccess";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(_req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
+  const blocked = await officeCandidateGuard(id);
+  if (blocked) return blocked;
 
   const application = await prisma.candidateApplication.findUnique({
     where: { id },

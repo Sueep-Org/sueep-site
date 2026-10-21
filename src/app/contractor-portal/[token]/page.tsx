@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { parseLang } from "@/lib/erp/language";
 import { ContractorDocPortalClient } from "./ContractorDocPortalClient";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +17,7 @@ export default async function ContractorPortalPage({ params }: PageProps) {
       name: true,
       paperwork: true,
       paperworkUploadTokenExpiry: true,
+      language: true,
     },
   });
 
@@ -33,6 +35,7 @@ export default async function ContractorPortalPage({ params }: PageProps) {
     <ContractorDocPortalClient
       token={token}
       name={contractor.name}
+      lang={parseLang(contractor.language)}
       paperwork={paperwork}
     />
   );

@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
     // the ERP; short of that, direct them to contact us instead of letting
     // duplicates pile up.
     const existing = await prisma.candidateApplication.findFirst({
-      where: { email: { equals: email, mode: "insensitive" } },
+      where: { track: "FIELD", email: { equals: email, mode: "insensitive" } },
       select: { id: true },
     });
 

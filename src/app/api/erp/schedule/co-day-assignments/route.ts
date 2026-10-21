@@ -33,6 +33,9 @@ export async function POST(req: Request) {
   const supervisorContractorId = String(body.supervisorContractorId || "").trim() || null;
   const dateRaw = String(body.date || "").trim();
   const comment = typeof body.comment === "string" && body.comment.trim() ? body.comment.trim() : null;
+  // Staff-only note, never sent in invites. Left as is when not sent, so
+  // callers that only move or copy a day don't wipe it.
+  const internalNote = "internalNote" in body ? (typeof body.internalNote === "string" && body.internalNote.trim() ? body.internalNote.trim() : null) : undefined;
   if (!changeOrderId) return NextResponse.json({ error: "changeOrderId is required" }, { status: 400 });
   if (!dateRaw) return NextResponse.json({ error: "date is required" }, { status: 400 });
   const date = new Date(`${dateRaw}T00:00:00.000Z`);
@@ -89,8 +92,8 @@ export async function POST(req: Request) {
 
   const writeAssignment = prisma.changeOrderDayAssignment.upsert({
     where: { changeOrderId_date: { changeOrderId, date } },
-    create: { changeOrderId, date, supervisorUserId, projectManagerUserId, supervisorContractorId, startTime, endTime, comment },
-    update: { supervisorUserId, projectManagerUserId, supervisorContractorId, startTime, endTime, comment },
+    create: { changeOrderId, date, supervisorUserId, projectManagerUserId, supervisorContractorId, startTime, endTime, comment, internalNote },
+    update: { supervisorUserId, projectManagerUserId, supervisorContractorId, startTime, endTime, comment, internalNote },
   });
   // Assigning a supervisor here also makes them the CO's current supervisor
   // (ProjectChangeOrder.supervisorUserId), same "last assignment wins" rule

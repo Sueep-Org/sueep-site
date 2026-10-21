@@ -4,6 +4,8 @@ import { CandidateStatusSelect } from "./CandidateStatusSelect";
 import { CandidatesFilterBar } from "./CandidatesFilterBar";
 import { NewCandidateForm } from "./NewCandidateForm";
 import { SUBCONTRACTOR_GATE_FIELD } from "@/lib/erp/subcontractorQuestionnaire";
+import { canSeeOfficeHiring, getErpAuth } from "@/lib/erpAuth";
+import { OfficeTab } from "./office/OfficeTab";
 
 export const dynamic = "force-dynamic";
 
@@ -14,12 +16,28 @@ type PageProps = { searchParams: Promise<Record<string, string | string[] | unde
 export default async function CandidatesPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const search = typeof sp.search === "string" ? sp.search.trim() : "";
+  const auth = await getErpAuth();
+  const officeAllowed = !!auth && canSeeOfficeHiring(auth.role);
+  const officeTab = officeAllowed && sp.track === "office";
+
+  if (officeTab) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Candidates</h1>
+          <TrackTabs office />
+        </div>
+        <OfficeTab search={search} showAll={sp.openings === "all"} />
+      </div>
+    );
+  }
   const statusFilter = typeof sp.status === "string" ? sp.status.trim() : "";
   const positionFilter = typeof sp.position === "string" ? sp.position.trim() : "";
   const typeFilter = typeof sp.type === "string" ? sp.type.trim() : "";
   const requestedPage = typeof sp.page === "string" ? parseInt(sp.page, 10) : 1;
 
   const where = {
+    track: "FIELD",
     ...(search ? { fullName: { contains: search, mode: "insensitive" as const } } : {}),
     // When no status filter is active, hide hired candidates (they are now employees)
     ...(statusFilter ? { status: statusFilter } : { status: { not: "HIRED" } }),
@@ -88,6 +106,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-gray-900">Candidates</h1>
+        {officeAllowed ? <TrackTabs office={false} /> : null}
 
         <div className="mt-3 flex items-center justify-between gap-4">
           <form>
@@ -143,7 +162,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
                     )}
                   </td>
                   <td className="px-4 py-3 text-gray-700">
-                    <a href={`mailto:${c.email}`} className="hover:underline">{c.email}</a>
+                    {c.email ? <a href={`mailto:${c.email}`} className="hover:underline">{c.email}</a> : "-"}
                   </td>
                   <td className="px-4 py-3 text-gray-700">{c.phone ?? "-"}</td>
                   <td className="px-4 py-3 text-gray-700">{c.positionInterest ?? "-"}</td>
@@ -197,5 +216,18 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
         </div>
       ) : null}
     </div>
+  );
+}
+/** Field (cleaners, painters, supervisors) vs Office (job openings) switch. */
+function TrackTabs({ office }: { office: boolean }) {
+  const tab = (active: boolean) =>
+    `border-b-2 px-1 pb-2 text-sm font-medium ${
+      active ? "border-pink-600 text-pink-600" : "border-transparent text-gray-500 hover:text-gray-800"
+    }`;
+  return (
+    <nav className="mt-3 flex gap-6 border-b border-gray-200">
+      <Link href="/erp/candidates" className={tab(!office)}>Field</Link>
+      <Link href="/erp/candidates?track=office" className={tab(office)}>Office</Link>
+    </nav>
   );
 }

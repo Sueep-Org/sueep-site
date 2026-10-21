@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next";
+import { prisma } from "@/lib/prisma";
+import { parseLang } from "@/lib/erp/language";
 import { ClockApp } from "./ClockApp";
 
 export const metadata: Metadata = {
@@ -18,5 +20,6 @@ type PageProps = { params: Promise<{ token: string }> };
 
 export default async function ClockPage({ params }: PageProps) {
   const { token } = await params;
-  return <ClockApp token={token} />;
+  const employee = await prisma.employee.findUnique({ where: { clockToken: token }, select: { language: true } }).catch(() => null);
+  return <ClockApp token={token} profileLang={parseLang(employee?.language)} />;
 }

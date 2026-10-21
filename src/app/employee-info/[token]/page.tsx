@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { parseLang } from "@/lib/erp/language";
 import { EmployeeInfoPortalClient } from "./EmployeeInfoPortalClient";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +24,7 @@ export default async function EmployeeInfoPage({ params }: PageProps) {
       bankAccountNumber: true,
       bankRoutingNumber: true,
       phone: true,
+      language: true,
     },
   });
 
@@ -34,6 +36,7 @@ export default async function EmployeeInfoPage({ params }: PageProps) {
     <EmployeeInfoPortalClient
       token={token}
       name={`${employee.firstName} ${employee.lastName}`.trim()}
+      lang={parseLang(employee.language)}
       initial={{
         address: employee.address,
         dateOfBirth: employee.dateOfBirth,

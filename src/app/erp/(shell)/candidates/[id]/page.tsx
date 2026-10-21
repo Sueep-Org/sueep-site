@@ -9,6 +9,10 @@ import { FinishOnboardingPanel } from "./FinishOnboardingPanel";
 import { SubcontractorInfoSection } from "./SubcontractorInfoSection";
 import { ConvertToContractorButton } from "./ConvertToContractorButton";
 import { SUBCONTRACTOR_GATE_FIELD } from "@/lib/erp/subcontractorQuestionnaire";
+import { canSeeOfficeHiring, getErpAuth } from "@/lib/erpAuth";
+import { officeStageMeta } from "@/lib/erp/officeHiring";
+import { OfficeCandidateEditor } from "./OfficeCandidateEditor";
+import { ShortlistStar } from "../office/OfficeCandidateControls";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -37,9 +41,19 @@ export default async function CandidateDetailPage({ params }: PageProps) {
       paperworkUploadTokenExpiry: true,
       contracts: { orderBy: { createdAt: "asc" } },
       contractor: { select: { id: true } },
+      track: true,
+      stage: true,
+      source: true,
+      expectedSalary: true,
+      shortlisted: true,
+      jobOpeningId: true,
+      jobOpening: { select: { id: true, title: true } },
     },
   });
   if (!row) notFound();
+  const auth = await getErpAuth();
+  const isOffice = row.track === "OFFICE";
+  if (isOffice && !(auth && canSeeOfficeHiring(auth.role))) notFound();
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "https://sueep.com";
 
@@ -93,6 +107,130 @@ export default async function CandidateDetailPage({ params }: PageProps) {
     return val === "yes" ? "Yes" : val === "no" ? "No" : "-";
   }
 
+  const paperworkItems = (row.paperwork ?? []) as { label: string; url: string }[];
+  const paperworkTab = {
+    label: "Paperwork",
+    content: (
+      <CandidatePaperworkPanel
+        id={row.id}
+        email={row.email}
+        status={row.status}
+        paperwork={paperworkItems}
+        paperworkUploadToken={row.paperworkUploadToken}
+        paperworkUploadTokenExpiry={(row.paperworkUploadTokenExpiry as Date | null)?.toISOString() ?? null}
+        resendConfigured={Boolean(process.env.RESEND_API_KEY)}
+        siteUrl={siteUrl}
+      />
+    ),
+  };
+  const onboardingTab = {
+    label: "Onboarding",
+    content: <FinishOnboardingPanel id={row.id} fullName={row.fullName} status={row.status} paperwork={paperworkItems} />,
+  };
+  const signingTab = {
+    label: "Signing",
+    content: (
+      <ContractSigningSection
+        apiBasePath={`/api/erp/candidates/${row.id}`}
+        initialContracts={row.contracts.map((c) => ({
+          id: c.id,
+          contractPdfFilename: c.contractPdfFilename,
+          docusealTemplateId: c.docusealTemplateId,
+          signingStatus: c.signingStatus,
+          signerEmail: c.signerEmail,
+          docusealSubmissionId: c.docusealSubmissionId,
+          signedAt: c.signedAt?.toISOString() ?? null,
+          signedDocumentUrl: c.signedDocumentUrl,
+        }))}
+      />
+    ),
+  };
+
+  if (isOffice) {
+    const openings = await prisma.jobOpening.findMany({
+      select: { id: true, title: true, status: true },
+      orderBy: { openedAt: "desc" },
+    });
+    const stage = officeStageMeta(row.stage);
+    const hired = stage.value === "HIRED";
+    return (
+      <div className="space-y-6">
+        <div>
+          <Link
+            href={row.jobOpening ? `/erp/candidates/openings/${row.jobOpening.id}` : "/erp/candidates?track=office"}
+            className="text-xs text-pink-600 hover:underline"
+          >
+            ← {row.jobOpening?.title ?? "Office openings"}
+          </Link>
+          <h1 className="mt-2 flex items-center gap-2 text-2xl font-semibold text-gray-900">
+            <ShortlistStar id={row.id} initial={row.shortlisted} />
+            {row.fullName}
+            <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${stage.cls}`}>{stage.label}</span>
+          </h1>
+          <p className="mt-1 text-sm text-gray-500">
+            {[
+              row.phone,
+              row.email,
+              `Added ${new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(row.createdAt)}`,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        </div>
+        <DetailTabs
+          tabs={[
+            {
+              label: "Details",
+              content: (
+                <OfficeCandidateEditor
+                  openings={openings
+                    // Closed openings stay pickable only if this candidate is already on one.
+                    .filter((o) => o.status === "OPEN" || o.status === "PAUSED" || o.id === row.jobOpeningId)
+                    .map((o) => ({ id: o.id, title: o.title }))}
+                  initial={{
+                    id: row.id,
+                    fullName: row.fullName,
+                    phone: row.phone,
+                    email: row.email,
+                    location: location ?? "",
+                    jobOpeningId: row.jobOpeningId,
+                    stage: stage.value,
+                    source: row.source,
+                    expectedSalary: row.expectedSalary,
+                    shortlisted: row.shortlisted,
+                    internalNotes: row.internalNotes,
+                  }}
+                />
+              ),
+            },
+            ...(hired
+              ? [
+                  {
+                    label: "Onboarding setup",
+                    content: (
+                      <CandidateApplicationEditor
+                        hideStatus
+                        initial={{
+                          id: row.id,
+                          status: row.status,
+                          internalNotes: row.internalNotes,
+                          paperwork: row.paperwork as { label: string; url: string }[] | null,
+                          bankAccountRequired: row.bankAccountRequired,
+                        }}
+                      />
+                    ),
+                  },
+                  paperworkTab,
+                  onboardingTab,
+                  signingTab,
+                ]
+              : []),
+          ]}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
@@ -133,9 +271,13 @@ export default async function CandidateDetailPage({ params }: PageProps) {
                 <div>
                   <dt className="text-pink-500">Email</dt>
                   <dd className="mt-0.5 text-pink-500">
-                    <a href={`mailto:${row.email}`} className="text-[#E73C6E] hover:underline">
-                      {row.email}
-                    </a>
+                    {row.email ? (
+                      <a href={`mailto:${row.email}`} className="text-[#E73C6E] hover:underline">
+                        {row.email}
+                      </a>
+                    ) : (
+                      "-"
+                    )}
                   </dd>
                 </div>
                 <div>

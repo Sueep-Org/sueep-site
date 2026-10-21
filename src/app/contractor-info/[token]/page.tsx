@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { CONTRACTOR_MANUAL_SECTIONS, subFieldName } from "@/lib/erp/subcontractorQuestionnaire";
+import { parseLang } from "@/lib/erp/language";
 import { ContractorInfoPortalClient } from "./ContractorInfoPortalClient";
 
 const QUESTIONNAIRE_KEYS = CONTRACTOR_MANUAL_SECTIONS.flatMap((s) => s.fields.map((f) => subFieldName(f.key)));
@@ -37,6 +38,7 @@ export default async function ContractorInfoPage({ params }: PageProps) {
       glAggregateCents: true,
       candidateApplicationId: true,
       manualApplicationInfo: true,
+      language: true,
     },
   });
 
@@ -69,6 +71,7 @@ export default async function ContractorInfoPage({ params }: PageProps) {
     <ContractorInfoPortalClient
       token={token}
       name={contractor.name}
+      lang={parseLang(contractor.language)}
       isLinkedToApplication={Boolean(contractor.candidateApplicationId)}
       initial={{
         contractorFullName: contractor.contractorFullName,

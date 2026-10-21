@@ -7,7 +7,7 @@ type PaperworkItem = { label: string; url: string };
 
 type Props = {
   id: string;
-  email: string;
+  email: string | null;
   status: string;
   paperwork: PaperworkItem[];
   paperworkUploadToken: string | null;

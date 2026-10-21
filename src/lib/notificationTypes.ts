@@ -100,6 +100,14 @@ export const NOTIFICATIONS = {
     ccEditable: true,
     sender: "sueep",
   }),
+  SCHEDULE_REQUESTER_CONFIRMED: def({
+    label: "Client's day confirmed",
+    group: "Projects & schedule",
+    when: "Everyone scheduled on a day the client asked for has clicked Confirm",
+    automatic: "The client who asked for that day (set on the day, filled in from the project portal)",
+    ccEditable: true,
+    sender: "sueep",
+  }),
   SCHEDULE_INVITE: def({
     label: "Schedule invite",
     group: "Projects & schedule",

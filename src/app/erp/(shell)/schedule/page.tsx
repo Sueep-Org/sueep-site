@@ -34,6 +34,7 @@ import { ProjectGantt } from "./ProjectGantt";
 import { MasterCalendar, type MasterProject } from "./MasterCalendar";
 import { statusesByUid } from "@/lib/erp/scheduleConfirmations";
 import { answerUid, type Answers } from "@/lib/erp/scheduleAnswerUids";
+import { parseRequester } from "@/lib/erp/scheduleRequester";
 
 export const metadata: Metadata = {
   title: "Schedule",
@@ -194,6 +195,9 @@ export default async function SchedulePage({ searchParams }: PageProps) {
         sovItems: { select: { id: true } },
         changeOrders: { select: { id: true } },
         comment: true,
+        internalNote: true,
+        requesterName: true,
+        requesterEmail: true,
       },
     }),
     prisma.projectWorkerDayAssignment.findMany({
@@ -229,6 +233,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
         startTime: true,
         endTime: true,
         comment: true,
+        internalNote: true,
       },
     }),
     prisma.changeOrderWorkerDayAssignment.findMany({
@@ -307,6 +312,9 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     scopeItems: a.scopeItems,
     changeOrderIds: a.changeOrders.map((co) => co.id),
     comment: a.comment,
+    internalNote: a.internalNote,
+    requesterName: a.requesterName,
+    requesterEmail: a.requesterEmail,
   }));
 
   // Calendar day cells are driven by actual logged work, not a project's full
@@ -524,6 +532,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     startTime: a.startTime,
     endTime: a.endTime,
     comment: a.comment,
+    internalNote: a.internalNote,
   }));
 
   const coWorkerAssignments: ScheduleCoWorkerAssignment[] = coWorkerAssignmentRows.map((a) => ({
@@ -570,6 +579,25 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     .catch(() => []);
   const requestNotesByProject = new Map(requestNoteRows.map((r) => [r.projectId!, r.notes!.trim()]));
 
+  // Who could have asked for a day, for the day card's Requested by picker:
+  // anyone already set on a day, portal change order requesters, and contacts with an email.
+  const projectIds = projectRows.map((r) => r.id);
+  const [contactRows, coRequesterRows] = await Promise.all([
+    prisma.projectContact.findMany({ where: { projectId: { in: projectIds }, email: { not: null } }, select: { projectId: true, fullName: true, email: true } }),
+    prisma.projectChangeOrder.findMany({ where: { projectId: { in: projectIds }, requestedBy: { contains: "@" } }, select: { projectId: true, requestedBy: true } }),
+  ]);
+  const requesterOptionsByProject = new Map<string, Map<string, { name: string; email: string }>>();
+  const addRequesterOption = (projectId: string, name: string | null, email: string | null) => {
+    const r = email ? parseRequester(name && !email.includes("<") ? `${name} <${email}>` : email) : null;
+    if (!r) return;
+    const m = requesterOptionsByProject.get(projectId) ?? new Map();
+    if (!m.has(r.email.toLowerCase())) m.set(r.email.toLowerCase(), r);
+    requesterOptionsByProject.set(projectId, m);
+  };
+  for (const a of dayAssignmentRows) addRequesterOption(a.projectId, a.requesterName, a.requesterEmail);
+  for (const c of coRequesterRows) addRequesterOption(c.projectId, null, c.requestedBy);
+  for (const c of contactRows) addRequesterOption(c.projectId, c.fullName, c.email);
+
   const projects: ScheduleProject[] = projectRows.map((r) => {
     const laborByDay: Record<string, { hours: number; workers: string[] }> = {};
     for (const [k, entry] of laborSummaryByProject.get(r.id) ?? []) {
@@ -613,6 +641,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
       contractedScopeItems: r.turnoverRequest ? contractedTurnoverScope(r.turnoverRequest) : null,
       otherScopeDescription: r.turnoverRequest?.otherDescription ?? null,
       requestNotes: requestNotesByProject.get(r.id) || null,
+      requesterOptions: [...(requesterOptionsByProject.get(r.id)?.values() ?? [])],
       completedScopeItems: r.turnoverRequest ? parseCompletedScopeItems(r.turnoverRequest.completedScopeItems) : [],
       changeOrders: changeOrdersByProject.get(r.id) ?? [],
       buildingId: r.turnoverRequest?.buildingId ?? null,

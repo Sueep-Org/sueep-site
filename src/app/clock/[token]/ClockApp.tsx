@@ -201,19 +201,19 @@ function getLocation(): Promise<{ latitude: number; longitude: number; accuracy:
   });
 }
 
-function initialLang(): Lang {
+/** A choice made with the toggle on this phone wins, then the language on their profile. */
+function initialLang(profileLang: Lang): Lang {
   try {
     const saved = localStorage.getItem(LANG_STORAGE_KEY);
     if (saved === "en" || saved === "es") return saved;
   } catch {
-    // storage blocked, fall through to the browser language
+    // storage blocked, fall back to the profile language
   }
-  if (typeof navigator !== "undefined" && navigator.language?.toLowerCase().startsWith("es")) return "es";
-  return "en";
+  return profileLang;
 }
 
-export function ClockApp({ token }: { token: string }) {
-  const [lang, setLang] = useState<Lang>("en");
+export function ClockApp({ token, profileLang = "en" }: { token: string; profileLang?: Lang }) {
+  const [lang, setLang] = useState<Lang>(profileLang);
   const [view, setView] = useState<View>("today");
   const [data, setData] = useState<ClockData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -227,8 +227,8 @@ export function ClockApp({ token }: { token: string }) {
   const t = (key: StringKey, vars?: Record<string, string>) => fill(STRINGS[lang][key], vars);
 
   useEffect(() => {
-    setLang(initialLang());
-  }, []);
+    setLang(initialLang(profileLang));
+  }, [profileLang]);
 
   function changeLang(next: Lang) {
     setLang(next);

@@ -7,13 +7,13 @@ import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 type LinkedApplication = {
   id: string;
   fullName: string;
-  email: string;
+  email: string | null;
   phone: string | null;
   positionInterest: string | null;
   responses: Record<string, unknown>;
 };
 
-type LinkableOption = { id: string; fullName: string; email: string };
+type LinkableOption = { id: string; fullName: string; email: string | null };
 
 type Props = {
   contractorId: string;
@@ -63,8 +63,7 @@ export function ContractorApplicationLinkSection({ contractorId, linkedApplicati
       {linkedApplication ? (
         <div className="mt-3 flex items-center justify-between gap-3 text-sm">
           <span className="text-gray-800">
-            Linked to <span className="font-medium">{linkedApplication.fullName}</span> ({linkedApplication.email}
-            {linkedApplication.phone ? `, ${linkedApplication.phone}` : ""})
+            Linked to <span className="font-medium">{linkedApplication.fullName}</span> ({[linkedApplication.email, linkedApplication.phone].filter(Boolean).join(", ") || "no contact info"})
             {linkedApplication.positionInterest ? <span className="text-gray-500"> · {linkedApplication.positionInterest}</span> : null}
           </span>
           <button
@@ -87,7 +86,7 @@ export function ContractorApplicationLinkSection({ contractorId, linkedApplicati
             <SearchableSelect
               value={selected}
               onChange={setSelected}
-              options={linkableApplications.map((a) => ({ value: a.id, label: `${a.fullName} - ${a.email}` }))}
+              options={linkableApplications.map((a) => ({ value: a.id, label: a.email ? `${a.fullName} - ${a.email}` : a.fullName }))}
               placeholder="Search applications…"
               allLabel="- None -"
             />

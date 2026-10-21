@@ -144,6 +144,7 @@ export function CoDayPopover({
   const [startTime, setStartTime] = useState(assignment?.startTime ?? "");
   const [endTime, setEndTime] = useState(assignment?.endTime ?? "");
   const [comment, setComment] = useState(assignment?.comment ?? "");
+  const [internalNote, setInternalNote] = useState(assignment?.internalNote ?? "");
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [error, setError] = useState("");
@@ -189,6 +190,7 @@ export function CoDayPopover({
           startTime: startTime || undefined,
           endTime: endTime || undefined,
           comment: comment.trim() || undefined,
+          internalNote: internalNote.trim(),
         }),
       });
       const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
@@ -203,6 +205,7 @@ export function CoDayPopover({
         startTime: startTime || null,
         endTime: endTime || null,
         comment: comment.trim() || null,
+        internalNote: internalNote.trim() || null,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save");
@@ -314,7 +317,7 @@ export function CoDayPopover({
 
         {readOnly ? (
           <>
-            {assignment && (supervisorName || pmName || contractorName || assignment.startTime || assignment.comment) ? (
+            {assignment && (supervisorName || pmName || contractorName || assignment.startTime || assignment.comment || assignment.internalNote) ? (
               <div className="mt-3 border-t border-gray-100 pt-2.5">
                 <label className="block text-[10px] font-medium text-gray-500">Coverage</label>
                 {supervisorName ? <p className="mt-1 text-[11px] text-gray-600">Supervisor: {supervisorName}<AnswerMark status={supervisorAnswer} /></p> : null}
@@ -326,6 +329,7 @@ export function CoDayPopover({
                   </p>
                 ) : null}
                 {assignment.comment ? <p className="mt-1 text-[11px] text-gray-600">Note: {assignment.comment}</p> : null}
+                {assignment.internalNote ? <p className="mt-1 text-[11px] text-amber-700">Internal: {assignment.internalNote}</p> : null}
               </div>
             ) : null}
 
@@ -411,9 +415,16 @@ export function CoDayPopover({
               <textarea
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
-                placeholder="Note about this day's coverage..."
+                placeholder="Note for contractors (sent with invites)..."
                 rows={2}
                 className="mt-1.5 w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-900 placeholder-gray-400"
+              />
+              <textarea
+                value={internalNote}
+                onChange={(e) => setInternalNote(e.target.value)}
+                placeholder="Internal note (staff only, never sent)..."
+                rows={2}
+                className="mt-1.5 w-full rounded border border-amber-200 bg-amber-50 px-1.5 py-1 text-xs text-gray-900 placeholder-gray-400"
               />
               {error ? <p className="mt-1 text-[10px] text-red-500">{error}</p> : null}
               <div className="mt-1.5 flex gap-1.5">

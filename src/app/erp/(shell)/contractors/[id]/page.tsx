@@ -358,6 +358,7 @@ export default async function ContractorDetailPage({ params }: PageProps) {
                     name: contractor.name,
                     email: contractor.email,
                     phone: contractor.phone,
+                    language: contractor.language,
                     role: contractor.role,
                     status: contractor.status,
                     runsWithoutSupervisor: contractor.runsWithoutSupervisor,

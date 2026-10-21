@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendEmail, buildPaperworkUploadEmail } from "@/lib/email";
+import { officeCandidateGuard } from "@/lib/erp/officeHiringAccess";
 
 const TOKEN_EXPIRY_DAYS = 7;
 
@@ -9,6 +10,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const blocked = await officeCandidateGuard(id);
+  if (blocked) return blocked;
 
   const candidate = await prisma.candidateApplication.findUnique({
     where: { id },
@@ -24,6 +27,11 @@ export async function POST(
       { status: 400 }
     );
   }
+
+  if (!candidate.email) {
+    return NextResponse.json({ error: "Add an email for this candidate before sending the upload link" }, { status: 400 });
+  }
+  const to = candidate.email;
 
   const paperwork = (candidate.paperwork ?? []) as { label: string; url: string }[];
   if (paperwork.length === 0) {
@@ -49,7 +57,7 @@ export async function POST(
     await sendEmail({
       type: "CANDIDATE_UPLOAD_LINK",
       link: `/erp/candidates/${id}`,
-      to: candidate.email,
+      to,
       subject: "Sueep: Upload your onboarding documents",
       html: buildPaperworkUploadEmail({
         fullName: candidate.fullName,

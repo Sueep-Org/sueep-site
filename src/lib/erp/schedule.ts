@@ -134,6 +134,8 @@ export type ScheduleProject = {
   otherScopeDescription: string | null;
   /** Notes the property manager typed on their turnover request (website form or their link) */
   requestNotes: string | null;
+  /** Client people who could have asked for a day (portal requesters, project contacts with an email) */
+  requesterOptions: { name: string; email: string }[];
   /** Subset of contractedScopeItems already marked done (see
    * TurnoverRequest.completedScopeItems). The day-assignment scope picker
    * excludes these, a finished item can't be put back on the calendar. */
@@ -213,6 +215,8 @@ export type ScheduleCoDayAssignment = {
   endTime: string | null;
   /** Free-text note about this day's coverage. */
   comment: string | null;
+  /** Staff-only note, never sent in invites. */
+  internalNote: string | null;
 };
 
 /** A worker (Employee or Contractor) planned onto a change order's work on a
@@ -274,6 +278,11 @@ export type ScheduleDayAssignment = {
   /** Free-text note about this day's coverage, mainly used when there are
    * no SOV items yet to pick from. */
   comment: string | null;
+  /** Staff-only note, never sent in invites. */
+  internalNote: string | null;
+  /** The client who asked for this day, emailed once everyone confirms (see scheduleRequester.ts) */
+  requesterName: string | null;
+  requesterEmail: string | null;
 };
 
 /** A worker (Employee or Contractor) planned to be on a project on a future
@@ -375,8 +384,8 @@ export function formatShortDate(dateKey: string): string {
 }
 
 /** Formal "July 21, 2026" form, no weekday — for email/notification copy. */
-export function formatLongDate(dateKey: string): string {
-  return new Date(`${dateKey}T00:00:00.000Z`).toLocaleDateString("en-US", {
+export function formatLongDate(dateKey: string, locale = "en-US"): string {
+  return new Date(`${dateKey}T00:00:00.000Z`).toLocaleDateString(locale, {
     month: "long",
     day: "numeric",
     year: "numeric",

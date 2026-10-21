@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getErpAuth, canViewSsn } from "@/lib/erpAuth";
 import { recordPayChange, samePay, type PayValues } from "@/lib/erp/payRates";
 import { todayEasternKey } from "@/lib/erp/dates";
+import { parseLang } from "@/lib/erp/language";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -65,6 +66,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
   if (body.email !== undefined) data.email = body.email ? String(body.email).trim().toLowerCase() : null;
   if (body.phone !== undefined) data.phone = body.phone ? String(body.phone).trim() : null;
+  if (body.language !== undefined) data.language = parseLang(body.language);
   if (body.address !== undefined) data.address = body.address ? String(body.address).trim() : null;
   if (body.dateOfBirth !== undefined) data.dateOfBirth = body.dateOfBirth ? String(body.dateOfBirth).trim() : null;
   if (body.role !== undefined) data.role = body.role ? String(body.role).trim() : null;

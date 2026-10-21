@@ -188,6 +188,8 @@ export function DayAssignmentModal({
   const [coPicks, setCoPicks] = useState<string[]>([]);
   // Free-text note, mainly for when there are no SOV items yet to pick from.
   const [comment, setComment] = useState("");
+  // Staff-only note, never sent in invites.
+  const [internalNote, setInternalNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [deletingSeriesId, setDeletingSeriesId] = useState<string | null>(null);
@@ -369,13 +371,16 @@ export function DayAssignmentModal({
           scopeItems: scopePicks.length > 0 ? scopePicks : undefined,
           changeOrderIds: coPicks.length > 0 ? coPicks : undefined,
           comment: comment.trim() || undefined,
+          internalNote: internalNote.trim() || undefined,
           ...(usingSeries ? { dates: allDateKeys } : {}),
         }),
       });
       const data = (await res.json().catch(() => ({}))) as {
         id?: string;
         seriesId?: string;
-        assignments?: { id: string }[];
+        assignments?: { id: string; requesterName?: string | null; requesterEmail?: string | null }[];
+        requesterName?: string | null;
+        requesterEmail?: string | null;
         error?: string;
       };
       if (!res.ok) throw new Error(data.error || "Failed to assign");
@@ -396,6 +401,9 @@ export function DayAssignmentModal({
             scopeItems: scopePicks,
             changeOrderIds: coPicks,
             comment: comment.trim() || null,
+            internalNote: internalNote.trim() || null,
+            requesterName: a.requesterName ?? null,
+            requesterEmail: a.requesterEmail ?? null,
           }))
         );
       } else if (data.id) {
@@ -413,6 +421,9 @@ export function DayAssignmentModal({
           scopeItems: scopePicks,
           changeOrderIds: coPicks,
           comment: comment.trim() || null,
+          internalNote: internalNote.trim() || null,
+          requesterName: data.requesterName ?? null,
+          requesterEmail: data.requesterEmail ?? null,
         });
       }
       setProjectId("");
@@ -425,6 +436,7 @@ export function DayAssignmentModal({
       setScopePicks([]);
       setCoPicks([]);
       setComment("");
+      setInternalNote("");
       setEndTime("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to assign");
@@ -466,6 +478,7 @@ export function DayAssignmentModal({
           startTime: startTime || undefined,
           endTime: endTime || undefined,
           comment: comment.trim() || undefined,
+          internalNote: internalNote.trim() || undefined,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
@@ -480,6 +493,7 @@ export function DayAssignmentModal({
         startTime: startTime || null,
         endTime: endTime || null,
         comment: comment.trim() || null,
+        internalNote: internalNote.trim() || null,
       });
       setCoId("");
       setCoQuery("");
@@ -488,6 +502,7 @@ export function DayAssignmentModal({
       setSupervisorContractorId("");
       setStartTime("");
       setComment("");
+      setInternalNote("");
       setEndTime("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to assign");
@@ -730,6 +745,7 @@ export function DayAssignmentModal({
               setStartTime("");
               setEndTime("");
               setComment("");
+              setInternalNote("");
             }}
             className={`flex-1 rounded px-2 py-1 text-xs font-medium ${
               targetMode === "project" ? "bg-white text-pink-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
@@ -754,6 +770,7 @@ export function DayAssignmentModal({
               setStartTime("");
               setEndTime("");
               setComment("");
+              setInternalNote("");
             }}
             className={`flex-1 rounded px-2 py-1 text-xs font-medium ${
               targetMode === "co" ? "bg-white text-pink-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
@@ -786,6 +803,7 @@ export function DayAssignmentModal({
                         setCoId(co.id);
                         setCoQuery(co.title);
                         setComment("");
+                        setInternalNote("");
                       }}
                       className="block w-full truncate px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-pink-50"
                       title={`${co.title} - ${co.projectTitle}`}
@@ -827,6 +845,7 @@ export function DayAssignmentModal({
                       setCoPicks([]);
                       setWorkerScopePick("");
                       setComment("");
+                      setInternalNote("");
                     }}
                     className="block w-full truncate px-2 py-1.5 text-left text-xs text-gray-700 hover:bg-pink-50"
                     title={p.jobTitle}
@@ -986,6 +1005,17 @@ export function DayAssignmentModal({
                 className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600">Internal note (staff only, never sent)</label>
+            <textarea
+              value={internalNote}
+              onChange={(e) => setInternalNote(e.target.value)}
+              placeholder="Pricing, client issues, reminders for the office..."
+              rows={2}
+              className="mt-1 w-full rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400"
+            />
           </div>
 
           {targetMode === "project" ? (
