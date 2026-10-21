@@ -51,6 +51,9 @@ import { ProjectSigningSection, type ProjectContractItem } from "./ProjectSignin
 import { ProjectNotesSection } from "./ProjectNotesSection";
 import { resolveCommissionEmployeeId } from "@/lib/erp/commission";
 import { ProjectsBackLink } from "@/app/erp/components/ProjectsBackLink";
+import { ProjectInviteResponses } from "./ProjectInviteResponses";
+import { inviteResponsesForProject } from "@/lib/erp/scheduleConfirmations";
+import { todayEasternKey } from "@/lib/erp/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -524,6 +527,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     }
   }
 
+  const inviteResponses = await inviteResponsesForProject(project.id).catch(() => []);
   const contractorRows = project.contractorAssignments.map((a) => ({
     id: a.id,
     contractorId: a.contractorId,
@@ -759,6 +763,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     {
       label: "Contractors",
       content: (
+        <div className="space-y-6">
+        <ProjectInviteResponses rows={inviteResponses} todayKey={todayEasternKey()} />
         <ProjectContractorSection
           projectId={project.id}
           initialAssignments={contractorRows}
@@ -772,6 +778,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           contractedScopeItems={contractedScopeItems}
           completedScopeItems={completedScopeItems}
         />
+        </div>
       ),
     },
     {

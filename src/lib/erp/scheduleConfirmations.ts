@@ -198,3 +198,45 @@ export async function statusesByUid(uids: string[]): Promise<Map<string, Confirm
   const rows = await prisma.scheduleConfirmation.findMany({ where: { uid: { in: uids } }, select: { uid: true, status: true } });
   return new Map(rows.map((r) => [r.uid, r.status as ConfirmationStatus]));
 }
+
+export type ProjectInviteResponse = {
+  uid: string;
+  personName: string;
+  role: string;
+  title: string;
+  /** Invite for a change order day; `title` is then the change order */
+  changeOrder: boolean;
+  dateKey: string;
+  status: "PENDING" | "CONFIRMED" | "DECLINED";
+  reason: string | null;
+  respondedAt: string | null;
+  inviteSentAt: string | null;
+};
+
+/** Every invite sent for a job's days and its change orders' days, with each person's answer. Newest day first. */
+export async function inviteResponsesForProject(projectId: string): Promise<ProjectInviteResponse[]> {
+  const [days, workers, coDays, coWorkers] = await Promise.all([
+    prisma.projectDayAssignment.findMany({ where: { projectId }, select: { id: true } }),
+    prisma.projectWorkerDayAssignment.findMany({ where: { projectId }, select: { id: true } }),
+    prisma.changeOrderDayAssignment.findMany({ where: { changeOrder: { projectId } }, select: { id: true } }),
+    prisma.changeOrderWorkerDayAssignment.findMany({ where: { changeOrder: { projectId } }, select: { id: true } }),
+  ]);
+  const ids = [...days, ...workers, ...coDays, ...coWorkers].map((a) => a.id);
+  if (!ids.length) return [];
+  const rows = await prisma.scheduleConfirmation.findMany({
+    where: { assignmentId: { in: ids }, status: { not: "CANCELLED" }, inviteSentAt: { not: null } },
+    orderBy: [{ dateKey: "desc" }, { personName: "asc" }],
+  });
+  return rows.map((r) => ({
+    uid: r.uid,
+    personName: r.personName,
+    role: ROLE_LABEL[r.kind as ConfirmationKind] ?? "Scheduled",
+    title: r.title,
+    changeOrder: r.kind.startsWith("co-"),
+    dateKey: r.dateKey,
+    status: r.status as ProjectInviteResponse["status"],
+    reason: r.reason,
+    respondedAt: r.respondedAt?.toISOString() ?? null,
+    inviteSentAt: r.inviteSentAt?.toISOString() ?? null,
+  }));
+}
