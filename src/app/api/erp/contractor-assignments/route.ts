@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { sendSubAssignedEmail } from "@/lib/erp/scheduleInvites";
 import { prisma } from "@/lib/prisma";
 
 type RequestBody = Record<string, unknown>;
@@ -59,25 +58,6 @@ export async function POST(req: Request) {
         costCents: costCents ?? null,
       },
     });
-    // Tell the sub what they were put on (a job or a building), never the cost. Logged and skipped on failure.
-    const [project, building] = await Promise.all([
-      assignment.projectId
-        ? prisma.project.findUnique({ where: { id: assignment.projectId }, select: { jobTitle: true, building: { select: { address: true } }, workOrderRecord: { select: { siteAddress: true } } } })
-        : null,
-      assignment.buildingId ? prisma.building.findUnique({ where: { id: assignment.buildingId }, select: { name: true, address: true } }) : null,
-    ]);
-    const jobTitle = project?.jobTitle ?? building?.name;
-    if (jobTitle) {
-      await sendSubAssignedEmail({
-        contractorId,
-        projectId: assignment.projectId,
-        jobTitle,
-        location: project?.building?.address || project?.workOrderRecord?.siteAddress || building?.address || null,
-        role: assignment.role,
-        startDate: assignment.startDate,
-        endDate: assignment.endDate,
-      });
-    }
     return NextResponse.json(assignment);
   } catch (e) {
     console.error("POST /api/erp/contractor-assignments", e);

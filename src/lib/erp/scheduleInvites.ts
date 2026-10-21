@@ -6,7 +6,7 @@ import { dayKey } from "@/lib/erp/schedule";
 import { todayEasternKey } from "@/lib/erp/dates";
 import { centsToDollars } from "@/lib/erp/money";
 import { turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
-import { cancelConfirmation, markInviteSent, prepareConfirmation, responseButtonsHtml, responseUrl } from "@/lib/erp/scheduleConfirmations";
+import { cancelConfirmation, markInviteSent, parseInviteUid, prepareConfirmation, responseButtonsHtml, responseUrl } from "@/lib/erp/scheduleConfirmations";
 
 /** Shared "you're on the schedule" notification path — used by both the
  * supervisor day-assignment routes and the crew (employee/contractor)
@@ -105,6 +105,8 @@ function inviteHtml(params: {
   extraHtml?: string;
   /** Confirm / Can't make it page (scheduleConfirmations.ts) */
   respondUrl?: string | null;
+  /** The day's note and the property manager's request notes (inviteNotes) */
+  notes?: string | null;
 }): string {
   const verb = params.role === "Supervising" ? "assigned to supervise" : params.role === "Running" ? "assigned to run" : "scheduled to work on";
   const title = escapeHtml(params.title);
@@ -115,6 +117,7 @@ function inviteHtml(params: {
     params.extraHtml ?? "",
     params.scopeText ? `<p><strong>Scope:</strong> ${escapeHtml(params.scopeText)}</p>` : "",
     params.location ? `<p><strong>Address:</strong> ${escapeHtml(params.location)}</p>` : "",
+    !params.cancelled && params.notes ? `<p><strong>Notes:</strong><br>${escapeHtml(params.notes).replace(/\n/g, "<br>")}</p>` : "",
     !params.cancelled && params.respondUrl ? responseButtonsHtml(params.respondUrl) : "",
     !params.cancelled ? `<p>Add the attached invite to your calendar.</p>` : "",
   ];
@@ -132,6 +135,45 @@ function inviteFingerprint(p: { to: string; role: InviteRole; title: string; dat
   return createHash("sha256")
     .update(JSON.stringify([p.to.toLowerCase(), p.role, p.title, p.dateKey, p.startTime ?? "", p.endTime ?? "", p.location ?? "", p.scopeText ?? ""]))
     .digest("hex");
+}
+
+/**
+ * What everyone on a day should read: the day's note (where a portal
+ * request's "Requested by ... : comments" lands) and, for a turnover unit,
+ * the property manager's notes from their request. Null when there are none.
+ */
+async function inviteNotes(uid: string, dateKey: string): Promise<string | null> {
+  const parsed = parseInviteUid(uid);
+  if (!parsed) return null;
+  const date = new Date(`${dateKey}T00:00:00.000Z`);
+  let projectId: string | null = null;
+  let dayNote: string | null = null;
+  if (parsed.kind === "day" || parsed.kind === "day-sub") {
+    const a = await prisma.projectDayAssignment.findUnique({ where: { id: parsed.assignmentId }, select: { projectId: true, comment: true } });
+    projectId = a?.projectId ?? null;
+    dayNote = a?.comment ?? null;
+  } else if (parsed.kind === "worker") {
+    const w = await prisma.projectWorkerDayAssignment.findUnique({ where: { id: parsed.assignmentId }, select: { projectId: true } });
+    projectId = w?.projectId ?? null;
+    if (projectId) {
+      const a = await prisma.projectDayAssignment.findUnique({ where: { projectId_date: { projectId, date } }, select: { comment: true } });
+      dayNote = a?.comment ?? null;
+    }
+  } else if (parsed.kind === "co-day" || parsed.kind === "co-day-sub") {
+    const a = await prisma.changeOrderDayAssignment.findUnique({ where: { id: parsed.assignmentId }, select: { comment: true } });
+    dayNote = a?.comment ?? null;
+  } else {
+    const w = await prisma.changeOrderWorkerDayAssignment.findUnique({ where: { id: parsed.assignmentId }, select: { changeOrderId: true } });
+    if (w) {
+      const a = await prisma.changeOrderDayAssignment.findUnique({ where: { changeOrderId_date: { changeOrderId: w.changeOrderId, date } }, select: { comment: true } });
+      dayNote = a?.comment ?? null;
+    }
+  }
+  const request = projectId
+    ? await prisma.propertyManagerRequest.findFirst({ where: { projectId, notes: { not: null } }, select: { notes: true } })
+    : null;
+  const parts = [dayNote?.trim(), request?.notes?.trim() ? `From the property manager: ${request.notes.trim()}` : null].filter(Boolean);
+  return parts.length ? parts.join("\n") : null;
 }
 
 /** Sends (or cancels) the invite for one specific day. `uid` should be
@@ -165,10 +207,15 @@ export async function sendDayInvite(params: {
   // notify about it. Applies to cancellations too, not just new invites.
   if (params.dateKey < todayEasternKey()) return;
   const when = formatInviteWhen(params.dateKey, params.startTime, params.endTime);
-  const fingerprint = inviteFingerprint(params);
+  const baseFingerprint = inviteFingerprint(params);
   try {
+    const notes = params.cancelled ? null : await inviteNotes(params.uid, params.dateKey).catch(() => null);
+    // A changed note re-sends the invite but isn't a changed day: answers stay. Kept off
+    // the fingerprint when there's no note, so invites sent before notes existed match.
+    const fingerprint = notes ? `${baseFingerprint}|${createHash("sha256").update(notes).digest("hex").slice(0, 16)}` : baseFingerprint;
     const last = await prisma.scheduleInviteSent.findUnique({ where: { uid: params.uid } });
     if (params.cancelled ? !last || last.cancelled : last && !last.cancelled && last.fingerprint === fingerprint) return;
+    const dayChanged = !!last && !last.cancelled && last.fingerprint.split("|")[0] !== baseFingerprint;
 
     // Confirm / Can't make it: a response link per invite. A changed day asks again.
     let respondUrl: string | null = null;
@@ -181,7 +228,7 @@ export async function sendDayInvite(params: {
         title: params.title,
         dateKey: params.dateKey,
         link: path,
-        changed: !!last && !last.cancelled,
+        changed: dayChanged,
       }).catch((e) => {
         console.error("Schedule confirmation link failed", { uid: params.uid }, e);
         return null;
@@ -195,7 +242,7 @@ export async function sendDayInvite(params: {
       startTime: params.startTime,
       endTime: params.endTime,
       summary: `${params.role}: ${params.title}`,
-      description: [params.title, params.scopeText ? `Scope: ${params.scopeText}` : "", params.url ?? ""]
+      description: [params.title, params.scopeText ? `Scope: ${params.scopeText}` : "", notes ? `Notes: ${notes}` : "", params.url ?? ""]
         .filter(Boolean)
         .join("\n"),
       location: params.location,
@@ -211,7 +258,7 @@ export async function sendDayInvite(params: {
       link: params.url ? new URL(params.url, "https://x").pathname : undefined,
       to: params.to,
       subject: `${params.cancelled ? "Cancelled" : "You're scheduled"}: ${params.title}, ${when}`,
-      html: inviteHtml({ ...params, when, respondUrl }),
+      html: inviteHtml({ ...params, when, respondUrl, notes }),
       attachments: [{ filename: "invite.ics", content: Buffer.from(ics) }],
     });
     // Only remember invites that really went out, so turning email back on
@@ -407,43 +454,4 @@ export async function sendSubLeadInvite(params: {
 
 function dayLabel(d: Date | null | undefined): string | null {
   return d ? d.toLocaleDateString("en-US", { weekday: "short", month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }) : null;
-}
-
-/**
- * "You've been assigned" email when a sub is added to a job's or change
- * order's Subs list (no specific day yet). Never includes the cost entered
- * on the assignment; a janitorial turnover shows the estimated pay. Errors
- * are logged, never thrown, so the assignment itself always saves.
- */
-export async function sendSubAssignedEmail(params: {
-  contractorId: string;
-  /** The job, for the turnover estimated pay. Left out for change orders. */
-  projectId?: string | null;
-  jobTitle: string;
-  changeOrderTitle?: string | null;
-  location?: string | null;
-  task?: string | null;
-  role?: string | null;
-  startDate?: Date | null;
-  endDate?: Date | null;
-}): Promise<void> {
-  try {
-    const contact = await resolveWorkerContact(null, params.contractorId);
-    if (!contact) return;
-    const what = params.changeOrderTitle ? `${params.changeOrderTitle} (change order on ${params.jobTitle})` : params.jobTitle;
-    const start = dayLabel(params.startDate), end = dayLabel(params.endDate);
-    const dates = start && end && start !== end ? `${start} to ${end}` : start ?? end;
-    const lines = [
-      `<p>Hi ${escapeHtml(contact.name)},</p>`,
-      `<p>You've been assigned to <strong>${escapeHtml(what)}</strong>.</p>`,
-      params.task || params.role ? `<p><strong>Work:</strong> ${escapeHtml([params.role, params.task].filter(Boolean).join(": "))}</p>` : "",
-      dates ? `<p><strong>Dates:</strong> ${escapeHtml(dates)}</p>` : "",
-      params.location ? `<p><strong>Address:</strong> ${escapeHtml(params.location)}</p>` : "",
-      params.changeOrderTitle ? "" : ((await turnoverSubPayHtml(params.projectId)) ?? ""),
-      `<p>You'll get a separate calendar invite for each day you're scheduled.</p>`,
-    ];
-    await sendEmail({ type: "SUB_ASSIGNED", to: contact.email, subject: `You've been assigned: ${what}`, html: lines.filter(Boolean).join("") });
-  } catch (e) {
-    console.error("Failed to send sub assigned email", { contractorId: params.contractorId }, e);
-  }
 }

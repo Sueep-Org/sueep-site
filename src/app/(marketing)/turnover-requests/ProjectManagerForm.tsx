@@ -126,6 +126,8 @@ export function ProjectManagerForm({ onBack }: Props) {
   const [sovLoading, setSovLoading] = useState(false);
   const [selectedSovIds, setSelectedSovIds] = useState<string[]>([]);
   const [desiredDate, setDesiredDate] = useState("");
+  // Optional last day: blank means just the one day.
+  const [desiredEndDate, setDesiredEndDate] = useState("");
   const [comments, setComments] = useState("");
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId) ?? null;
@@ -278,7 +280,8 @@ export function ProjectManagerForm({ onBack }: Props) {
       return "Estimated end date must be on or after the start date.";
     }
     if (requestType === "sov-schedule" && sovItems.length > 0 && !selectedSovIds.length) return "Please select at least one SOV item.";
-    if (requestType === "sov-schedule" && !desiredDate) return "Desired date is required.";
+    if (requestType === "sov-schedule" && !desiredDate) return "Start date is required.";
+    if (requestType === "sov-schedule" && desiredEndDate && desiredEndDate < desiredDate) return "The end date can't be before the start date.";
     return "";
   }
 
@@ -305,6 +308,7 @@ export function ProjectManagerForm({ onBack }: Props) {
         coNoCrewRequired,
         sovItemIds: selectedSovIds.length ? selectedSovIds : undefined,
         desiredDate: desiredDate || undefined,
+        desiredEndDate: desiredEndDate && desiredEndDate !== desiredDate ? desiredEndDate : undefined,
         comments: comments.trim() || undefined,
         ...(signature
           ? {
@@ -418,7 +422,7 @@ export function ProjectManagerForm({ onBack }: Props) {
             setRequestType(null);
             setCoTitle(""); setCoDescription(""); setCoEstimatedStartDate(""); setCoEstimatedEndDate("");
             setCoCleanerCount(""); setCoPriceCents(null);
-            setSelectedSovIds([]); setDesiredDate(""); setComments("");
+            setSelectedSovIds([]); setDesiredDate(""); setDesiredEndDate(""); setComments("");
             setRequesterName(""); setRequesterEmail("");
             if (contractPdfUrl) URL.revokeObjectURL(contractPdfUrl);
             setContractPdfUrl(""); setSignaturePngDataUrl(""); setSignaturePrintedName("");
@@ -796,16 +800,33 @@ export function ProjectManagerForm({ onBack }: Props) {
               </div>
             )}
 
-            <div>
-              <label className={label} htmlFor="sov-date">Desired date *</label>
-              <input
-                id="sov-date"
-                type="date"
-                required
-                className={input}
-                value={desiredDate}
-                onChange={(e) => setDesiredDate(e.target.value)}
-              />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className={label} htmlFor="sov-date">Start date *</label>
+                <input
+                  id="sov-date"
+                  type="date"
+                  required
+                  className={input}
+                  value={desiredDate}
+                  onChange={(e) => {
+                    setDesiredDate(e.target.value);
+                    if (desiredEndDate && e.target.value > desiredEndDate) setDesiredEndDate("");
+                  }}
+                />
+              </div>
+              <div>
+                <label className={label} htmlFor="sov-end-date">End date</label>
+                <input
+                  id="sov-end-date"
+                  type="date"
+                  className={input}
+                  min={desiredDate || undefined}
+                  value={desiredEndDate}
+                  onChange={(e) => setDesiredEndDate(e.target.value)}
+                />
+                <p className="mt-1 text-xs text-gray-500">Leave blank for one day.</p>
+              </div>
             </div>
             <div>
               <label className={label} htmlFor="sov-comments">Comments</label>

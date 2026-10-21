@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Button, InfoTip } from "@/app/erp/components/ui";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
-import { BID_OPTIONS, FLAG_GROUPS, type Filters, type Flag } from "./filters";
+import { AWARD_OPTIONS, BID_OPTIONS, FLAG_GROUPS, type Filters, type Flag } from "./filters";
 
 type Option = { value: string; label: string };
 
@@ -11,6 +11,22 @@ const LABEL = "text-[10px] font-semibold uppercase tracking-wide text-gray-400";
 const RADIO = "h-3.5 w-3.5 border-gray-300 text-pink-600 focus:ring-pink-400";
 const DATE =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
+
+/** From and To boxes for a custom date range. */
+function DateRange({ from, to, onFrom, onTo }: { from: string; to: string; onFrom: (v: string) => void; onTo: (v: string) => void }) {
+  return (
+    <div className="grid grid-cols-2 gap-2 pt-1">
+      <label className="block text-xs text-gray-700">
+        From
+        <input type="date" value={from} max={to || undefined} onChange={(e) => onFrom(e.target.value)} className={DATE} />
+      </label>
+      <label className="block text-xs text-gray-700">
+        To
+        <input type="date" value={to} min={from || undefined} onChange={(e) => onTo(e.target.value)} className={DATE} />
+      </label>
+    </div>
+  );
+}
 
 function Section({ title, info, children }: { title: string; info?: string; children: React.ReactNode }) {
   return (
@@ -164,30 +180,20 @@ export function FilterMenu({
           >
             <Radios name={`${name}-bid`} value={filters.bid} onPick={(v) => update({ bid: v })} options={BID_OPTIONS} />
             {filters.bid === "custom" && (
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <label className="block text-xs text-gray-700">
-                  From
-                  <input
-                    type="date"
-                    value={filters.bidFrom}
-                    max={filters.bidTo || undefined}
-                    onChange={(e) => update({ bidFrom: e.target.value })}
-                    className={DATE}
-                  />
-                </label>
-                <label className="block text-xs text-gray-700">
-                  To
-                  <input
-                    type="date"
-                    value={filters.bidTo}
-                    min={filters.bidFrom || undefined}
-                    onChange={(e) => update({ bidTo: e.target.value })}
-                    className={DATE}
-                  />
-                </label>
-              </div>
+              <DateRange from={filters.bidFrom} to={filters.bidTo} onFrom={(v) => update({ bidFrom: v })} onTo={(v) => update({ bidTo: v })} />
             )}
           </Section>
+          {!isJan && (
+            <Section
+              title="Award date"
+              info="HubSpot's Award Date, when the GC expects to award the job. Picking a range sorts cards by award date, soonest first."
+            >
+              <Radios name={`${name}-award`} value={filters.award} onPick={(v) => update({ award: v })} options={AWARD_OPTIONS} />
+              {filters.award === "custom" && (
+                <DateRange from={filters.awardFrom} to={filters.awardTo} onFrom={(v) => update({ awardFrom: v })} onTo={(v) => update({ awardTo: v })} />
+              )}
+            </Section>
+          )}
           {!isJan && (
             <Section title="Sort" info="Recent activity: deals touched most recently on top. Chance to win: best odds on top.">
               <Radios

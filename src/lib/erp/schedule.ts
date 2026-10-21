@@ -132,6 +132,8 @@ export type ScheduleProject = {
   /** What was typed in for this unit's "Other" scope (TurnoverRequest.
    * otherDescription), shown in place of the bare "Other" label. */
   otherScopeDescription: string | null;
+  /** Notes the property manager typed on their turnover request (website form or their link) */
+  requestNotes: string | null;
   /** Subset of contractedScopeItems already marked done (see
    * TurnoverRequest.completedScopeItems). The day-assignment scope picker
    * excludes these, a finished item can't be put back on the calendar. */

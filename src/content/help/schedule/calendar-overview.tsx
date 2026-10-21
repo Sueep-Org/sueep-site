@@ -108,19 +108,21 @@ export function ScheduleCalendarOverview() {
           <UL>
             <LI>
               <strong>Start date / End date:</strong> the project&apos;s own scheduling window.
-              Editing these and clicking <strong>Save dates</strong> moves the project itself, not
-              just this one day.
+              Editing these moves the project itself, not just this one day.
             </LI>
             <LI>
-              <strong>Coverage for this day:</strong> Supervisor and PM dropdowns for this
-              specific day, saved independently with <strong>Save coverage</strong>. This is what
-              fills in the amber warning chip&apos;s missing supervisor.
+              <strong>Coverage for this day:</strong> Supervisor, PM and contractor for this
+              specific day, the SOV items or scope, and a <strong>Note</strong> that goes out with everyone&apos;s
+              invite. This is what fills in the amber warning chip&apos;s missing supervisor. Comments from a
+              portal request land in the note, and a property manager&apos;s request notes show under it.
             </LI>
             <LI>
               <strong>Workers scheduled this day:</strong> add or remove workers (employees or
               contractors) planned for this project on this day.
             </LI>
           </UL>
+          One <strong>Save</strong> button at the bottom saves the dates, coverage and note together.
+          Adding or removing a worker saves right away.
           <Callout type="warning">
             If you try to add a worker who&apos;s already scheduled on a <em>different</em>{" "}
             project that same day, the card warns you before adding them. You can still add them
@@ -131,12 +133,12 @@ export function ScheduleCalendarOverview() {
 
         <Step n={5} title="Moving a planned chip's date">
           A gray or red dashed chip (a planned assignment, not yet logged) opens the same event
-          card, but with a <strong>Planned date</strong> field instead of Start/End date, plus an
-          optional time range.
+          card, but with <strong>Planned dates</strong> (first and last day) instead of Start/End date.
+          Back-to-back planned days for the same job count as one range.
           <Img src="/help/schedule_calendar_overview/calendar_card.png" alt="Filter panel with supervisor and project type options" size="sm" />
-          Changing the planned date and clicking <strong>Save planned date</strong> moves just that
-          day&apos;s assignment (and any workers already scheduled on it) to the new day. It does{" "}
-          <strong>not</strong> change the project&apos;s overall Start/End date.
+          Change the range and click <strong>Save</strong>. New days copy the day you clicked (coverage,
+          SOV or scope, note and crew), and days taken out of the range are removed. A one-day range moves
+          that day and its workers. It does <strong>not</strong> change the project&apos;s overall Start/End date.
         </Step>
 
         <Step n={6} title="Confirmed chips: the read-only labor card">
@@ -162,7 +164,7 @@ export function ScheduleCalendarOverview() {
           </Callout>
           <Callout type="info">
             Whenever a project&apos;s date actually changes, whether by dragging or through the
-            event card&apos;s Save dates / Save planned date, the project&apos;s supervisor and PM
+            event card&apos;s Save, the project&apos;s supervisor and PM
             get emailed about the new date, the same way they&apos;re notified when first
             assigned.
           </Callout>

@@ -57,6 +57,9 @@ export const BID_OPTIONS: { value: BidRange; label: string }[] = [
   { value: "none", label: "No bid date" },
   { value: "custom", label: "Dates" },
 ];
+export const AWARD_OPTIONS: { value: BidRange; label: string }[] = BID_OPTIONS.map((o) =>
+  o.value === "none" ? { ...o, label: "No award date" } : o.value === "past" ? { ...o, label: "Passed" } : o,
+);
 
 /** Owner values that aren't a person's name. */
 export const ME = "__me";
@@ -71,11 +74,14 @@ export type Filters = {
   bid: BidRange;
   bidFrom: string;
   bidTo: string;
+  award: BidRange;
+  awardFrom: string;
+  awardTo: string;
   flags: Flag[];
   missingField: MissingField | "";
 };
 
-export const EMPTY: Filters = { owner: "", gc: "", kind: "", scope: "", sortBy: "activity", bid: "", bidFrom: "", bidTo: "", flags: [], missingField: "" };
+export const EMPTY: Filters = { owner: "", gc: "", kind: "", scope: "", sortBy: "activity", bid: "", bidFrom: "", bidTo: "", award: "", awardFrom: "", awardTo: "", flags: [], missingField: "" };
 
 export type ViewKey = "everything" | "mine" | "todos" | "cleanup" | "lost" | "bids";
 
@@ -94,15 +100,15 @@ export function sameFilters(a: Filters, b: Filters): boolean {
   return JSON.stringify({ ...a, flags: [...a.flags].sort() }) === JSON.stringify({ ...b, flags: [...b.flags].sort() });
 }
 
-function bidMatches(c: BoardCard, f: Filters, today: string): boolean {
-  const b = c.bidDate;
-  if (f.bid === "") return true;
-  if (f.bid === "none") return !b;
+/** Bid due and Award date filters work the same way. */
+function dateMatches(b: string | null, range: BidRange, from: string, to: string, today: string): boolean {
+  if (range === "") return true;
+  if (range === "none") return !b;
   if (!b) return false;
-  if (f.bid === "next7") return b >= today && b <= addDays(today, 7);
-  if (f.bid === "next30") return b >= today && b <= addDays(today, 30);
-  if (f.bid === "past") return b < today;
-  return (!f.bidFrom || b >= f.bidFrom) && (!f.bidTo || b <= f.bidTo);
+  if (range === "next7") return b >= today && b <= addDays(today, 7);
+  if (range === "next30") return b >= today && b <= addDays(today, 30);
+  if (range === "past") return b < today;
+  return (!from || b >= from) && (!to || b <= to);
 }
 
 export type FilterContext = {
@@ -143,10 +149,11 @@ export function applyFilters(cards: BoardCard[], f: Filters, ctx: FilterContext)
     if (has("rebid") && !(c.gcNotAwarded && c.winner && !c.rebid)) return false;
     if (has("strong") && c.chance?.band !== "Strong") return false;
     if (has("price") && !c.priceFlag) return false;
-    return bidMatches(c, f, ctx.today);
+    return dateMatches(c.bidDate, f.bid, f.bidFrom, f.bidTo, ctx.today) && dateMatches(c.awardDate, f.award, f.awardFrom, f.awardTo, ctx.today);
   });
   if (f.sortBy === "chance") return [...list].sort((a, b) => (b.chance?.p ?? -1) - (a.chance?.p ?? -1));
-  // Picking bid dates means "what's due when", so the soonest bid goes on top.
+  // Picking award dates or bid dates means "what's coming when", so the soonest goes on top. Award wins when both are picked.
+  if (f.award && f.award !== "none") return [...list].sort((a, b) => (a.awardDate ?? "").localeCompare(b.awardDate ?? ""));
   if (f.bid && f.bid !== "none") return [...list].sort((a, b) => (a.bidDate ?? "").localeCompare(b.bidDate ?? ""));
   return list;
 }

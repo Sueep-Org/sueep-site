@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
@@ -16,6 +16,7 @@ import {
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { useConfirm } from "@/app/erp/components/ui";
 import { useInsuranceCheck } from "@/app/erp/components/useInsuranceCheck";
+import { useFloatingMenu } from "@/app/erp/components/useFloatingMenu";
 import { AnswerMark, CoverageAnswer, answerUid, type Answers } from "./AnswerMark";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -150,6 +151,10 @@ export function CoDayPopover({
   const [workerType, setWorkerType] = useState<"employee" | "contractor">("employee");
   const [workerQuery, setWorkerQuery] = useState("");
   const [workerId, setWorkerId] = useState("");
+  // Matches float over the card so its bottom edge can't cut them off.
+  const workerInputRef = useRef<HTMLInputElement>(null);
+  const workerMenuRef = useRef<HTMLDivElement>(null);
+  const workerMenuStyle = useFloatingMenu(!!workerQuery && !workerId, workerInputRef, workerMenuRef, workerQuery.length, 0);
   const [addingWorker, setAddingWorker] = useState(false);
   const [workerError, setWorkerError] = useState("");
   const [deletingWorkerId, setDeletingWorkerId] = useState<string | null>(null);
@@ -504,6 +509,7 @@ export function CoDayPopover({
               <div className="relative mt-1.5">
                 <div className="flex gap-1.5">
                   <input
+                    ref={workerInputRef}
                     type="text"
                     value={workerId ? workerOptions.find((w) => w.id === workerId)?.displayName ?? "" : workerQuery}
                     onChange={(e) => {
@@ -523,7 +529,7 @@ export function CoDayPopover({
                   </button>
                 </div>
                 {workerQuery && !workerId ? (
-                  <div className="absolute z-10 mt-1 max-h-32 w-full overflow-auto rounded border border-gray-200 bg-white shadow-sm">
+                  <div ref={workerMenuRef} style={workerMenuStyle} className="overflow-auto rounded border border-gray-200 bg-white shadow-lg">
                     {filteredWorkerOptions.slice(0, 8).map((w) => (
                       <button
                         key={w.id}

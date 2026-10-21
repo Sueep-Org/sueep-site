@@ -107,13 +107,6 @@ export const NOTIFICATIONS = {
     automatic: "The scheduled person",
     sender: "sueep",
   }),
-  SUB_ASSIGNED: def({
-    label: "Sub assigned to a job",
-    group: "Projects & schedule",
-    when: "A subcontractor is added to a project's or change order's subs. Each day they're scheduled also sends a Schedule invite.",
-    automatic: "The subcontractor (when they have an email on file)",
-    sender: "sueep",
-  }),
   SCHEDULE_DECLINED: def({
     label: "Schedule declined",
     group: "Projects & schedule",

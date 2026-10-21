@@ -564,6 +564,12 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     pickable: u.role === "PROJECT_MANAGER",
   }));
 
+  // Notes a property manager typed on their turnover request, shown on the unit's chip and card.
+  const requestNoteRows = await prisma.propertyManagerRequest
+    .findMany({ where: { projectId: { not: null }, notes: { not: null } }, select: { projectId: true, notes: true } })
+    .catch(() => []);
+  const requestNotesByProject = new Map(requestNoteRows.map((r) => [r.projectId!, r.notes!.trim()]));
+
   const projects: ScheduleProject[] = projectRows.map((r) => {
     const laborByDay: Record<string, { hours: number; workers: string[] }> = {};
     for (const [k, entry] of laborSummaryByProject.get(r.id) ?? []) {
@@ -606,6 +612,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
       })),
       contractedScopeItems: r.turnoverRequest ? contractedTurnoverScope(r.turnoverRequest) : null,
       otherScopeDescription: r.turnoverRequest?.otherDescription ?? null,
+      requestNotes: requestNotesByProject.get(r.id) || null,
       completedScopeItems: r.turnoverRequest ? parseCompletedScopeItems(r.turnoverRequest.completedScopeItems) : [],
       changeOrders: changeOrdersByProject.get(r.id) ?? [],
       buildingId: r.turnoverRequest?.buildingId ?? null,
