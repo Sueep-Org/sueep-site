@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
-
-type CandidateDoc = { id: string; label: string; filename: string };
+import { moveCandidateToEmployee } from "@/lib/erp/candidateHandoff";
 
 /** Only overwrites a field on the target Employee when it's currently empty
  * — merging into an existing profile should fill gaps, not clobber data
@@ -31,7 +30,6 @@ export async function POST(
       bankAccountType: true,
       bankAccountNumber: true,
       bankRoutingNumber: true,
-      documents: { select: { id: true, label: true, filename: true } },
     },
   });
 
@@ -44,8 +42,6 @@ export async function POST(
       { status: 400 }
     );
   }
-
-  const docs = candidate.documents as CandidateDoc[];
 
   // Merge path: an Employee profile with this email already exists (surfaced
   // by the 409 below on a prior attempt) and staff chose to merge into it
@@ -86,23 +82,8 @@ export async function POST(
       return NextResponse.json({ error: "Failed to merge into employee profile" }, { status: 500 });
     }
 
-    if (docs.length > 0) {
-      await prisma.employeeDocument.createMany({
-        data: docs.map((doc) => ({
-          employeeId: mergeIntoEmployeeId,
-          documentType: doc.label,
-          title: doc.filename,
-          fileUrl: `/api/erp/candidates/${id}/documents/${doc.id}`,
-          isVerified: false,
-        })),
-      });
-    }
-
-    await prisma.candidateApplication.update({
-      where: { id },
-      data: { status: "HIRED" },
-    });
-
+    // Documents and contracts move onto the employee, then the candidate profile is deleted.
+    await handOff(id, mergeIntoEmployeeId);
     return NextResponse.json({ employeeId: mergeIntoEmployeeId });
   }
 
@@ -160,22 +141,17 @@ export async function POST(
     return NextResponse.json({ error: "Failed to create employee" }, { status: 500 });
   }
 
-  if (docs.length > 0) {
-    await prisma.employeeDocument.createMany({
-      data: docs.map((doc) => ({
-        employeeId: employee.id,
-        documentType: doc.label,
-        title: doc.filename,
-        fileUrl: `/api/erp/candidates/${id}/documents/${doc.id}`,
-        isVerified: false,
-      })),
-    });
-  }
-
-  await prisma.candidateApplication.update({
-    where: { id },
-    data: { status: "HIRED" },
-  });
-
+  // Documents and contracts move onto the employee, then the candidate profile is deleted.
+  await handOff(id, employee.id);
   return NextResponse.json({ employeeId: employee.id });
+}
+
+/** If the move fails the employee still exists; the candidate is kept (marked Hired) so nothing is lost. */
+async function handOff(candidateId: string, employeeId: string) {
+  try {
+    await moveCandidateToEmployee(candidateId, employeeId);
+  } catch (e) {
+    console.error("finish-onboarding: moving the candidate to the employee failed, keeping the candidate", e);
+    await prisma.candidateApplication.update({ where: { id: candidateId }, data: { status: "HIRED" } }).catch(() => {});
+  }
 }

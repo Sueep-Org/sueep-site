@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useConfirm } from "@/app/erp/components/ui";
 
 type Props = {
   applicationId: string;
@@ -11,6 +12,7 @@ type Props = {
 
 export function ConvertToContractorButton({ applicationId, existingContractorId }: Props) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -26,6 +28,14 @@ export function ConvertToContractorButton({ applicationId, existingContractorId 
   }
 
   async function onConvert() {
+    if (
+      !(await confirm({
+        message: "Create a contractor profile? Their documents, contracts and answers move to it and this candidate profile is deleted.",
+        danger: false,
+        confirmLabel: "Create",
+      }))
+    )
+      return;
     setLoading(true);
     setError("");
     try {

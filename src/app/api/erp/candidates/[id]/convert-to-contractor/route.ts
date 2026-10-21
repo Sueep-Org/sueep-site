@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { moveCandidateToContractor } from "@/lib/erp/candidateHandoff";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -40,6 +41,11 @@ export async function POST(_req: Request, ctx: Ctx) {
       },
       select: { id: true },
     });
+    // Documents, contracts and answers move onto the contractor, then the candidate profile is deleted.
+    // If that fails the contractor still exists and stays linked to the candidate, so nothing is lost.
+    await moveCandidateToContractor(id, contractor.id).catch((e) =>
+      console.error("convert-to-contractor: moving the candidate to the contractor failed, keeping the candidate", e),
+    );
     return NextResponse.json({ id: contractor.id }, { status: 201 });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
