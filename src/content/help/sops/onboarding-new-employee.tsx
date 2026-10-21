@@ -47,8 +47,10 @@ export function OnboardingNewEmployee() {
           <strong>Finish onboarding &rarr; Add as employee</strong>.
           <Img src="/help/employees/onboarding.png" alt="Employees details" />
           This creates a new Employee record, copying over their name, email, phone, role, and
-          bank info, and moves their uploaded documents onto that new Employee profile. Their
-          candidate status flips to Hired.
+          bank info, and moves their uploaded documents and contracts onto that new Employee profile.
+          The candidate profile is then deleted, so they no longer show on the Candidates page.
+          Converting a candidate to a contractor works the same way: documents, contracts and their
+          questionnaire answers move to the contractor profile.
           <Callout type="warning">
             If an employee profile already exists for that email, you&apos;ll get a link to the
             existing profile instead of a duplicate being created.

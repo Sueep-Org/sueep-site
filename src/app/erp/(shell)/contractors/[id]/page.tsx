@@ -24,6 +24,7 @@ import { erpRoleForEmail, timeOffReviewBlock } from "@/lib/erp/timeOff";
 import { ContractorApplicationLinkSection } from "./ContractorApplicationLinkSection";
 import { ContractorQuestionnaireCard } from "./ContractorQuestionnaireCard";
 import { CONTRACTOR_LABOR_PAGE_SIZE } from "./laborPagination";
+import { ContractorDeleteButton } from "./ContractorDeleteButton";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -47,6 +48,8 @@ export default async function ContractorDetailPage({ params }: PageProps) {
       candidateApplication: {
         select: { id: true, fullName: true, email: true, phone: true, positionInterest: true, responses: true },
       },
+      // What a delete would take with it, for the Delete contractor window.
+      _count: { select: { assignments: true, changeOrderAssignments: true, workerDayAssignments: true, coWorkerDayAssignments: true, documents: true } },
     },
   });
   if (!contractor) notFound();
@@ -317,7 +320,8 @@ export default async function ContractorDetailPage({ params }: PageProps) {
         <Link href="/erp/contractors" className="text-xs text-pink-600 hover:underline">
           ← Contractor Verification
         </Link>
-        <div className="mt-2 flex flex-wrap items-center gap-3">
+        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold text-gray-900">{contractor.name}</h1>
           <span
             className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -327,6 +331,18 @@ export default async function ContractorDetailPage({ params }: PageProps) {
             {contractor.status === "ACTIVE" ? "Active" : "Inactive"}
           </span>
           {contractor.role && <span className="text-sm text-gray-500">{contractor.role}</span>}
+        </div>
+          {auth && auth.role !== "SUPERVISOR" && auth.role !== "EMPLOYEE" ? (
+            <ContractorDeleteButton
+              contractorId={contractor.id}
+              name={contractor.name}
+              impact={{
+                jobs: contractor._count.assignments + contractor._count.changeOrderAssignments,
+                scheduledDays: contractor._count.workerDayAssignments + contractor._count.coWorkerDayAssignments,
+                documents: contractor._count.documents,
+              }}
+            />
+          ) : null}
         </div>
       </div>
 

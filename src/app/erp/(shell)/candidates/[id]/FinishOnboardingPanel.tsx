@@ -25,7 +25,7 @@ export function FinishOnboardingPanel({ id, fullName, status, paperwork }: Props
   const pendingDocs = paperwork.filter((p) => !p.url);
 
   async function finish() {
-    if (!(await confirm({ message: `Create an employee profile for ${fullName}?`, danger: false, confirmLabel: "Create" }))) return;
+    if (!(await confirm({ message: `Create an employee profile for ${fullName}? Their documents and contracts move to it and this candidate profile is deleted.`, danger: false, confirmLabel: "Create" }))) return;
     setLoading(true);
 
     const res = await fetch(`/api/erp/candidates/${id}/finish-onboarding`, { method: "POST" });
@@ -53,7 +53,7 @@ export function FinishOnboardingPanel({ id, fullName, status, paperwork }: Props
     if (!existingEmployeeId) return;
     if (
       !(await confirm({
-        message: `Merge this application into the existing employee profile for ${fullName}? Missing details (phone, bank info) will be filled in from this application, and its documents will be added to that profile. Nothing already on the employee profile will be overwritten.`,
+        message: `Merge this application into the existing employee profile for ${fullName}? Missing details (phone, bank info) will be filled in from this application, and its documents and contracts will be added to that profile. Nothing already on the employee profile will be overwritten. This candidate profile is then deleted.`,
         danger: false,
         confirmLabel: "Merge",
       }))

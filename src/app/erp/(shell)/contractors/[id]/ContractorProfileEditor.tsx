@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, InfoTip, inputClass, labelClass, useConfirm, useToast } from "@/app/erp/components/ui";
+import { Button, InfoTip, inputClass, labelClass } from "@/app/erp/components/ui";
 
 const input = inputClass.md;
 const label = labelClass.default;
@@ -21,10 +21,7 @@ type Props = {
 
 export function ContractorProfileEditor({ contractorId, initial }: Props) {
   const router = useRouter();
-  const confirm = useConfirm();
-  const toast = useToast();
   const [loading, setLoading] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
   const [ok, setOk] = useState("");
 
@@ -59,24 +56,6 @@ export function ContractorProfileEditor({ contractorId, initial }: Props) {
       setError("Network error");
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function handleDelete() {
-    if (!(await confirm({ message: "Permanently delete this contractor? This cannot be undone." }))) return;
-    setDeleting(true);
-    try {
-      const res = await fetch(`/api/erp/contractors/${contractorId}`, { method: "DELETE" });
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
-        toast(data.error ?? "Delete failed", "error");
-        setDeleting(false);
-        return;
-      }
-      router.push("/erp/contractors");
-    } catch {
-      toast("Network error", "error");
-      setDeleting(false);
     }
   }
 
@@ -157,17 +136,9 @@ export function ContractorProfileEditor({ contractorId, initial }: Props) {
         {ok ? <p className="text-xs text-emerald-600">{ok}</p> : null}
         <div className="flex items-center gap-3">
           <Button size="md" type="submit"
-            disabled={loading || deleting}>
+            disabled={loading}>
             {loading ? "Saving…" : "Save profile"}
           </Button>
-          <button
-            type="button"
-            onClick={() => void handleDelete()}
-            disabled={loading || deleting}
-            className="rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-          >
-            {deleting ? "Deleting…" : "Delete contractor"}
-          </button>
         </div>
       </form>
   );
