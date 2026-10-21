@@ -15,6 +15,8 @@
 import { prisma } from "@/lib/prisma";
 import { escapeHtml, sendEmail } from "@/lib/email";
 import { todayEasternKey } from "./dates";
+import { dayCellLabel } from "./schedule";
+import { formatInviteWhen } from "./scheduleInvites";
 import { turnoverScopeDisplayLabel } from "./turnoverScope";
 
 const EMAIL_RE = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
@@ -40,15 +42,6 @@ export function requesterFromBody(body: Record<string, unknown>): { requesterNam
 
 const keyOf = (d: Date) => d.toISOString().slice(0, 10);
 
-function dayLabel(key: string): string {
-  return new Date(`${key}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" });
-}
-
-function timeLabel(t: string): string {
-  const [h, m] = t.split(":").map(Number);
-  return new Date(Date.UTC(2000, 0, 1, h, m)).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "UTC" });
-}
-
 /** True when at least one invite went out for these assignments and every one of them is Confirmed. */
 async function everyoneConfirmed(assignmentIds: string[]): Promise<{ ok: boolean; people: number }> {
   const rows = await prisma.scheduleConfirmation.findMany({
@@ -70,7 +63,7 @@ async function sendConfirmedEmail(p: {
   link: string;
 }) {
   const first = p.to.name.includes("@") ? "" : p.to.name.split(/\s+/)[0]!;
-  const when = p.startTime && p.endTime ? `${dayLabel(p.dateKey)}, ${timeLabel(p.startTime)} - ${timeLabel(p.endTime)}` : dayLabel(p.dateKey);
+  const when = formatInviteWhen(p.dateKey, p.startTime, p.endTime);
   const rows = [
     `<li><strong>When:</strong> ${escapeHtml(when)}</li>`,
     p.work.length ? `<li><strong>Work:</strong> ${p.work.map(escapeHtml).join(", ")}</li>` : "",
@@ -80,8 +73,8 @@ async function sendConfirmedEmail(p: {
   await sendEmail({
     type: "SCHEDULE_REQUESTER_CONFIRMED",
     to: p.to.email,
-    subject: `Confirmed: ${p.title}, ${dayLabel(p.dateKey)}`,
-    html: `<p>Hi${first ? ` ${escapeHtml(first)}` : ""},</p><p>The day you asked for is confirmed. Our crew will be at <strong>${escapeHtml(p.title)}</strong> on <strong>${escapeHtml(dayLabel(p.dateKey))}</strong>.</p><ul>${rows}</ul><p>Questions or changes? Just reply to this email.</p>`,
+    subject: `Confirmed: ${p.title}, ${dayCellLabel(p.dateKey)}`,
+    html: `<p>Hi${first ? ` ${escapeHtml(first)}` : ""},</p><p>The day you asked for is confirmed. Our crew will be at <strong>${escapeHtml(p.title)}</strong> on <strong>${escapeHtml(dayCellLabel(p.dateKey))}</strong>.</p><ul>${rows}</ul><p>Questions or changes? Just reply to this email.</p>`,
     replyTo: (process.env.CONTACT_TO_EMAIL ?? "contact@sueep.com").trim(),
     link: p.link,
   });

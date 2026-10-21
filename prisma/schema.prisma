@@ -184,6 +184,7 @@ model Project {
   safetyIncidents       SafetyIncident[]
   sov                   ProjectSOV?
   dayAssignments        ProjectDayAssignment[]
+  dayRemovals           ScheduleDayRemoval[]
   workerDayAssignments  ProjectWorkerDayAssignment[]
   scheduleSeries        ProjectScheduleSeries[]
   notes                 ProjectNote[]
@@ -1508,6 +1509,31 @@ model ProjectDayAssignment {
   @@index([projectManagerUserId])
   @@index([supervisorContractorId])
   @@index([seriesId])
+}
+
+/// A planned day taken off the schedule for a real reason (rescheduled,
+/// client canceled, weather...). The ProjectDayAssignment itself is deleted
+/// as before, this keeps a grayed-out record on the calendar so the team can
+/// see why. Removing a day placed by mistake saves nothing here.
+model ScheduleDayRemoval {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// The calendar date that was removed (midnight UTC, same as ProjectDayAssignment.date)
+  date DateTime
+
+  /// One of SCHEDULE_REMOVAL_REASONS (src/lib/erp/scheduleRemovals.ts)
+  reason String
+  note   String?
+
+  /// Who was covering the day, as plain text, since the assignment is gone
+  coveredBy     String?
+  removedByName String?
+
+  @@index([date])
 }
 
 /// A worker planned to be on a project on a future day, before any labor is
@@ -3459,6 +3485,8 @@ model PropertyManagerRequest {
   sqft         Int?
   /// GOOD | FAIR | POOR, website form only
   unitQuality  String?
+  /// The property manager's answer to "Unit has been walked". Null on requests sent before the question was asked.
+  unitWalked   Boolean?
 
   fullClean        Boolean @default(false)
   fullPaint        Boolean @default(false)
@@ -3939,6 +3967,29 @@ model PipelineSnapshot {
 
 /// A new HubSpot deal made to re-bid a job we lost as GC Not Awarded, with
 /// the GC that won it (PIPELINE_PLAN Phase 5). One re-bid per lost deal.
+/// A deal made with New deal on the Deals board. Keeps what was sent to
+/// HubSpot so the board shows it before the next hourly HubSpot read.
+model DealCreated {
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now())
+  hubspotDealId  String   @unique
+  /// post-con | janitorial
+  pipeline       String
+  dealName       String
+  stageId        String
+  amountCents    Int?
+  ownerId        String?
+  company        String?
+  /// "YYYY-MM-DD"
+  bidDate        String?
+  walkDate       String?
+  sqft           Int?
+  typeOfBusiness String?
+  byEmail        String
+
+  @@index([pipeline, createdAt])
+}
+
 model DealRebid {
   id               String   @id @default(cuid())
   createdAt        DateTime @default(now())

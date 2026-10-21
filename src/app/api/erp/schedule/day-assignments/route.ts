@@ -6,6 +6,8 @@ import { formatTurnoverHoursBudgetText } from "@/lib/erp/turnoverHoursBudget";
 import { isTurnoverScopeValue, parseCompletedScopeItems, turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
 import { appUrl, notifyProjectCrew, scopeText, sendDayInvite, sendSubLeadInvite } from "@/lib/erp/scheduleInvites";
 import { notifyProjectDayRequester, requesterFromBody } from "@/lib/erp/scheduleRequester";
+import { saveSubPay, subPayFromBody } from "@/lib/erp/subPay";
+import { canSeeFinancials, getErpAuth } from "@/lib/erpAuth";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -34,6 +36,12 @@ export async function POST(req: Request) {
   const internalNote = "internalNote" in body ? (typeof body.internalNote === "string" && body.internalNote.trim() ? body.internalNote.trim() : null) : undefined;
   // The client to tell once everyone confirms; left as is when not sent
   const requester = requesterFromBody(body);
+  // The sub's pay on a turnover (see subPay.ts); only roles that see prices can set it
+  const subPayCents = subPayFromBody(body);
+  if (subPayCents !== undefined) {
+    const auth = await getErpAuth();
+    if (!auth || !canSeeFinancials(auth.role)) return NextResponse.json({ error: "Not allowed to set contractor pay" }, { status: 403 });
+  }
   if (!projectId) return NextResponse.json({ error: "projectId is required" }, { status: 400 });
 
   // An explicit, possibly non-consecutive list of dates (the calendar's
@@ -132,6 +140,7 @@ export async function POST(req: Request) {
       select: {
         id: true,
         jobTitle: true,
+        segment: true,
         turnoverRequestId: true,
         contractValueCents: true,
         building: { select: { address: true } },
@@ -224,6 +233,11 @@ export async function POST(req: Request) {
     const prev = prevSub.get(dayKey(a.date)) ?? null;
     if (prev && prev !== supervisorContractorId) await sendSubLeadInvite({ ...invite, contractorId: prev, cancelled: true });
     if (supervisorContractorId) await sendSubLeadInvite({ ...invite, contractorId: supervisorContractorId });
+  }
+
+  // Saved before any invite goes out, so the sub's invite shows it
+  if (subPayCents !== undefined && supervisorContractorId && project.segment === "JANITORIAL_TURNOVER_REQUESTS") {
+    await saveSubPay(projectId, supervisorContractorId, subPayCents, date);
   }
 
   if (seriesDates && repeatUntil) {

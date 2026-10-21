@@ -98,6 +98,7 @@ export async function createPropertyManagerRequests(
     const otherWork = u.otherWork === true;
     const otherDescription = otherWork ? text(u.otherDescription, 500) : null;
     if (otherWork && !otherDescription) return { error: `${name}: describe the other work` };
+    const unitWalked = u.unitWalked === true;
     if (!work.fullClean && !work.fullPaint && !work.touchUpPaint && !work.carpetCleaning && !otherWork) {
       return { error: `${name}: pick at least one kind of work` };
     }
@@ -122,6 +123,7 @@ export async function createPropertyManagerRequests(
       ...work,
       otherWork,
       otherDescription,
+      unitWalked,
       moveOutDate,
       moveInDate,
       estimateCents: estimateRequestCents(pricingPackage, layout.bedrooms, layout.bathrooms, work),
@@ -161,6 +163,11 @@ export async function createPropertyManagerRequests(
   return { ids: requests.map((r) => r.id) };
 }
 
+/** "Yes" or "No" for the property manager's walked answer; null on requests from before it was asked. */
+export function walkedLabel(walked: boolean | null): string | null {
+  return walked == null ? null : walked ? "Yes" : "No";
+}
+
 /** The new-request email to staff, for link and website requests alike. One email per booking, however many units. */
 async function emailStaffAboutRequests(requests: PropertyManagerRequest[], buildingName: string) {
   const first = requests[0];
@@ -191,6 +198,7 @@ async function emailStaffAboutRequests(requests: PropertyManagerRequest[], build
           start: sameStart ? null : formatDay(r.requestedStartDate),
           moveOut: formatDay(r.moveOutDate),
           moveIn: formatDay(r.moveInDate),
+          walked: walkedLabel(r.unitWalked),
         })),
         total: requests.length > 1 ? `${money(total)}${requests.some((r) => r.otherWork) ? " plus other work" : ""}` : null,
         notes: first.notes,
@@ -297,6 +305,7 @@ export async function createWebsiteRequest(body: Record<string, unknown>, ip: st
       ...work,
       otherWork,
       otherDescription,
+      unitWalked: body.unitWalked === true,
       requestedStartDate,
       requestedEndDate,
       notes: text(body.notes, 2000),
@@ -376,7 +385,10 @@ export async function confirmPropertyManagerRequest(
     const cfg = parseHubSpotPipelineStageMap();
     const where = request.source === "WEBSITE" ? "on the website form" : "on their property manager link";
     const phone = request.requesterPhone ? `, ${request.requesterPhone}` : "";
-    const comments = [`Requested by ${request.requesterName} (${request.requesterEmail}${phone}) ${where}.`, request.notes].filter(Boolean).join("\n");
+    const walked = walkedLabel(request.unitWalked);
+    const comments = [`Requested by ${request.requesterName} (${request.requesterEmail}${phone}) ${where}.`, walked && `Unit walked: ${walked}.`, request.notes]
+      .filter(Boolean)
+      .join("\n");
     const result = await createProjectFromPayload({
       segment: "JANITORIAL_TURNOVER_REQUESTS",
       ...(cfg?.janitorial.pipelineId ? { hubspotPipelineId: cfg.janitorial.pipelineId } : {}),

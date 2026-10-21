@@ -40,6 +40,8 @@ interface FormState {
   carpetCleaning: boolean;
   otherWork: boolean;
   otherDescription: string;
+  /** "Unit has been walked" */
+  unitWalked: boolean;
   startDate: string;
   endDate: string;
   notes: string;
@@ -64,6 +66,7 @@ const initial: FormState = {
   carpetCleaning: false,
   otherWork: false,
   otherDescription: "",
+  unitWalked: false,
   startDate: "",
   endDate: "",
   notes: "",
@@ -216,6 +219,7 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
           carpetCleaning: form.carpetCleaning,
           otherWork: form.otherWork,
           otherDescription: form.otherWork ? form.otherDescription.trim() : undefined,
+          unitWalked: form.unitWalked,
           startDate: form.startDate,
           endDate: form.endDate || undefined,
           notes: form.notes.trim() || undefined,
@@ -444,6 +448,9 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
                   <p className="mt-1 text-xs text-gray-500">Sueep will price this when confirming your request.</p>
                 </div>
               )}
+              <div className="mt-3">
+                <ServiceCheckbox checked={form.unitWalked} onChange={(v) => patch({ unitWalked: v })} label="Unit has been walked" />
+              </div>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">

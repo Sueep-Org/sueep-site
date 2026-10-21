@@ -112,9 +112,24 @@ export function ScheduleCalendarOverview() {
             </LI>
             <LI>
               <strong>Coverage for this day:</strong> Supervisor, PM and contractor for this
-              specific day, the SOV items or scope, and a <strong>Note</strong> that goes out with everyone&apos;s
-              invite. This is what fills in the amber warning chip&apos;s missing supervisor. Comments from a
+              specific day, the SOV items or scope, and a <strong>Note for contractors</strong> that goes out with
+              everyone&apos;s invite. This is what fills in the amber warning chip&apos;s missing supervisor. Comments from a
               portal request land in the note, and a property manager&apos;s request notes show under it.
+            </LI>
+            <LI>
+              <strong>Internal note:</strong> for the office only (pricing, client issues, reminders). It is never
+              sent to anyone. It shows on the card and in amber as &quot;Internal&quot; when you hover the chip.
+            </LI>
+            <LI>
+              <strong>Requested by:</strong> the client who asked for this day. It fills in on its own when they
+              ask through the project portal, or pick someone. Once everyone on the day clicks Confirm, they get
+              one &quot;Confirmed&quot; email with the date, work, address and crew size. They never hear about
+              declines, pay or who the sub is.
+            </LI>
+            <LI>
+              <strong>Contractor pay</strong> (turnover days run by a sub, roles that see prices only): what the sub
+              gets paid for the day. It shows on their invite and saves as their cost on the project. Click the
+              &quot;50% of&quot; amount to fill it in. Leave it blank and no pay line goes on the invite.
             </LI>
             <LI>
               <strong>Workers scheduled this day:</strong> add or remove workers (employees or
@@ -218,6 +233,14 @@ export function ScheduleCalendarOverview() {
           sub), or replacing the sub running a day, sends them a cancellation for their calendar
           invite.
           <Img src="/help/schedule_calendar_overview/schedule_calendar_overview_9.png" alt="Removing an assignment with the x button" size="sm" />
+          <P>
+            The <strong>×</strong> on a dashed chip asks <strong>why</strong> first. Pick{" "}
+            <strong>Placed by mistake / wrong day</strong> and the day is simply gone. Any other reason
+            (Rescheduled, Client canceled, Weather, Crew unavailable, Site not ready, Other) still removes the day
+            and sends the cancellations, but leaves a <strong>gray, crossed-out chip</strong> on that day. Hover it
+            to see the reason, the note, who was covering it, and who removed it. Click its own{" "}
+            <strong>×</strong> to clear it for good.
+          </P>
         </Step>
 
         <Step n={10} title="What supervisors and PMs see">

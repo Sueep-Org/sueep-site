@@ -25,11 +25,3 @@ export async function languageForEmail(email: string | null | undefined): Promis
   if (!email) return "en";
   return (await languagesForEmails([email])).get(email.trim().toLowerCase()) ?? "en";
 }
-
-/** Splits recipients by language, for emails sent to a group in one go. */
-export async function groupByLanguage(emails: string[]): Promise<{ lang: Lang; to: string[] }[]> {
-  const langs = await languagesForEmails(emails);
-  const groups: Record<Lang, string[]> = { en: [], es: [] };
-  for (const e of emails) groups[langs.get(e.trim().toLowerCase()) ?? "en"].push(e);
-  return (["en", "es"] as const).filter((l) => groups[l].length).map((lang) => ({ lang, to: groups[lang] }));
-}

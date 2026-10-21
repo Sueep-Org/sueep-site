@@ -5,7 +5,7 @@ export function PipelineBoardHelp() {
     <>
       <H2>What this is</H2>
       <P>
-        <strong>Pipeline</strong> (left menu, Projects) shows every post-construction deal from HubSpot as a card, in a column
+        <strong>Deals</strong> (left menu, Projects) shows every post-construction deal from HubSpot as a card, in a column
         for its stage, like HubSpot&apos;s board view. It goes from the first stage through <strong>Work Completed</strong>,
         with <strong>Deal Lost</strong> last. Admins, Project Managers, the Business Manager, Sales and Estimation can open it.
         It&apos;s read live from HubSpot and refreshed every hour.
@@ -17,10 +17,26 @@ export function PipelineBoardHelp() {
         Turnovers, and Not Awarded counts as lost.
       </P>
       <Callout type="info">
-        The board can change four things in HubSpot: a deal&apos;s stage (drag the card or use Move to), its info (owner, GC,
-        dates, amount, sq ft), its lost reason, and marking an open deal lost. Next steps are kept in the ERP. The board
+        The board can change five things in HubSpot: new deals (<strong>New deal</strong>), a deal&apos;s stage (drag the card
+        or use Move to), its info (owner, GC, dates, amount, sq ft), its lost reason, and marking an open deal lost. Next steps are kept in the ERP. The board
         picks up changes made in HubSpot on the next refresh (within an hour).
       </Callout>
+
+      <H2>New deals</H2>
+      <UL>
+        <LI>
+          <strong>New deal</strong> (top right, next to Filters) creates a deal in HubSpot in the pipeline you&apos;re looking
+          at. Only the name is needed. Owner starts on you; GC, dates, amount, Area SQFT and Type of business are optional.
+        </LI>
+        <LI>
+          It goes into Lead unless you pick another open stage. Won and lost stages aren&apos;t offered, because a won deal
+          makes an ERP project. Move the card there later.
+        </LI>
+        <LI>
+          The card shows on the board right away and its panel opens. A yellow note warns when a deal with a similar name is
+          already on the board.
+        </LI>
+      </UL>
 
       <H2>Moving cards</H2>
       <UL>
@@ -81,7 +97,7 @@ export function PipelineBoardHelp() {
           in the last 12 months, for scale. It&apos;s a rough guide, not a promise, and it gets more honest as old deals are
           cleaned up.
         </LI>
-        <LI>The Business Manager sees the same numbers on the dashboard&apos;s Sales tab (Pipeline this week).</LI>
+        <LI>The Business Manager sees the same numbers on the dashboard&apos;s Sales tab (Deals this week).</LI>
       </UL>
 
       <H2>What&apos;s on a card</H2>

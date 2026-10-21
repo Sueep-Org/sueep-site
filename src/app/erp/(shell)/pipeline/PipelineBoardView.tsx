@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { InfoTip, useToast } from "@/app/erp/components/ui";
+import { Button, InfoTip, useToast } from "@/app/erp/components/ui";
 import { centsToDollarsCompact } from "@/lib/erp/money";
 import type { BoardCard, BoardColumn, PipelineBoard } from "@/lib/erp/pipelineBoard";
 import { MISSING_FIELDS, MISSING_LABELS, type MissingField } from "@/lib/erp/pipelineMissing";
@@ -11,6 +11,7 @@ import { BAND_COLOR, todayKey } from "@/lib/erp/pipelineUi";
 import { DealInfoModal } from "./DealInfoModal";
 import { DealPanel } from "./DealPanel";
 import { RebidModal } from "./RebidModal";
+import { NewDealModal } from "./NewDealModal";
 import { MoveToModal } from "./MoveToModal";
 import { LostReasonModal, type Option } from "./LostReasonModal";
 import { NextStepModal } from "./NextStepModal";
@@ -36,6 +37,7 @@ export function PipelineBoardView({
   reasonOptions,
   companies,
   mayEditCompanies,
+  typeOptions,
 }: {
   board: PipelineBoard;
   closedDays: number;
@@ -48,6 +50,8 @@ export function PipelineBoardView({
   companies: Option[];
   /** Admin and Business Manager: can add a typed company name to a company's other names */
   mayEditCompanies: boolean;
+  /** HubSpot Type of business options, for New deal */
+  typeOptions: Option[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -64,6 +68,7 @@ export function PipelineBoardView({
   const [editingInfo, setEditingInfo] = useState<BoardCard | null>(null);
   const [editingRebid, setEditingRebid] = useState<BoardCard | null>(null);
   const [movingTo, setMovingTo] = useState<BoardCard | null>(null);
+  const [creating, setCreating] = useState(false);
   const [panelId, setPanelId] = useState<string | null>(null);
   const [dragging, setDragging] = useState<BoardCard | null>(null);
 
@@ -237,6 +242,9 @@ export function PipelineBoardView({
             onClosed={setClosed}
             closedDays={closedDays}
           />
+          <Button size="sm" onClick={() => setCreating(true)}>
+            New deal
+          </Button>
         </div>
       </div>
 
@@ -310,6 +318,25 @@ export function PipelineBoardView({
             const card = movingTo;
             setMovingTo(null);
             void edits.moveCard(card, col);
+          }}
+        />
+      )}
+      {creating && (
+        <NewDealModal
+          pipeline={board.pipeline}
+          columns={board.columns.filter((c) => c.outcome === "open")}
+          cards={cards}
+          owners={owners}
+          companies={companies}
+          typeOptions={typeOptions}
+          defaultOwnerId={board.viewerOwnerId ?? ""}
+          onClose={() => setCreating(false)}
+          onSaved={(deal) => {
+            setCreating(false);
+            toast(`Created in HubSpot: ${deal.name}`, "success");
+            // The server adds it to the board from the ERP's copy; the panel opens once it's there.
+            setPanelId(deal.newDealId);
+            router.refresh();
           }}
         />
       )}

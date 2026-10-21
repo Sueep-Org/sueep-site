@@ -137,7 +137,7 @@ export async function buildFollowUpEmails(
     if (!l.email || !loginEmails.has(l.email)) continue;
     if (!l.overdue.length && !l.week.length && !l.none.length) continue;
     const html = [
-      `<p>Your pipeline for the week. Open the <a href="${escapeHtml(board)}">Pipeline</a> board to update next steps.</p>`,
+      `<p>Your pipeline for the week. Open the <a href="${escapeHtml(board)}">Deals</a> board to update next steps.</p>`,
       section("Overdue", l.overdue, board, "See them on the board (Only show > Overdue next step)."),
       section("Due this week", l.week, board, "See them on the board."),
       section("No next step yet", l.none, board, "See them on the board (Only show > No next step)."),
@@ -149,7 +149,7 @@ export async function buildFollowUpEmails(
     ]
       .filter(Boolean)
       .join(", ");
-    out.push({ type: "PIPELINE_FOLLOW_UPS", to: [l.email], subject: `Pipeline this week: ${counts}`, html });
+    out.push({ type: "PIPELINE_FOLLOW_UPS", to: [l.email], subject: `Deals this week: ${counts}`, html });
   }
 
   if (admins.length) {
@@ -165,7 +165,7 @@ export async function buildFollowUpEmails(
     if (rows) {
       const ownerOf = new Map(overdue.map((x) => [x.i.dealId, x.owner]));
       const html = [
-        `<p>Next steps across the <a href="${escapeHtml(board)}">Pipeline</a> board, both pipelines. Owners without an ERP login don't get their own email, so their deals need a new owner in HubSpot or someone to pick them up.</p>`,
+        `<p>Next steps across the <a href="${escapeHtml(board)}">Deals</a> board, both pipelines. Owners without an ERP login don't get their own email, so their deals need a new owner in HubSpot or someone to pick them up.</p>`,
         `<table style="border-collapse:collapse;font-size:14px"><tr><th style="text-align:left;padding:2px 12px 2px 0">Owner</th><th style="padding:2px 12px">Overdue</th><th style="padding:2px 12px">Due this week</th><th style="padding:2px 0 2px 12px">No next step</th></tr>${rows}</table>`,
         section(
           "Overdue",
@@ -179,7 +179,7 @@ export async function buildFollowUpEmails(
       out.push({
         type: "PIPELINE_FOLLOW_UPS_SUMMARY",
         to: admins,
-        subject: `Pipeline follow-ups: ${total("overdue")} overdue, ${total("week")} due this week, ${total("none")} with no next step`,
+        subject: `Deal follow-ups: ${total("overdue")} overdue, ${total("week")} due this week, ${total("none")} with no next step`,
         html,
       });
     }

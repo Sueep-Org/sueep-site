@@ -1,17 +1,24 @@
 /**
  * HubSpot deals with the ERP's own recent changes on top. The HubSpot read is
- * cached for an hour (postConDeals.ts), so lost reasons, Mark lost, Edit info
- * and stage moves made in the ERP since that read are applied here. Every
- * page that shows deals loads them through this, so a change shows everywhere
- * at once (board, Win/Loss, dashboard cards, emails), not after the refresh.
+ * cached for an hour (postConDeals.ts), so lost reasons, Mark lost, Edit info,
+ * stage moves and new deals made in the ERP since that read are applied here.
+ * Every page that shows deals loads them through this, so a change shows
+ * everywhere at once (board, Win/Loss, dashboard cards, emails), not after the refresh.
  */
 import { loadDealBundle, loadJanitorialDealBundle, type Bundle, type PipelineKey } from "./postConDeals";
 import { lostChangesSince } from "./dealLostReasons";
 import { infoChangesSince } from "./dealInfo";
+import { createdDealsMissing } from "./dealCreate";
 
 /** Applies ERP changes made after `bundle.fetchedAt`, oldest first. */
-export async function applyErpEdits(bundle: Bundle, pipeline: PipelineKey): Promise<Bundle> {
-  const [lost, info] = await Promise.all([lostChangesSince(pipeline, bundle.fetchedAt), infoChangesSince(pipeline, bundle.fetchedAt)]);
+export async function applyErpEdits(cached: Bundle, pipeline: PipelineKey): Promise<Bundle> {
+  const [lost, info, added] = await Promise.all([
+    lostChangesSince(pipeline, cached.fetchedAt),
+    infoChangesSince(pipeline, cached.fetchedAt),
+    createdDealsMissing(pipeline, cached.fetchedAt, new Set(cached.deals.map((d) => d.id))),
+  ]);
+  // Deals made with New deal go in first, so edits made to them since apply too.
+  const bundle = added.length ? { ...cached, deals: [...cached.deals, ...added] } : cached;
   if (!lost.length && !info.length) return bundle;
   const lostOf = new Map(lost.map((c) => [c.hubspotDealId, c]));
   const infoOf = new Map<string, typeof info>();

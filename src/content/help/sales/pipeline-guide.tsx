@@ -10,7 +10,7 @@ export function PipelineGuide() {
     <>
       <H2>Why we have it</H2>
       <P>
-        The <strong>Pipeline</strong> board (left menu, Projects) is there to help us win more of the jobs we bid on, by making
+        The <strong>Deals</strong> board (left menu, Projects) is there to help us win more of the jobs we bid on, by making
         sure no deal gets forgotten. When we built it (October 2026), HubSpot showed:
       </P>
       <UL>
@@ -22,7 +22,7 @@ export function PipelineGuide() {
       <P>
         The board shows every deal from HubSpot by stage and flags the ones that need someone: deals that are stuck, quotes
         nobody has touched, prices that look off, and deals with no plan. For what every badge and button means, see{" "}
-        <A href="/erp/help/sales/pipeline-board">Pipeline Board</A>.
+        <A href="/erp/help/sales/pipeline-board">Deals Board</A>.
       </P>
       <Callout type="info">
         HubSpot is still where deals live. The board reads from it every hour. Moving cards, Edit info, lost reasons and
@@ -56,7 +56,7 @@ export function PipelineGuide() {
       <P>Do this once so the board only shows deals that are really live. After that, the weekly routine keeps it clean.</P>
       <Steps>
         <Step n={1} title="Close out dead deals">
-          Open Pipeline and click the <strong>Clean up</strong> quick view above the board. These deals have sat in one
+          Open Deals and click the <strong>Clean up</strong> quick view above the board. These deals have sat in one
           stage for 180 days or more. For each one: if it&apos;s dead, click <strong>⋯ &gt; Mark lost</strong> and pick the
           reason. If it&apos;s still alive, add a next step instead.
         </Step>
@@ -79,11 +79,11 @@ export function PipelineGuide() {
       <H2>Every week</H2>
       <Steps>
         <Step n={1} title="Monday: read your email">
-          Each deal owner with an ERP login gets <strong>Pipeline this week</strong>: next steps that are overdue, due this
+          Each deal owner with an ERP login gets <strong>Deals this week</strong>: next steps that are overdue, due this
           week, and deals with no next step yet. Admins get one summary for everyone.
         </Step>
         <Step n={2} title="Open the board on your deals">
-          Sales and Estimation open Pipeline on their own deals (Owner: Me). The same list is on your dashboard, in the{" "}
+          Sales and Estimation open Deals on their own deals (Owner: Me). The same list is on your dashboard, in the{" "}
           <strong>Follow-ups</strong> tab of the Bids card.
         </Step>
         <Step n={3} title="Clear the red">
@@ -111,6 +111,13 @@ export function PipelineGuide() {
         Mark it lost from the board (<strong>⋯ &gt; Mark lost</strong>) or in HubSpot, and always pick a reason. If the GC
         didn&apos;t win the job (<strong>GC Not Awarded</strong>), find out which GC did. Call our GC or check the bid
         results, then record it (and their price if you know it).
+      </P>
+      <H3>A new lead comes in</H3>
+      <P>
+        Click <strong>New deal</strong> above the board, on the Post-construction or Janitorial tab. Only the name is needed,
+        but add the GC, owner and Bid Date if you have them. It&apos;s created in HubSpot and shows on the board right away,
+        in Lead unless you pick another stage. If a deal with a similar name is already on the board you&apos;ll see a warning,
+        so check it isn&apos;t the same job first.
       </P>
       <H3>Our GC lost the job</H3>
       <P>

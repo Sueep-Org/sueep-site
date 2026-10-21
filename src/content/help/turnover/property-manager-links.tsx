@@ -77,7 +77,8 @@ export function PropertyManagerLinks() {
           <strong>Booking:</strong> they tap <strong>Book a turnover</strong>, enter the unit, work, and start date, and see an
           estimate from the building&apos;s pricing package. Units we&apos;ve turned before fill in their size, and{" "}
           <strong>Same as last time</strong> checks last time&apos;s work. They can add up to 10 units in one booking. All
-          units start on the same date unless they tap <strong>Change date</strong> on a unit to give it its own.
+          units start on the same date unless they tap <strong>Change date</strong> on a unit to give it its own. Each unit
+          also asks whether they&apos;ve <strong>walked the unit</strong>.
         </LI>
         <LI>A bar at the top says who to call: their Sueep contact&apos;s name and phone number.</LI>
       </UL>
@@ -94,7 +95,8 @@ export function PropertyManagerLinks() {
       </P>
       <Steps>
         <Step n={1} title="1. Check it">
-          Open <strong>Requests</strong>. Read the work, dates, and notes. Website requests also show the person&apos;s email and
+          Open <strong>Requests</strong>. Read the work, dates, and notes, and whether the unit was walked (Walked / Not walked,
+          also in the request email and the unit project&apos;s comments). Website requests also show the person&apos;s email and
           phone. If a request includes <strong>Other</strong> work, that isn&apos;t in the estimate yet.
         </Step>
         <Step n={2} title="2. Confirm it">

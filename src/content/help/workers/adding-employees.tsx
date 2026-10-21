@@ -31,7 +31,8 @@ export function AddingEmployees() {
             <Step n={3} title="Employee Details Page">
                 All employees have an employee details page that can be navigated to by clicking on their name in the employees table. It has 5 tabs.
                 <br></br><br></br>
-                You will first land on the <strong>General Info</strong> tab where you can change their name, email, phone number, role, pay type and rate, default project, status, hire date, offshore status, and any notes.
+                You will first land on the <strong>General Info</strong> tab where you can change their name, email, phone number, role, pay type and rate, default project, status, hire date, offshore status, language, and any notes.
+                <Callout type="tip"><strong>Language</strong> (English or Spanish) sets the language of the emails we send them (schedule invites, info form and clock links) and the pages those emails open. Anything staff type, like notes or job names, stays as typed.</Callout>
                 <Img src="/help/employees/employee_3.png" alt="Employees details" />
                 <Callout type="info">Pay fields, bank info, and SSN are only visible to roles allowed to see pay information.</Callout>
                 Next is the <strong>Personal &amp; Documents</strong> tab. This tab combines their SSN, bank account details, and required documents in one place, and this is where employee compliance is configured.

@@ -872,6 +872,8 @@ type UnitDraft = {
   work: RequestWork;
   otherWork: boolean;
   otherDescription: string;
+  /** "Unit has been walked" */
+  walked: boolean;
   moveOut: string;
   moveIn: string;
   showMore: boolean;
@@ -890,6 +892,7 @@ function newDraft(key: number, copyWorkFrom?: UnitDraft): UnitDraft {
     work: copyWorkFrom ? { ...copyWorkFrom.work } : { ...NO_WORK },
     otherWork: copyWorkFrom?.otherWork ?? false,
     otherDescription: copyWorkFrom?.otherDescription ?? "",
+    walked: false,
     moveOut: "",
     moveIn: "",
     showMore: false,
@@ -986,6 +989,7 @@ function BookingForm({
             ...d.work,
             otherWork: d.otherWork,
             otherDescription: d.otherDescription,
+            unitWalked: d.walked,
             startDate: d.ownStart || undefined,
             moveOutDate: d.moveOut,
             moveInDate: d.moveIn,
@@ -1185,6 +1189,11 @@ function BookingForm({
                     />
                   )}
                 </fieldset>
+
+                <label className="flex items-center gap-2 py-0.5 text-sm text-gray-700">
+                  <input type="checkbox" checked={d.walked} onChange={() => update(d.key, { walked: !d.walked })} className="h-5 w-5 text-pink-600" />
+                  Unit has been walked
+                </label>
 
                 {d.showMore ? (
                   <div className="grid gap-3 sm:grid-cols-2">

@@ -381,13 +381,13 @@ export const NOTIFICATIONS = {
   }),
 
   PIPELINE_FOLLOW_UPS: def({
-    label: "Pipeline follow-ups",
+    label: "Deal follow-ups",
     group: "Reminders",
     when: "Monday about 8am: your deals with an overdue next step, one due this week, or none yet in a stage that needs one",
     automatic: "Each HubSpot deal owner who has an ERP login with the same email",
   }),
   PIPELINE_FOLLOW_UPS_SUMMARY: def({
-    label: "Pipeline follow-ups summary",
+    label: "Deal follow-ups summary",
     group: "Reminders",
     when: "Monday about 8am: next steps for everyone, including deals owned by people no longer in HubSpot",
     automatic: "Every Admin",

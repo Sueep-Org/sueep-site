@@ -197,6 +197,9 @@ export default async function PropertyManagerRequestsPage({ searchParams }: Page
                         {r.sqft ? `, ${r.sqft} sq ft` : ""}
                         {r.unitQuality ? `, ${r.unitQuality.toLowerCase()} condition` : ""}
                       </div>
+                      {r.unitWalked != null && (
+                        <div className={`text-xs ${r.unitWalked ? "text-emerald-700" : "text-amber-700"}`}>{r.unitWalked ? "Walked" : "Not walked"}</div>
+                      )}
                     </td>
                     <td className="px-3 py-2 text-xs text-gray-700">
                       {requestWorkLabels(r).join(", ")}

@@ -2,11 +2,31 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { dayKey } from "@/lib/erp/schedule";
 import { notifyProjectCrew, sendDayInvite, sendSubLeadInvite } from "@/lib/erp/scheduleInvites";
+import { isScheduleRemovalReason } from "@/lib/erp/scheduleRemovals";
+import { getErpAuth } from "@/lib/erpAuth";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-export async function DELETE(_req: Request, ctx: Ctx) {
+// Name shown on the calendar for a person, same rule as the schedule page
+// (their Employee name by email, else the part before the @).
+async function personName(email: string | null | undefined): Promise<string | null> {
+  if (!email) return null;
+  const emp = await prisma.employee.findFirst({
+    where: { email: { equals: email, mode: "insensitive" } },
+    select: { firstName: true, lastName: true },
+  });
+  return (emp ? `${emp.firstName} ${emp.lastName}`.trim() : "") || email.split("@")[0]!;
+}
+
+export async function DELETE(req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
+
+  // Optional { reason, note }. Any reason except MISTAKE leaves a grayed-out
+  // ScheduleDayRemoval on the calendar; no body (older callers) or MISTAKE
+  // just deletes like before.
+  const body = (await req.json().catch(() => null)) as { reason?: unknown; note?: unknown } | null;
+  const reason = isScheduleRemovalReason(body?.reason) ? body.reason : null;
+  const note = typeof body?.note === "string" && body.note.trim() ? body.note.trim().slice(0, 500) : null;
 
   const existing = await prisma.projectDayAssignment.findUnique({
     where: { id },
@@ -19,9 +39,31 @@ export async function DELETE(_req: Request, ctx: Ctx) {
         },
       },
       supervisorUser: { select: { email: true } },
+      projectManager: { select: { email: true } },
+      supervisorContractor: { select: { name: true } },
     },
   });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  let removal: { id: string } | null = null;
+  if (reason && reason !== "MISTAKE") {
+    const auth = await getErpAuth();
+    const coveredBy =
+      (await personName(existing.supervisorUser?.email)) ??
+      (await personName(existing.projectManager?.email)) ??
+      existing.supervisorContractor?.name ??
+      null;
+    removal = await prisma.scheduleDayRemoval.create({
+      data: {
+        projectId: existing.projectId,
+        date: existing.date,
+        reason,
+        note,
+        coveredBy,
+        removedByName: await personName(auth?.email),
+      },
+    });
+  }
 
   const location = existing.project.building?.address || existing.project.workOrderRecord?.siteAddress || undefined;
 
@@ -79,5 +121,5 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     });
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, removal });
 }

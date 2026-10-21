@@ -165,7 +165,7 @@ function Body({ r, canLink }: { r: WinLossReport; canLink: boolean }) {
 
                 <Card
                   title="Re-bids with the GC that won"
-                  info="Bids in the period lost because our GC wasn't awarded the job. With winner: someone recorded which GC got it (Mark lost or Who won? on the Pipeline board). Re-bids: new deals made from those with the winning GC, and how they turned out. Any period's re-bid can still be open."
+                  info="Bids in the period lost because our GC wasn't awarded the job. With winner: someone recorded which GC got it (Mark lost or Who won? on the Deals board). Re-bids: new deals made from those with the winning GC, and how they turned out. Any period's re-bid can still be open."
                 >
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     {[

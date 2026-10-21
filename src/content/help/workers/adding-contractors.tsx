@@ -24,7 +24,7 @@ export function AddingContractors() {
                 <br></br><br></br>
                 The profile has five tabs: <strong>Overview</strong> (name, email, status, application and company profile), <strong>Compliance</strong> (insurance, background check, documents, licensing), <strong>Pay &amp; Personal</strong> (info form link, personal info, bank, SSN), <strong>Work</strong> (labor and time off), and <strong>Signing</strong>. Time off for a contractor needs an Admin, PM or Business Manager to approve it, same as an employee&apos;s, but there&apos;s no yearly day limit.
                 <br></br><br></br>
-                On <strong>Overview</strong>, open <strong>General information</strong> to edit their name, email, and status (active or inactive). There&apos;s also a <strong>Delete contractor</strong> button there if you need to remove one entirely.
+                On <strong>Overview</strong>, open <strong>General information</strong> to edit their name, email, status (active or inactive), and <strong>Language</strong> (English or Spanish). Language sets the emails we send them (schedule invites, info form and upload links) and the pages those emails open. There&apos;s also a <strong>Delete contractor</strong> button there if you need to remove one entirely.
                 <Img src="/help/add_contractor/contractor_3.png" alt="Contractor" />
                 Under <strong>Compliance → Documents</strong> you set which documents a contractor must provide. Click <strong>Edit list</strong> to add or remove documents.
                 <Img src="/help/add_contractor/contractor_4.png" alt="Contractor" />
