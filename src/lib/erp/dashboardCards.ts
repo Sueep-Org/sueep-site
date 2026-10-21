@@ -121,7 +121,7 @@ export const DASHBOARD_CARDS: readonly DashboardCardDef[] = [
   },
   {
     id: "pipeline-week",
-    title: "Pipeline this week",
+    title: "Deals this week",
     tab: "sales",
     roles: ["BUSINESS_MANAGER"],
     info: "Post-construction and janitorial deals compared with the saved pipeline from a week ago: new deals, deals that moved to a later stage, won and closed lost. Forecast: each open post-construction deal's amount times its chance to win, leaving out Clean up deals, next to what we really won from bids created in the last 12 months. A rough guide, not a promise.",

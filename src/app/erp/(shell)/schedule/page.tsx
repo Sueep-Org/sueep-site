@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { insuranceWarning } from "@/lib/erp/subCoverage";
+import type { ScheduleDayRemovalRow } from "@/lib/erp/scheduleRemovals";
 import {
   addDays,
   coIsComplete,
@@ -98,6 +99,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     coWorkerAssignmentRows,
     contractorAssignmentRows,
     coContractorAssignmentRows,
+    dayRemovalRows,
   ] = await Promise.all([
     prisma.project.findMany({
       // Excludes a recurring contract's own billing placeholder — it has
@@ -118,6 +120,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
         createdAt: true,
         percentDone: true,
         supervisorUserId: true,
+        contractValueCents: true,
         sov: { select: { items: { select: { id: true, description: true, completed: true, scheduledValueCents: true } } } },
         turnoverRequest: {
           select: {
@@ -245,12 +248,25 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     // (projectId null) aren't schedulable here, hence the filter.
     prisma.contractorAssignment.findMany({
       where: { projectId: { not: null } },
-      select: { projectId: true, contractorId: true, assignedDate: true, startDate: true, endDate: true },
+      orderBy: { createdAt: "asc" },
+      select: { projectId: true, contractorId: true, assignedDate: true, startDate: true, endDate: true, costCents: true },
     }),
     prisma.changeOrderContractorAssignment.findMany({
       select: { changeOrderId: true, contractorId: true, assignedDate: true, startDate: true, endDate: true },
     }),
+    prisma.scheduleDayRemoval.findMany({ orderBy: { createdAt: "asc" } }),
   ]);
+
+  const dayRemovals: ScheduleDayRemovalRow[] = dayRemovalRows.map((r) => ({
+    id: r.id,
+    projectId: r.projectId,
+    dateKey: dayKey(r.date),
+    reason: r.reason,
+    note: r.note,
+    coveredBy: r.coveredBy,
+    removedByName: r.removedByName,
+    removedAt: r.createdAt.toISOString(),
+  }));
 
   const workerAssignments: ScheduleWorkerAssignment[] = workerAssignmentRows.map((a) => ({
     id: a.id,
@@ -598,6 +614,15 @@ export default async function SchedulePage({ searchParams }: PageProps) {
   for (const c of coRequesterRows) addRequesterOption(c.projectId, null, c.requestedBy);
   for (const c of contactRows) addRequesterOption(c.projectId, c.fullName, c.email);
 
+  // A sub's pay on a turnover, newest wins (same row subPay.ts edits). Prices-only roles.
+  const subPayByProject = new Map<string, Record<string, number>>();
+  if (showSovPrices) {
+    for (const ca of contractorAssignmentRows) {
+      if (!ca.projectId || ca.costCents == null) continue;
+      subPayByProject.set(ca.projectId, { ...subPayByProject.get(ca.projectId), [ca.contractorId]: ca.costCents });
+    }
+  }
+
   const projects: ScheduleProject[] = projectRows.map((r) => {
     const laborByDay: Record<string, { hours: number; workers: string[] }> = {};
     for (const [k, entry] of laborSummaryByProject.get(r.id) ?? []) {
@@ -642,6 +667,8 @@ export default async function SchedulePage({ searchParams }: PageProps) {
       otherScopeDescription: r.turnoverRequest?.otherDescription ?? null,
       requestNotes: requestNotesByProject.get(r.id) || null,
       requesterOptions: [...(requesterOptionsByProject.get(r.id)?.values() ?? [])],
+      contractValueCents: showSovPrices ? r.contractValueCents : null,
+      subPayByContractor: subPayByProject.get(r.id) ?? {},
       completedScopeItems: r.turnoverRequest ? parseCompletedScopeItems(r.turnoverRequest.completedScopeItems) : [],
       changeOrders: changeOrdersByProject.get(r.id) ?? [],
       buildingId: r.turnoverRequest?.buildingId ?? null,
@@ -835,6 +862,8 @@ export default async function SchedulePage({ searchParams }: PageProps) {
         initialWorkerAssignments={visibleWorkerAssignments}
         initialCoDayAssignments={visibleCoDayAssignments}
         initialCoWorkerAssignments={visibleCoWorkerAssignments}
+        canSetSubPay={showSovPrices}
+        initialDayRemovals={dayRemovals.filter((r) => visibleProjects.some((p) => p.id === r.projectId))}
       />
 
       <ProjectGantt

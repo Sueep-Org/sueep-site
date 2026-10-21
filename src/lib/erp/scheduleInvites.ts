@@ -5,6 +5,7 @@ import { buildDayAssignmentInvite } from "@/lib/calendarInvite";
 import { dayKey } from "@/lib/erp/schedule";
 import { todayEasternKey } from "@/lib/erp/dates";
 import { centsToDollars } from "@/lib/erp/money";
+import { getSubPayCents } from "@/lib/erp/subPay";
 import { turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
 import { cancelConfirmation, markInviteSent, parseInviteUid, prepareConfirmation, responseButtonsHtml, responseUrl } from "@/lib/erp/scheduleConfirmations";
 import { dateLocale, tr, type Lang } from "@/lib/erp/language";
@@ -431,14 +432,14 @@ export async function notifyChangeOrderCrew(params: {
  * and the one replaced can be sent a cancellation. Skipped when the sub has
  * no email on file. Same rules as every other invite (sendDayInvite).
  */
-/** A sub's estimated pay on a janitorial turnover: half the contract value. Only the dollar amount is shown, never how it's worked out. */
-const TURNOVER_SUB_PAY_SHARE = 0.5;
-
-async function turnoverSubPayHtml(projectId: string | null | undefined, lang: Lang = "en"): Promise<string | undefined> {
+/** A sub's pay on a janitorial turnover, as typed on the day card (see subPay.ts). No pay line until someone enters it. */
+async function turnoverSubPayHtml(projectId: string | null | undefined, contractorId: string, lang: Lang = "en"): Promise<string | undefined> {
   if (!projectId) return undefined;
-  const p = await prisma.project.findUnique({ where: { id: projectId }, select: { segment: true, contractValueCents: true } });
-  if (p?.segment !== "JANITORIAL_TURNOVER_REQUESTS" || !p.contractValueCents) return undefined;
-  return `<p><strong>${tr(lang, { en: "Estimated pay", es: "Pago estimado" })}:</strong> ${centsToDollars(Math.round(p.contractValueCents * TURNOVER_SUB_PAY_SHARE))}</p>`;
+  const p = await prisma.project.findUnique({ where: { id: projectId }, select: { segment: true } });
+  if (p?.segment !== "JANITORIAL_TURNOVER_REQUESTS") return undefined;
+  const cents = await getSubPayCents(projectId, contractorId);
+  if (cents == null) return undefined;
+  return `<p><strong>${tr(lang, { en: "Pay", es: "Pago" })}:</strong> ${centsToDollars(cents)}</p>`;
 }
 
 export async function sendSubLeadInvite(params: {
@@ -460,7 +461,7 @@ export async function sendSubLeadInvite(params: {
     params.kind === "day" && !params.cancelled
       ? await prisma.projectDayAssignment
           .findUnique({ where: { id: params.assignmentId }, select: { projectId: true } })
-          .then((a) => turnoverSubPayHtml(a?.projectId, contact.lang))
+          .then((a) => turnoverSubPayHtml(a?.projectId, params.contractorId, contact.lang))
           .catch(() => undefined)
       : undefined;
   await sendDayInvite({
@@ -479,8 +480,4 @@ export async function sendSubLeadInvite(params: {
     extraHtml,
     lang: contact.lang,
   });
-}
-
-function dayLabel(d: Date | null | undefined): string | null {
-  return d ? d.toLocaleDateString("en-US", { weekday: "short", month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }) : null;
 }

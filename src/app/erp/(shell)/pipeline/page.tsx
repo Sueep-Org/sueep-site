@@ -6,10 +6,11 @@ import { InfoTip } from "@/app/erp/components/ui";
 import { CLOSED_DAYS, loadPipelineBoard, type PipelineBoard } from "@/lib/erp/pipelineBoard";
 import { WORK_SCOPES, WORK_SCOPE_LABELS, type PipelineKey } from "@/lib/erp/postConDeals";
 import { loadLostReasonOptions, type LostReasonOption } from "@/lib/erp/dealLostReasons";
+import { loadTypeOfBusinessOptions } from "@/lib/erp/dealCreate";
 import { prisma } from "@/lib/prisma";
 import { PipelineBoardView } from "./PipelineBoardView";
 
-export const metadata: Metadata = { title: "Pipeline" };
+export const metadata: Metadata = { title: "Deals" };
 export const dynamic = "force-dynamic";
 
 const PIPELINES: { key: PipelineKey; label: string }[] = [
@@ -27,7 +28,10 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
   let board: PipelineBoard | null = null;
   let reasonOptions: LostReasonOption[] = [];
   let error: string | null = null;
-  const companies = await prisma.clientCompany.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } });
+  const [companies, typeOptions] = await Promise.all([
+    prisma.clientCompany.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    loadTypeOfBusinessOptions().catch(() => []),
+  ]);
   try {
     [board, reasonOptions] = await Promise.all([loadPipelineBoard(pipeline, closed, auth.email), loadLostReasonOptions()]);
   } catch (e) {
@@ -37,8 +41,8 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
   return (
     <div className="space-y-4">
       <h1 className="flex items-center gap-1 text-2xl font-semibold text-gray-900">
-        Pipeline
-        <InfoTip text="HubSpot deals by stage, like HubSpot's board. Read-only: change a stage in HubSpot from the card link. Refreshed every hour." />
+        Deals
+        <InfoTip text="HubSpot deals by stage, like HubSpot's board. New deals, stage moves and edits made here save to HubSpot. Refreshed from HubSpot every hour." />
       </h1>
       <div className="flex flex-wrap gap-2">
         {PIPELINES.map((p) => (
@@ -63,6 +67,7 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
             closedDays={CLOSED_DAYS}
             reasonOptions={reasonOptions}
             mayEditCompanies={canEditCompanies(auth.role)}
+            typeOptions={typeOptions}
             companies={companies.map((c) => ({ value: c.id, label: c.name }))}
             startOnMine={auth.role === "SALES" || auth.role === "ESTIMATION"}
             scopes={WORK_SCOPES.map((k) => ({ value: k, label: WORK_SCOPE_LABELS[k] }))}

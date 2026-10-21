@@ -62,7 +62,7 @@ export function scopeFromText(text: string): WorkScope | null {
 }
 
 /** HubSpot's Type of business values, for deals without line items. */
-function scopeFromTypeOfBusiness(v: string | null): WorkScope | null {
+export function scopeFromTypeOfBusiness(v: string | null): WorkScope | null {
   if (!v) return null;
   if (/\+|cleaning and painting/i.test(v)) return "BOTH";
   return /paint/i.test(v) ? "PAINTING" : /clean/i.test(v) ? "CLEANING" : null;

@@ -1090,7 +1090,17 @@ export function buildPropertyManagerRequestEmail(params: {
   building: string;
   /** Shared start day, or null when the units start on different days (each unit's `start` is then set) */
   start: string | null;
-  units: { unit: string; layout: string; work: string[]; estimate: string; start?: string | null; moveOut: string | null; moveIn: string | null }[];
+  units: {
+    unit: string;
+    layout: string;
+    work: string[];
+    estimate: string;
+    start?: string | null;
+    moveOut: string | null;
+    moveIn: string | null;
+    /** "Yes" or "No": has the unit been walked */
+    walked?: string | null;
+  }[];
   total: string | null;
   notes: string | null;
   url: string;
@@ -1099,7 +1109,7 @@ export function buildPropertyManagerRequestEmail(params: {
   const units = params.units
     .map(
       (u) =>
-        `<p>${line("Unit", `${u.unit} (${u.layout})`)}${line("Start", u.start ?? null)}${line("Work", u.work.join(", "))}${line("Move-out", u.moveOut)}${line("Move-in", u.moveIn)}${line("Estimate", u.estimate)}</p>`,
+        `<p>${line("Unit", `${u.unit} (${u.layout})`)}${line("Start", u.start ?? null)}${line("Work", u.work.join(", "))}${line("Move-out", u.moveOut)}${line("Move-in", u.moveIn)}${line("Unit walked", u.walked ?? null)}${line("Estimate", u.estimate)}</p>`,
     )
     .join("");
   const count = params.units.length;

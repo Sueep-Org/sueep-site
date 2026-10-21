@@ -136,6 +136,10 @@ export type ScheduleProject = {
   requestNotes: string | null;
   /** Client people who could have asked for a day (portal requesters, project contacts with an email) */
   requesterOptions: { name: string; email: string }[];
+  /** Project price, for the day card's half-price hint. Null for roles that can't see financials. */
+  contractValueCents: number | null;
+  /** Sub pay saved on this project, by contractor id (see subPay.ts). Empty for roles that can't see financials. */
+  subPayByContractor: Record<string, number>;
   /** Subset of contractedScopeItems already marked done (see
    * TurnoverRequest.completedScopeItems). The day-assignment scope picker
    * excludes these, a finished item can't be put back on the calendar. */

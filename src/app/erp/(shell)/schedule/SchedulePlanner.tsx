@@ -39,6 +39,8 @@ import { SOVMultiCombobox, SOVPriceSummary } from "@/app/erp/components/SOVCombo
 import { centsToDollars } from "@/lib/erp/money";
 import { addDaysKey, daysBetween } from "@/lib/erp/managementCalendar";
 import { AnswerMark, CoverageAnswer, answerUid, answersSummary, type Answers } from "./AnswerMark";
+import { RemoveDayModal } from "./RemoveDayModal";
+import { scheduleRemovalReasonLabel, type ScheduleDayRemovalRow, type ScheduleRemovalReason } from "@/lib/erp/scheduleRemovals";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -595,6 +597,8 @@ export function SchedulePlanner({
   initialCoDayAssignments,
   initialCoWorkerAssignments,
   answers = {},
+  canSetSubPay = false,
+  initialDayRemovals = [],
 }: {
   projects: ScheduleProject[];
   supervisors: Person[];
@@ -610,6 +614,10 @@ export function SchedulePlanner({
   initialCoWorkerAssignments: ScheduleCoWorkerAssignment[];
   /** Confirm / Can't make it answers by invite uid (AnswerMark.tsx), loaded with the page */
   answers?: Answers;
+  /** Roles that see prices can type a sub's pay on a turnover day (see subPay.ts) */
+  canSetSubPay?: boolean;
+  /** Planned days removed for a real reason, drawn grayed out (see scheduleRemovals.ts) */
+  initialDayRemovals?: ScheduleDayRemovalRow[];
 }) {
   // Anchors the whole calendar (which month/day is "today") to Eastern time,
   // not the viewer's own device timezone — otherwise a viewer far enough
@@ -718,17 +726,60 @@ export function SchedulePlanner({
   // works on any day, including past ones where the "+" button is hidden, so
   // stale planned entries that never got a real labor log can still be
   // cleared. Never touches confirmed (labor-log-based) calendar entries.
-  async function handleDeleteAssignment(id: string) {
+  // The chip's × asks why first (RemoveDayModal). Anything but "placed by
+  // mistake" leaves a grayed-out removed chip on that day with the reason.
+  const [dayRemovals, setDayRemovals] = useState(initialDayRemovals);
+  const [pendingRemoval, setPendingRemoval] = useState<{ assignmentId: string; title: string; dateKey: string } | null>(null);
+  const [dismissingRemovalId, setDismissingRemovalId] = useState<string | null>(null);
+
+  async function handleDeleteAssignment(id: string, reason: ScheduleRemovalReason, note: string) {
+    const assignment = dayAssignments.find((a) => a.id === id);
     setDeletingAssignmentId(id);
     const previous = dayAssignments;
     setDayAssignments((prev) => prev.filter((a) => a.id !== id));
     try {
-      const res = await fetch(`/api/erp/schedule/day-assignments/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/erp/schedule/day-assignments/${id}`, {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ reason, note }),
+      });
       if (!res.ok) throw new Error("Failed to remove");
+      const data = (await res.json()) as { removal: { id: string; coveredBy: string | null; removedByName: string | null; note: string | null } | null };
+      if (data.removal && assignment) {
+        const r = data.removal;
+        setDayRemovals((prev) => [
+          ...prev,
+          {
+            id: r.id,
+            projectId: assignment.projectId,
+            dateKey: assignment.dateKey,
+            reason,
+            note: r.note,
+            coveredBy: r.coveredBy,
+            removedByName: r.removedByName,
+            removedAt: new Date().toISOString(),
+          },
+        ]);
+      }
     } catch {
       setDayAssignments(previous);
     } finally {
       setDeletingAssignmentId(null);
+    }
+  }
+
+  async function handleDismissRemoval(id: string) {
+    if (!(await confirm({ title: "Clear removed day?", message: "Takes this grayed-out day and its reason off the calendar.", confirmLabel: "Clear" }))) return;
+    setDismissingRemovalId(id);
+    const previous = dayRemovals;
+    setDayRemovals((prev) => prev.filter((r) => r.id !== id));
+    try {
+      const res = await fetch(`/api/erp/schedule/day-removals/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to clear");
+    } catch {
+      setDayRemovals(previous);
+    } finally {
+      setDismissingRemovalId(null);
     }
   }
 
@@ -808,6 +859,17 @@ export function SchedulePlanner({
   const [eventComment, setEventComment] = useState("");
   // Staff-only note, never sent in invites.
   const [eventInternalNote, setEventInternalNote] = useState("");
+  // Sub pay on a turnover day, in dollars as typed. Saved pay this session, by "projectId:contractorId".
+  const [eventSubPay, setEventSubPay] = useState("");
+  const [subPayOverrides, setSubPayOverrides] = useState<Record<string, number | null>>({});
+  function savedSubPayCents(p: ScheduleProject, contractorId: string): number | null {
+    if (!contractorId) return null;
+    const k = `${p.id}:${contractorId}`;
+    return k in subPayOverrides ? subPayOverrides[k]! : (p.subPayByContractor[contractorId] ?? null);
+  }
+  const centsToInput = (c: number | null) => (c == null ? "" : (c / 100).toFixed(2).replace(/\.00$/, ""));
+  const showSubPay = (p: ScheduleProject, contractorId: string) =>
+    canSetSubPay && !!contractorId && calendarSegmentGroup(p.segment) === "JANITORIAL_TURNOVER_REQUESTS";
   // The client emailed once everyone on the day confirms; "other" types someone not in the list.
   const [eventRequesterEmail, setEventRequesterEmail] = useState("");
   const [eventRequesterName, setEventRequesterName] = useState("");
@@ -864,6 +926,7 @@ export function SchedulePlanner({
     setEventDaySupervisorId(da?.supervisorUserId ?? currentSupervisorId(p));
     setEventDayPmId(da?.projectManagerUserId ?? "");
     setEventDaySupervisorContractorId(da?.supervisorContractorId ?? "");
+    setEventSubPay(centsToInput(savedSubPayCents(p, da?.supervisorContractorId ?? "")));
     setEventDayError("");
     setEventSovPicks(da?.sovItemIds ?? []);
     setEventScopePicks(da?.scopeItems ?? []);
@@ -1608,6 +1671,14 @@ export function SchedulePlanner({
     setEventDayError("");
     const existing = dayAssignments.find((a) => a.dateKey === k && a.projectId === projectId);
     const same = (x: string[], y: string[]) => [...x].sort().join() === [...y].sort().join();
+    const proj = projects.find((x) => x.id === projectId);
+    const sendPay = !!proj && showSubPay(proj, eventDaySupervisorContractorId);
+    const payCents = eventSubPay.trim() ? Math.round(Number(eventSubPay.replace(/[$,\s]/g, "")) * 100) : null;
+    if (sendPay && payCents != null && (!Number.isFinite(payCents) || payCents < 0)) {
+      setEventDayError("Contractor pay needs to be a dollar amount");
+      return { ok: false, row: null };
+    }
+    const payChanged = sendPay && payCents !== savedSubPayCents(proj!, eventDaySupervisorContractorId);
     // Nothing on the card changed for this day, so there's nothing to send (and no invites re-sent).
     if (
       existing &&
@@ -1618,7 +1689,10 @@ export function SchedulePlanner({
       same(existing.scopeItems, eventScopePicks) &&
       same(existing.changeOrderIds, eventCoPicks) &&
       (existing.comment ?? "") === eventComment.trim() &&
-      (existing.internalNote ?? "") === eventInternalNote.trim()
+      (existing.internalNote ?? "") === eventInternalNote.trim() &&
+      (existing.requesterEmail ?? "") === eventRequesterEmail.trim() &&
+      (existing.requesterName ?? "") === eventRequesterName.trim() &&
+      !payChanged
     )
       return { ok: true, row: existing };
     // A supervisor/PM isn't required to keep an assignment around — SOV
@@ -1664,10 +1738,12 @@ export function SchedulePlanner({
           internalNote: eventInternalNote.trim(),
           requesterName: eventRequesterName.trim(),
           requesterEmail: eventRequesterEmail.trim(),
+          ...(sendPay ? { subPayCents: payCents } : {}),
         }),
       });
       const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string; requesterName?: string | null; requesterEmail?: string | null };
       if (!res.ok) throw new Error(data.error || "Failed to save");
+      if (sendPay) setSubPayOverrides((o) => ({ ...o, [`${projectId}:${eventDaySupervisorContractorId}`]: payCents }));
       let row: ScheduleDayAssignment | null = null;
       if (data.id) {
         row = {
@@ -2194,7 +2270,10 @@ export function SchedulePlanner({
               <label className="block text-[9px] text-gray-400">Contractor (if no supervisor)</label>
               <SearchableSelect
                 value={eventDaySupervisorContractorId}
-                onChange={setEventDaySupervisorContractorId}
+                onChange={(v) => {
+                  setEventDaySupervisorContractorId(v);
+                  setEventSubPay(centsToInput(savedSubPayCents(p, v)));
+                }}
                 options={contractors.map((c) => ({ value: c.id, label: c.displayName }))}
                 placeholder="Search…"
                 allLabel="- None -"
@@ -2213,6 +2292,41 @@ export function SchedulePlanner({
               name={contractors.find((c) => c.id === eventDayAssignment.supervisorContractorId)?.displayName}
               status={answers[answerUid.daySub(eventDayAssignment.id, eventDayAssignment.supervisorContractorId)]}
             />
+          ) : null}
+          {showSubPay(p, eventDaySupervisorContractorId) ? (
+            <div className="mt-1.5">
+              <div className="flex items-center gap-1 text-[9px] text-gray-400">
+                Contractor pay
+                <InfoTip text="Shows on the contractor's invite as their pay, and saves as their cost on the project. Leave blank to keep pay off the invite." />
+              </div>
+              <div className="mt-0.5 flex items-center gap-1.5">
+                <div className="relative w-28">
+                  <span className="pointer-events-none absolute left-1.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">$</span>
+                  <input
+                    inputMode="decimal"
+                    value={eventSubPay}
+                    onChange={(e) => setEventSubPay(e.target.value)}
+                    placeholder="0"
+                    className="w-full rounded border border-gray-300 bg-white py-1 pl-4 pr-1.5 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
+                  />
+                </div>
+                {p.contractValueCents ? (
+                  <span className="text-[10px] text-gray-500">
+                    50% of {centsToDollars(p.contractValueCents)} is{" "}
+                    <button
+                      type="button"
+                      onClick={() => setEventSubPay(centsToInput(Math.round(p.contractValueCents! / 2)))}
+                      className="font-medium text-pink-600 hover:underline"
+                      title="Use this amount"
+                    >
+                      {centsToDollars(Math.round(p.contractValueCents / 2))}
+                    </button>
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-gray-400">No price on this project</span>
+                )}
+              </div>
+            </div>
           ) : null}
 
           {calendarSegmentGroup(p.segment) === "POST_CONSTRUCTION" || p.sovItems.length > 0 ? (
@@ -2896,6 +3010,12 @@ export function SchedulePlanner({
   const legendShowsIcons = presentGroups.length > 0;
   const legendShowsGroupingTip = presentGroups.includes("JANITORIAL_TURNOVER_REQUESTS");
   const showLegend = legendShowsType || legendShowsStatus || legendShowsIcons || legendShowsGroupingTip;
+
+  const dayRemovalsByKey = useMemo(() => {
+    const map = new Map<string, ScheduleDayRemovalRow[]>();
+    for (const r of dayRemovals) map.set(r.dateKey, [...(map.get(r.dateKey) ?? []), r]);
+    return map;
+  }, [dayRemovals]);
 
   // Every visible day's chip lists, worked out before drawing any cell so
   // a project on back-to-back days can be drawn as one bar (see
@@ -3791,7 +3911,7 @@ export function SchedulePlanner({
                       type="button"
                       onClick={(e) => {
                         e.preventDefault();
-                        handleDeleteAssignment(assignment.id);
+                        setPendingRemoval({ assignmentId: assignment.id, title: project.jobTitle, dateKey: k });
                       }}
                       disabled={deletingAssignmentId === assignment.id}
                       title="Remove this scheduled assignment"
@@ -4135,6 +4255,40 @@ export function SchedulePlanner({
                           </li>
                         );
                       })}
+                      {selectedSupervisorId
+                        ? null
+                        : (dayRemovalsByKey.get(k) ?? []).map((r) => {
+                            const project = projectById.get(r.projectId);
+                            if (!project || !selectedTypes.has(calendarSegmentGroup(project.segment))) return null;
+                            return (
+                              <li key={`removed-${r.id}`} className={inMonth ? "group relative" : "relative"}>
+                                <div className="flex items-center gap-1 truncate rounded border border-dashed border-gray-300 bg-gray-100 py-0.5 pl-1.5 pr-4 text-[10px] font-medium text-gray-400">
+                                  <span className="truncate line-through">{project.jobTitle}</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDismissRemoval(r.id)}
+                                  disabled={dismissingRemovalId === r.id}
+                                  title="Clear this removed day"
+                                  className="absolute right-0.5 top-1/2 -translate-y-1/2 z-20 px-0.5 text-[11px] font-bold leading-none text-gray-400 opacity-60 hover:opacity-100 disabled:opacity-30"
+                                >
+                                  ×
+                                </button>
+                                {inMonth ? (
+                                  <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
+                                    <div className="font-semibold">{project.jobTitle}</div>
+                                    <div className="text-gray-300">Removed: {scheduleRemovalReasonLabel(r.reason)}</div>
+                                    {r.note ? <div className="line-clamp-3 text-gray-300">Note: {r.note}</div> : null}
+                                    {r.coveredBy ? <div className="text-gray-300">Was covered by: {r.coveredBy}</div> : null}
+                                    <div className="text-gray-400">
+                                      {r.removedByName ? `By ${r.removedByName}, ` : ""}
+                                      {new Date(r.removedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                    </div>
+                                  </div>
+                                ) : null}
+                              </li>
+                            );
+                          })}
                     </ul>
                   </div>
                   </div>
@@ -4283,6 +4437,16 @@ export function SchedulePlanner({
           onCoWorkerDeleted={(id) => setCoWorkerAssignments((prev) => prev.filter((a) => a.id !== id))}
         />
       ) : null}
+      <RemoveDayModal
+        open={pendingRemoval !== null}
+        title={pendingRemoval?.title ?? ""}
+        dateLabel={pendingRemoval ? dayCellLabel(pendingRemoval.dateKey) : ""}
+        onClose={() => setPendingRemoval(null)}
+        onRemove={(reason, note) => {
+          if (pendingRemoval) handleDeleteAssignment(pendingRemoval.assignmentId, reason, note);
+          setPendingRemoval(null);
+        }}
+      />
     </div>
   );
 }

@@ -31,6 +31,7 @@ import { PropertyManagerLinks } from "./turnover/property-manager-links";
 import { CompanyInfoOverview } from "./company-info/company-info-overview";
 import { CompaniesOverview } from "./companies/companies-overview";
 import { RolesAndPermissions } from "./people/roles-and-permissions";
+import { OfficeHiring } from "./people/office-hiring";
 import { WinLossHelp } from "./sales/win-loss";
 import { PipelineBoardHelp } from "./sales/pipeline-board";
 import { PipelineGuide } from "./sales/pipeline-guide";
@@ -164,6 +165,15 @@ export const registry: ArticleEntry[] = [
     component: RolesAndPermissions,
   },
   {
+    slug: "people/office-hiring",
+    title: "Office Hiring",
+    category: "People & Schedule",
+    description: "Office job openings, candidates, stages, and what job ads cost.",
+    order: 2,
+    component: OfficeHiring,
+    roles: [...PM_LEVEL_ROLES],
+  },
+  {
     slug: "schedule/calendar-overview",
     title: "Using the Schedule Calendar",
     category: "People & Schedule",
@@ -262,16 +272,16 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "sales/pipeline-guide",
-    title: "Pipeline Guide: Win More Deals",
+    title: "Deals Guide: Win More Jobs",
     category: "Projects",
-    description: "Why we have the pipeline board and what to do with it: a one-time clean up, the Monday routine, and what to do when a deal is lost.",
+    description: "Why we have the Deals board and what to do with it: a one-time clean up, the Monday routine, and what to do when a deal is lost.",
     order: 10,
     component: PipelineGuide,
     roles: [...PM_LEVEL_ROLES, "SALES", "ESTIMATION"],
   },
   {
     slug: "sales/pipeline-board",
-    title: "Pipeline Board",
+    title: "Deals Board",
     category: "Projects",
     description: "Post-construction and janitorial HubSpot deals as cards by stage, with GC, dates, stale quotes and price flags.",
     order: 11,
