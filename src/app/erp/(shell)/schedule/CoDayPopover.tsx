@@ -16,6 +16,7 @@ import {
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { useConfirm } from "@/app/erp/components/ui";
 import { useInsuranceCheck } from "@/app/erp/components/useInsuranceCheck";
+import { AnswerMark, CoverageAnswer, answerUid, type Answers } from "./AnswerMark";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -49,6 +50,7 @@ export function CoDayPopover({
   projectManagers,
   employees,
   contractors,
+  answers = {},
   onClose,
   onAssignmentSaved,
   onAssignmentDeleted,
@@ -64,6 +66,8 @@ export function CoDayPopover({
   projectManagers: Person[];
   employees: WorkerPerson[];
   contractors: WorkerPerson[];
+  /** Confirm / Can't make it answers by invite uid (AnswerMark.tsx) */
+  answers?: Answers;
   onClose: () => void;
   onAssignmentSaved: (a: ScheduleCoDayAssignment) => void;
   onAssignmentDeleted: (id: string) => void;
@@ -93,6 +97,8 @@ export function CoDayPopover({
     !supervisorName && !pmName && assignment?.supervisorContractorId
       ? contractors.find((c) => c.id === assignment.supervisorContractorId)?.displayName
       : null;
+  const supervisorAnswer = assignment?.supervisorUserId ? answers[answerUid.coDay(assignment.id)] : undefined;
+  const contractorAnswer = assignment?.supervisorContractorId ? answers[answerUid.coDaySub(assignment.id, assignment.supervisorContractorId)] : undefined;
 
   const [completing, setCompleting] = useState(false);
   const [completeError, setCompleteError] = useState("");
@@ -306,9 +312,9 @@ export function CoDayPopover({
             {assignment && (supervisorName || pmName || contractorName || assignment.startTime || assignment.comment) ? (
               <div className="mt-3 border-t border-gray-100 pt-2.5">
                 <label className="block text-[10px] font-medium text-gray-500">Coverage</label>
-                {supervisorName ? <p className="mt-1 text-[11px] text-gray-600">Supervisor: {supervisorName}</p> : null}
+                {supervisorName ? <p className="mt-1 text-[11px] text-gray-600">Supervisor: {supervisorName}<AnswerMark status={supervisorAnswer} /></p> : null}
                 {pmName ? <p className="mt-1 text-[11px] text-gray-600">PM: {pmName}</p> : null}
-                {contractorName ? <p className="mt-1 text-[11px] text-gray-600">Contractor: {contractorName}</p> : null}
+                {contractorName ? <p className="mt-1 text-[11px] text-gray-600">Contractor: {contractorName}<AnswerMark status={contractorAnswer} /></p> : null}
                 {assignment.startTime && assignment.endTime ? (
                   <p className="mt-1 text-[11px] text-gray-600">
                     {assignment.startTime} to {assignment.endTime}
@@ -380,6 +386,8 @@ export function CoDayPopover({
                   allLabel="Contractor (if no supervisor)"
                 />
               </div>
+              <CoverageAnswer name={supervisorName} status={supervisorAnswer} />
+              <CoverageAnswer name={contractorName} status={contractorAnswer} />
               <div className="mt-1.5 flex items-center gap-1.5">
                 <input
                   type="time"
@@ -440,6 +448,7 @@ export function CoDayPopover({
                       >
                         <span className="truncate">
                           {worker?.displayName ?? "Unknown worker"}
+                          <AnswerMark status={answers[answerUid.coWorker(w.id)]} />
                           {worker && !worker.email ? (
                             <span className="text-gray-400" title="No email on file - didn't get a schedule invite">
                               {" "}

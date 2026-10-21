@@ -49,6 +49,8 @@ type Body = {
   signaturePngDataUrl?: string;
   signaturePrintedName?: string;
   // SOV fields
+  sovItemIds?: string[];
+  /** Older single pick, still accepted */
   sovItemId?: string;
   desiredDate?: string;
   comments?: string;
@@ -216,15 +218,17 @@ export async function POST(req: Request) {
   // same click-to-open coverage editor, same delete button), not a separate
   // lightweight "request" chip that only looks similar. Kept out of
   // ProjectChangeOrder entirely, see that model's own comment for why.
-  let sovDescription: string | undefined;
+  let sovDescriptions: string[] | undefined;
+  const sovItemIds = [...new Set([...(Array.isArray(body.sovItemIds) ? body.sovItemIds : []), ...(body.sovItemId ? [body.sovItemId] : [])].filter((id): id is string => typeof id === "string" && !!id))];
   if (type === "sov-schedule") {
-    if (body.sovItemId) {
-      const sovItem = await prisma.projectSOVItem.findFirst({
-        where: { id: body.sovItemId, sov: { projectId } },
-        select: { description: true },
+    if (sovItemIds.length) {
+      const sovItems = await prisma.projectSOVItem.findMany({
+        where: { id: { in: sovItemIds }, sov: { projectId } },
+        select: { id: true, description: true },
       });
-      if (!sovItem) return NextResponse.json({ error: "SOV item not found" }, { status: 404 });
-      sovDescription = sovItem.description;
+      if (sovItems.length !== sovItemIds.length) return NextResponse.json({ error: "SOV item not found" }, { status: 404 });
+      // In the order they were picked
+      sovDescriptions = sovItemIds.map((id) => sovItems.find((s) => s.id === id)!.description);
     }
 
     const date = new Date(`${body.desiredDate}T00:00:00Z`);
@@ -246,11 +250,11 @@ export async function POST(req: Request) {
         projectId,
         date,
         comment: mergedComment,
-        sovItems: body.sovItemId ? { connect: [{ id: body.sovItemId }] } : undefined,
+        sovItems: sovItemIds.length ? { connect: sovItemIds.map((id) => ({ id })) } : undefined,
       },
       update: {
         comment: mergedComment,
-        sovItems: body.sovItemId ? { connect: [{ id: body.sovItemId }] } : undefined,
+        sovItems: sovItemIds.length ? { connect: sovItemIds.map((id) => ({ id })) } : undefined,
       },
     });
   }
@@ -301,7 +305,7 @@ export async function POST(req: Request) {
     coCleanerCount: cleanerCount > 0 ? cleanerCount : undefined,
     coSupervisorCount: supervisorCount > 0 ? supervisorCount : undefined,
     coQuotedPriceCents: quotedPriceCents ?? undefined,
-    sovDescription,
+    sovDescriptions,
     desiredDate: body.desiredDate,
     comments: body.comments,
     projectUrl,
@@ -315,7 +319,7 @@ export async function POST(req: Request) {
     coEstimatedStartDate: body.coEstimatedStartDate,
     coEstimatedEndDate: body.coEstimatedEndDate,
     coQuotedPriceCents: quotedPriceCents ?? undefined,
-    sovDescription,
+    sovDescriptions,
     desiredDate: body.desiredDate,
   });
 

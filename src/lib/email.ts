@@ -510,7 +510,7 @@ export function buildProjectRequestEmail(params: {
    * hasCustomChangeOrderLaborRate. */
   coQuotedPriceCents?: number;
   // SOV fields
-  sovDescription?: string;
+  sovDescriptions?: string[];
   desiredDate?: string;
   comments?: string;
   projectUrl: string | null;
@@ -537,7 +537,7 @@ export function buildProjectRequestEmail(params: {
         ${priceLine}
       `
       : `
-        <p><strong>SOV Item:</strong> ${escapeHtml(params.sovDescription ?? "")}</p>
+        ${sovItemsHtml(params.sovDescriptions)}
         ${params.desiredDate ? `<p><strong>Desired Date:</strong> ${escapeHtml(params.desiredDate)}</p>` : ""}
         ${params.comments ? `<p><strong>Comments:</strong> ${escapeHtml(params.comments)}</p>` : ""}
       `;
@@ -559,6 +559,13 @@ export function buildProjectRequestEmail(params: {
   `;
 }
 
+/** "SOV Item: X" for one pick, a list for several, nothing when none were picked. */
+function sovItemsHtml(items: string[] | undefined): string {
+  if (!items?.length) return "";
+  if (items.length === 1) return `<p><strong>SOV Item:</strong> ${escapeHtml(items[0]!)}</p>`;
+  return `<p style="margin-bottom:4px"><strong>SOV Items:</strong></p><ul style="margin-top:0">${items.map((d) => `<li>${escapeHtml(d)}</li>`).join("")}</ul>`;
+}
+
 export function buildProjectRequestConfirmationEmail(params: {
   type: "change-order" | "sov-schedule";
   projectTitle: string;
@@ -569,7 +576,7 @@ export function buildProjectRequestConfirmationEmail(params: {
   /** Only set when the project has a real Labor rate — see
    * hasCustomChangeOrderLaborRate. */
   coQuotedPriceCents?: number;
-  sovDescription?: string;
+  sovDescriptions?: string[];
   desiredDate?: string;
 }) {
   const typeLabel = params.type === "change-order" ? "change order request" : "scheduling request";
@@ -580,7 +587,7 @@ export function buildProjectRequestConfirmationEmail(params: {
          ${params.coEstimatedEndDate ? `<p><strong>Estimated End Date:</strong> ${escapeHtml(params.coEstimatedEndDate)}</p>` : ""}
          ${params.coQuotedPriceCents != null ? `<p><strong>Estimated Price:</strong> ${formatUsd(params.coQuotedPriceCents)}</p>` : ""}`
       : `
-          <p><strong>SOV Item:</strong> ${escapeHtml(params.sovDescription ?? "")}</p>
+          ${sovItemsHtml(params.sovDescriptions)}
           ${params.desiredDate ? `<p><strong>Desired Date:</strong> ${escapeHtml(params.desiredDate)}</p>` : ""}
         `;
 

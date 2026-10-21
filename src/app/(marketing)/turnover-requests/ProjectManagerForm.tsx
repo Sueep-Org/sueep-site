@@ -33,7 +33,7 @@ function contractFilename(coTitle: string, suffix = "") {
 
 const STEP_LABELS_CO =["Your Project", "Request Type", "Details"] as const;
 const STEP_LABELS_CO_SIGNED = ["Your Project", "Request Type", "Details", "Sign Contract"] as const;
-const STEP_LABELS_SOV = ["Your Project", "Request Type", "SOV Item"] as const;
+const STEP_LABELS_SOV = ["Your Project", "Request Type", "SOV Items"] as const;
 
 function StepIndicator({ current, type, willSign }: { current: number; type: RequestType | null; willSign: boolean }) {
   const labels = type === "sov-schedule" ? STEP_LABELS_SOV : willSign ? STEP_LABELS_CO_SIGNED : STEP_LABELS_CO;
@@ -124,7 +124,7 @@ export function ProjectManagerForm({ onBack }: Props) {
   // Step 3 — SOV fields
   const [sovItems, setSovItems] = useState<SovItem[]>([]);
   const [sovLoading, setSovLoading] = useState(false);
-  const [selectedSovId, setSelectedSovId] = useState("");
+  const [selectedSovIds, setSelectedSovIds] = useState<string[]>([]);
   const [desiredDate, setDesiredDate] = useState("");
   const [comments, setComments] = useState("");
 
@@ -178,7 +178,7 @@ export function ProjectManagerForm({ onBack }: Props) {
   async function loadSovItems(projectId: string) {
     setSovLoading(true);
     setSovItems([]);
-    setSelectedSovId("");
+    setSelectedSovIds([]);
     try {
       const res = await fetch(`/api/external/projects/${projectId}/sov`);
       const data = (await res.json()) as { items?: SovItem[] };
@@ -277,7 +277,7 @@ export function ProjectManagerForm({ onBack }: Props) {
     if (requestType === "change-order" && coEstimatedEndDate && coEstimatedEndDate < coEstimatedStartDate) {
       return "Estimated end date must be on or after the start date.";
     }
-    if (requestType === "sov-schedule" && sovItems.length > 0 && !selectedSovId) return "Please select an SOV item.";
+    if (requestType === "sov-schedule" && sovItems.length > 0 && !selectedSovIds.length) return "Please select at least one SOV item.";
     if (requestType === "sov-schedule" && !desiredDate) return "Desired date is required.";
     return "";
   }
@@ -303,7 +303,7 @@ export function ProjectManagerForm({ onBack }: Props) {
         // coCleanerCount itself (see deriveChangeOrderSupervisorCount).
         coCleanerCount: coCleanerCount.trim() || undefined,
         coNoCrewRequired,
-        sovItemId: selectedSovId || undefined,
+        sovItemIds: selectedSovIds.length ? selectedSovIds : undefined,
         desiredDate: desiredDate || undefined,
         comments: comments.trim() || undefined,
         ...(signature
@@ -418,7 +418,7 @@ export function ProjectManagerForm({ onBack }: Props) {
             setRequestType(null);
             setCoTitle(""); setCoDescription(""); setCoEstimatedStartDate(""); setCoEstimatedEndDate("");
             setCoCleanerCount(""); setCoPriceCents(null);
-            setSelectedSovId(""); setDesiredDate(""); setComments("");
+            setSelectedSovIds([]); setDesiredDate(""); setComments("");
             setRequesterName(""); setRequesterEmail("");
             if (contractPdfUrl) URL.revokeObjectURL(contractPdfUrl);
             setContractPdfUrl(""); setSignaturePngDataUrl(""); setSignaturePrintedName("");
@@ -766,20 +766,24 @@ export function ProjectManagerForm({ onBack }: Props) {
 
             {!sovLoading && sovItems.length > 0 && (
               <div>
-                <label className={label}>Select SOV line item *</label>
+                <label className={label}>Select SOV line items *</label>
+                <p className="mt-0.5 text-xs text-gray-500">Pick as many as you need.</p>
                 <div className="mt-2 max-h-64 overflow-y-auto space-y-2 rounded-md border border-gray-200 p-2">
                   {sovItems.map((item) => (
                     <label
                       key={item.id}
-                      className={`flex cursor-pointer items-start gap-3 rounded-md px-3 py-2.5 transition ${selectedSovId === item.id ? "bg-pink-50 ring-1 ring-[#E73C6E]" : "hover:bg-gray-50"} ${item.completed ? "opacity-50" : ""}`}
+                      className={`flex cursor-pointer items-start gap-3 rounded-md px-3 py-2.5 transition ${selectedSovIds.includes(item.id) ? "bg-pink-50 ring-1 ring-[#E73C6E]" : "hover:bg-gray-50"} ${item.completed ? "opacity-50" : ""}`}
                     >
                       <input
-                        type="radio"
+                        type="checkbox"
                         name="sovItem"
                         value={item.id}
-                        checked={selectedSovId === item.id}
+                        checked={selectedSovIds.includes(item.id)}
                         disabled={item.completed}
-                        onChange={() => setSelectedSovId(item.id)}
+                        onChange={(e) => {
+                          const on = e.target.checked;
+                          setSelectedSovIds((prev) => (on ? [...prev, item.id] : prev.filter((id) => id !== item.id)));
+                        }}
                         className="mt-0.5 accent-[#E73C6E]"
                       />
                       <div className="min-w-0">
