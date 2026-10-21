@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { contentDisposition } from "@/lib/contentDisposition";
+import { officeCandidateGuard } from "@/lib/erp/officeHiringAccess";
 
 export const runtime = "nodejs";
 
@@ -8,6 +9,8 @@ type Ctx = { params: Promise<{ id: string; docId: string }> };
 
 export async function GET(_req: NextRequest, { params }: Ctx) {
   const { id, docId } = await params;
+  const blocked = await officeCandidateGuard(id);
+  if (blocked) return blocked;
 
   const doc = await prisma.candidateDocument.findUnique({
     where: { id: docId },

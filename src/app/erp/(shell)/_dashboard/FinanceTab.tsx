@@ -525,6 +525,8 @@ export async function FinanceTab({ period, by }: { period: string | undefined; b
       items: warnings.janitorMissingRate.map((name) => ({ id: name, label: name, href: "/erp/employees" })),
     },
     { title: "Insurance policies with no premium (counted as $0)", items: warnings.insuranceMissingPremium },
+    { title: "Job ads with no posted date (left out)", items: warnings.jobAdMissingDate },
+    { title: "Job ads with no cost (counted as $0)", items: warnings.jobAdMissingCost },
   ].filter((g) => g.items.length > 0);
   const gapCount = gapGroups.reduce((s, g) => s + g.items.length, 0);
 

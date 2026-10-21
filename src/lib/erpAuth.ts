@@ -125,6 +125,12 @@ export function canSeeFranchiseInquiries(role: ErpRole): boolean {
   return isPmLevel(role);
 }
 
+/** Office tab on Candidates (job openings and office candidates, with
+ * expected salaries). Sales keeps the Field tab only. */
+export function canSeeOfficeHiring(role: ErpRole): boolean {
+  return isPmLevel(role);
+}
+
 /** Post-construction pipeline board (read-only view of HubSpot deals). */
 export function canViewPipelineBoard(role: ErpRole): boolean {
   return isPmLevel(role) || role === "SALES" || role === "ESTIMATION";

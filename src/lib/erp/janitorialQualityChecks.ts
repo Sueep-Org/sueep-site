@@ -10,6 +10,7 @@ import { buildQualityCheckEmail, buildQualityCheckSummaryEmail, buildQualityTeam
 import { addDaysKey } from "./managementCalendar";
 import { todayEasternKey, utcDateKey } from "./dates";
 import { needsAttention, parseAreaResults } from "./janitorialQualityShared";
+import { dateLocale, parseLang, tr, type Lang } from "./language";
 
 /** Roles that can be picked to do a check. */
 export const QUALITY_CHECKER_ROLES = ["ADMIN", "PROJECT_MANAGER"];
@@ -42,8 +43,8 @@ export function checkerName(user: { email: string } | null, names: Map<string, s
   return names.get(user.email.toLowerCase()) ?? user.email.split("@")[0]!;
 }
 
-const formatDay = (d: Date) =>
-  d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+const formatDay = (d: Date, lang: Lang = "en") =>
+  d.toLocaleDateString(dateLocale(lang), { weekday: "short", month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
 const appUrl = () => (process.env.NEXT_PUBLIC_APP_URL?.trim() || "").replace(/\/$/, "");
 
@@ -174,7 +175,7 @@ export async function janitorsAtContract(contractId: string, todayKey: string = 
       OR: [{ effectiveUntil: null }, { effectiveUntil: { gte: new Date(`${todayKey}T00:00:00.000Z`) } }],
       employee: { status: "ACTIVE" },
     },
-    select: { employee: { select: { id: true, firstName: true, lastName: true, email: true, clockToken: true } } },
+    select: { employee: { select: { id: true, firstName: true, lastName: true, email: true, clockToken: true, language: true } } },
   });
   return [...new Map(patterns.map((p) => [p.employee.id, p.employee])).values()];
 }
@@ -204,15 +205,18 @@ export async function notifyTeamAfterCheck(checkId: string) {
   const building = check.recurringContract.building.name;
   for (const j of await janitorsAtContract(check.recurringContractId)) {
     if (!j.email) continue;
+    const lang = parseLang(j.language);
     await sendEmail({
       type: "QUALITY_CHECK_TEAM_NOTICE",
       to: j.email,
       link: `/erp/janitorial/quality-checks/${checkId}`,
-      subject: `Site visit notes for ${building} / Notas de la visita`,
+      subject: tr(lang, { en: `Site visit notes for ${building}`, es: `Notas de la visita a ${building}` }),
+      lang,
       html: buildQualityTeamNoticeEmail({
+        lang,
         firstName: j.firstName,
         building,
-        dateLabel: formatDay(check.scheduledDate),
+        dateLabel: formatDay(check.scheduledDate, lang),
         areas: areas.map((a) => ({ area: a.area, note: a.note || null })),
         teamUpdates: check.teamUpdates,
         clockUrl: j.clockToken ? `${appUrl()}/clock/${j.clockToken}` : null,

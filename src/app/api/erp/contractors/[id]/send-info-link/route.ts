@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendEmail, buildContractorInfoEmail } from "@/lib/email";
+import { parseLang, tr } from "@/lib/erp/language";
 
 const TOKEN_EXPIRY_DAYS = 7;
 
@@ -12,7 +13,7 @@ export async function POST(
 
   const contractor = await prisma.contractor.findUnique({
     where: { id },
-    select: { id: true, name: true, email: true },
+    select: { id: true, name: true, email: true, language: true },
   });
 
   if (!contractor) return NextResponse.json({ error: "Contractor not found" }, { status: 404 });
@@ -37,8 +38,10 @@ export async function POST(
       type: "CONTRACTOR_INFO_LINK",
       link: `/erp/contractors/${id}`,
       to: contractor.email,
-      subject: "Sueep: Complete your contractor information",
+      subject: tr(parseLang(contractor.language), { en: "Sueep: Complete your contractor information", es: "Sueep: Completa tu información de contratista" }),
+      lang: parseLang(contractor.language),
       html: buildContractorInfoEmail({
+        lang: parseLang(contractor.language),
         name: contractor.name,
         infoUrl,
         expiryDays: TOKEN_EXPIRY_DAYS,

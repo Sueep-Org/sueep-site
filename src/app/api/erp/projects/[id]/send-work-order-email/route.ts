@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendEmail, buildWorkOrderNotificationEmailHtml } from "@/lib/email";
+import { dateLocale, parseLang, tr, type Lang } from "@/lib/erp/language";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-function formatDateForEmail(value: string): string {
+function formatDateForEmail(value: string, lang: Lang): string {
   if (!ISO_DATE.test(value)) return value;
-  return new Date(value + "T00:00:00").toLocaleDateString("en-US", {
+  return new Date(value + "T00:00:00").toLocaleDateString(dateLocale(lang), {
     weekday: "long", month: "long", day: "numeric", year: "numeric",
   });
 }
@@ -30,7 +31,7 @@ export async function POST(req: Request, ctx: Ctx) {
 
   const [project, employee] = await Promise.all([
     prisma.project.findUnique({ where: { id }, select: { id: true, jobTitle: true } }),
-    prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true, firstName: true, lastName: true, email: true } }),
+    prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true, firstName: true, lastName: true, email: true, language: true } }),
   ]);
 
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
@@ -48,15 +49,17 @@ export async function POST(req: Request, ctx: Ctx) {
   const origin = req.headers.get("origin") || req.headers.get("host") || "";
   const projectUrl = origin ? `${origin}/erp/projects/${id}` : null;
 
+  const lang = parseLang(employee.language);
   const html = buildWorkOrderNotificationEmailHtml({
     recipientName,
     projectName,
     siteAddress,
     contacts,
-    startDate: startDate ? formatDateForEmail(startDate) : "",
+    startDate: startDate ? formatDateForEmail(startDate, lang) : "",
     serviceType,
     notes,
     projectUrl,
+    lang,
   });
 
   const attachmentRows = await prisma.projectWorkOrderAttachment.findMany({
@@ -74,8 +77,9 @@ export async function POST(req: Request, ctx: Ctx) {
       type: "JOB_BRIEF",
       link: `/erp/projects/${id}`,
       to: employee.email,
-      subject: `Job brief: ${projectName}`,
+      subject: `${tr(lang, { en: "Job brief", es: "Resumen del trabajo" })}: ${projectName}`,
       html,
+      lang,
       attachments: emailAttachments.length > 0 ? emailAttachments : undefined,
     });
   } catch (e) {

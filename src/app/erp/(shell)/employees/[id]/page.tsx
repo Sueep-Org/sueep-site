@@ -260,6 +260,7 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
                 lastName: employee.lastName,
                 email: employee.email,
                 phone: employee.phone,
+                language: employee.language,
                 address: employee.address,
                 dateOfBirth: employee.dateOfBirth,
                 role: employee.role,

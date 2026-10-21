@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 import { prisma } from "@/lib/prisma";
 import { NOTIFICATIONS, type EmailType, type SenderKind } from "@/lib/notificationTypes";
+import type { Lang } from "@/lib/erp/language";
 import { getNotificationSetting } from "@/lib/notificationSettings";
 import { getErpAuth } from "@/lib/erpAuth";
 
@@ -33,13 +34,15 @@ export async function sendEmail(options: {
   sentBy?: string;
   /** Store the attached files with the log row, so they can be opened later */
   keepAttachments?: boolean;
+  /** Language of the shared frame (footer); the caller writes the body in it */
+  lang?: Lang;
 }): Promise<"SENT" | "OFF" | "SKIPPED" | "NO_RECIPIENTS"> {
   const def = NOTIFICATIONS[options.type];
   const setting = await getNotificationSetting(options.type);
   const given = options.to == null ? [] : Array.isArray(options.to) ? options.to : [options.to];
   const to = uniqueAddresses(given.length || def.toMode !== "recipients" ? given : setting.to);
   const cc = uniqueAddresses([...(options.cc ?? []), ...setting.cc]).filter((e) => !to.includes(e));
-  const html = def.layout ? wrapEmailLayout(options.html, options.type) : options.html;
+  const html = def.layout ? wrapEmailLayout(options.html, options.type, options.lang) : options.html;
   // Worker and client emails come from a noreply address, so a reply would
   // be lost. When someone in the ERP sent it, replies go to them instead.
   const replyTo = options.replyTo ?? (def.sender === "sueep" ? await signedInEmail() : undefined);
@@ -180,7 +183,7 @@ function appBaseUrl(): string {
  * content, and a footer saying why you got it. Staff emails point to the
  * Notifications page; worker and client emails get a contact line instead.
  */
-export function wrapEmailLayout(body: string, type: EmailType): string {
+export function wrapEmailLayout(body: string, type: EmailType, lang: Lang = "en"): string {
   const def = NOTIFICATIONS[type];
   const base = appBaseUrl();
   const logo = base
@@ -192,9 +195,9 @@ export function wrapEmailLayout(body: string, type: EmailType): string {
       ? `You got this "${escapeHtml(def.label)}" email from the Sueep ERP.${
           base ? ` Admins and PMs can change who gets it on the <a href="${escapeHtml(base)}/erp/notifications" style="color:#6b7280">Email Settings page</a>.` : ""
         }`
-      : `Sueep. Questions? Email <a href="mailto:${escapeHtml(contact)}" style="color:#6b7280">${escapeHtml(contact)}</a>.`;
+      : `Sueep. ${lang === "es" ? "¿Preguntas? Escribe a" : "Questions? Email"} <a href="mailto:${escapeHtml(contact)}" style="color:#6b7280">${escapeHtml(contact)}</a>.`;
   return `<!doctype html>
-<html><body style="margin:0;padding:0;background:#f3f4f6">
+<html lang="${lang}"><body style="margin:0;padding:0;background:#f3f4f6">
   <div style="background:#f3f4f6;padding:24px 12px;font-family:Arial,Helvetica,sans-serif">
     <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
       <div style="padding:16px 24px;border-bottom:3px solid #E73C6E">${logo}</div>
@@ -318,25 +321,27 @@ export function buildContractorDocUploadEmail(params: {
   uploadUrl: string;
   documents: string[];
   expiryDays?: number;
+  lang?: Lang;
 }) {
+  const es = params.lang === "es";
   const docList = params.documents
     .map((d) => `<li style="margin-bottom:6px">${escapeHtml(d)}</li>`)
     .join("");
   const days = params.expiryDays ?? 7;
   return `
     <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:560px">
-      <h2 style="margin-bottom:8px;color:#E73C6E">Action required: upload your documents</h2>
-      <p>Hi ${escapeHtml(params.name)},</p>
-      <p>Please upload the following documents using the secure link below. No account required, and the link expires in ${days} days.</p>
+      <h2 style="margin-bottom:8px;color:#E73C6E">${es ? "Acción requerida: sube tus documentos" : "Action required: upload your documents"}</h2>
+      <p>${es ? "Hola" : "Hi"} ${escapeHtml(params.name)},</p>
+      <p>${es ? `Sube los siguientes documentos con el enlace seguro de abajo. No necesitas una cuenta y el enlace vence en ${days} días.` : `Please upload the following documents using the secure link below. No account required, and the link expires in ${days} days.`}</p>
       <ul style="margin:12px 0;padding-left:20px">${docList}</ul>
       <p style="margin:20px 0">
         <a href="${escapeHtml(params.uploadUrl)}"
            style="background:#E73C6E;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold">
-          Upload documents
+          ${es ? "Subir documentos" : "Upload documents"}
         </a>
       </p>
-      <p style="font-size:12px;color:#555">Or copy this link into your browser:<br/>${escapeHtml(params.uploadUrl)}</p>
-      <p style="font-size:12px;color:#888;margin-top:24px">If you weren't expecting this email, please ignore it.</p>
+      <p style="font-size:12px;color:#555">${es ? "O copia este enlace en tu navegador:" : "Or copy this link into your browser:"}<br/>${escapeHtml(params.uploadUrl)}</p>
+      <p style="font-size:12px;color:#888;margin-top:24px">${es ? "Si no esperabas este correo, ignóralo." : "If you weren't expecting this email, please ignore it."}</p>
     </div>
   `;
 }
@@ -345,22 +350,24 @@ export function buildContractorInfoEmail(params: {
   name: string;
   infoUrl: string;
   expiryDays?: number;
+  lang?: Lang;
 }) {
+  const es = params.lang === "es";
   const days = params.expiryDays ?? 7;
   return `
     <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:560px">
-      <h2 style="margin-bottom:8px;color:#E73C6E">Action required: complete your contractor information</h2>
-      <p>Hi ${escapeHtml(params.name)},</p>
-      <p>Please complete the contractor information form using the secure link below. You will be asked to provide your personal details, banking information, and insurance status.</p>
-      <p>No account required, and the link expires in ${days} days.</p>
+      <h2 style="margin-bottom:8px;color:#E73C6E">${es ? "Acción requerida: completa tu información de contratista" : "Action required: complete your contractor information"}</h2>
+      <p>${es ? "Hola" : "Hi"} ${escapeHtml(params.name)},</p>
+      <p>${es ? "Completa el formulario de información de contratista con el enlace seguro de abajo. Te pediremos tus datos personales, información bancaria y si tienes seguro." : "Please complete the contractor information form using the secure link below. You will be asked to provide your personal details, banking information, and insurance status."}</p>
+      <p>${es ? `No necesitas una cuenta y el enlace vence en ${days} días.` : `No account required, and the link expires in ${days} days.`}</p>
       <p style="margin:20px 0">
         <a href="${escapeHtml(params.infoUrl)}"
            style="background:#E73C6E;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold">
-          Complete my information
+          ${es ? "Completar mi información" : "Complete my information"}
         </a>
       </p>
-      <p style="font-size:12px;color:#555">Or copy this link into your browser:<br/>${escapeHtml(params.infoUrl)}</p>
-      <p style="font-size:12px;color:#888;margin-top:24px">If you weren't expecting this email, please ignore it.</p>
+      <p style="font-size:12px;color:#555">${es ? "O copia este enlace en tu navegador:" : "Or copy this link into your browser:"}<br/>${escapeHtml(params.infoUrl)}</p>
+      <p style="font-size:12px;color:#888;margin-top:24px">${es ? "Si no esperabas este correo, ignóralo." : "If you weren't expecting this email, please ignore it."}</p>
     </div>
   `;
 }
@@ -369,22 +376,24 @@ export function buildEmployeeInfoEmail(params: {
   name: string;
   infoUrl: string;
   expiryDays?: number;
+  lang?: Lang;
 }) {
+  const es = params.lang === "es";
   const days = params.expiryDays ?? 7;
   return `
     <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:560px">
-      <h2 style="margin-bottom:8px;color:#E73C6E">Action required: complete your employee information</h2>
-      <p>Hi ${escapeHtml(params.name)},</p>
-      <p>Please complete the employee information form using the secure link below. You will be asked to provide your address, date of birth, banking information, and SSN.</p>
-      <p>No account required, and the link expires in ${days} days.</p>
+      <h2 style="margin-bottom:8px;color:#E73C6E">${es ? "Acción requerida: completa tu información de empleado" : "Action required: complete your employee information"}</h2>
+      <p>${es ? "Hola" : "Hi"} ${escapeHtml(params.name)},</p>
+      <p>${es ? "Completa el formulario de información de empleado con el enlace seguro de abajo. Te pediremos tu dirección, fecha de nacimiento, información bancaria y número de Seguro Social (SSN)." : "Please complete the employee information form using the secure link below. You will be asked to provide your address, date of birth, banking information, and SSN."}</p>
+      <p>${es ? `No necesitas una cuenta y el enlace vence en ${days} días.` : `No account required, and the link expires in ${days} days.`}</p>
       <p style="margin:20px 0">
         <a href="${escapeHtml(params.infoUrl)}"
            style="background:#E73C6E;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold">
-          Complete my information
+          ${es ? "Completar mi información" : "Complete my information"}
         </a>
       </p>
-      <p style="font-size:12px;color:#555">Or copy this link into your browser:<br/>${escapeHtml(params.infoUrl)}</p>
-      <p style="font-size:12px;color:#888;margin-top:24px">If you weren't expecting this email, please ignore it.</p>
+      <p style="font-size:12px;color:#555">${es ? "O copia este enlace en tu navegador:" : "Or copy this link into your browser:"}<br/>${escapeHtml(params.infoUrl)}</p>
+      <p style="font-size:12px;color:#888;margin-top:24px">${es ? "Si no esperabas este correo, ignóralo." : "If you weren't expecting this email, please ignore it."}</p>
     </div>
   `;
 }
@@ -425,30 +434,34 @@ export function buildChangeOrderNotificationEmail(params: {
   reason: string | null;
   requestedBy: string | null;
   changeOrderUrl: string | null;
+  lang?: Lang;
 }) {
+  const es = params.lang === "es";
   const projectLink = params.changeOrderUrl
-    ? `<p style="margin:20px 0"><a href="${escapeHtml(params.changeOrderUrl)}" style="background:#E73C6E;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold">View change order details</a></p>`
+    ? `<p style="margin:20px 0"><a href="${escapeHtml(params.changeOrderUrl)}" style="background:#E73C6E;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold">${es ? "Ver detalles de la orden de cambio" : "View change order details"}</a></p>`
     : "";
   const description = params.description
-    ? `<p><strong>Description:</strong> ${escapeHtml(params.description)}</p>`
+    ? `<p><strong>${es ? "Descripción" : "Description"}:</strong> ${escapeHtml(params.description)}</p>`
     : "";
   const reason = params.reason
-    ? `<p><strong>Reason:</strong> ${escapeHtml(params.reason)}</p>`
+    ? `<p><strong>${es ? "Motivo" : "Reason"}:</strong> ${escapeHtml(params.reason)}</p>`
     : "";
   const requestedBy = params.requestedBy
-    ? `<p><strong>Requested by:</strong> ${escapeHtml(params.requestedBy)}</p>`
+    ? `<p><strong>${es ? "Solicitado por" : "Requested by"}:</strong> ${escapeHtml(params.requestedBy)}</p>`
     : "";
+  const STATUS_ES: Record<string, string> = { DRAFT: "Borrador", SUBMITTED: "Enviada", PENDING: "Pendiente", APPROVED: "Aprobada", REJECTED: "Rechazada", VOID: "Anulada", COMPLETED: "Completada", IN_PROGRESS: "En curso" };
+  const status = es ? STATUS_ES[params.coStatus] ?? params.coStatus : params.coStatus;
 
   return `
     <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:640px">
-      <h2 style="margin-bottom:12px;color:#E73C6E">Change Order Notification</h2>
-      <p>Hi ${escapeHtml(params.recipientName)},</p>
-      <p>A change order has been submitted for your review on the following project.</p>
-      <p><strong>Project:</strong> ${escapeHtml(params.projectTitle)}</p>
-      <p><strong>Change order:</strong> ${escapeHtml(params.coTitle)}</p>
-      <p><strong>Status:</strong> ${escapeHtml(params.coStatus)}</p>
-      <p><strong>Estimated cost:</strong> ${escapeHtml(params.estimatedCost)}</p>
-      <p><strong>Schedule impact:</strong> ${params.estimatedDays != null ? `${params.estimatedDays} day(s)` : "N/A"}</p>
+      <h2 style="margin-bottom:12px;color:#E73C6E">${es ? "Aviso de orden de cambio" : "Change Order Notification"}</h2>
+      <p>${es ? "Hola" : "Hi"} ${escapeHtml(params.recipientName)},</p>
+      <p>${es ? "Se envió una orden de cambio para que la revises en este proyecto." : "A change order has been submitted for your review on the following project."}</p>
+      <p><strong>${es ? "Proyecto" : "Project"}:</strong> ${escapeHtml(params.projectTitle)}</p>
+      <p><strong>${es ? "Orden de cambio" : "Change order"}:</strong> ${escapeHtml(params.coTitle)}</p>
+      <p><strong>${es ? "Estado" : "Status"}:</strong> ${escapeHtml(status)}</p>
+      <p><strong>${es ? "Costo estimado" : "Estimated cost"}:</strong> ${escapeHtml(params.estimatedCost)}</p>
+      <p><strong>${es ? "Impacto en el calendario" : "Schedule impact"}:</strong> ${params.estimatedDays != null ? `${params.estimatedDays} ${es ? "día(s)" : "day(s)"}` : es ? "N/D" : "N/A"}</p>
       ${requestedBy}
       ${description}
       ${reason}
@@ -466,30 +479,33 @@ export function buildWorkOrderNotificationEmailHtml(params: {
   serviceType: string;
   notes: string;
   projectUrl: string | null;
+  lang?: Lang;
 }) {
+  const es = params.lang === "es";
+  const na = es ? "N/D" : "N/A";
   const projectLink = params.projectUrl
-    ? `<p style="margin:20px 0"><a href="${escapeHtml(params.projectUrl)}" style="background:#E73C6E;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold">View Project</a></p>`
+    ? `<p style="margin:20px 0"><a href="${escapeHtml(params.projectUrl)}" style="background:#E73C6E;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold">${es ? "Ver proyecto" : "View Project"}</a></p>`
     : "";
   const notesBlock = params.notes
     ? `<div style="margin-top:16px;padding:12px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;white-space:pre-line">${escapeHtml(params.notes)}</div>`
     : "";
   const contactsBlock = params.contacts
-    ? `<p><strong>Main Point of Contacts:</strong></p><div style="margin-left:16px;white-space:pre-line">${escapeHtml(params.contacts)}</div>`
+    ? `<p><strong>${es ? "Contactos principales" : "Main Point of Contacts"}:</strong></p><div style="margin-left:16px;white-space:pre-line">${escapeHtml(params.contacts)}</div>`
     : "";
 
   return `
     <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:640px">
-      <h2 style="margin-bottom:12px;color:#E73C6E">Job Brief</h2>
-      <p>Hi ${escapeHtml(params.recipientName)},</p>
-      <p>A job brief has been created for the following project and assigned to you for review.</p>
-      <p><strong>Project Name:</strong> ${escapeHtml(params.projectName)}</p>
-      <p><strong>Site Address:</strong> ${escapeHtml(params.siteAddress || "N/A")}</p>
+      <h2 style="margin-bottom:12px;color:#E73C6E">${es ? "Resumen del trabajo" : "Job Brief"}</h2>
+      <p>${es ? "Hola" : "Hi"} ${escapeHtml(params.recipientName)},</p>
+      <p>${es ? "Se creó un resumen del trabajo para este proyecto y se te asignó para revisarlo." : "A job brief has been created for the following project and assigned to you for review."}</p>
+      <p><strong>${es ? "Proyecto" : "Project Name"}:</strong> ${escapeHtml(params.projectName)}</p>
+      <p><strong>${es ? "Dirección" : "Site Address"}:</strong> ${escapeHtml(params.siteAddress || na)}</p>
       ${contactsBlock}
-      <p><strong>Starting Date (Estimated):</strong> ${escapeHtml(params.startDate || "N/A")}</p>
-      <p><strong>Service Type:</strong> ${escapeHtml(params.serviceType || "N/A")}</p>
+      <p><strong>${es ? "Fecha de inicio (estimada)" : "Starting Date (Estimated)"}:</strong> ${escapeHtml(params.startDate || na)}</p>
+      <p><strong>${es ? "Tipo de servicio" : "Service Type"}:</strong> ${escapeHtml(params.serviceType || na)}</p>
       ${notesBlock}
       ${projectLink}
-      <p style="font-size:12px;color:#888;margin-top:24px">Please log in to the project portal to review the full details.</p>
+      <p style="font-size:12px;color:#888;margin-top:24px">${es ? "Inicia sesión en el portal del proyecto para ver todos los detalles." : "Please log in to the project portal to review the full details."}</p>
     </div>
   `;
 }
@@ -893,24 +909,31 @@ export function buildQualityTeamNoticeEmail(params: {
   areas: { area: string; note: string | null }[];
   teamUpdates: string | null;
   clockUrl: string | null;
+  lang?: Lang;
 }) {
+  const es = params.lang === "es";
   const list = params.areas.length
     ? `<ul style="padding-left:20px">${params.areas.map((a) => `<li><strong>${escapeHtml(a.area)}</strong>${a.note ? `: ${escapeHtml(a.note)}` : ""}</li>`).join("")}</ul>`
     : "";
   const updates = params.teamUpdates ? `<p style="white-space:pre-line;background:#f3f4f6;padding:10px 12px;border-radius:6px">${escapeHtml(params.teamUpdates)}</p>` : "";
   const button = params.clockUrl
-    ? `<p style="margin:20px 0"><a href="${escapeHtml(params.clockUrl)}" style="${BUTTON_STYLE}">Open my clock-in page / Abrir mi página</a></p>`
+    ? `<p style="margin:20px 0"><a href="${escapeHtml(params.clockUrl)}" style="${BUTTON_STYLE}">${es ? "Abrir mi página de entrada" : "Open my clock-in page"}</a></p>`
     : "";
-  return `
+  return es
+    ? `
+    <h2 style="margin:0 0 12px;color:#E73C6E">Notas de la visita a ${escapeHtml(params.building)}</h2>
+    <p>Hola ${escapeHtml(params.firstName)}, tu supervisor visitó ${escapeHtml(params.building)} el ${escapeHtml(params.dateLabel)}.</p>
+    ${params.areas.length ? "<p>Por favor atiende estas áreas:</p>" : ""}
+    ${list}
+    ${updates}
+    ${button}
+  `
+    : `
     <h2 style="margin:0 0 12px;color:#E73C6E">Notes from the site visit at ${escapeHtml(params.building)}</h2>
     <p>Hi ${escapeHtml(params.firstName)}, your manager visited ${escapeHtml(params.building)} on ${escapeHtml(params.dateLabel)}.</p>
     ${params.areas.length ? "<p>Please take care of these areas:</p>" : ""}
     ${list}
     ${updates}
-    <hr style="border:none;border-top:1px solid #eee;margin:20px 0">
-    <p>Hola ${escapeHtml(params.firstName)}, tu supervisor visitó ${escapeHtml(params.building)} el ${escapeHtml(params.dateLabel)}.</p>
-    ${params.areas.length ? "<p>Por favor atiende estas áreas (las notas están arriba):</p>" : ""}
-    ${list}
     ${button}
   `;
 }
@@ -968,8 +991,27 @@ export function buildSafetyNoticeEmail(params: {
   violationCount: number;
   escalated: boolean;
   threshold: number;
+  lang?: Lang;
 }) {
   const remaining = params.threshold - params.violationCount;
+  if (params.lang === "es") {
+    const noteEs =
+      params.violationCount >= 2
+        ? `<p><strong>Nota:</strong> Esta es la falta #${params.violationCount} registrada. ${
+            params.escalated
+              ? "Se informó a la Gerencia de Operaciones."
+              : `${remaining === 1 ? "Una falta más" : `${remaining} faltas más`} se informará a la Gerencia de Operaciones.`
+          }</p>`
+        : "";
+    return `
+    <h2 style="margin:0 0 12px;color:#E73C6E">Aviso de cumplimiento de seguridad</h2>
+    <p>Hola ${escapeHtml(params.name)},</p>
+    <p>Se te marcó como <strong>no cumple</strong> en la inspección diaria de equipo de protección (EPP) el <strong>${escapeHtml(params.checkDate)}</strong> en <strong>${escapeHtml(params.projectName)}</strong>.</p>
+    <p>Según la política de Sueep, esto se debe corregir antes de empezar a trabajar. Habla con tu supervisor de inmediato.</p>
+    ${noteEs}
+    <p>Operaciones de Sueep</p>
+  `;
+  }
   const note =
     params.violationCount >= 2
       ? `<p><strong>Note:</strong> This is violation #${params.violationCount} on record. ${
@@ -1008,9 +1050,19 @@ export function buildSafetyEscalationEmail(params: {
 }
 
 /** English and Spanish, since most janitors read the Spanish half. */
-export function buildClockLinkEmail(params: { firstName: string; url: string }) {
+export function buildClockLinkEmail(params: { firstName: string; url: string; lang?: Lang }) {
   const name = escapeHtml(params.firstName);
   const url = escapeHtml(params.url);
+  if (params.lang === "es") {
+    return `
+    <h2 style="margin:0 0 12px;color:#E73C6E">Tu enlace para marcar entrada</h2>
+    <p>Hola ${name},</p>
+    <p>Usa este enlace para marcar tu entrada y salida en tus turnos. Guárdalo en la pantalla de inicio de tu teléfono para encontrarlo fácilmente.</p>
+    <p style="margin:20px 0"><a href="${url}" style="${BUTTON_STYLE}">Abrir mi página de entrada</a></p>
+    <p style="font-size:12px;color:#555">O copia este enlace: ${url}</p>
+    <p>Este enlace es solo para ti, por favor no lo compartas.</p>
+  `;
+  }
   return `
     <h2 style="margin:0 0 12px;color:#E73C6E">Your clock-in link</h2>
     <p>Hi ${name},</p>
@@ -1018,11 +1070,6 @@ export function buildClockLinkEmail(params: { firstName: string; url: string }) 
     <p style="margin:20px 0"><a href="${url}" style="${BUTTON_STYLE}">Open my clock-in page</a></p>
     <p style="font-size:12px;color:#555">Or copy this link: ${url}</p>
     <p>This link is just for you, so please don't share it.</p>
-    <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0">
-    <h2 style="margin:0 0 12px;color:#E73C6E">Tu enlace para marcar entrada</h2>
-    <p>Hola ${name},</p>
-    <p>Usa este enlace para marcar tu entrada y salida en tus turnos. Guárdalo en la pantalla de inicio de tu teléfono para encontrarlo fácilmente. La página está disponible en español.</p>
-    <p>Este enlace es solo para ti, por favor no lo compartas.</p>
   `;
 }
 
@@ -1272,11 +1319,12 @@ export function buildReadyToBillEmail(params: {
   `;
 }
 
-export function buildRescheduleEmail(params: { jobTitle: string; oldLabel: string; newLabel: string; projectUrl: string | null }) {
+export function buildRescheduleEmail(params: { jobTitle: string; oldLabel: string; newLabel: string; projectUrl: string | null; lang?: Lang }) {
+  const es = params.lang === "es";
   return `
-    <h2 style="margin:0 0 12px;color:#E73C6E">Project rescheduled</h2>
-    <p><strong>${escapeHtml(params.jobTitle)}</strong> was moved from ${escapeHtml(params.oldLabel)} to <strong>${escapeHtml(params.newLabel)}</strong>.</p>
-    ${params.projectUrl ? `<p style="margin:20px 0"><a href="${escapeHtml(params.projectUrl)}" style="${BUTTON_STYLE}">View project</a></p>` : ""}
+    <h2 style="margin:0 0 12px;color:#E73C6E">${es ? "Cambio de fecha del proyecto" : "Project rescheduled"}</h2>
+    <p><strong>${escapeHtml(params.jobTitle)}</strong> ${es ? "se movió de" : "was moved from"} ${escapeHtml(params.oldLabel)} ${es ? "a" : "to"} <strong>${escapeHtml(params.newLabel)}</strong>.</p>
+    ${params.projectUrl ? `<p style="margin:20px 0"><a href="${escapeHtml(params.projectUrl)}" style="${BUTTON_STYLE}">${es ? "Ver proyecto" : "View project"}</a></p>` : ""}
   `;
 }
 

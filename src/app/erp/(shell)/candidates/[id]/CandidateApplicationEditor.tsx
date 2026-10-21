@@ -29,7 +29,8 @@ export type CandidateApplicationRow = {
   bankAccountRequired: boolean;
 };
 
-export function CandidateApplicationEditor({ initial }: { initial: CandidateApplicationRow }) {
+/** `hideStatus`: office candidates, whose status follows their stage (set on the Details tab). */
+export function CandidateApplicationEditor({ initial, hideStatus = false }: { initial: CandidateApplicationRow; hideStatus?: boolean }) {
   const router = useRouter();
   const confirm = useConfirm();
   const toast = useToast();
@@ -93,7 +94,11 @@ export function CandidateApplicationEditor({ initial }: { initial: CandidateAppl
     const res = await fetch(`/api/erp/candidates/${initial.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, internalNotes, paperwork, bankAccountRequired }),
+      // With hideStatus the Details tab owns status (via stage) and notes, so
+      // this tab only sends paperwork and never overwrites those.
+      body: JSON.stringify(
+        hideStatus ? { paperwork, bankAccountRequired } : { status, internalNotes, paperwork, bankAccountRequired },
+      ),
     });
     setSaving(false);
     if (!res.ok) {
@@ -108,7 +113,7 @@ export function CandidateApplicationEditor({ initial }: { initial: CandidateAppl
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2">
+      {!hideStatus && <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="status" className="block text-xs font-medium text-pink-500 mb-1">
             Status
@@ -126,7 +131,7 @@ export function CandidateApplicationEditor({ initial }: { initial: CandidateAppl
             ))}
           </select>
         </div>
-      </div>
+      </div>}
 
       {status === "ONBOARDING" && (
         <div className="space-y-3">
@@ -192,7 +197,7 @@ export function CandidateApplicationEditor({ initial }: { initial: CandidateAppl
         </div>
       )}
 
-      <div>
+      {!hideStatus && <div>
         <label htmlFor="internalNotes" className="block text-xs font-medium text-pink-500 mb-1">
           Internal notes (not visible to applicant)
         </label>
@@ -204,7 +209,7 @@ export function CandidateApplicationEditor({ initial }: { initial: CandidateAppl
           className="w-full rounded-md border border-gray-300 bg-gray-200 px-3 py-2 text-sm text-zinc-600 placeholder:text-zinc-400 focus:border-[#E73C6E] focus:outline-none focus:ring-1 focus:ring-[#E73C6E]"
           placeholder="Interview feedback, background check, next steps…"
         />
-      </div>
+      </div>}
       {error && <p className="text-sm text-red-500">{error}</p>}
       {savedFlash && <p className="text-sm text-emerald-500">Saved.</p>}
       <div className="flex items-center gap-3">

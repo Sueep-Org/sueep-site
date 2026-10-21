@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { ConfirmationStatus, ResponseView } from "@/lib/erp/scheduleConfirmations";
+import { tr } from "@/lib/erp/language";
 
 /**
  * Confirm or Can't make it for one scheduled day. Nothing is recorded until a
@@ -14,6 +15,7 @@ export function ResponseForm({ token, view }: { token: string; view: ResponseVie
   const [reason, setReason] = useState(view.reason ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const t = (en: string, es: string) => tr(view.lang, { en, es });
 
   async function answer(a: "CONFIRMED" | "DECLINED") {
     setBusy(true);
@@ -25,11 +27,11 @@ export function ResponseForm({ token, view }: { token: string; view: ResponseVie
         body: JSON.stringify({ answer: a, reason: a === "DECLINED" ? reason : null }),
       });
       const data = (await res.json().catch(() => null)) as { error?: string; status?: ConfirmationStatus } | null;
-      if (!res.ok || !data || data.error) return setError(data?.error ?? "Couldn't save your answer. Try again.");
+      if (!res.ok || !data || data.error) return setError(data?.error ?? t("Couldn't save your answer. Try again.", "No se pudo guardar tu respuesta. Inténtalo de nuevo."));
       setStatus(data.status ?? a);
       setDeclining(false);
     } catch {
-      setError("Couldn't reach the server. Check your connection and try again.");
+      setError(t("Couldn't reach the server. Check your connection and try again.", "No se pudo conectar. Revisa tu conexión e inténtalo de nuevo."));
     } finally {
       setBusy(false);
     }
@@ -39,17 +41,22 @@ export function ResponseForm({ token, view }: { token: string; view: ResponseVie
   return (
     <div className="mt-2 space-y-4">
       <div>
-        <h1 className="text-lg font-semibold text-gray-900">Hi {view.personName.split(/\s+/)[0]},</h1>
+        <h1 className="text-lg font-semibold text-gray-900">
+          {t("Hi", "Hola")} {view.personName.split(/\s+/)[0]},
+        </h1>
         <p className="mt-1 text-sm text-gray-700">
-          You&apos;re scheduled for <strong>{view.title}</strong> on <strong>{view.day}</strong> ({view.role.toLowerCase()}).
+          {t("You're scheduled for", "Estás programado para")} <strong>{view.title}</strong> {t("on", "el")} <strong>{view.day}</strong> (
+          {view.role.toLowerCase()}).
         </p>
       </div>
 
-      {status === "CANCELLED" && <p className="rounded-md bg-gray-100 px-3 py-2 text-sm text-gray-700">You&apos;re no longer scheduled for this day.</p>}
-      {view.past && status !== "CANCELLED" && <p className="rounded-md bg-gray-100 px-3 py-2 text-sm text-gray-700">This day has already passed.</p>}
-      {!closed && status === "CONFIRMED" && <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Thanks, you&apos;re confirmed. See you there.</p>}
+      {status === "CANCELLED" && <p className="rounded-md bg-gray-100 px-3 py-2 text-sm text-gray-700">{t("You're no longer scheduled for this day.", "Ya no estás programado para este día.")}</p>}
+      {view.past && status !== "CANCELLED" && <p className="rounded-md bg-gray-100 px-3 py-2 text-sm text-gray-700">{t("This day has already passed.", "Este día ya pasó.")}</p>}
+      {!closed && status === "CONFIRMED" && <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{t("Thanks, you're confirmed. See you there.", "Gracias, estás confirmado. Nos vemos allá.")}</p>}
       {!closed && status === "DECLINED" && (
-        <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">Thanks for letting us know. The office has been told you can&apos;t make it.</p>
+        <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          {t("Thanks for letting us know. The office has been told you can't make it.", "Gracias por avisarnos. La oficina ya sabe que no puedes ir.")}
+        </p>
       )}
 
       {!closed && !declining && (
@@ -61,7 +68,7 @@ export function ResponseForm({ token, view }: { token: string; view: ResponseVie
               onClick={() => answer("CONFIRMED")}
               className="rounded-md bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
             >
-              {status === "DECLINED" ? "I can make it after all" : "Confirm"}
+              {status === "DECLINED" ? t("I can make it after all", "Al final sí puedo ir") : t("Confirm", "Confirmar")}
             </button>
           )}
           {status !== "DECLINED" && (
@@ -71,7 +78,7 @@ export function ResponseForm({ token, view }: { token: string; view: ResponseVie
               onClick={() => setDeclining(true)}
               className="rounded-md border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             >
-              Can&apos;t make it
+              {t("Can't make it", "No puedo ir")}
             </button>
           )}
         </div>
@@ -80,7 +87,7 @@ export function ResponseForm({ token, view }: { token: string; view: ResponseVie
       {!closed && declining && (
         <div className="space-y-2">
           <label htmlFor="reason" className="block text-sm font-medium text-gray-700">
-            Why? (optional)
+            {t("Why? (optional)", "¿Por qué? (opcional)")}
           </label>
           <textarea
             id="reason"
@@ -97,10 +104,10 @@ export function ResponseForm({ token, view }: { token: string; view: ResponseVie
               onClick={() => answer("DECLINED")}
               className="rounded-md bg-gray-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-gray-900 disabled:opacity-50"
             >
-              {busy ? "Sending…" : "Send"}
+              {busy ? t("Sending…", "Enviando…") : t("Send", "Enviar")}
             </button>
             <button type="button" disabled={busy} onClick={() => setDeclining(false)} className="px-3 py-2.5 text-sm text-gray-500 hover:text-gray-700">
-              Back
+              {t("Back", "Volver")}
             </button>
           </div>
         </div>

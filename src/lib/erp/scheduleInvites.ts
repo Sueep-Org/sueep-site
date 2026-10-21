@@ -7,6 +7,8 @@ import { todayEasternKey } from "@/lib/erp/dates";
 import { centsToDollars } from "@/lib/erp/money";
 import { turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
 import { cancelConfirmation, markInviteSent, parseInviteUid, prepareConfirmation, responseButtonsHtml, responseUrl } from "@/lib/erp/scheduleConfirmations";
+import { dateLocale, tr, type Lang } from "@/lib/erp/language";
+import { languageForEmail } from "@/lib/erp/languageLookup";
 
 /** Shared "you're on the schedule" notification path — used by both the
  * supervisor day-assignment routes and the crew (employee/contractor)
@@ -31,8 +33,8 @@ export function appUrl(): string {
   return process.env.NEXT_PUBLIC_APP_URL?.trim() || "";
 }
 
-function dateKeyLabel(dateKey: string): string {
-  return new Date(`${dateKey}T00:00:00.000Z`).toLocaleDateString("en-US", {
+function dateKeyLabel(dateKey: string, lang: Lang = "en"): string {
+  return new Date(`${dateKey}T00:00:00.000Z`).toLocaleDateString(dateLocale(lang), {
     weekday: "long",
     month: "long",
     day: "numeric",
@@ -41,9 +43,9 @@ function dateKeyLabel(dateKey: string): string {
   });
 }
 
-function formatTimeLabel(time: string): string {
+function formatTimeLabel(time: string, lang: Lang = "en"): string {
   const [h, m] = time.split(":").map(Number);
-  return new Date(Date.UTC(2000, 0, 1, h, m)).toLocaleTimeString("en-US", {
+  return new Date(Date.UTC(2000, 0, 1, h, m)).toLocaleTimeString(dateLocale(lang), {
     hour: "numeric",
     minute: "2-digit",
     timeZone: "UTC",
@@ -52,10 +54,10 @@ function formatTimeLabel(time: string): string {
 
 /** Human "when" line for a single day, e.g. "Tuesday, August 18, 2026,
  * 8:00 AM – 4:00 PM" or "Tuesday, August 18, 2026 (all day)". */
-export function formatInviteWhen(dateKey: string, startTime?: string | null, endTime?: string | null): string {
-  const day = dateKeyLabel(dateKey);
-  if (startTime && endTime) return `${day}, ${formatTimeLabel(startTime)} – ${formatTimeLabel(endTime)}`;
-  return `${day} (all day)`;
+export function formatInviteWhen(dateKey: string, startTime?: string | null, endTime?: string | null, lang: Lang = "en"): string {
+  const day = dateKeyLabel(dateKey, lang);
+  if (startTime && endTime) return `${day}, ${formatTimeLabel(startTime, lang)} – ${formatTimeLabel(endTime, lang)}`;
+  return `${day} ${tr(lang, { en: "(all day)", es: "(todo el día)" })}`;
 }
 
 /** Joins SOV item descriptions and/or turnover scope labels into one
@@ -73,25 +75,32 @@ export function scopeText(sovDescriptions: string[], scopeLabels: string[]): str
 export async function resolveWorkerContact(
   employeeId: string | null,
   contractorId: string | null
-): Promise<{ email: string; name: string } | null> {
+): Promise<{ email: string; name: string; lang: Lang } | null> {
   if (employeeId) {
     const e = await prisma.employee.findUnique({
       where: { id: employeeId },
-      select: { email: true, firstName: true, lastName: true },
+      select: { email: true, firstName: true, lastName: true, language: true },
     });
     if (!e?.email) return null;
-    return { email: e.email, name: `${e.firstName} ${e.lastName}`.trim() };
+    return { email: e.email, name: `${e.firstName} ${e.lastName}`.trim(), lang: e.language === "es" ? "es" : "en" };
   }
   if (contractorId) {
-    const c = await prisma.contractor.findUnique({ where: { id: contractorId }, select: { email: true, name: true } });
+    const c = await prisma.contractor.findUnique({ where: { id: contractorId }, select: { email: true, name: true, language: true } });
     if (!c?.email) return null;
-    return { email: c.email, name: c.name };
+    return { email: c.email, name: c.name, lang: c.language === "es" ? "es" : "en" };
   }
   return null;
 }
 
 /** Running: a sub covering the day in the supervisor's spot (no Sueep supervisor on site). */
 type InviteRole = "Supervising" | "Working" | "Running";
+
+/** Calendar event title prefix */
+const ROLE_SUMMARY: Record<InviteRole, Record<Lang, string>> = {
+  Supervising: { en: "Supervising", es: "Supervisando" },
+  Working: { en: "Working", es: "Trabajando" },
+  Running: { en: "Running", es: "Dirigiendo" },
+};
 
 function inviteHtml(params: {
   role: InviteRole;
@@ -107,19 +116,29 @@ function inviteHtml(params: {
   respondUrl?: string | null;
   /** The day's note and the property manager's request notes (inviteNotes) */
   notes?: string | null;
+  lang: Lang;
 }): string {
-  const verb = params.role === "Supervising" ? "assigned to supervise" : params.role === "Running" ? "assigned to run" : "scheduled to work on";
+  const lang = params.lang;
+  const verb =
+    params.role === "Supervising"
+      ? tr(lang, { en: "assigned to supervise", es: "asignado para supervisar" })
+      : params.role === "Running"
+        ? tr(lang, { en: "assigned to run", es: "asignado para dirigir" })
+        : tr(lang, { en: "scheduled to work on", es: "programado para trabajar en" });
   const title = escapeHtml(params.title);
   const lines = [
     params.cancelled
-      ? `<p>Your assignment to <strong>${title}</strong> on ${params.when} has been removed.</p>`
-      : `<p>You've been ${verb} <strong>${title}</strong>, ${params.when}.</p>`,
+      ? tr(lang, {
+          en: `<p>Your assignment to <strong>${title}</strong> on ${params.when} has been removed.</p>`,
+          es: `<p>Tu asignación a <strong>${title}</strong> el ${params.when} fue cancelada.</p>`,
+        })
+      : tr(lang, { en: `<p>You've been ${verb} <strong>${title}</strong>, ${params.when}.</p>`, es: `<p>Has sido ${verb} <strong>${title}</strong>, ${params.when}.</p>` }),
     params.extraHtml ?? "",
-    params.scopeText ? `<p><strong>Scope:</strong> ${escapeHtml(params.scopeText)}</p>` : "",
-    params.location ? `<p><strong>Address:</strong> ${escapeHtml(params.location)}</p>` : "",
-    !params.cancelled && params.notes ? `<p><strong>Notes:</strong><br>${escapeHtml(params.notes).replace(/\n/g, "<br>")}</p>` : "",
-    !params.cancelled && params.respondUrl ? responseButtonsHtml(params.respondUrl) : "",
-    !params.cancelled ? `<p>Add the attached invite to your calendar.</p>` : "",
+    params.scopeText ? `<p><strong>${tr(lang, { en: "Scope", es: "Trabajo" })}:</strong> ${escapeHtml(params.scopeText)}</p>` : "",
+    params.location ? `<p><strong>${tr(lang, { en: "Address", es: "Dirección" })}:</strong> ${escapeHtml(params.location)}</p>` : "",
+    !params.cancelled && params.notes ? `<p><strong>${tr(lang, { en: "Notes", es: "Notas" })}:</strong><br>${escapeHtml(params.notes).replace(/\n/g, "<br>")}</p>` : "",
+    !params.cancelled && params.respondUrl ? responseButtonsHtml(params.respondUrl, lang) : "",
+    !params.cancelled ? `<p>${tr(lang, { en: "Add the attached invite to your calendar.", es: "Agrega la invitación adjunta a tu calendario." })}</p>` : "",
   ];
   return lines.filter(Boolean).join("");
 }
@@ -142,7 +161,7 @@ function inviteFingerprint(p: { to: string; role: InviteRole; title: string; dat
  * request's "Requested by ... : comments" lands) and, for a turnover unit,
  * the property manager's notes from their request. Null when there are none.
  */
-async function inviteNotes(uid: string, dateKey: string): Promise<string | null> {
+async function inviteNotes(uid: string, dateKey: string, lang: Lang = "en"): Promise<string | null> {
   const parsed = parseInviteUid(uid);
   if (!parsed) return null;
   const date = new Date(`${dateKey}T00:00:00.000Z`);
@@ -172,7 +191,7 @@ async function inviteNotes(uid: string, dateKey: string): Promise<string | null>
   const request = projectId
     ? await prisma.propertyManagerRequest.findFirst({ where: { projectId, notes: { not: null } }, select: { notes: true } })
     : null;
-  const parts = [dayNote?.trim(), request?.notes?.trim() ? `From the property manager: ${request.notes.trim()}` : null].filter(Boolean);
+  const parts = [dayNote?.trim(), request?.notes?.trim() ? `${tr(lang, { en: "From the property manager", es: "Del administrador de la propiedad" })}: ${request.notes.trim()}` : null].filter(Boolean);
   return parts.length ? parts.join("\n") : null;
 }
 
@@ -200,16 +219,19 @@ export async function sendDayInvite(params: {
   url?: string;
   cancelled?: boolean;
   extraHtml?: string;
+  /** Looked up from the employee or contractor with this email when left out */
+  lang?: Lang;
 }): Promise<void> {
   // Never notify for a day that's already passed — a schedule change on a
   // date behind "today" (adding/moving/cancelling someone on a past chip,
   // e.g. editing a completed job's history) has nobody left to actually
   // notify about it. Applies to cancellations too, not just new invites.
   if (params.dateKey < todayEasternKey()) return;
-  const when = formatInviteWhen(params.dateKey, params.startTime, params.endTime);
   const baseFingerprint = inviteFingerprint(params);
   try {
-    const notes = params.cancelled ? null : await inviteNotes(params.uid, params.dateKey).catch(() => null);
+    const lang = params.lang ?? (await languageForEmail(params.to));
+    const when = formatInviteWhen(params.dateKey, params.startTime, params.endTime, lang);
+    const notes = params.cancelled ? null : await inviteNotes(params.uid, params.dateKey, lang).catch(() => null);
     // A changed note re-sends the invite but isn't a changed day: answers stay. Kept off
     // the fingerprint when there's no note, so invites sent before notes existed match.
     const fingerprint = notes ? `${baseFingerprint}|${createHash("sha256").update(notes).digest("hex").slice(0, 16)}` : baseFingerprint;
@@ -241,8 +263,13 @@ export async function sendDayInvite(params: {
       dateKey: params.dateKey,
       startTime: params.startTime,
       endTime: params.endTime,
-      summary: `${params.role}: ${params.title}`,
-      description: [params.title, params.scopeText ? `Scope: ${params.scopeText}` : "", notes ? `Notes: ${notes}` : "", params.url ?? ""]
+      summary: `${ROLE_SUMMARY[params.role][lang]}: ${params.title}`,
+      description: [
+        params.title,
+        params.scopeText ? `${tr(lang, { en: "Scope", es: "Trabajo" })}: ${params.scopeText}` : "",
+        notes ? `${tr(lang, { en: "Notes", es: "Notas" })}: ${notes}` : "",
+        params.url ?? "",
+      ]
         .filter(Boolean)
         .join("\n"),
       location: params.location,
@@ -257,8 +284,9 @@ export async function sendDayInvite(params: {
       type: "SCHEDULE_INVITE",
       link: params.url ? new URL(params.url, "https://x").pathname : undefined,
       to: params.to,
-      subject: `${params.cancelled ? "Cancelled" : "You're scheduled"}: ${params.title}, ${when}`,
-      html: inviteHtml({ ...params, when, respondUrl, notes }),
+      subject: `${params.cancelled ? tr(lang, { en: "Cancelled", es: "Cancelado" }) : tr(lang, { en: "You're scheduled", es: "Estás programado" })}: ${params.title}, ${when}`,
+      html: inviteHtml({ ...params, when, respondUrl, notes, lang }),
+      lang,
       attachments: [{ filename: "invite.ics", content: Buffer.from(ics) }],
     });
     // Only remember invites that really went out, so turning email back on
@@ -406,11 +434,11 @@ export async function notifyChangeOrderCrew(params: {
 /** A sub's estimated pay on a janitorial turnover: half the contract value. Only the dollar amount is shown, never how it's worked out. */
 const TURNOVER_SUB_PAY_SHARE = 0.5;
 
-async function turnoverSubPayHtml(projectId: string | null | undefined): Promise<string | undefined> {
+async function turnoverSubPayHtml(projectId: string | null | undefined, lang: Lang = "en"): Promise<string | undefined> {
   if (!projectId) return undefined;
   const p = await prisma.project.findUnique({ where: { id: projectId }, select: { segment: true, contractValueCents: true } });
   if (p?.segment !== "JANITORIAL_TURNOVER_REQUESTS" || !p.contractValueCents) return undefined;
-  return `<p><strong>Estimated pay:</strong> ${centsToDollars(Math.round(p.contractValueCents * TURNOVER_SUB_PAY_SHARE))}</p>`;
+  return `<p><strong>${tr(lang, { en: "Estimated pay", es: "Pago estimado" })}:</strong> ${centsToDollars(Math.round(p.contractValueCents * TURNOVER_SUB_PAY_SHARE))}</p>`;
 }
 
 export async function sendSubLeadInvite(params: {
@@ -432,7 +460,7 @@ export async function sendSubLeadInvite(params: {
     params.kind === "day" && !params.cancelled
       ? await prisma.projectDayAssignment
           .findUnique({ where: { id: params.assignmentId }, select: { projectId: true } })
-          .then((a) => turnoverSubPayHtml(a?.projectId))
+          .then((a) => turnoverSubPayHtml(a?.projectId, contact.lang))
           .catch(() => undefined)
       : undefined;
   await sendDayInvite({
@@ -449,6 +477,7 @@ export async function sendSubLeadInvite(params: {
     url: params.url,
     cancelled: params.cancelled,
     extraHtml,
+    lang: contact.lang,
   });
 }
 

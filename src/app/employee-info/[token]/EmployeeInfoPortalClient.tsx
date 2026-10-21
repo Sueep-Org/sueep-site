@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { tr, type Lang } from "@/lib/erp/language";
 
 type Props = {
   token: string;
   name: string;
+  lang: Lang;
   initial: {
     address: string | null;
     dateOfBirth: string | null;
@@ -20,7 +22,8 @@ const fieldCls =
   "w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#E73C6E] focus:outline-none focus:ring-1 focus:ring-[#E73C6E]";
 const labelCls = "block text-xs font-medium text-gray-600 mb-1";
 
-export function EmployeeInfoPortalClient({ token, name, initial }: Props) {
+export function EmployeeInfoPortalClient({ token, name, lang, initial }: Props) {
+  const t = (en: string, es: string) => tr(lang, { en, es });
   const [phone, setPhone] = useState(initial.phone ?? "");
   const [address, setAddress] = useState(initial.address ?? "");
   const [dateOfBirth, setDateOfBirth] = useState(initial.dateOfBirth ?? "");
@@ -52,10 +55,10 @@ export function EmployeeInfoPortalClient({ token, name, initial }: Props) {
         }),
       });
       const json = (await res.json()) as { ok?: boolean; error?: string };
-      if (!res.ok) throw new Error(json.error ?? "Save failed");
+      if (!res.ok) throw new Error(json.error ?? t("Save failed", "No se pudo guardar"));
       setSaved(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
+      setError(err instanceof Error ? err.message : t("Save failed", "No se pudo guardar"));
     } finally {
       setSaving(false);
     }
@@ -68,23 +71,26 @@ export function EmployeeInfoPortalClient({ token, name, initial }: Props) {
           <svg className="mx-auto mb-4 h-10 w-10 text-[#E73C6E]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
           </svg>
-          <h1 className="text-2xl font-bold text-gray-900">Employee Information</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t("Employee Information", "Información de empleado")}</h1>
           <p className="mt-2 text-sm text-gray-500">
-            Hi {name} — please fill in your information below.
+            {t(`Hi ${name}, please fill in your information below.`, `Hola ${name}, llena tu información abajo.`)}
           </p>
         </div>
 
         {saved && (
           <div className="mb-6 rounded-lg bg-emerald-50 border border-emerald-200 p-4 text-center">
             <p className="text-sm font-medium text-emerald-700">
-              Information saved. You can update it below anytime before the link expires.
+              {t(
+                "Information saved. You can update it below anytime before the link expires.",
+                "Información guardada. Puedes actualizarla abajo en cualquier momento antes de que venza el enlace."
+              )}
             </p>
           </div>
         )}
 
         <form onSubmit={onSubmit} className="space-y-5">
           <div>
-            <label className={labelCls}>Phone number</label>
+            <label className={labelCls}>{t("Phone number", "Número de teléfono")}</label>
             <input
               type="tel"
               value={phone}
@@ -95,18 +101,18 @@ export function EmployeeInfoPortalClient({ token, name, initial }: Props) {
           </div>
 
           <div>
-            <label className={labelCls}>Address</label>
+            <label className={labelCls}>{t("Address", "Dirección")}</label>
             <textarea
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               rows={3}
-              placeholder="Street, City, State, ZIP"
+              placeholder={t("Street, City, State, ZIP", "Calle, ciudad, estado, código postal")}
               className={fieldCls}
             />
           </div>
 
           <div>
-            <label className={labelCls}>Date of birth</label>
+            <label className={labelCls}>{t("Date of birth", "Fecha de nacimiento")}</label>
             <input
               type="date"
               value={dateOfBirth}
@@ -116,7 +122,7 @@ export function EmployeeInfoPortalClient({ token, name, initial }: Props) {
           </div>
 
           <div>
-            <label className={labelCls}>Social Security Number (SSN)</label>
+            <label className={labelCls}>{t("Social Security Number (SSN)", "Número de Seguro Social (SSN)")}</label>
             <input
               type="text"
               value={ssn}
@@ -127,38 +133,38 @@ export function EmployeeInfoPortalClient({ token, name, initial }: Props) {
           </div>
 
           <fieldset className="rounded-lg border border-gray-200 p-4 space-y-3">
-            <legend className="text-sm font-semibold text-gray-800 px-1">Bank Account Info</legend>
+            <legend className="text-sm font-semibold text-gray-800 px-1">{t("Bank Account Info", "Información bancaria")}</legend>
 
             <div>
-              <label className={labelCls}>Account type</label>
+              <label className={labelCls}>{t("Account type", "Tipo de cuenta")}</label>
               <select
                 value={bankAccountType}
                 onChange={(e) => setBankAccountType(e.target.value)}
                 className={fieldCls}
               >
-                <option value="checking">Checking</option>
-                <option value="savings">Savings</option>
+                <option value="checking">{t("Checking", "Cheques")}</option>
+                <option value="savings">{t("Savings", "Ahorros")}</option>
               </select>
             </div>
 
             <div>
-              <label className={labelCls}>Account number</label>
+              <label className={labelCls}>{t("Account number", "Número de cuenta")}</label>
               <input
                 type="text"
                 value={bankAccountNumber}
                 onChange={(e) => setBankAccountNumber(e.target.value)}
-                placeholder="Enter account number"
+                placeholder={t("Enter account number", "Escribe el número de cuenta")}
                 className={fieldCls}
               />
             </div>
 
             <div>
-              <label className={labelCls}>Routing number</label>
+              <label className={labelCls}>{t("Routing number", "Número de ruta (routing)")}</label>
               <input
                 type="text"
                 value={bankRoutingNumber}
                 onChange={(e) => setBankRoutingNumber(e.target.value)}
-                placeholder="Enter routing number"
+                placeholder={t("Enter routing number", "Escribe el número de ruta")}
                 className={fieldCls}
               />
             </div>
@@ -171,12 +177,12 @@ export function EmployeeInfoPortalClient({ token, name, initial }: Props) {
             disabled={saving}
             className="w-full rounded-md bg-[#E73C6E] px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
-            {saving ? "Saving…" : saved ? "Update information" : "Submit information"}
+            {saving ? t("Saving…", "Guardando…") : saved ? t("Update information", "Actualizar información") : t("Submit information", "Enviar información")}
           </button>
         </form>
 
         <p className="mt-8 text-center text-xs text-gray-400">
-          Having trouble? Reply to the email we sent you.
+          {t("Having trouble? Reply to the email we sent you.", "¿Tienes problemas? Responde al correo que te enviamos.")}
         </p>
       </div>
     </div>

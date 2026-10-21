@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { officeCandidateGuard } from "@/lib/erp/officeHiringAccess";
 
 type Ctx = { params: Promise<{ id: string; contractId: string }> };
 
 export async function DELETE(_req: Request, ctx: Ctx) {
   const { id, contractId } = await ctx.params;
+  const blocked = await officeCandidateGuard(id);
+  if (blocked) return blocked;
 
   const contract = await prisma.candidateContract.findFirst({
     where: { id: contractId, candidateId: id },

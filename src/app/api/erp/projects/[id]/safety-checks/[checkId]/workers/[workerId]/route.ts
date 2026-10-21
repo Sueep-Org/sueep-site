@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { buildSafetyEscalationEmail, buildSafetyNoticeEmail, sendEmail } from "@/lib/email";
+import { dateLocale, parseLang, tr } from "@/lib/erp/language";
 import { SAFETY_VIOLATION_THRESHOLD } from "@/lib/erp/safetyConfig";
 
 export const runtime = "nodejs";
@@ -73,19 +74,21 @@ export async function PATCH(req: Request, { params }: Ctx) {
       if (employeeId) {
         const employee = await prisma.employee.findUnique({
           where: { id: employeeId },
-          select: { email: true, firstName: true },
+          select: { email: true, firstName: true, language: true },
         });
         if (employee?.email) {
-          const projectName = check?.project?.jobTitle ?? "your project";
+          const lang = parseLang(employee.language);
+          const projectName = check?.project?.jobTitle ?? tr(lang, { en: "your project", es: "tu proyecto" });
           const checkDateStr = check?.checkDate
-            ? new Date(check.checkDate).toLocaleDateString("en-US", { timeZone: "America/New_York", month: "long", day: "numeric", year: "numeric" })
-            : "today";
+            ? new Date(check.checkDate).toLocaleDateString(dateLocale(lang), { timeZone: "America/New_York", month: "long", day: "numeric", year: "numeric" })
+            : tr(lang, { en: "today", es: "hoy" });
 
           await sendEmail({
             type: "SAFETY_NOTICE",
             link: `/erp/projects/${projectId}`,
             to: employee.email,
-            subject: `Safety compliance notice: ${checkDateStr}`,
+            subject: `${tr(lang, { en: "Safety compliance notice", es: "Aviso de cumplimiento de seguridad" })}: ${checkDateStr}`,
+            lang,
             html: buildSafetyNoticeEmail({
               name: employee.firstName || worker.workerName,
               projectName,
@@ -93,6 +96,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
               violationCount,
               escalated: shouldEscalate,
               threshold: SAFETY_VIOLATION_THRESHOLD,
+              lang,
             }),
           });
 

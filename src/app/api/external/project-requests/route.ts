@@ -256,19 +256,24 @@ export async function POST(req: Request) {
     for (const date of sovDays) {
       const existingAssignment = await prisma.projectDayAssignment.findUnique({
         where: { projectId_date: { projectId, date } },
-        select: { comment: true },
+        select: { comment: true, requesterEmail: true },
       });
       const mergedComment = existingAssignment?.comment ? `${existingAssignment.comment}\n${requesterLine}` : requesterLine;
+      // Who to email once everyone on the day confirms (latest request wins)
+      const requester = { requesterName: requesterName.trim(), requesterEmail: requesterEmail.trim() };
       await prisma.projectDayAssignment.upsert({
         where: { projectId_date: { projectId, date } },
         create: {
           projectId,
           date,
           comment: mergedComment,
+          ...requester,
           sovItems: sovItemIds.length ? { connect: sovItemIds.map((id) => ({ id })) } : undefined,
         },
         update: {
           comment: mergedComment,
+          ...requester,
+          ...(existingAssignment?.requesterEmail !== requester.requesterEmail ? { requesterNotifiedFor: null } : {}),
           sovItems: sovItemIds.length ? { connect: sovItemIds.map((id) => ({ id })) } : undefined,
         },
       });

@@ -10,6 +10,8 @@
  *   again: the answer goes back to "no answer yet".
  * - Can't make it alerts the "Schedule declined" recipients (Jennifer, Edwin,
  *   David, Nick by default) right away. Nothing is removed from the schedule.
+ * - When everyone on a day the client asked for has confirmed, the client
+ *   hears it (scheduleRequester.ts).
  * - About 2pm the day before, anyone who hasn't answered for tomorrow goes in
  *   one "No answer yet" email to the same people (once per invite).
  */
@@ -18,6 +20,9 @@ import { prisma } from "@/lib/prisma";
 import { escapeHtml, sendEmail } from "@/lib/email";
 import { addDaysKey } from "./manualHoursRepeat";
 import { todayEasternKey } from "./dates";
+import { notifyRequesterAfterConfirm } from "./scheduleRequester";
+import { dateLocale, tr, type Lang } from "./language";
+import { languageForEmail } from "./languageLookup";
 
 export type ConfirmationKind = "day" | "co-day" | "worker" | "co-worker" | "day-sub" | "co-day-sub";
 export type ConfirmationStatus = "PENDING" | "CONFIRMED" | "DECLINED" | "CANCELLED";
@@ -80,14 +85,23 @@ export async function cancelConfirmation(uid: string): Promise<void> {
 }
 
 /** The two buttons in the invite email. */
-export function responseButtonsHtml(url: string): string {
+export function responseButtonsHtml(url: string, lang: Lang = "en"): string {
   const btn = (label: string, bg: string) =>
     `<a href="${escapeHtml(url)}" style="display:inline-block;padding:10px 18px;margin-right:8px;border-radius:6px;background:${bg};color:#fff;text-decoration:none;font-weight:600">${label}</a>`;
-  return `<p style="margin:16px 0 4px">Can you make it?</p><p>${btn("Confirm", "#16a34a")}${btn("Can't make it", "#6b7280")}</p>`;
+  return `<p style="margin:16px 0 4px">${tr(lang, { en: "Can you make it?", es: "¿Puedes ir?" })}</p><p>${btn(tr(lang, { en: "Confirm", es: "Confirmar" }), "#16a34a")}${btn(tr(lang, { en: "Can't make it", es: "No puedo ir" }), "#6b7280")}</p>`;
 }
 
-function dayLabel(key: string): string {
-  return new Date(`${key}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" });
+const ROLE_LABEL_ES: Record<ConfirmationKind, string> = {
+  day: "Supervisando",
+  "co-day": "Supervisando",
+  worker: "Trabajando",
+  "co-worker": "Trabajando",
+  "day-sub": "Dirigiendo el trabajo",
+  "co-day-sub": "Dirigiendo el trabajo",
+};
+
+function dayLabel(key: string, lang: Lang = "en"): string {
+  return new Date(`${key}T12:00:00Z`).toLocaleDateString(dateLocale(lang), { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" });
 }
 
 export type ResponseView = {
@@ -98,16 +112,19 @@ export type ResponseView = {
   status: ConfirmationStatus;
   reason: string | null;
   past: boolean;
+  lang: Lang;
 };
 
 export async function loadResponse(token: string): Promise<ResponseView | null> {
   const c = await prisma.scheduleConfirmation.findUnique({ where: { token } });
   if (!c) return null;
+  const lang = await languageForEmail(c.personEmail);
   return {
     personName: c.personName,
-    role: ROLE_LABEL[c.kind as ConfirmationKind] ?? "Scheduled",
+    role: (lang === "es" ? ROLE_LABEL_ES : ROLE_LABEL)[c.kind as ConfirmationKind] ?? tr(lang, { en: "Scheduled", es: "Programado" }),
     title: c.title,
-    day: dayLabel(c.dateKey),
+    day: dayLabel(c.dateKey, lang),
+    lang,
     status: c.status as ConfirmationStatus,
     reason: c.reason,
     past: c.dateKey < todayEasternKey(),
@@ -118,8 +135,9 @@ export async function loadResponse(token: string): Promise<ResponseView | null> 
 export async function recordResponse(token: string, answer: "CONFIRMED" | "DECLINED", reasonRaw: string | null): Promise<{ error: string } | { status: ConfirmationStatus }> {
   const c = await prisma.scheduleConfirmation.findUnique({ where: { token } });
   if (!c) return { error: "This link isn't valid anymore." };
-  if (c.status === "CANCELLED") return { error: "You're no longer scheduled for this day." };
-  if (c.dateKey < todayEasternKey()) return { error: "This day has already passed." };
+  const lang = await languageForEmail(c.personEmail);
+  if (c.status === "CANCELLED") return { error: tr(lang, { en: "You're no longer scheduled for this day.", es: "Ya no estás programado para este día." }) };
+  if (c.dateKey < todayEasternKey()) return { error: tr(lang, { en: "This day has already passed.", es: "Este día ya pasó." }) };
   const reason = answer === "DECLINED" ? reasonRaw?.trim().slice(0, 500) || null : null;
   const before = c.status;
   await prisma.scheduleConfirmation.update({ where: { token }, data: { status: answer, reason, respondedAt: new Date() } });
@@ -150,6 +168,8 @@ export async function recordResponse(token: string, answer: "CONFIRMED" | "DECLI
   } catch (e) {
     console.error("Schedule response alert failed", { token: token.slice(0, 6) }, e);
   }
+  // The last Confirm for a day the client asked for tells the client
+  if (answer === "CONFIRMED") await notifyRequesterAfterConfirm(c);
   return { status: answer };
 }
 

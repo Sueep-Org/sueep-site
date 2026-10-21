@@ -672,7 +672,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
               backgroundCheckStatus: true, backgroundCheckExpiresAt: true,
             },
           }),
-          prisma.candidateApplication.groupBy({ by: ["status"], _count: { _all: true } }),
+          prisma.candidateApplication.groupBy({ by: ["status"], where: { track: "FIELD" }, _count: { _all: true } }),
           prisma.contractor.findMany({
             where: { status: "ACTIVE" },
             select: { id: true, name: true, workersCompExpiresAt: true, workersCompExempt: true, glExpiresAt: true },

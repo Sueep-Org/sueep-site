@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { CONTRACTOR_MANUAL_SECTIONS, subFieldName, type SubField } from "@/lib/erp/subcontractorQuestionnaire";
+import { tr, type Lang } from "@/lib/erp/language";
 
 type Props = {
   token: string;
   name: string;
+  lang: Lang;
   /** True when an ERP staffer has linked this contractor to a submitted
    * /careers application — Company profile / Insurance / Licensing already
    * have answers from that application, so this form skips re-asking for
@@ -46,14 +48,47 @@ const COMPANY_FIELDS = CONTRACTOR_MANUAL_SECTIONS.find((s) => s.id === "company"
 const INSURANCE_FIELDS = CONTRACTOR_MANUAL_SECTIONS.find((s) => s.id === "insurance")?.fields ?? [];
 const LICENSING_FIELDS = CONTRACTOR_MANUAL_SECTIONS.find((s) => s.id === "licensing")?.fields ?? [];
 
-function questionnaireInput(field: SubField, value: string, onChange: (v: string) => void) {
+/** Spanish labels for the company / insurance / licensing questions (English stays in subcontractorQuestionnaire.ts). */
+const FIELD_LABEL_ES: Record<string, string> = {
+  legalCompanyName: "Nombre legal de la empresa",
+  dba: "DBA / nombre comercial (si aplica)",
+  federalEin: "EIN federal",
+  businessAddress: "Dirección de la empresa",
+  mailingAddress: "Dirección postal (si es diferente)",
+  primaryContact: "Contacto principal",
+  officePhone: "Teléfono de oficina",
+  cellPhone: "Celular",
+  companyEmail: "Correo electrónico",
+  website: "Sitio web",
+  yearBusinessStarted: "Año en que empezó la empresa",
+  numberOfEmployees: "Número de empleados",
+  numberOfCrews: "Número de cuadrillas",
+  serviceArea: "Área de servicio (estados/ciudades)",
+  unionStatus: "¿Sindicalizado o no sindicalizado?",
+  diverseOwned: "¿Empresa de minoría, mujer o veterano?",
+  generalLiabilityCoverage: "Cobertura de responsabilidad general",
+  workersCompensation: "Compensación de trabajadores",
+  commercialAuto: "Auto comercial",
+  umbrellaLiability: "Responsabilidad paraguas (umbrella)",
+  professionalLiability: "Responsabilidad profesional (si aplica)",
+  stateContractorLicenseNumbers: "Número(s) de licencia estatal de contratista",
+  licenseClassification: "Clasificación de la licencia",
+  statesLicensedIn: "Estados donde tiene licencia",
+};
+const OPTION_ES: Record<string, string> = { Union: "Sindicalizado", "Non-Union": "No sindicalizado" };
+
+function fieldLabel(field: SubField, lang: Lang): string {
+  return lang === "es" ? FIELD_LABEL_ES[field.key] ?? field.label : field.label;
+}
+
+function questionnaireInput(field: SubField, value: string, onChange: (v: string) => void, lang: Lang) {
   if (field.type === "select") {
     return (
       <select value={value} onChange={(e) => onChange(e.target.value)} className={fieldCls}>
-        <option value="">— Select —</option>
+        <option value="">{tr(lang, { en: "Select", es: "Elegir" })}</option>
         {(field.options ?? []).map((opt) => (
           <option key={opt} value={opt}>
-            {opt}
+            {lang === "es" ? OPTION_ES[opt] ?? opt : opt}
           </option>
         ))}
       </select>
@@ -69,7 +104,8 @@ function questionnaireInput(field: SubField, value: string, onChange: (v: string
   );
 }
 
-export function ContractorInfoPortalClient({ token, name, isLinkedToApplication, initial }: Props) {
+export function ContractorInfoPortalClient({ token, name, lang, isLinkedToApplication, initial }: Props) {
+  const t = (en: string, es: string) => tr(lang, { en, es });
   const [contractorFullName, setContractorFullName] = useState(initial.contractorFullName ?? "");
   const [address, setAddress] = useState(initial.address ?? "");
   const [dateOfBirth, setDateOfBirth] = useState(initial.dateOfBirth ?? "");
@@ -114,10 +150,10 @@ export function ContractorInfoPortalClient({ token, name, isLinkedToApplication,
       body.append("file", file);
       const res = await fetch(`/api/contractor-info/${token}/upload`, { method: "POST", body });
       const json = (await res.json()) as { ok?: boolean; error?: string };
-      if (!res.ok) throw new Error(json.error ?? "Upload failed");
+      if (!res.ok) throw new Error(json.error ?? t("Upload failed", "No se pudo subir"));
       setWorkersCompDocFilename(file.name);
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Upload failed");
+      setUploadError(err instanceof Error ? err.message : t("Upload failed", "No se pudo subir"));
     } finally {
       setUploadingCoi(false);
       e.target.value = "";
@@ -127,11 +163,11 @@ export function ContractorInfoPortalClient({ token, name, isLinkedToApplication,
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!contractorFullName.trim()) {
-      setError("Full name is required.");
+      setError(t("Full name is required.", "El nombre completo es obligatorio."));
       return;
     }
     if (hasInsurance === null) {
-      setError("Please indicate whether you have insurance.");
+      setError(t("Please indicate whether you have insurance.", "Indica si tienes seguro."));
       return;
     }
     setError("");
@@ -160,10 +196,10 @@ export function ContractorInfoPortalClient({ token, name, isLinkedToApplication,
         }),
       });
       const json = (await res.json()) as { ok?: boolean; error?: string };
-      if (!res.ok) throw new Error(json.error ?? "Save failed");
+      if (!res.ok) throw new Error(json.error ?? t("Save failed", "No se pudo guardar"));
       setSaved(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
+      setError(err instanceof Error ? err.message : t("Save failed", "No se pudo guardar"));
     } finally {
       setSaving(false);
     }
@@ -176,34 +212,37 @@ export function ContractorInfoPortalClient({ token, name, isLinkedToApplication,
           <svg className="mx-auto mb-4 h-10 w-10 text-[#E73C6E]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
           </svg>
-          <h1 className="text-2xl font-bold text-gray-900">Contractor Information</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t("Contractor Information", "Información de contratista")}</h1>
           <p className="mt-2 text-sm text-gray-500">
-            Hi {name} — please fill in your information below.
+            {t(`Hi ${name}, please fill in your information below.`, `Hola ${name}, llena tu información abajo.`)}
           </p>
         </div>
 
         {saved && (
           <div className="mb-6 rounded-lg bg-emerald-50 border border-emerald-200 p-4 text-center">
             <p className="text-sm font-medium text-emerald-700">
-              Information saved. You can update it below anytime before the link expires.
+              {t(
+                "Information saved. You can update it below anytime before the link expires.",
+                "Información guardada. Puedes actualizarla abajo en cualquier momento antes de que venza el enlace."
+              )}
             </p>
           </div>
         )}
 
         <form onSubmit={onSubmit} className="space-y-5">
           <div>
-            <label className={labelCls}>Full name *</label>
+            <label className={labelCls}>{t("Full name *", "Nombre completo *")}</label>
             <input
               type="text"
               value={contractorFullName}
               onChange={(e) => setContractorFullName(e.target.value)}
-              placeholder="Your full legal name"
+              placeholder={t("Your full legal name", "Tu nombre legal completo")}
               className={fieldCls}
             />
           </div>
 
           <div>
-            <label className={labelCls}>Phone number</label>
+            <label className={labelCls}>{t("Phone number", "Número de teléfono")}</label>
             <input
               type="tel"
               value={phone}
@@ -214,18 +253,18 @@ export function ContractorInfoPortalClient({ token, name, isLinkedToApplication,
           </div>
 
           <div>
-            <label className={labelCls}>Address</label>
+            <label className={labelCls}>{t("Address", "Dirección")}</label>
             <textarea
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               rows={3}
-              placeholder="Street, City, State, ZIP"
+              placeholder={t("Street, City, State, ZIP", "Calle, ciudad, estado, código postal")}
               className={fieldCls}
             />
           </div>
 
           <div>
-            <label className={labelCls}>Date of birth</label>
+            <label className={labelCls}>{t("Date of birth", "Fecha de nacimiento")}</label>
             <input
               type="date"
               value={dateOfBirth}
@@ -235,7 +274,7 @@ export function ContractorInfoPortalClient({ token, name, isLinkedToApplication,
           </div>
 
           <div>
-            <label className={labelCls}>Social Security Number (SSN)</label>
+            <label className={labelCls}>{t("Social Security Number (SSN)", "Número de Seguro Social (SSN)")}</label>
             <input
               type="text"
               value={ssn}
@@ -246,45 +285,45 @@ export function ContractorInfoPortalClient({ token, name, isLinkedToApplication,
           </div>
 
           <fieldset className="rounded-lg border border-gray-200 p-4 space-y-3">
-            <legend className="text-sm font-semibold text-gray-800 px-1">Bank Account Info</legend>
+            <legend className="text-sm font-semibold text-gray-800 px-1">{t("Bank Account Info", "Información bancaria")}</legend>
 
             <div>
-              <label className={labelCls}>Account type</label>
+              <label className={labelCls}>{t("Account type", "Tipo de cuenta")}</label>
               <select
                 value={bankAccountType}
                 onChange={(e) => setBankAccountType(e.target.value)}
                 className={fieldCls}
               >
-                <option value="checking">Checking</option>
-                <option value="savings">Savings</option>
+                <option value="checking">{t("Checking", "Cheques")}</option>
+                <option value="savings">{t("Savings", "Ahorros")}</option>
               </select>
             </div>
 
             <div>
-              <label className={labelCls}>Account number</label>
+              <label className={labelCls}>{t("Account number", "Número de cuenta")}</label>
               <input
                 type="text"
                 value={bankAccountNumber}
                 onChange={(e) => setBankAccountNumber(e.target.value)}
-                placeholder="Enter account number"
+                placeholder={t("Enter account number", "Escribe el número de cuenta")}
                 className={fieldCls}
               />
             </div>
 
             <div>
-              <label className={labelCls}>Routing number</label>
+              <label className={labelCls}>{t("Routing number", "Número de ruta (routing)")}</label>
               <input
                 type="text"
                 value={bankRoutingNumber}
                 onChange={(e) => setBankRoutingNumber(e.target.value)}
-                placeholder="Enter routing number"
+                placeholder={t("Enter routing number", "Escribe el número de ruta")}
                 className={fieldCls}
               />
             </div>
           </fieldset>
 
           <div>
-            <label className={labelCls}>Do you have insurance? *</label>
+            <label className={labelCls}>{t("Do you have insurance? *", "¿Tienes seguro? *")}</label>
             <div className="flex gap-4 mt-2">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -294,7 +333,7 @@ export function ContractorInfoPortalClient({ token, name, isLinkedToApplication,
                   onChange={() => setHasInsurance(true)}
                   className="accent-[#E73C6E]"
                 />
-                <span className="text-sm text-gray-800">Yes</span>
+                <span className="text-sm text-gray-800">{t("Yes", "Sí")}</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -310,47 +349,47 @@ export function ContractorInfoPortalClient({ token, name, isLinkedToApplication,
           </div>
 
           <fieldset className="rounded-lg border border-gray-200 p-4 space-y-3">
-            <legend className="text-sm font-semibold text-gray-800 px-1">General Liability</legend>
+            <legend className="text-sm font-semibold text-gray-800 px-1">{t("General Liability", "Responsabilidad general")}</legend>
             <div>
-              <label className={labelCls}>Insurance carrier</label>
+              <label className={labelCls}>{t("Insurance carrier", "Aseguradora")}</label>
               <input type="text" value={gl.glCarrier} onChange={(e) => setGl((g) => ({ ...g, glCarrier: e.target.value }))} className={fieldCls} />
             </div>
             <div>
-              <label className={labelCls}>Policy number</label>
+              <label className={labelCls}>{t("Policy number", "Número de póliza")}</label>
               <input type="text" value={gl.glPolicyNumber} onChange={(e) => setGl((g) => ({ ...g, glPolicyNumber: e.target.value }))} className={fieldCls} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className={labelCls}>Each occurrence</label>
+                <label className={labelCls}>{t("Each occurrence", "Por incidente")}</label>
                 <input type="text" inputMode="decimal" placeholder="$" value={gl.glOccurrenceCents} onChange={(e) => setGl((g) => ({ ...g, glOccurrenceCents: e.target.value }))} className={fieldCls} />
               </div>
               <div>
-                <label className={labelCls}>Aggregate</label>
+                <label className={labelCls}>{t("Aggregate", "Total acumulado")}</label>
                 <input type="text" inputMode="decimal" placeholder="$" value={gl.glAggregateCents} onChange={(e) => setGl((g) => ({ ...g, glAggregateCents: e.target.value }))} className={fieldCls} />
               </div>
             </div>
             <div>
-              <label className={labelCls}>Policy expiration date</label>
+              <label className={labelCls}>{t("Policy expiration date", "Fecha de vencimiento de la póliza")}</label>
               <input type="date" value={gl.glExpiresAt} onChange={(e) => setGl((g) => ({ ...g, glExpiresAt: e.target.value }))} className={fieldCls} />
             </div>
           </fieldset>
 
           <fieldset className="rounded-lg border border-gray-200 p-4 space-y-3">
-            <legend className="text-sm font-semibold text-gray-800 px-1">Workers&rsquo; Compensation</legend>
+            <legend className="text-sm font-semibold text-gray-800 px-1">{t("Workers’ Compensation", "Compensación de trabajadores")}</legend>
 
             <div>
-              <label className={labelCls}>Insurance carrier</label>
+              <label className={labelCls}>{t("Insurance carrier", "Aseguradora")}</label>
               <input
                 type="text"
                 value={workersCompCarrier}
                 onChange={(e) => setWorkersCompCarrier(e.target.value)}
-                placeholder="e.g. Travelers"
+                placeholder={t("e.g. Travelers", "p. ej. Travelers")}
                 className={fieldCls}
               />
             </div>
 
             <div>
-              <label className={labelCls}>Policy number</label>
+              <label className={labelCls}>{t("Policy number", "Número de póliza")}</label>
               <input
                 type="text"
                 value={workersCompPolicyNumber}
@@ -360,7 +399,7 @@ export function ContractorInfoPortalClient({ token, name, isLinkedToApplication,
             </div>
 
             <div>
-              <label className={labelCls}>Policy expiration date</label>
+              <label className={labelCls}>{t("Policy expiration date", "Fecha de vencimiento de la póliza")}</label>
               <input
                 type="date"
                 value={workersCompExpiresAt}
@@ -370,7 +409,7 @@ export function ContractorInfoPortalClient({ token, name, isLinkedToApplication,
             </div>
 
             <div>
-              <label className={labelCls}>Certificate of insurance (COI)</label>
+              <label className={labelCls}>{t("Certificate of insurance (COI)", "Certificado de seguro (COI)")}</label>
               <input
                 type="file"
                 accept="application/pdf,image/jpeg,image/png,image/webp,image/heic"
@@ -378,9 +417,11 @@ export function ContractorInfoPortalClient({ token, name, isLinkedToApplication,
                 disabled={uploadingCoi}
                 className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-gray-700 hover:file:bg-gray-200"
               />
-              {uploadingCoi && <p className="mt-1 text-xs text-gray-400">Uploading…</p>}
+              {uploadingCoi && <p className="mt-1 text-xs text-gray-400">{t("Uploading…", "Subiendo…")}</p>}
               {!uploadingCoi && workersCompDocFilename && (
-                <p className="mt-1 text-xs text-emerald-600">Uploaded: {workersCompDocFilename}</p>
+                <p className="mt-1 text-xs text-emerald-600">
+                  {t("Uploaded", "Subido")}: {workersCompDocFilename}
+                </p>
               )}
               {uploadError && <p className="mt-1 text-xs text-red-500">{uploadError}</p>}
             </div>
@@ -388,36 +429,39 @@ export function ContractorInfoPortalClient({ token, name, isLinkedToApplication,
 
           {isLinkedToApplication ? (
             <p className="text-xs text-gray-400">
-              We already have your company, insurance, and licensing details on file from your subcontractor application.
+              {t(
+                "We already have your company, insurance, and licensing details on file from your subcontractor application.",
+                "Ya tenemos los datos de tu empresa, seguros y licencias de tu solicitud de subcontratista."
+              )}
             </p>
           ) : (
             <>
               <fieldset className="rounded-lg border border-gray-200 p-4 space-y-3">
-                <legend className="text-sm font-semibold text-gray-800 px-1">Additional Insurance</legend>
+                <legend className="text-sm font-semibold text-gray-800 px-1">{t("Additional Insurance", "Seguros adicionales")}</legend>
                 {INSURANCE_FIELDS.map((field) => (
                   <div key={field.key}>
-                    <label className={labelCls}>{field.label}</label>
-                    {questionnaireInput(field, questionnaireValues[subFieldName(field.key)] ?? "", (v) => setQuestionnaireField(field.key, v))}
+                    <label className={labelCls}>{fieldLabel(field, lang)}</label>
+                    {questionnaireInput(field, questionnaireValues[subFieldName(field.key)] ?? "", (v) => setQuestionnaireField(field.key, v), lang)}
                   </div>
                 ))}
               </fieldset>
 
               <fieldset className="rounded-lg border border-gray-200 p-4 space-y-3">
-                <legend className="text-sm font-semibold text-gray-800 px-1">Company Profile</legend>
+                <legend className="text-sm font-semibold text-gray-800 px-1">{t("Company Profile", "Perfil de la empresa")}</legend>
                 {COMPANY_FIELDS.map((field) => (
                   <div key={field.key}>
-                    <label className={labelCls}>{field.label}</label>
-                    {questionnaireInput(field, questionnaireValues[subFieldName(field.key)] ?? "", (v) => setQuestionnaireField(field.key, v))}
+                    <label className={labelCls}>{fieldLabel(field, lang)}</label>
+                    {questionnaireInput(field, questionnaireValues[subFieldName(field.key)] ?? "", (v) => setQuestionnaireField(field.key, v), lang)}
                   </div>
                 ))}
               </fieldset>
 
               <fieldset className="rounded-lg border border-gray-200 p-4 space-y-3">
-                <legend className="text-sm font-semibold text-gray-800 px-1">Licensing</legend>
+                <legend className="text-sm font-semibold text-gray-800 px-1">{t("Licensing", "Licencias")}</legend>
                 {LICENSING_FIELDS.map((field) => (
                   <div key={field.key}>
-                    <label className={labelCls}>{field.label}</label>
-                    {questionnaireInput(field, questionnaireValues[subFieldName(field.key)] ?? "", (v) => setQuestionnaireField(field.key, v))}
+                    <label className={labelCls}>{fieldLabel(field, lang)}</label>
+                    {questionnaireInput(field, questionnaireValues[subFieldName(field.key)] ?? "", (v) => setQuestionnaireField(field.key, v), lang)}
                   </div>
                 ))}
               </fieldset>
@@ -431,12 +475,12 @@ export function ContractorInfoPortalClient({ token, name, isLinkedToApplication,
             disabled={saving}
             className="w-full rounded-md bg-[#E73C6E] px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
-            {saving ? "Saving…" : saved ? "Update information" : "Submit information"}
+            {saving ? t("Saving…", "Guardando…") : saved ? t("Update information", "Actualizar información") : t("Submit information", "Enviar información")}
           </button>
         </form>
 
         <p className="mt-8 text-center text-xs text-gray-400">
-          Having trouble? Reply to the email we sent you.
+          {t("Having trouble? Reply to the email we sent you.", "¿Tienes problemas? Responde al correo que te enviamos.")}
         </p>
       </div>
     </div>

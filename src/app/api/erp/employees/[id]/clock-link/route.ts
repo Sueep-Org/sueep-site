@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canManageJanitorial } from "@/lib/erpAuth";
 import { buildClockLinkEmail, sendEmail } from "@/lib/email";
+import { parseLang, tr } from "@/lib/erp/language";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -36,7 +37,7 @@ export async function POST(req: Request, ctx: Ctx) {
 
   const employee = await prisma.employee.findUnique({
     where: { id },
-    select: { id: true, firstName: true, lastName: true, email: true, clockToken: true },
+    select: { id: true, firstName: true, lastName: true, email: true, clockToken: true, language: true },
   });
   if (!employee) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
 
@@ -62,8 +63,9 @@ export async function POST(req: Request, ctx: Ctx) {
         type: "CLOCK_LINK",
         link: `/erp/employees/${id}`,
         to: employee.email,
-        subject: "Your Sueep clock-in link / Tu enlace para marcar entrada",
-        html: buildClockLinkEmail({ firstName: employee.firstName, url }),
+        subject: tr(parseLang(employee.language), { en: "Your Sueep clock-in link", es: "Tu enlace de Sueep para marcar entrada" }),
+        lang: parseLang(employee.language),
+        html: buildClockLinkEmail({ firstName: employee.firstName, url, lang: parseLang(employee.language) }),
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Email send failed";

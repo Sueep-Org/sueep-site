@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { officeCandidateGuard } from "@/lib/erp/officeHiringAccess";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -7,6 +8,8 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
 export async function POST(req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
+  const blocked = await officeCandidateGuard(id);
+  if (blocked) return blocked;
 
   const candidate = await prisma.candidateApplication.findUnique({
     where: { id },

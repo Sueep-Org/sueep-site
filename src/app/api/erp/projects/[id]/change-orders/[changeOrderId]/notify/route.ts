@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { buildChangeOrderNotificationEmail } from "@/lib/email";
 import { centsToDollars } from "@/lib/erp/money";
+import { parseLang, tr } from "@/lib/erp/language";
 
 type Ctx = { params: Promise<{ id: string; changeOrderId: string }> };
 
@@ -32,7 +33,7 @@ export async function POST(req: Request, ctx: Ctx) {
     }),
     prisma.employee.findMany({
       where: { id: { in: employeeIds } },
-      select: { id: true, firstName: true, lastName: true, email: true },
+      select: { id: true, firstName: true, lastName: true, email: true, language: true },
     }),
   ]);
 
@@ -45,6 +46,7 @@ export async function POST(req: Request, ctx: Ctx) {
 
   for (const employee of employees) {
     if (!employee.email) continue;
+    const lang = parseLang(employee.language);
     const html = buildChangeOrderNotificationEmail({
       recipientName: `${employee.firstName} ${employee.lastName}`.trim(),
       projectTitle: changeOrder.project.jobTitle,
@@ -56,14 +58,16 @@ export async function POST(req: Request, ctx: Ctx) {
       reason: changeOrder.reason,
       requestedBy: changeOrder.requestedBy,
       changeOrderUrl: projectUrl,
+      lang,
     });
     try {
       await sendEmail({
         type: "CHANGE_ORDER_NOTICE",
         link: `/erp/projects/${id}`,
         to: employee.email,
-        subject: `Change order: ${changeOrder.title} (${changeOrder.project.jobTitle})`,
+        subject: `${tr(lang, { en: "Change order", es: "Orden de cambio" })}: ${changeOrder.title} (${changeOrder.project.jobTitle})`,
         html,
+        lang,
       });
       results.push({ email: employee.email, ok: true });
     } catch (e) {

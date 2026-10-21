@@ -1091,6 +1091,13 @@ model ChangeOrderDayAssignment {
   /// Free-text note about what's happening this day.
   comment String?
 
+  /// Staff-only note for this day. Never included in invites or emails.
+  internalNote String?
+
+  /// Day key the change order's requester was last told this day is
+  /// confirmed (see ProjectDayAssignment.requesterNotifiedFor)
+  requesterNotifiedFor String?
+
   @@unique([changeOrderId, date])
   @@index([date])
   @@index([supervisorUserId])
@@ -1465,6 +1472,10 @@ model ProjectDayAssignment {
   /// described and shown on the calendar.
   comment String?
 
+  /// Staff-only note for this day. Never included in invites or emails,
+  /// unlike comment which goes out to everyone invited.
+  internalNote String?
+
   /// The supervisor/PM's accept/decline response to this specific day's
   /// invite — PENDING | ACCEPTED | DECLINED (see
   /// src/lib/erp/shiftResponses.ts). Only meaningful when supervisorUserId
@@ -1482,6 +1493,14 @@ model ProjectDayAssignment {
   /// that's already passed just shows read-only), which is simpler and
   /// keeps the same link working right up to the shift as intended.
   responseToken String? @unique
+
+  /// The client who asked for this day (e.g. their project manager, from the
+  /// project portal). Emailed once everyone invited for the day confirms.
+  requesterName        String?
+  requesterEmail       String?
+  /// Day key ("YYYY-MM-DD") the requester was last told was confirmed, so
+  /// they hear once per date (a move to a new date tells them again)
+  requesterNotifiedFor String?
 
   @@unique([projectId, date])
   @@index([date])
@@ -1596,6 +1615,8 @@ model Employee {
   lastName          String
   email             String? @unique
   phone             String?
+  /// Language for emails and the pages they open: "en" or "es"
+  language String @default("en")
   role              String?
   /// HOURLY | SALARY
   payType           String  @default("HOURLY")
@@ -2007,6 +2028,8 @@ model Contractor {
   bankAccountNumber  String?
   bankRoutingNumber  String?
   phone              String?
+  /// Language for emails and the pages they open: "en" or "es"
+  language String @default("en")
   hasInsurance       Boolean?
 
   /// Workers comp coverage, self-reported by the contractor via the info portal; staff can review/correct in the ERP.
@@ -2204,8 +2227,25 @@ model CandidateApplication {
   updatedAt DateTime @updatedAt
 
   fullName String
-  email    String
+  /// Required for field candidates (enforced in the APIs). Office candidates
+  /// often only have a phone number, so it can be null for them.
+  email    String?
   phone    String?
+
+  /// FIELD (cleaners, painters, supervisors, the /careers form) | OFFICE
+  /// (office jobs tracked per JobOpening). Field candidates use `status`;
+  /// office candidates use `stage`, and `status` is kept in sync from it
+  /// (see officeHiring.ts) so paperwork, onboarding and signing still work.
+  track          String      @default("FIELD")
+  jobOpeningId   String?
+  jobOpening     JobOpening? @relation(fields: [jobOpeningId], references: [id], onDelete: SetNull)
+  /// Office only. NEW | CONTACTING | PHONE_SCREEN | INTERVIEW | FINAL | OFFER | BACKUP | HIRED | REJECTED | WITHDREW
+  stage          String?
+  /// Office only. Free text, people answer in words ("around 70k, 80 works").
+  expectedSalary String?
+  shortlisted    Boolean     @default(false)
+  /// Office only. LINKEDIN | INDEED | REFERRAL | WEBSITE | OTHER
+  source         String?
 
   /// Role or work type they are interested in (placeholder until full questionnaire).
   positionInterest String?
@@ -2257,6 +2297,54 @@ model CandidateApplication {
   @@index([status])
   @@index([createdAt])
   @@index([email])
+  @@index([track])
+  @@index([jobOpeningId])
+}
+
+/// An office job we are hiring for (one tab of the old Candidates.xlsx).
+model JobOpening {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  title              String
+  department         String?
+  location           String?
+  /// ON_SITE | HYBRID | REMOTE
+  workMode           String?
+  salaryMinCents     Int?
+  salaryMaxCents     Int?
+  /// OPEN | PAUSED | FILLED | CLOSED
+  status             String    @default("OPEN")
+  openedAt           DateTime  @default(now())
+  closedAt           DateTime?
+  /// Email of the ERP user running this hire
+  hiringManagerEmail String?
+  description        String?
+  createdBy          String?
+
+  postings   JobPosting[]
+  candidates CandidateApplication[]
+
+  @@index([status])
+}
+
+/// One job ad for an opening (LinkedIn, Indeed, ...). An opening can have several.
+model JobPosting {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  jobOpeningId String
+  jobOpening   JobOpening @relation(fields: [jobOpeningId], references: [id], onDelete: Cascade)
+
+  /// LINKEDIN | INDEED | REFERRAL | WEBSITE | OTHER
+  source         String
+  costCents      Int?
+  applicantCount Int?
+  postedAt       DateTime?
+  notes          String?
+
+  @@index([jobOpeningId])
 }
 
 model FranchiseInquiry {

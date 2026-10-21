@@ -4,6 +4,8 @@ import { getBackupPms } from "@/lib/notificationSettings";
 import { getDescLine } from "@/lib/erp/descLine";
 import { findEmployeeEmailByName } from "@/lib/erp/createLaborEntry";
 import { formatLongDate } from "@/lib/erp/schedule";
+import { dateLocale, tr } from "@/lib/erp/language";
+import { languagesForEmails } from "@/lib/erp/languageLookup";
 
 /**
  * Emails the project's supervisor and PM whenever a project's schedule
@@ -67,18 +69,21 @@ export async function notifyProjectRescheduled(params: {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "";
   const projectUrl = appUrl ? `${appUrl}/erp/projects/${projectId}` : undefined;
-  const oldLabel = oldDateKey ? formatLongDate(oldDateKey) : "unscheduled";
-  const newLabel = formatLongDate(newDateKey);
+  const langs = await languagesForEmails([...recipients.values()]);
 
   await Promise.all(
-    [...recipients.values()].map((email) =>
-      sendEmail({
+    [...recipients.values()].map((email) => {
+      const lang = langs.get(email.toLowerCase()) ?? "en";
+      const oldLabel = oldDateKey ? formatLongDate(oldDateKey, dateLocale(lang)) : tr(lang, { en: "unscheduled", es: "sin fecha" });
+      const newLabel = formatLongDate(newDateKey, dateLocale(lang));
+      return sendEmail({
         type: "RESCHEDULE_NOTICE",
         link: `/erp/projects/${projectId}`,
         to: email,
-        subject: `Rescheduled: ${jobTitle}, now ${newLabel}`,
-        html: buildRescheduleEmail({ jobTitle, oldLabel, newLabel, projectUrl: projectUrl ?? null }),
-      }).catch((e) => console.error("Failed to send reschedule notification", e)),
-    ),
+        subject: `${tr(lang, { en: "Rescheduled", es: "Cambio de fecha" })}: ${jobTitle}, ${tr(lang, { en: "now", es: "ahora" })} ${newLabel}`,
+        html: buildRescheduleEmail({ jobTitle, oldLabel, newLabel, projectUrl: projectUrl ?? null, lang }),
+        lang,
+      }).catch((e) => console.error("Failed to send reschedule notification", e));
+    }),
   );
 }

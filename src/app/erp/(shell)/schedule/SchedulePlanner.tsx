@@ -10,7 +10,7 @@ import { DayAssignmentModal } from "./DayAssignmentModal";
 import { MiniCalendarPicker, dayAfter } from "./MiniCalendarPicker";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { useFloatingMenu } from "@/app/erp/components/useFloatingMenu";
-import { useConfirm } from "@/app/erp/components/ui";
+import { InfoTip, useConfirm } from "@/app/erp/components/ui";
 import { useInsuranceCheck } from "@/app/erp/components/useInsuranceCheck";
 import {
   coIsComplete,
@@ -364,6 +364,9 @@ function DuplicateToMoreDaysSection({
   scopeItems,
   changeOrderIds,
   comment,
+  internalNote,
+  requesterName,
+  requesterEmail,
   startTime,
   endTime,
   supervisors,
@@ -379,6 +382,9 @@ function DuplicateToMoreDaysSection({
   scopeItems: string[];
   changeOrderIds: string[];
   comment: string;
+  internalNote: string;
+  requesterName: string | null;
+  requesterEmail: string | null;
   startTime: string | null;
   endTime: string | null;
   supervisors: Person[];
@@ -406,6 +412,7 @@ function DuplicateToMoreDaysSection({
     !!projectManagerUserId ||
     !!supervisorContractorId ||
     comment.trim().length > 0 ||
+    internalNote.trim().length > 0 ||
     sovItemIds.length > 0 ||
     scopeItems.length > 0 ||
     changeOrderIds.length > 0;
@@ -448,6 +455,9 @@ function DuplicateToMoreDaysSection({
           scopeItems: scopeItems.length > 0 ? scopeItems : undefined,
           changeOrderIds: changeOrderIds.length > 0 ? changeOrderIds : undefined,
           comment: comment.trim() || undefined,
+          internalNote: internalNote.trim(),
+          requesterName: requesterName ?? "",
+          requesterEmail: requesterEmail ?? "",
           ...(isBatch ? { dates: sortedKeys } : {}),
         }),
       });
@@ -473,6 +483,9 @@ function DuplicateToMoreDaysSection({
             scopeItems,
             changeOrderIds,
             comment: comment.trim() || null,
+            internalNote: internalNote.trim() || null,
+            requesterName,
+            requesterEmail,
           }))
         : data.id
         ? [
@@ -490,6 +503,9 @@ function DuplicateToMoreDaysSection({
               scopeItems,
               changeOrderIds,
               comment: comment.trim() || null,
+              internalNote: internalNote.trim() || null,
+              requesterName,
+              requesterEmail,
             },
           ]
         : [];
@@ -790,6 +806,12 @@ export function SchedulePlanner({
   const [eventCoPicks, setEventCoPicks] = useState<string[]>([]);
   // Free-text note, mainly for when there are no SOV items yet to pick from.
   const [eventComment, setEventComment] = useState("");
+  // Staff-only note, never sent in invites.
+  const [eventInternalNote, setEventInternalNote] = useState("");
+  // The client emailed once everyone on the day confirms; "other" types someone not in the list.
+  const [eventRequesterEmail, setEventRequesterEmail] = useState("");
+  const [eventRequesterName, setEventRequesterName] = useState("");
+  const [eventRequesterOther, setEventRequesterOther] = useState(false);
 
   // Worker add/remove for the specific (day, project) the popover is open
   // for — separate from the day-assignment modal's worker picker, which
@@ -847,6 +869,10 @@ export function SchedulePlanner({
     setEventScopePicks(da?.scopeItems ?? []);
     setEventCoPicks(da?.changeOrderIds ?? []);
     setEventComment(da?.comment ?? "");
+    setEventInternalNote(da?.internalNote ?? "");
+    setEventRequesterEmail(da?.requesterEmail ?? "");
+    setEventRequesterName(da?.requesterName ?? "");
+    setEventRequesterOther(false);
     setEventWorkerType("employee");
     setEventWorkerQuery("");
     setEventWorkerId("");
@@ -899,6 +925,9 @@ export function SchedulePlanner({
           scopeItems: finalScopeItems.length > 0 ? finalScopeItems : undefined,
           changeOrderIds: finalChangeOrderIds.length > 0 ? finalChangeOrderIds : undefined,
           comment: existingAssignment.comment || undefined,
+          internalNote: existingAssignment.internalNote ?? "",
+          requesterName: existingAssignment.requesterName ?? "",
+          requesterEmail: existingAssignment.requesterEmail ?? "",
         }),
       });
       const dayData = (await dayRes.json().catch(() => ({}))) as { id?: string; error?: string };
@@ -958,6 +987,9 @@ export function SchedulePlanner({
           scopeItems: finalScopeItems,
           changeOrderIds: finalChangeOrderIds,
           comment: existingAssignment.comment,
+          internalNote: existingAssignment.internalNote,
+          requesterName: existingAssignment.requesterName,
+          requesterEmail: existingAssignment.requesterEmail,
         },
       ]);
       if (dateChanged) {
@@ -1011,6 +1043,7 @@ export function SchedulePlanner({
           startTime: existingAssignment.startTime || undefined,
           endTime: existingAssignment.endTime || undefined,
           comment: existingAssignment.comment || undefined,
+          internalNote: existingAssignment.internalNote ?? "",
         }),
       });
       const dayData = (await dayRes.json().catch(() => ({}))) as { id?: string; error?: string };
@@ -1050,6 +1083,7 @@ export function SchedulePlanner({
           startTime: existingAssignment.startTime,
           endTime: existingAssignment.endTime,
           comment: existingAssignment.comment,
+          internalNote: existingAssignment.internalNote,
         },
       ]);
       setCoWorkerAssignments((prev) => [
@@ -1116,6 +1150,9 @@ export function SchedulePlanner({
             scopeItems: union(other.scopeItems, a.scopeItems),
             changeOrderIds: union(other.changeOrderIds, a.changeOrderIds),
             comment: mergeNotes(other.comment, a.comment),
+            internalNote: mergeNotes(other.internalNote, a.internalNote),
+            requesterName: other.requesterEmail ? other.requesterName : a.requesterName,
+            requesterEmail: other.requesterEmail || a.requesterEmail,
           };
           const res = await fetch("/api/erp/schedule/day-assignments", {
             method: "POST",
@@ -1132,6 +1169,9 @@ export function SchedulePlanner({
               scopeItems: merged.scopeItems.length > 0 ? merged.scopeItems : undefined,
               changeOrderIds: merged.changeOrderIds.length > 0 ? merged.changeOrderIds : undefined,
               comment: merged.comment || undefined,
+              internalNote: merged.internalNote ?? "",
+              requesterName: merged.requesterName ?? "",
+              requesterEmail: merged.requesterEmail ?? "",
             }),
           });
           const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
@@ -1173,6 +1213,9 @@ export function SchedulePlanner({
             scopeItems: a.scopeItems.length > 0 ? a.scopeItems : undefined,
             changeOrderIds: a.changeOrderIds.length > 0 ? a.changeOrderIds : undefined,
             comment: a.comment || undefined,
+            internalNote: a.internalNote ?? "",
+            requesterName: a.requesterName ?? "",
+            requesterEmail: a.requesterEmail ?? "",
           }),
         });
         const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
@@ -1477,6 +1520,9 @@ export function SchedulePlanner({
             scopeItems={existingAssignment?.scopeItems ?? []}
             changeOrderIds={existingAssignment?.changeOrderIds ?? []}
             comment={existingAssignment?.comment ?? ""}
+            internalNote={existingAssignment?.internalNote ?? ""}
+            requesterName={existingAssignment?.requesterName ?? null}
+            requesterEmail={existingAssignment?.requesterEmail ?? null}
             startTime={existingAssignment?.startTime ?? null}
             endTime={existingAssignment?.endTime ?? null}
             supervisors={supervisors}
@@ -1571,14 +1617,15 @@ export function SchedulePlanner({
       same(existing.sovItemIds, eventSovPicks) &&
       same(existing.scopeItems, eventScopePicks) &&
       same(existing.changeOrderIds, eventCoPicks) &&
-      (existing.comment ?? "") === eventComment.trim()
+      (existing.comment ?? "") === eventComment.trim() &&
+      (existing.internalNote ?? "") === eventInternalNote.trim()
     )
       return { ok: true, row: existing };
     // A supervisor/PM isn't required to keep an assignment around — SOV
     // picks, scope picks, change-order picks, or a comment are each enough
     // coverage on their own. Only clear the row when literally nothing is set.
     const hasCoverage =
-      eventSovPicks.length > 0 || eventScopePicks.length > 0 || eventCoPicks.length > 0 || eventComment.trim().length > 0;
+      eventSovPicks.length > 0 || eventScopePicks.length > 0 || eventCoPicks.length > 0 || eventComment.trim().length > 0 || eventInternalNote.trim().length > 0;
     if (!eventDaySupervisorId && !eventDayPmId && !eventDaySupervisorContractorId && !hasCoverage) {
       if (!existing) return { ok: true, row: null };
       setEventDaySaving(true);
@@ -1593,6 +1640,10 @@ export function SchedulePlanner({
       } finally {
         setEventDaySaving(false);
       }
+    }
+    if (eventRequesterEmail.trim() && !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(eventRequesterEmail.trim())) {
+      setEventDayError("Requested by needs a valid email");
+      return { ok: false, row: null };
     }
     if (!(await checkInsurance(eventDaySupervisorContractorId, existing?.supervisorContractorId))) return { ok: false, row: null };
     setEventDaySaving(true);
@@ -1610,9 +1661,12 @@ export function SchedulePlanner({
           scopeItems: eventScopePicks.length > 0 ? eventScopePicks : undefined,
           changeOrderIds: eventCoPicks.length > 0 ? eventCoPicks : undefined,
           comment: eventComment.trim() || undefined,
+          internalNote: eventInternalNote.trim(),
+          requesterName: eventRequesterName.trim(),
+          requesterEmail: eventRequesterEmail.trim(),
         }),
       });
-      const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
+      const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string; requesterName?: string | null; requesterEmail?: string | null };
       if (!res.ok) throw new Error(data.error || "Failed to save");
       let row: ScheduleDayAssignment | null = null;
       if (data.id) {
@@ -1630,6 +1684,9 @@ export function SchedulePlanner({
           scopeItems: eventScopePicks,
           changeOrderIds: eventCoPicks,
           comment: eventComment.trim() || null,
+          internalNote: eventInternalNote.trim() || null,
+          requesterName: data.requesterName ?? null,
+          requesterEmail: data.requesterEmail ?? null,
         };
         const saved = row;
         setDayAssignments((prev) => [...prev.filter((a) => !(a.dateKey === k && a.projectId === projectId)), saved]);
@@ -2030,6 +2087,9 @@ export function SchedulePlanner({
               scopeItems={eventScopePicks}
               changeOrderIds={eventCoPicks}
               comment={eventComment}
+              internalNote={eventInternalNote}
+              requesterName={eventRequesterName.trim() || null}
+              requesterEmail={eventRequesterEmail.trim() || null}
               startTime={dayAssignments.find((x) => x.id === eventAssignmentId)?.startTime ?? null}
               endTime={dayAssignments.find((x) => x.id === eventAssignmentId)?.endTime ?? null}
               supervisors={supervisors}
@@ -2074,6 +2134,9 @@ export function SchedulePlanner({
               scopeItems={eventScopePicks}
               changeOrderIds={eventCoPicks}
               comment={eventComment}
+              internalNote={eventInternalNote}
+              requesterName={eventRequesterName.trim() || null}
+              requesterEmail={eventRequesterEmail.trim() || null}
               startTime={null}
               endTime={null}
               supervisors={supervisors}
@@ -2224,7 +2287,7 @@ export function SchedulePlanner({
 
 
           <label className="mt-1.5 block text-[9px] text-gray-400">
-            Note for this day (sent with everyone&apos;s invite)
+            Note for contractors (sent with everyone&apos;s invite)
             <textarea
               value={eventComment}
               onChange={(e) => setEventComment(e.target.value)}
@@ -2233,12 +2296,81 @@ export function SchedulePlanner({
               className="mt-0.5 w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
             />
           </label>
+          <label className="mt-1.5 block text-[9px] text-gray-400">
+            Internal note (staff only, never sent)
+            <textarea
+              value={eventInternalNote}
+              onChange={(e) => setEventInternalNote(e.target.value)}
+              placeholder="Pricing, client issues, reminders for the office..."
+              rows={2}
+              className="mt-0.5 w-full rounded border border-amber-200 bg-amber-50 px-1.5 py-1 text-xs text-gray-800 focus:border-amber-400 focus:outline-none"
+            />
+          </label>
           {p.requestNotes ? (
             <div className="mt-1 rounded bg-gray-50 px-1.5 py-1 text-[10px] text-gray-600">
               <span className="font-medium text-gray-700">From the property manager:</span>{" "}
               <span className="whitespace-pre-line">{p.requestNotes}</span>
             </div>
           ) : null}
+          <div className="mt-1.5">
+            <div className="flex items-center gap-1 text-[9px] text-gray-400">
+              Requested by
+              <InfoTip text="Gets one email once everyone on this day has clicked Confirm. Filled in when the client asks through the project portal." />
+            </div>
+            {eventRequesterOther ? (
+              <div className="mt-0.5 flex gap-1">
+                <input
+                  value={eventRequesterName}
+                  onChange={(e) => setEventRequesterName(e.target.value)}
+                  placeholder="Name"
+                  className="w-1/3 rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
+                />
+                <input
+                  type="email"
+                  value={eventRequesterEmail}
+                  onChange={(e) => setEventRequesterEmail(e.target.value)}
+                  placeholder="Email"
+                  className="min-w-0 flex-1 rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEventRequesterOther(false);
+                    setEventRequesterEmail("");
+                    setEventRequesterName("");
+                  }}
+                  className="text-[10px] text-gray-500 hover:text-gray-700"
+                >
+                  List
+                </button>
+              </div>
+            ) : (
+              <SearchableSelect
+                value={eventRequesterEmail}
+                onChange={(v) => {
+                  if (v === "__other") {
+                    setEventRequesterOther(true);
+                    setEventRequesterEmail("");
+                    setEventRequesterName("");
+                    return;
+                  }
+                  const picked = p.requesterOptions.find((o) => o.email === v);
+                  setEventRequesterEmail(v);
+                  setEventRequesterName(picked?.name ?? (v === eventRequesterEmail ? eventRequesterName : ""));
+                }}
+                options={[
+                  ...p.requesterOptions.map((o) => ({ value: o.email, label: o.name === o.email ? o.email : `${o.name} (${o.email})` })),
+                  ...(eventRequesterEmail && !p.requesterOptions.some((o) => o.email === eventRequesterEmail)
+                    ? [{ value: eventRequesterEmail, label: eventRequesterName ? `${eventRequesterName} (${eventRequesterEmail})` : eventRequesterEmail }]
+                    : []),
+                  { value: "__other", label: "Someone else..." },
+                ]}
+                allLabel="Nobody"
+                placeholder="Nobody"
+                className="mt-0.5"
+              />
+            )}
+          </div>
         </div>
 
         <div className="mt-3 border-t border-gray-100 pt-2.5">
@@ -3710,6 +3842,9 @@ export function SchedulePlanner({
                         ) : null}
                         {assignment.comment ? (
                           <div className="mt-1 whitespace-pre-line text-gray-300">Note: {assignment.comment}</div>
+                        ) : null}
+                        {assignment.internalNote ? (
+                          <div className="mt-1 whitespace-pre-line text-amber-300">Internal: {assignment.internalNote}</div>
                         ) : null}
                       </div>
                     ) : null}

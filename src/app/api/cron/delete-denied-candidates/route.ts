@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * Runs daily (see vercel.json). Deletes any candidate application still
- * marked DENIED 30+ days after it was submitted (createdAt, not updatedAt -
+ * marked DENIED 30+ days after it was submitted (field candidates only) (createdAt, not updatedAt -
  * editing notes/paperwork on a denied candidate shouldn't push the deletion
  * out). Cascades to CandidateDocument/CandidateContract via the schema's
  * onDelete: Cascade.
@@ -20,7 +20,8 @@ export async function GET(req: Request) {
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   const result = await prisma.candidateApplication.deleteMany({
-    where: { status: "DENIED", createdAt: { lt: cutoff } },
+    // Office candidates are kept on purpose (who we already talked to, backups).
+    where: { track: "FIELD", status: "DENIED", createdAt: { lt: cutoff } },
   });
 
   return NextResponse.json({ deleted: result.count, cutoff: cutoff.toISOString() });

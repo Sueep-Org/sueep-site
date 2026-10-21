@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, InfoTip, inputClass, labelClass } from "@/app/erp/components/ui";
+import { LANGUAGE_OPTIONS } from "@/lib/erp/language";
 
 const input = inputClass.md;
 const label = labelClass.default;
@@ -13,6 +14,7 @@ type Props = {
     name: string;
     email: string | null;
     phone: string | null;
+    language: string;
     role: string | null;
     status: string;
     runsWithoutSupervisor: boolean;
@@ -40,6 +42,7 @@ export function ContractorProfileEditor({ contractorId, initial }: Props) {
           name: fd.get("name"),
           email: fd.get("email") || null,
           phone: fd.get("phone") || null,
+          language: fd.get("language"),
           role: fd.get("role") || null,
           status: fd.get("status"),
           runsWithoutSupervisor: fd.get("runsWithoutSupervisor") === "on",
@@ -108,6 +111,19 @@ export function ContractorProfileEditor({ contractorId, initial }: Props) {
               defaultValue={initial.role ?? ""}
               className={input}
             />
+          </div>
+          <div>
+            <label className={`${label} flex items-center gap-1`} htmlFor="language">
+              Language
+              <InfoTip text="Emails we send them, and the pages those emails open, use this language. Anything typed by staff (notes, job names) stays as typed." />
+            </label>
+            <select id="language" name="language" defaultValue={initial.language} className={input}>
+              {LANGUAGE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className={label} htmlFor="status">
