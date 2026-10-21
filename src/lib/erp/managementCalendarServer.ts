@@ -391,6 +391,7 @@ export async function loadManagementItems(
         for (const [day, label, kind] of [
           [d.bidDate, "Bid due", "bid"],
           [d.walkDate, "Job walk", "walk"],
+          [d.awardDate, "Award expected", "award"],
         ] as const) {
           if (!day || day < startKey || day > endKey) continue;
           add("BIDS", { key: `${kind}:${d.id}`, title: `${label}: ${d.name}`, detail, href, start: day, end: day });

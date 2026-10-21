@@ -32,7 +32,7 @@ function inDays(todayKey: string, key: string): string {
   return n === 0 ? "today" : n === 1 ? "tomorrow" : `in ${n} days`;
 }
 
-/** Bid due dates and job walks from today through DUE_WINDOW_DAYS, soonest first. Lost bids are left off. */
+/** Bid due dates, job walks and expected award dates from today through DUE_WINDOW_DAYS, soonest first. Lost bids are left off. */
 /** `bandOf` adds the chance to win to each row (left out for the tab count, which doesn't need it). */
 function bidsDueSection(bundle: Bundle, todayKey: string, bandOf?: (d: RawDeal) => WinBand | null): CardSection {
   const last = addDaysKey(todayKey, DUE_WINDOW_DAYS);
@@ -45,6 +45,7 @@ function bidsDueSection(bundle: Bundle, todayKey: string, bandOf?: (d: RawDeal) 
     for (const [day, what] of [
       [d.bidDate, "Bid due"],
       [d.walkDate, "Job walk"],
+      [d.awardDate, "Award expected"],
     ] as const) {
       if (!day || day < todayKey || day > last) continue;
       rows.push({
@@ -56,7 +57,8 @@ function bidsDueSection(bundle: Bundle, todayKey: string, bandOf?: (d: RawDeal) 
         note: [bandOf?.(d) ? `${bandOf(d)} chance` : null, `${what} ${dayLabel(day)}, ${inDays(todayKey, day)}`, stage, owner].filter(Boolean).join(" · "),
         value: d.cents ? centsToDollarsCompact(d.cents) : "",
         valueTitle: d.cents ? centsToDollars(d.cents) : undefined,
-        negative: day <= urgentBy,
+        // Only bids and walks are work to get done; an award date is just a date to watch.
+        negative: what !== "Award expected" && day <= urgentBy,
       });
     }
   }
@@ -65,9 +67,9 @@ function bidsDueSection(bundle: Bundle, todayKey: string, bandOf?: (d: RawDeal) 
     key: "due",
     label: "Due soon",
     // A deal with both a bid due and a job walk this soon counts once.
-    alertCount: new Set(rows.filter((r) => r.day <= urgentBy).map((r) => r.dealId)).size,
+    alertCount: new Set(rows.filter((r) => r.negative).map((r) => r.dealId)).size,
     rows: rows.slice(0, SHOWN).map(({ day: _day, dealId: _dealId, ...r }) => r),
-    empty: `No bid due dates or job walks in the next ${DUE_WINDOW_DAYS} days. They come from Bid Date and Job Walk Date on HubSpot deals.`,
+    empty: `No bid due dates, job walks or award dates in the next ${DUE_WINDOW_DAYS} days. They come from Bid Date, Job Walk Date and Award Date on HubSpot deals.`,
     href: "/erp/schedule?calendar=management",
     footer: rows.length > SHOWN ? `Soonest ${SHOWN} of ${rows.length}.` : undefined,
   };
@@ -142,7 +144,7 @@ async function followUpSection(ctx: CardContext, todayKey: string): Promise<Card
   };
 }
 
-/** Estimation Queue tab: bid due dates and job walks coming up, and next steps. */
+/** Estimation Queue tab: bid due dates, job walks and award dates coming up, and next steps. */
 export async function loadBidsDue(ctx: CardContext): Promise<DashboardCardData> {
   const today = todayEasternKey();
   const bundle = await loadDeals();

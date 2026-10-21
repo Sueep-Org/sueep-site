@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useFloatingMenu } from "./useFloatingMenu";
 
 export type SearchableSelectOption = { value: string; label: string };
 
@@ -33,12 +34,15 @@ export function SearchableSelect({
   const [highlighted, setHighlighted] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const selectedLabel = options.find((o) => o.value === value)?.label ?? "";
   const displayValue = open ? query : selectedLabel;
 
   const filtered = options.filter((o) => o.label.toLowerCase().includes(query.trim().toLowerCase()));
   const filteredWithAll = query.trim() === "" ? options : filtered;
+  const menuStyle = useFloatingMenu(open, anchorRef, menuRef, filteredWithAll.length);
 
   useEffect(() => {
     if (!open) return;
@@ -81,7 +85,7 @@ export function SearchableSelect({
 
   return (
     <div className={`relative ${className}`} ref={ref}>
-      <div className="relative">
+      <div className="relative" ref={anchorRef}>
         <input
           id={id}
           ref={inputRef}
@@ -120,7 +124,7 @@ export function SearchableSelect({
       </div>
 
       {open ? (
-        <div className="absolute left-0 z-20 mt-1 max-h-64 w-full min-w-[12rem] overflow-y-auto rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+        <div ref={menuRef} style={menuStyle} className="overflow-y-auto rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
           <button
             type="button"
             onClick={() => select("")}

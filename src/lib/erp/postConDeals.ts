@@ -34,9 +34,11 @@ export type RawDeal = {
   sqft: number | null;
   lastActivity: string | null;
   scope: WorkScope;
-  /** HubSpot Bid Date and Job Walk Date ("YYYY-MM-DD"), for the Management calendar's Bids category */
+  /** HubSpot Bid Date, Job Walk Date and Award Date ("YYYY-MM-DD"), for the Management calendar's Bids category */
   bidDate: string | null;
   walkDate: string | null;
+  /** When the GC expects to award the job (HubSpot award_date). Optional so older cached bundles still read. */
+  awardDate?: string | null;
   /** When the deal entered its current stage (HubSpot hs_v2_date_entered_<stage>), for days in stage */
   stageEnteredAt: string | null;
 };
@@ -82,7 +84,7 @@ export type Bundle = {
   fetchedAt: string;
 };
 
-const PROPS = ["dealname", "dealstage", "amount", "createdate", "hubspot_owner_id", "company", "deal_lost_reason", "how_the_customer_reach_sueep", "area_sqft", "notes_last_updated", "hs_lastmodifieddate", "type_of_business", "bid_date", "completion_date"];
+const PROPS = ["dealname", "dealstage", "amount", "createdate", "hubspot_owner_id", "company", "deal_lost_reason", "how_the_customer_reach_sueep", "area_sqft", "notes_last_updated", "hs_lastmodifieddate", "type_of_business", "bid_date", "completion_date", "award_date"];
 
 async function searchAll(pipelineId: string, stageIds: string[]): Promise<RawDeal[]> {
   // HubSpot keeps one "date entered" property per stage; the old hs_date_entered_ names come back empty.
@@ -122,6 +124,7 @@ async function searchAll(pipelineId: string, stageIds: string[]): Promise<RawDea
         bidDate: p.bid_date?.slice(0, 10) || null,
         // HubSpot's "Job Walk Date" lives in a property named completion_date.
         walkDate: p.completion_date?.slice(0, 10) || null,
+        awardDate: p.award_date?.slice(0, 10) || null,
         stageEnteredAt: (p.dealstage && p[`hs_v2_date_entered_${p.dealstage}`]) || null,
       });
     }
@@ -232,7 +235,7 @@ export async function computeBundle(key: PipelineKey = "post-con"): Promise<Bund
 }
 
 /** Cached an hour. Errors aren't cached, so the next visit tries again. */
-export const loadDealBundle = unstable_cache(() => computeBundle("post-con"), ["post-con-deals-v6"], { revalidate: CACHE_SECONDS });
+export const loadDealBundle = unstable_cache(() => computeBundle("post-con"), ["post-con-deals-v7"], { revalidate: CACHE_SECONDS });
 
 /** Janitorial pipeline deals, same shape and cache time, for the pipeline board. */
 export const loadJanitorialDealBundle = unstable_cache(() => computeBundle("janitorial"), ["janitorial-deals-v2"], { revalidate: CACHE_SECONDS });

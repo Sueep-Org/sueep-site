@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   dayCellLabelWithYear,
   matchesSearchQuery,
@@ -17,6 +17,7 @@ import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { centsToDollars } from "@/lib/erp/money";
 import { MiniCalendarPicker } from "./MiniCalendarPicker";
 import { AnswerMark, answerUid, type Answers } from "./AnswerMark";
+import { useFloatingMenu } from "@/app/erp/components/useFloatingMenu";
 
 /** The specific things a single crew member on a day could be split onto —
  * an SOV item for Post-Construction, a turnover scope category for
@@ -199,6 +200,11 @@ export function DayAssignmentModal({
   const [employeeQuery, setEmployeeQuery] = useState("");
   const [contractorId, setContractorId] = useState("");
   const [contractorQuery, setContractorQuery] = useState("");
+  // Worker and contractor matches float over the panel so its edge can't cut them off (one shows at a time).
+  const workerSearchRef = useRef<HTMLInputElement>(null);
+  const workerMatchesRef = useRef<HTMLDivElement>(null);
+  const workerMatchesOpen = workerType === "employee" ? !!employeeQuery && !employeeId : !!contractorQuery && !contractorId;
+  const workerMatchesStyle = useFloatingMenu(workerMatchesOpen, workerSearchRef, workerMatchesRef, (workerType === "employee" ? employeeQuery : contractorQuery).length, 0);
   // Which scope the next worker covers, when the project's day has more
   // than one (see scopeSplitOptions) — required in that case, ignored
   // otherwise (everyone's on the day's one-and-only scope by default).
@@ -1225,6 +1231,7 @@ export function DayAssignmentModal({
             {workerType === "employee" ? (
               <div className="relative flex-1">
                 <input
+                  ref={workerSearchRef}
                   type="text"
                   value={employeeId ? employees.find((e) => e.id === employeeId)?.displayName ?? "" : employeeQuery}
                   onChange={(e) => {
@@ -1236,7 +1243,7 @@ export function DayAssignmentModal({
                   className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400"
                 />
                 {employeeQuery && !employeeId ? (
-                  <div className="absolute z-10 mt-1 max-h-40 w-full overflow-auto rounded border border-gray-200 bg-white shadow-sm">
+                  <div ref={workerMatchesRef} style={workerMatchesStyle} className="overflow-auto rounded border border-gray-200 bg-white shadow-lg">
                     {filteredEmployees.slice(0, 8).map((e) => (
                       <button
                         key={e.id}
@@ -1260,6 +1267,7 @@ export function DayAssignmentModal({
             ) : (
               <div className="relative flex-1">
                 <input
+                  ref={workerSearchRef}
                   type="text"
                   value={contractorId ? contractors.find((c) => c.id === contractorId)?.displayName ?? "" : contractorQuery}
                   onChange={(e) => {
@@ -1271,7 +1279,7 @@ export function DayAssignmentModal({
                   className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 placeholder-gray-400"
                 />
                 {contractorQuery && !contractorId ? (
-                  <div className="absolute z-10 mt-1 max-h-40 w-full overflow-auto rounded border border-gray-200 bg-white shadow-sm">
+                  <div ref={workerMatchesRef} style={workerMatchesStyle} className="overflow-auto rounded border border-gray-200 bg-white shadow-lg">
                     {filteredContractors.slice(0, 8).map((c) => (
                       <button
                         key={c.id}

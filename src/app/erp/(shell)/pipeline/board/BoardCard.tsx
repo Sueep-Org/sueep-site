@@ -23,6 +23,7 @@ function details(c: Card, b: BoardContext, items: Attention[]): string {
     c.scopeLabel,
     c.bidDate && `Bid ${shortDay(c.bidDate)}`,
     c.walkDate && `Job walk ${shortDay(c.walkDate)}`,
+    c.awardDate && `Award expected ${shortDay(c.awardDate)}`,
     c.daysInStage != null &&
       `${c.daysInStage} days in this stage${c.importedStage ? " (counted from the HubSpot import on Dec 26, 2024, so likely longer)" : ""}`,
     c.daysQuiet != null && `${c.daysQuiet} days since last activity`,

@@ -79,6 +79,8 @@ export type BoardCard = {
   scopeLabel: string;
   bidDate: string | null;
   walkDate: string | null;
+  /** HubSpot Award Date, when the GC expects to award the job */
+  awardDate: string | null;
   /** ISO time of the last HubSpot activity (or creation), for sorting */
   activeAt: string;
   daysQuiet: number | null;
@@ -222,6 +224,7 @@ export async function loadPipelineBoard(
       scopeLabel: WORK_SCOPE_LABELS[d.scope],
       bidDate: d.bidDate,
       walkDate: d.walkDate,
+      awardDate: d.awardDate ?? null,
       activeAt,
       daysQuiet: Number.isFinite(active) ? Math.max(0, Math.floor((now.getTime() - active) / DAY_MS)) : null,
       stale: stale.has(d.id),

@@ -125,6 +125,11 @@ export function PipelineGuide() {
         Use <strong>Bid due &gt; Next 7 days</strong> in the filter to see what&apos;s due soon, soonest first. Put the Bid Date
         in HubSpot on every bid so it shows here, on the dashboard and on the Management calendar.
       </P>
+      <H3>Waiting to hear back</H3>
+      <P>
+        Use <strong>Award date &gt; Next 7 days</strong> to see which GCs should be deciding soon, soonest first. Put the Award
+        Date in HubSpot when the GC tells you, so it shows here, on the dashboard and on the Management calendar.
+      </P>
       <H3>Deciding where to spend time</H3>
       <P>
         Each open bid has a chance to win from how similar bids turned out for us: a green stripe on the card means Strong,

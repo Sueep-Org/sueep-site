@@ -54,7 +54,7 @@ export const DASHBOARD_CARDS: readonly DashboardCardDef[] = [
     title: "Bids due",
     tab: "queue",
     roles: ["ESTIMATION"],
-    info: "Post-construction bid due dates and job walks in the next 30 days, soonest first, from Bid Date and Job Walk Date on HubSpot deals. Lost bids are left off. Red when it's within 3 days. Click one to open the deal in HubSpot. All of them are on the Management calendar's Bids category. Follow-ups: next steps on your pipeline deals that are overdue (red) or due this week.",
+    info: "Post-construction bid due dates, job walks and expected award dates in the next 30 days, soonest first, from Bid Date, Job Walk Date and Award Date on HubSpot deals. Lost bids are left off. Bids and walks are red when they're within 3 days. Click one to open the deal in HubSpot. All of them are on the Management calendar's Bids category. Follow-ups: next steps on your pipeline deals that are overdue (red) or due this week.",
   },
   {
     id: "quote-price-check",
@@ -131,7 +131,7 @@ export const DASHBOARD_CARDS: readonly DashboardCardDef[] = [
     title: "Bids",
     tab: "sales",
     roles: ["SALES", "BUSINESS_MANAGER", "ADMIN"],
-    info: "Due soon: post-construction bid due dates and job walks in the next 30 days, from Bid Date and Job Walk Date on HubSpot deals (lost bids left off). Red when it's within 3 days. Stale quotes: bids in Quote Sent, Negotiation or Competitive Quote with no activity in HubSpot for 30 days, biggest first. Click one to open the deal in HubSpot. Follow-ups: pipeline next steps overdue (red) or due this week, your own deals for Sales and everyone's for Admin and the Business Manager.",
+    info: "Due soon: post-construction bid due dates, job walks and expected award dates in the next 30 days, from Bid Date, Job Walk Date and Award Date on HubSpot deals (lost bids left off). Bids and walks are red when they're within 3 days. Stale quotes: bids in Quote Sent, Negotiation or Competitive Quote with no activity in HubSpot for 30 days, biggest first. Click one to open the deal in HubSpot. Follow-ups: pipeline next steps overdue (red) or due this week, your own deals for Sales and everyone's for Admin and the Business Manager.",
   },
   // Jobs (Project Managers, Business Manager, Admin)
   {

@@ -405,10 +405,11 @@ export function DealPanel({
           )}
 
           {/* Key facts, as short chips */}
-          {(card.bidDate || card.walkDate || card.sqft != null || card.daysQuiet != null) && (
+          {(card.bidDate || card.walkDate || card.awardDate || card.sqft != null || card.daysQuiet != null) && (
             <div className="flex flex-wrap gap-1.5 border-t border-gray-100 pt-3 text-[11px]">
               {card.bidDate && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-700">Bid {shortDay(card.bidDate)}</span>}
               {card.walkDate && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-700">Walk {shortDay(card.walkDate)}</span>}
+              {card.awardDate && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-700">Award {shortDay(card.awardDate)}</span>}
               {card.sqft != null && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-700">{card.sqft.toLocaleString()} sq ft</span>}
               {card.daysQuiet != null && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-700">{card.daysQuiet} days since last activity</span>}
             </div>

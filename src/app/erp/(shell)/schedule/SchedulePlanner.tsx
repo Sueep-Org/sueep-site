@@ -9,6 +9,7 @@ import { CoDayPopover } from "./CoDayPopover";
 import { DayAssignmentModal } from "./DayAssignmentModal";
 import { MiniCalendarPicker, dayAfter } from "./MiniCalendarPicker";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
+import { useFloatingMenu } from "@/app/erp/components/useFloatingMenu";
 import { useConfirm } from "@/app/erp/components/ui";
 import { useInsuranceCheck } from "@/app/erp/components/useInsuranceCheck";
 import {
@@ -36,6 +37,7 @@ import { calendarSegmentGroup, type CalendarSegmentGroup } from "@/lib/erp/proje
 import { TURNOVER_SCOPE_OPTIONS, turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
 import { SOVMultiCombobox, SOVPriceSummary } from "@/app/erp/components/SOVCombobox";
 import { centsToDollars } from "@/lib/erp/money";
+import { addDaysKey, daysBetween } from "@/lib/erp/managementCalendar";
 import { AnswerMark, CoverageAnswer, answerUid, answersSummary, type Answers } from "./AnswerMark";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -748,9 +750,9 @@ export function SchedulePlanner({
   // when opened some other way with no role context.
   const [eventRole, setEventRole] = useState<"start" | "end" | null>(null);
   const [eventAssignmentId, setEventAssignmentId] = useState<string | null>(null);
+  // A planned card edits the whole run of back-to-back planned days it's part of, first to last day.
   const [eventPlannedDate, setEventPlannedDate] = useState("");
-  const [eventPlannedStartTime, setEventPlannedStartTime] = useState("");
-  const [eventPlannedEndTime, setEventPlannedEndTime] = useState("");
+  const [eventPlannedEndDate, setEventPlannedEndDate] = useState("");
   const [eventStartDate, setEventStartDate] = useState("");
   const [eventEndDate, setEventEndDate] = useState("");
   const [eventSaving, setEventSaving] = useState(false);
@@ -782,6 +784,10 @@ export function SchedulePlanner({
   const [eventWorkerType, setEventWorkerType] = useState<"employee" | "contractor">("employee");
   const [eventWorkerQuery, setEventWorkerQuery] = useState("");
   const [eventWorkerId, setEventWorkerId] = useState("");
+  // The worker search's matches float over the card so its bottom edge can't cut them off.
+  const eventWorkerInputRef = useRef<HTMLInputElement>(null);
+  const eventWorkerMenuRef = useRef<HTMLDivElement>(null);
+  const eventWorkerMenuStyle = useFloatingMenu(!!eventPopoverKey && !!eventWorkerQuery && !eventWorkerId, eventWorkerInputRef, eventWorkerMenuRef, eventWorkerQuery.length, 0);
   // Which scope this next worker covers, when the day has more than one
   // (see dayScopeSplitOptions) — a required pick in that case, ignored
   // otherwise (everyone's on the day's one-and-only scope by default).
@@ -807,15 +813,14 @@ export function SchedulePlanner({
     if (assignment) {
       setEventKind("planned");
       setEventAssignmentId(assignment.id);
-      setEventPlannedDate(assignment.dateKey);
-      setEventPlannedStartTime(assignment.startTime ?? "");
-      setEventPlannedEndTime(assignment.endTime ?? "");
+      const run = plannedRunKeys(assignment.projectId, assignment.dateKey);
+      setEventPlannedDate(run[0]!);
+      setEventPlannedEndDate(run[run.length - 1]!);
     } else {
       setEventKind("project");
       setEventAssignmentId(null);
       setEventPlannedDate("");
-      setEventPlannedStartTime("");
-      setEventPlannedEndTime("");
+      setEventPlannedEndDate("");
     }
     setEventStartDate(p.projectDate ? p.projectDate.slice(0, 10) : "");
     setEventEndDate(p.projectEndDate ? p.projectEndDate.slice(0, 10) : "");
@@ -857,8 +862,10 @@ export function SchedulePlanner({
     sovItemIds?: string[],
     scopeItems?: string[],
     changeOrderIds?: string[],
+    /** The row as just saved, when state hasn't caught up yet (the card's Save). */
+    base?: ScheduleDayAssignment,
   ): Promise<{ ok: boolean; error?: string }> {
-    const existingAssignment = dayAssignments.find((a) => a.id === assignmentId);
+    const existingAssignment = base ?? dayAssignments.find((a) => a.id === assignmentId);
     if (!existingAssignment) return { ok: false, error: "Assignment not found" };
     const finalSovItemIds = sovItemIds ?? existingAssignment.sovItemIds;
     const finalScopeItems = scopeItems ?? existingAssignment.scopeItems;
@@ -923,7 +930,7 @@ export function SchedulePlanner({
       }
 
       setDayAssignments((prev) => [
-        ...prev.filter((a) => a.id !== assignmentId && a.id !== dayData.id),
+        ...prev.filter((a) => a.id !== assignmentId && a.id !== dayData.id && !(a.projectId === projectId && a.dateKey === toK)),
         {
           id: dayData.id!,
           projectId,
@@ -1042,39 +1049,130 @@ export function SchedulePlanner({
     }
   }
 
-  async function handleEventPlannedDateSave(oldK: string, projectId: string, assignmentId: string) {
+  /** The back-to-back days this project is planned on around `k` (k included), in order. */
+  function plannedRunKeys(projectId: string, k: string): string[] {
+    const planned = new Set(dayAssignments.filter((a) => a.projectId === projectId).map((a) => a.dateKey));
+    let first = k;
+    let last = k;
+    while (planned.has(addDaysKey(first, -1))) first = addDaysKey(first, -1);
+    while (planned.has(addDaysKey(last, 1))) last = addDaysKey(last, 1);
+    return Array.from({ length: daysBetween(first, last) + 1 }, (_, i) => addDaysKey(first, i));
+  }
+
+  // Saves a planned card's date range. One day to one day is a plain move
+  // (movePlannedAssignment). Otherwise days added to the range copy the
+  // clicked day (coverage, SOV/scope, note, crew) and days dropped from it
+  // are removed with their crew. Any times already on a day are kept.
+  async function saveEventPlannedRange(oldK: string, projectId: string, a: ScheduleDayAssignment): Promise<boolean> {
+    const from = eventPlannedDate;
+    const to = eventPlannedEndDate || from;
+    const runKeys = plannedRunKeys(projectId, oldK);
+    const targetKeys = Array.from({ length: daysBetween(from, to) + 1 }, (_, i) => addDaysKey(from, i));
+    if (runKeys.join() === targetKeys.join()) return true;
+
+    if (runKeys.length === 1 && targetKeys.length === 1) {
+      const result = await movePlannedAssignment(projectId, a.id, oldK, from, a.startTime, a.endTime, a.sovItemIds, a.scopeItems, a.changeOrderIds, a);
+      if (!result.ok) setEventError(result.error ?? "Failed to save");
+      return result.ok;
+    }
+
+    try {
+      const crew = workerAssignments.filter((w) => w.projectId === projectId && w.dateKey === oldK);
+      const createdDays: ScheduleDayAssignment[] = [];
+      const createdCrew: ScheduleWorkerAssignment[] = [];
+      for (const k of targetKeys.filter((k) => !runKeys.includes(k))) {
+        const res = await fetch("/api/erp/schedule/day-assignments", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            projectId,
+            date: k,
+            supervisorUserId: a.supervisorUserId || undefined,
+            projectManagerUserId: a.projectManagerUserId || undefined,
+            supervisorContractorId: a.supervisorContractorId || undefined,
+            startTime: a.startTime || undefined,
+            endTime: a.endTime || undefined,
+            sovItemIds: a.sovItemIds.length > 0 ? a.sovItemIds : undefined,
+            scopeItems: a.scopeItems.length > 0 ? a.scopeItems : undefined,
+            changeOrderIds: a.changeOrderIds.length > 0 ? a.changeOrderIds : undefined,
+            comment: a.comment || undefined,
+          }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
+        if (!res.ok || !data.id) throw new Error(data.error || "Failed to add a day");
+        createdDays.push({ ...a, id: data.id, dateKey: k, seriesId: null });
+        for (const w of crew) {
+          const wRes = await fetch("/api/erp/schedule/worker-assignments", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              projectId,
+              employeeId: w.employeeId || undefined,
+              contractorId: w.contractorId || undefined,
+              date: k,
+              assignedSovItemId: w.assignedSovItemId,
+              assignedScopeItem: w.assignedScopeItem,
+            }),
+          });
+          const wData = (await wRes.json().catch(() => ({}))) as { id?: string };
+          if (wRes.ok && wData.id) createdCrew.push({ ...w, id: wData.id, dateKey: k, seriesId: null });
+        }
+      }
+      setDayAssignments((prev) => [...prev, ...createdDays]);
+      setWorkerAssignments((prev) => [...prev, ...createdCrew]);
+
+      // Days dropped from the range (the route clears their crew too).
+      const removed = runKeys.filter((k) => !targetKeys.includes(k));
+      for (const k of removed) {
+        const row = dayAssignments.find((x) => x.projectId === projectId && x.dateKey === k);
+        if (!row) continue;
+        const res = await fetch(`/api/erp/schedule/day-assignments/${row.id}`, { method: "DELETE" });
+        if (!res.ok) throw new Error("Failed to remove a day");
+        setDayAssignments((prev) => prev.filter((x) => x.id !== row.id));
+        setWorkerAssignments((prev) => prev.filter((w) => !(w.projectId === projectId && w.dateKey === k)));
+      }
+      return true;
+    } catch (err) {
+      setEventError(err instanceof Error ? err.message : "Failed to save");
+      return false;
+    }
+  }
+
+  /**
+   * The card's one Save: coverage, SOV/scope, change orders and the note for
+   * this day, then the dates (a planned card's range, or the project's own
+   * start and end). Adding or removing a worker still saves right away.
+   */
+  async function handleEventCardSave(k: string, p: ScheduleProject) {
     setEventError("");
-    const newK = eventPlannedDate;
-    if (!newK) {
-      setEventError("Pick a date");
-      return;
-    }
-    if ((eventPlannedStartTime && !eventPlannedEndTime) || (eventPlannedEndTime && !eventPlannedStartTime)) {
-      setEventError("Set both a start and end time, or leave both blank for all-day");
-      return;
-    }
-    if (eventPlannedStartTime && eventPlannedEndTime && eventPlannedEndTime <= eventPlannedStartTime) {
-      setEventError("End time must be after start time");
-      return;
+    setEventDayError("");
+    const planned = eventKind === "planned" && !!eventAssignmentId;
+    if (planned) {
+      const from = eventPlannedDate;
+      const to = eventPlannedEndDate || from;
+      if (!from) return setEventError("Pick a date");
+      if (to < from) return setEventError("The end date can't be before the start");
+      if (daysBetween(from, to) > 61) return setEventError("Pick a range of 62 days or fewer");
     }
     setEventSaving(true);
-    const result = await movePlannedAssignment(
-      projectId,
-      assignmentId,
-      oldK,
-      newK,
-      eventPlannedStartTime || null,
-      eventPlannedEndTime || null,
-      eventSovPicks,
-      eventScopePicks,
-      eventCoPicks,
-    );
-    setEventSaving(false);
-    if (!result.ok) {
-      setEventError(result.error ?? "Failed to save");
-      return;
+    try {
+      const saved = await handleEventDayAssignmentSave(k, p.id);
+      if (!saved.ok) return;
+      if (planned) {
+        // Everything was cleared, so the day itself is gone; nothing left to move.
+        if (!saved.row) return setEventPopoverKey(null);
+        if (!(await saveEventPlannedRange(k, p.id, saved.row))) return;
+      } else {
+        const startNow = p.projectDate ? p.projectDate.slice(0, 10) : "";
+        const endNow = p.projectEndDate ? p.projectEndDate.slice(0, 10) : "";
+        if (eventStartDate !== startNow || eventEndDate !== endNow) {
+          if (!(await handleEventDatesSave(p.id))) return;
+        }
+      }
+      setEventPopoverKey(null);
+    } finally {
+      setEventSaving(false);
     }
-    setEventPopoverKey(null);
   }
 
   // Drag-and-drop rescheduling on the month calendar, Google-Calendar style.
@@ -1379,29 +1477,43 @@ export function SchedulePlanner({
     );
   }
 
-  async function handleEventDayAssignmentSave(k: string, projectId: string) {
+  async function handleEventDayAssignmentSave(k: string, projectId: string): Promise<{ ok: boolean; row: ScheduleDayAssignment | null }> {
     setEventDayError("");
     const existing = dayAssignments.find((a) => a.dateKey === k && a.projectId === projectId);
+    const same = (x: string[], y: string[]) => [...x].sort().join() === [...y].sort().join();
+    // Nothing on the card changed for this day, so there's nothing to send (and no invites re-sent).
+    if (
+      existing &&
+      (existing.supervisorUserId ?? "") === eventDaySupervisorId &&
+      (existing.projectManagerUserId ?? "") === eventDayPmId &&
+      (existing.supervisorContractorId ?? "") === eventDaySupervisorContractorId &&
+      same(existing.sovItemIds, eventSovPicks) &&
+      same(existing.scopeItems, eventScopePicks) &&
+      same(existing.changeOrderIds, eventCoPicks) &&
+      (existing.comment ?? "") === eventComment.trim()
+    )
+      return { ok: true, row: existing };
     // A supervisor/PM isn't required to keep an assignment around — SOV
     // picks, scope picks, change-order picks, or a comment are each enough
     // coverage on their own. Only clear the row when literally nothing is set.
     const hasCoverage =
       eventSovPicks.length > 0 || eventScopePicks.length > 0 || eventCoPicks.length > 0 || eventComment.trim().length > 0;
     if (!eventDaySupervisorId && !eventDayPmId && !eventDaySupervisorContractorId && !hasCoverage) {
-      if (!existing) return;
+      if (!existing) return { ok: true, row: null };
       setEventDaySaving(true);
       try {
         const res = await fetch(`/api/erp/schedule/day-assignments/${existing.id}`, { method: "DELETE" });
         if (!res.ok) throw new Error("Failed to clear");
         setDayAssignments((prev) => prev.filter((a) => a.id !== existing.id));
+        return { ok: true, row: null };
       } catch {
         setEventDayError("Failed to clear");
+        return { ok: false, row: null };
       } finally {
         setEventDaySaving(false);
       }
-      return;
     }
-    if (!(await checkInsurance(eventDaySupervisorContractorId, existing?.supervisorContractorId))) return;
+    if (!(await checkInsurance(eventDaySupervisorContractorId, existing?.supervisorContractorId))) return { ok: false, row: null };
     setEventDaySaving(true);
     try {
       const res = await fetch("/api/erp/schedule/day-assignments", {
@@ -1421,33 +1533,35 @@ export function SchedulePlanner({
       });
       const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
       if (!res.ok) throw new Error(data.error || "Failed to save");
+      let row: ScheduleDayAssignment | null = null;
       if (data.id) {
-        setDayAssignments((prev) => [
-          ...prev.filter((a) => !(a.dateKey === k && a.projectId === projectId)),
-          {
-            id: data.id!,
-            projectId,
-            dateKey: k,
-            supervisorUserId: eventDaySupervisorId || null,
-            projectManagerUserId: eventDayPmId || null,
-            supervisorContractorId: eventDaySupervisorContractorId || null,
-            startTime: existing?.startTime ?? null,
-            endTime: existing?.endTime ?? null,
-            seriesId: existing?.seriesId ?? null,
-            sovItemIds: eventSovPicks,
-            scopeItems: eventScopePicks,
-            changeOrderIds: eventCoPicks,
-            comment: eventComment.trim() || null,
-          },
-        ]);
+        row = {
+          id: data.id,
+          projectId,
+          dateKey: k,
+          supervisorUserId: eventDaySupervisorId || null,
+          projectManagerUserId: eventDayPmId || null,
+          supervisorContractorId: eventDaySupervisorContractorId || null,
+          startTime: existing?.startTime ?? null,
+          endTime: existing?.endTime ?? null,
+          seriesId: existing?.seriesId ?? null,
+          sovItemIds: eventSovPicks,
+          scopeItems: eventScopePicks,
+          changeOrderIds: eventCoPicks,
+          comment: eventComment.trim() || null,
+        };
+        const saved = row;
+        setDayAssignments((prev) => [...prev.filter((a) => !(a.dateKey === k && a.projectId === projectId)), saved]);
       }
       // Assigning a supervisor here also sets it as the project's overall
       // supervisor server-side (see the day-assignments route) — mirror that
       // in the local supervisor overrides right away, same as the
       // day-assignment modal does.
       if (eventDaySupervisorId) setSupervisorOverrides((o) => ({ ...o, [projectId]: eventDaySupervisorId }));
+      return { ok: true, row };
     } catch (err) {
       setEventDayError(err instanceof Error ? err.message : "Failed to save");
+      return { ok: false, row: null };
     } finally {
       setEventDaySaving(false);
     }
@@ -1689,9 +1803,7 @@ export function SchedulePlanner({
   // bucket, work-day placement all key off them), so a plain router.refresh()
   // after the PATCH is simpler and safer than trying to patch every derived
   // map locally.
-  async function handleEventDatesSave(projectId: string) {
-    setEventSaving(true);
-    setEventError("");
+  async function handleEventDatesSave(projectId: string): Promise<boolean> {
     try {
       const res = await fetch(`/api/erp/projects/${projectId}`, {
         method: "PATCH",
@@ -1702,12 +1814,11 @@ export function SchedulePlanner({
         }),
       });
       if (!res.ok) throw new Error("Update failed");
-      setEventPopoverKey(null);
       router.refresh();
+      return true;
     } catch {
-      setEventError("Failed to save");
-    } finally {
-      setEventSaving(false);
+      setEventError("Failed to save dates");
+      return false;
     }
   }
 
@@ -1803,33 +1914,31 @@ export function SchedulePlanner({
 
         {eventKind === "planned" && eventAssignmentId ? (
           <div className="mt-2 space-y-1.5">
-            <label className="block text-[10px] font-medium text-gray-500">
-              Planned date
-              <input
-                type="date"
-                value={eventPlannedDate}
-                onChange={(e) => setEventPlannedDate(e.target.value)}
-                className="mt-0.5 w-full rounded border border-gray-300 px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
-              />
-            </label>
-            <label className="block text-[10px] font-medium text-gray-500">
-              Time (optional - leave blank for all-day)
+            <div className="text-[10px] font-medium text-gray-500">
+              Planned dates
               <div className="mt-0.5 flex items-center gap-1.5">
                 <input
-                  type="time"
-                  value={eventPlannedStartTime}
-                  onChange={(e) => setEventPlannedStartTime(e.target.value)}
+                  type="date"
+                  aria-label="First day"
+                  value={eventPlannedDate}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setEventPlannedDate(v);
+                    if (v && (!eventPlannedEndDate || eventPlannedEndDate < v)) setEventPlannedEndDate(v);
+                  }}
                   className="w-full rounded border border-gray-300 px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
                 />
                 <span className="text-[10px] text-gray-400">to</span>
                 <input
-                  type="time"
-                  value={eventPlannedEndTime}
-                  onChange={(e) => setEventPlannedEndTime(e.target.value)}
+                  type="date"
+                  aria-label="Last day"
+                  value={eventPlannedEndDate}
+                  min={eventPlannedDate || undefined}
+                  onChange={(e) => setEventPlannedEndDate(e.target.value)}
                   className="w-full rounded border border-gray-300 px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
                 />
               </div>
-            </label>
+            </div>
             <DuplicateToMoreDaysSection
               projectId={p.id}
               fromDateKey={k}
@@ -1840,8 +1949,8 @@ export function SchedulePlanner({
               scopeItems={eventScopePicks}
               changeOrderIds={eventCoPicks}
               comment={eventComment}
-              startTime={eventPlannedStartTime || null}
-              endTime={eventPlannedEndTime || null}
+              startTime={dayAssignments.find((x) => x.id === eventAssignmentId)?.startTime ?? null}
+              endTime={dayAssignments.find((x) => x.id === eventAssignmentId)?.endTime ?? null}
               supervisors={supervisors}
               projectEndDateKey={p.projectEndDate ? p.projectEndDate.slice(0, 10) : null}
               onCreated={(created) => setDayAssignments((prev) => [...prev.filter((a) => !created.some((c) => c.id === a.id)), ...created])}
@@ -1893,28 +2002,7 @@ export function SchedulePlanner({
           </div>
         )}
 
-        {eventError ? <p className="mt-1 text-[10px] text-red-500">{eventError}</p> : null}
-
         <div className="mt-2 flex items-center gap-1.5">
-          {eventKind === "planned" && eventAssignmentId ? (
-            <button
-              type="button"
-              onClick={() => handleEventPlannedDateSave(k, p.id, eventAssignmentId)}
-              disabled={eventSaving}
-              className="rounded bg-pink-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-            >
-              {eventSaving ? "Moving…" : "Save planned date"}
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => handleEventDatesSave(p.id)}
-              disabled={eventSaving}
-              className="rounded bg-pink-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-            >
-              {eventSaving ? "Saving…" : "Save dates"}
-            </button>
-          )}
           {p.status !== "COMPLETE" ? (
             <button
               type="button"
@@ -1993,16 +2081,7 @@ export function SchedulePlanner({
                     <SOVPriceSummary sovItems={p.sovItems} selectedIds={eventSovPicks} />
                   </>
                 ) : (
-                  <div>
-                    <p className="text-[10px] text-gray-400">No SOV items on this project yet.</p>
-                    <textarea
-                      value={eventComment}
-                      onChange={(e) => setEventComment(e.target.value)}
-                      placeholder="Describe what's being worked on this day..."
-                      rows={2}
-                      className="mt-1 w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
-                    />
-                  </div>
+                  <p className="text-[10px] text-gray-400">No SOV items on this project yet. Describe the work in the note below.</p>
                 )}
               </div>
             </div>
@@ -2062,15 +2141,23 @@ export function SchedulePlanner({
             </div>
           ) : null}
 
-          {eventDayError ? <p className="mt-1 text-[10px] text-red-500">{eventDayError}</p> : null}
-          <button
-            type="button"
-            onClick={() => handleEventDayAssignmentSave(k, p.id)}
-            disabled={eventDaySaving}
-            className="mt-1.5 rounded bg-pink-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-          >
-            {eventDaySaving ? "Saving…" : "Save coverage"}
-          </button>
+
+          <label className="mt-1.5 block text-[9px] text-gray-400">
+            Note for this day (sent with everyone&apos;s invite)
+            <textarea
+              value={eventComment}
+              onChange={(e) => setEventComment(e.target.value)}
+              placeholder="What's being worked on, access, anything the crew should know..."
+              rows={3}
+              className="mt-0.5 w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
+            />
+          </label>
+          {p.requestNotes ? (
+            <div className="mt-1 rounded bg-gray-50 px-1.5 py-1 text-[10px] text-gray-600">
+              <span className="font-medium text-gray-700">From the property manager:</span>{" "}
+              <span className="whitespace-pre-line">{p.requestNotes}</span>
+            </div>
+          ) : null}
         </div>
 
         <div className="mt-3 border-t border-gray-100 pt-2.5">
@@ -2219,6 +2306,7 @@ export function SchedulePlanner({
           <div className="relative mt-1.5">
             <div className="flex gap-1.5">
               <input
+                ref={eventWorkerInputRef}
                 type="text"
                 value={eventWorkerId ? workerOptions.find((w) => w.id === eventWorkerId)?.displayName ?? "" : eventWorkerQuery}
                 onChange={(e) => {
@@ -2239,7 +2327,7 @@ export function SchedulePlanner({
               </button>
             </div>
             {eventWorkerQuery && !eventWorkerId ? (
-              <div className="absolute z-10 mt-1 max-h-32 w-full overflow-auto rounded border border-gray-200 bg-white shadow-sm">
+              <div ref={eventWorkerMenuRef} style={eventWorkerMenuStyle} className="overflow-auto rounded border border-gray-200 bg-white shadow-lg">
                 {filteredWorkerOptions.slice(0, 8).map((w) => (
                   <button
                     key={w.id}
@@ -2275,6 +2363,18 @@ export function SchedulePlanner({
             </div>
           ) : null}
           {eventWorkerError ? <p className="mt-1 text-[10px] text-red-500">{eventWorkerError}</p> : null}
+        </div>
+
+        <div className="sticky -bottom-4 -mx-4 mt-3 border-t border-gray-100 bg-white px-4 py-2">
+          {eventError || eventDayError ? <p className="mb-1 text-[10px] text-red-500">{eventError || eventDayError}</p> : null}
+          <button
+            type="button"
+            onClick={() => void handleEventCardSave(k, p)}
+            disabled={eventSaving || eventDaySaving}
+            className="w-full rounded bg-pink-600 px-2 py-1.5 text-[11px] font-medium text-white hover:bg-pink-500 disabled:opacity-50"
+          >
+            {eventSaving || eventDaySaving ? "Saving…" : "Save"}
+          </button>
         </div>
         </div>
       </div>,
@@ -3228,6 +3328,7 @@ export function SchedulePlanner({
                       {inMonth ? (
                         <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                           <div className="font-semibold">{p.jobTitle}</div>
+                          {p.requestNotes ? <div className="line-clamp-3 text-gray-300">PM notes: {p.requestNotes}</div> : null}
                           <div className="text-gray-300">Not otherwise scheduled this day - shown for its change order below</div>
                         </div>
                       ) : null}
@@ -3270,6 +3371,7 @@ export function SchedulePlanner({
                       {inMonth ? (
                         <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                           <div className="font-semibold">{p.jobTitle}</div>
+                          {p.requestNotes ? <div className="line-clamp-3 text-gray-300">PM notes: {p.requestNotes}</div> : null}
                           <div className="text-amber-300">
                             {isFutureOrToday
                               ? `${role === "end" ? (isToday ? "Ends today" : "Ends this day") : isToday ? "Starts today" : "Starts this day"} - no supervisor assigned yet`
@@ -3339,6 +3441,7 @@ export function SchedulePlanner({
                       {inMonth ? (
                         <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                           <div className="font-semibold">{p.jobTitle}</div>
+                          {p.requestNotes ? <div className="line-clamp-3 text-gray-300">PM notes: {p.requestNotes}</div> : null}
                           <div className={isOverdue ? "text-red-400" : "text-gray-300"}>
                             {isOverdue
                               ? `${role === "end" ? "Ended" : "Started"} ${formatShortDate(k)} - nothing ever logged`
@@ -3388,6 +3491,7 @@ export function SchedulePlanner({
                       {inMonth ? (
                         <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                           <div className="font-semibold">{p.jobTitle}</div>
+                          {p.requestNotes ? <div className="line-clamp-3 text-gray-300">PM notes: {p.requestNotes}</div> : null}
                           <div className="text-gray-300">{CALENDAR_GROUP_LABEL[calendarSegmentGroup(p.segment)]}</div>
                           {summary ? (
                             <>
@@ -3485,6 +3589,7 @@ export function SchedulePlanner({
                     {inMonth ? (
                       <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                         <div className="font-semibold">{project.jobTitle}</div>
+                        {project.requestNotes ? <div className="line-clamp-3 text-gray-300">PM notes: {project.requestNotes}</div> : null}
                         <div className="text-gray-300">
                           {isOverdue ? "Scheduled but never logged" : "Planned, not yet logged"}
                         </div>
@@ -3523,7 +3628,7 @@ export function SchedulePlanner({
                           <div className="mt-1 text-gray-300">Scope: {assignmentScopeLabels.join(", ")}</div>
                         ) : null}
                         {assignment.comment ? (
-                          <div className="mt-1 text-gray-300">Note: {assignment.comment}</div>
+                          <div className="mt-1 whitespace-pre-line text-gray-300">Note: {assignment.comment}</div>
                         ) : null}
                       </div>
                     ) : null}

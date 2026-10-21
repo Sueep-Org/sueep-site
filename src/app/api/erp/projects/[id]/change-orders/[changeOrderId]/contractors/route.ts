@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { sendSubAssignedEmail } from "@/lib/erp/scheduleInvites";
 import { prisma } from "@/lib/prisma";
 
 type Ctx = { params: Promise<{ id: string; changeOrderId: string }> };
@@ -31,7 +30,7 @@ export async function POST(req: Request, ctx: Ctx) {
   const { id, changeOrderId } = await ctx.params;
   const changeOrder = await prisma.projectChangeOrder.findFirst({
     where: { id: changeOrderId, projectId: id },
-    select: { id: true, title: true, project: { select: { jobTitle: true, building: { select: { address: true } }, workOrderRecord: { select: { siteAddress: true } } } } },
+    select: { id: true },
   });
   if (!changeOrder) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -61,16 +60,6 @@ export async function POST(req: Request, ctx: Ctx) {
         costCents: body.costCents != null && body.costCents !== "" ? Math.round(Number(body.costCents)) : null,
       },
       include: { contractor: { select: { id: true, name: true } } },
-    });
-    // Tell the sub they're on the change order (never the cost). Logged and skipped on failure.
-    await sendSubAssignedEmail({
-      contractorId,
-      jobTitle: changeOrder.project.jobTitle,
-      changeOrderTitle: changeOrder.title,
-      location: changeOrder.project.building?.address || changeOrder.project.workOrderRecord?.siteAddress || null,
-      role: assignment.role,
-      startDate: assignment.startDate,
-      endDate: assignment.endDate,
     });
     return NextResponse.json(assignment);
   } catch (e) {

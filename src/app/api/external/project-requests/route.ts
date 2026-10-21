@@ -53,6 +53,8 @@ type Body = {
   /** Older single pick, still accepted */
   sovItemId?: string;
   desiredDate?: string;
+  /** Last day of a multi-day SOV request; left out for one day */
+  desiredEndDate?: string;
   comments?: string;
 };
 
@@ -84,6 +86,19 @@ export async function POST(req: Request) {
   }
   if (type === "sov-schedule" && !body.desiredDate) {
     return NextResponse.json({ error: "desiredDate is required for SOV scheduling" }, { status: 400 });
+  }
+  // Every day from the start date through the end date (one day when there's no end date).
+  const sovDays: Date[] = [];
+  if (type === "sov-schedule") {
+    const DAY = /^\d{4}-\d{2}-\d{2}$/;
+    const endRaw = body.desiredEndDate || body.desiredDate!;
+    if (!DAY.test(body.desiredDate!) || !DAY.test(endRaw)) return NextResponse.json({ error: "Dates must be YYYY-MM-DD" }, { status: 400 });
+    const start = Date.parse(`${body.desiredDate}T00:00:00Z`);
+    const end = Date.parse(`${endRaw}T00:00:00Z`);
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return NextResponse.json({ error: "Invalid date" }, { status: 400 });
+    if (end < start) return NextResponse.json({ error: "The end date can't be before the start date" }, { status: 400 });
+    if ((end - start) / 86_400_000 > 61) return NextResponse.json({ error: "Pick a range of 62 days or fewer" }, { status: 400 });
+    for (let t = start; t <= end; t += 86_400_000) sovDays.push(new Date(t));
   }
   if (type === "change-order" && body.signaturePngDataUrl) {
     if (!body.signaturePngDataUrl.startsWith("data:image/png;base64,")) {
@@ -231,7 +246,6 @@ export async function POST(req: Request) {
       sovDescriptions = sovItemIds.map((id) => sovItems.find((s) => s.id === id)!.description);
     }
 
-    const date = new Date(`${body.desiredDate}T00:00:00Z`);
     // Preserved here (not just in the notification email) so "who asked for
     // this" stays visible on the calendar chip itself, not just in an inbox.
     // Merged into the day's existing comment rather than overwriting it, in
@@ -239,24 +253,26 @@ export async function POST(req: Request) {
     const requesterLine = `Requested by ${requesterName.trim()} via project portal${
       body.comments?.trim() ? `: ${body.comments.trim()}` : ""
     }`;
-    const existingAssignment = await prisma.projectDayAssignment.findUnique({
-      where: { projectId_date: { projectId, date } },
-      select: { comment: true },
-    });
-    const mergedComment = existingAssignment?.comment ? `${existingAssignment.comment}\n${requesterLine}` : requesterLine;
-    await prisma.projectDayAssignment.upsert({
-      where: { projectId_date: { projectId, date } },
-      create: {
-        projectId,
-        date,
-        comment: mergedComment,
-        sovItems: sovItemIds.length ? { connect: sovItemIds.map((id) => ({ id })) } : undefined,
-      },
-      update: {
-        comment: mergedComment,
-        sovItems: sovItemIds.length ? { connect: sovItemIds.map((id) => ({ id })) } : undefined,
-      },
-    });
+    for (const date of sovDays) {
+      const existingAssignment = await prisma.projectDayAssignment.findUnique({
+        where: { projectId_date: { projectId, date } },
+        select: { comment: true },
+      });
+      const mergedComment = existingAssignment?.comment ? `${existingAssignment.comment}\n${requesterLine}` : requesterLine;
+      await prisma.projectDayAssignment.upsert({
+        where: { projectId_date: { projectId, date } },
+        create: {
+          projectId,
+          date,
+          comment: mergedComment,
+          sovItems: sovItemIds.length ? { connect: sovItemIds.map((id) => ({ id })) } : undefined,
+        },
+        update: {
+          comment: mergedComment,
+          sovItems: sovItemIds.length ? { connect: sovItemIds.map((id) => ({ id })) } : undefined,
+        },
+      });
+    }
   }
 
   // Build notification recipients
@@ -293,6 +309,7 @@ export async function POST(req: Request) {
   }
 
   const typeLabel = type === "change-order" ? "Change Order Request" : "SOV Work Scheduling Request";
+  const desiredDatesLabel = body.desiredEndDate && body.desiredEndDate !== body.desiredDate ? `${body.desiredDate} to ${body.desiredEndDate}` : body.desiredDate;
   const html = buildProjectRequestEmail({
     type,
     projectTitle: project.jobTitle,
@@ -306,7 +323,7 @@ export async function POST(req: Request) {
     coSupervisorCount: supervisorCount > 0 ? supervisorCount : undefined,
     coQuotedPriceCents: quotedPriceCents ?? undefined,
     sovDescriptions,
-    desiredDate: body.desiredDate,
+    desiredDate: desiredDatesLabel,
     comments: body.comments,
     projectUrl,
   });
@@ -320,7 +337,7 @@ export async function POST(req: Request) {
     coEstimatedEndDate: body.coEstimatedEndDate,
     coQuotedPriceCents: quotedPriceCents ?? undefined,
     sovDescriptions,
-    desiredDate: body.desiredDate,
+    desiredDate: desiredDatesLabel,
   });
 
   await Promise.all([

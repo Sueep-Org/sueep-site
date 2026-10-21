@@ -346,6 +346,11 @@ export function PipelineBoardHelp() {
           dates. Picking a range sorts each column by bid date, soonest first.
         </LI>
         <LI>
+          <strong>Award date</strong> (post-construction) works the same way with HubSpot&apos;s Award Date, when the GC expects to
+          award the job, and sorts by award date. If both are picked, award date decides the order. The date also shows when you
+          hover a card and in the deal panel.
+        </LI>
+        <LI>
           The Owner filter has <strong>Me</strong> (your own deals, when your ERP email is a HubSpot owner) and{" "}
           <strong>No owner</strong>. Sales and Estimation open the board on Me; pick All owners to see everyone.
         </LI>

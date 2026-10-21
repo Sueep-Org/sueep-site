@@ -101,8 +101,9 @@ export function ManagementCalendar() {
       </Callout>
       <H2>Bids</H2>
       <P>
-        The <strong>Bids</strong> category shows post-construction bid due dates and job walks, from the{" "}
-        <strong>Bid Date</strong> and <strong>Job Walk Date</strong> fields on HubSpot deals (refreshed every hour). Lost
+        The <strong>Bids</strong> category shows post-construction bid due dates, job walks and expected award
+        dates, from the <strong>Bid Date</strong>, <strong>Job Walk Date</strong> and <strong>Award Date</strong> fields
+        on HubSpot deals (refreshed every hour). Lost
         bids are left off. Click one to open the deal in HubSpot. Reminders go out 3 days and 1 day before.
       </P>
       <P>
@@ -111,7 +112,7 @@ export function ManagementCalendar() {
       </P>
       <P>
         The next 30 days of bids are also on the dashboard: the <strong>Bids due</strong> card on Estimation&apos;s Queue tab,
-        and the <strong>Bids</strong> card on the Sales tab (Due soon and Stale quotes). Bids due within 3 days show in red.
+        and the <strong>Bids</strong> card on the Sales tab (Due soon and Stale quotes). Bids due within 3 days show in red; award dates show too but never in red.
       </P>
             <Callout type="tip">A bid only shows here once its Bid Date is filled in on the HubSpot deal.</Callout>
       <H2>Billing cutoffs</H2>
