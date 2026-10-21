@@ -134,10 +134,12 @@ export function ScheduleCalendarOverview() {
         <Step n={5} title="Moving a planned chip's date">
           A gray or red dashed chip (a planned assignment, not yet logged) opens the same event
           card, but with <strong>Planned dates</strong> (first and last day) instead of Start/End date.
-          Back-to-back planned days for the same job count as one range.
+          The range covers the back-to-back days with the same work (SOV items, scope and note) as the day you
+          clicked. The calendar still shows the job&apos;s back-to-back days as one bar.
           <Img src="/help/schedule_calendar_overview/calendar_card.png" alt="Filter panel with supervisor and project type options" size="sm" />
-          Change the range and click <strong>Save</strong>. New days copy the day you clicked (coverage,
-          SOV or scope, note and crew), and days taken out of the range are removed. A one-day range moves
+          Change the range and click <strong>Save</strong>. An empty day you add gets a copy of the day you
+          clicked (coverage, SOV or scope, note and crew). A day that already has other work keeps it and gets
+          this work&apos;s SOV items, note and crew added. Days taken out of the range are removed. A one-day range moves
           that day and its workers. It does <strong>not</strong> change the project&apos;s overall Start/End date.
         </Step>
 
