@@ -239,6 +239,19 @@ type LaneSegment = {
 /** Fixed lane height so every day in the week lines its bars up. */
 const LANE_HEIGHT_PX = 20;
 
+/** What a planned day is for: its SOV items, scope, change orders and note. Same value means the same work. */
+function plannedWork(a: Pick<ScheduleDayAssignment, "sovItemIds" | "scopeItems" | "changeOrderIds" | "comment">): string {
+  return JSON.stringify([[...a.sovItemIds].sort(), [...a.scopeItems].sort(), [...a.changeOrderIds].sort(), (a.comment ?? "").trim()]);
+}
+
+/** Two notes on one day: the second added under the first unless it's already there. */
+function mergeNotes(base: string | null, extra: string | null): string | null {
+  const b = (base ?? "").trim();
+  const e = (extra ?? "").trim();
+  if (!e || b.includes(e)) return b || null;
+  return b ? `${b}\n${e}` : e;
+}
+
 function laneEntryKey(e: LaneEntry): string {
   switch (e.kind) {
     case "buildingGroup":
@@ -1049,9 +1062,17 @@ export function SchedulePlanner({
     }
   }
 
-  /** The back-to-back days this project is planned on around `k` (k included), in order. */
-  function plannedRunKeys(projectId: string, k: string): string[] {
-    const planned = new Set(dayAssignments.filter((a) => a.projectId === projectId).map((a) => a.dateKey));
+  /**
+   * The back-to-back days around `k` (k included) planned for the same work
+   * as `k` (plannedWork), in order. The calendar still draws back-to-back
+   * days as one bar; this is what the card's date range edits.
+   */
+  function plannedRunKeys(projectId: string, k: string, work?: string): string[] {
+    const own = work ?? dayAssignments.find((a) => a.projectId === projectId && a.dateKey === k);
+    const sig = typeof own === "string" ? own : own ? plannedWork(own) : null;
+    const planned = new Set(
+      dayAssignments.filter((a) => a.projectId === projectId && (sig === null || plannedWork(a) === sig)).map((a) => a.dateKey),
+    );
     let first = k;
     let last = k;
     while (planned.has(addDaysKey(first, -1))) first = addDaysKey(first, -1);
@@ -1059,18 +1080,21 @@ export function SchedulePlanner({
     return Array.from({ length: daysBetween(first, last) + 1 }, (_, i) => addDaysKey(first, i));
   }
 
-  // Saves a planned card's date range. One day to one day is a plain move
-  // (movePlannedAssignment). Otherwise days added to the range copy the
-  // clicked day (coverage, SOV/scope, note, crew) and days dropped from it
-  // are removed with their crew. Any times already on a day are kept.
+  // Saves a planned card's date range, for this day's work only. One empty
+  // day to another is a plain move (movePlannedAssignment). Otherwise an
+  // empty day added to the range gets a copy of the clicked day (coverage,
+  // SOV/scope, note, crew); a day that already has other work keeps it and
+  // gets this work's SOV/scope, change orders, note and crew added. Days
+  // dropped from the range are removed with their crew. Times are kept.
   async function saveEventPlannedRange(oldK: string, projectId: string, a: ScheduleDayAssignment): Promise<boolean> {
     const from = eventPlannedDate;
     const to = eventPlannedEndDate || from;
-    const runKeys = plannedRunKeys(projectId, oldK);
+    const runKeys = plannedRunKeys(projectId, oldK, plannedWork(a));
     const targetKeys = Array.from({ length: daysBetween(from, to) + 1 }, (_, i) => addDaysKey(from, i));
     if (runKeys.join() === targetKeys.join()) return true;
+    const otherWorkOn = (k: string) => dayAssignments.find((x) => x.projectId === projectId && x.dateKey === k && x.id !== a.id && !runKeys.includes(k));
 
-    if (runKeys.length === 1 && targetKeys.length === 1) {
+    if (runKeys.length === 1 && targetKeys.length === 1 && !otherWorkOn(from)) {
       const result = await movePlannedAssignment(projectId, a.id, oldK, from, a.startTime, a.endTime, a.sovItemIds, a.scopeItems, a.changeOrderIds, a);
       if (!result.ok) setEventError(result.error ?? "Failed to save");
       return result.ok;
@@ -1080,7 +1104,60 @@ export function SchedulePlanner({
       const crew = workerAssignments.filter((w) => w.projectId === projectId && w.dateKey === oldK);
       const createdDays: ScheduleDayAssignment[] = [];
       const createdCrew: ScheduleWorkerAssignment[] = [];
+      const mergedDays: ScheduleDayAssignment[] = [];
       for (const k of targetKeys.filter((k) => !runKeys.includes(k))) {
+        const other = otherWorkOn(k);
+        if (other) {
+          // Different work already on this day: add this work to it, keep its coverage and times.
+          const union = (x: string[], y: string[]) => [...new Set([...x, ...y])];
+          const merged: ScheduleDayAssignment = {
+            ...other,
+            sovItemIds: union(other.sovItemIds, a.sovItemIds),
+            scopeItems: union(other.scopeItems, a.scopeItems),
+            changeOrderIds: union(other.changeOrderIds, a.changeOrderIds),
+            comment: mergeNotes(other.comment, a.comment),
+          };
+          const res = await fetch("/api/erp/schedule/day-assignments", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              projectId,
+              date: k,
+              supervisorUserId: other.supervisorUserId || undefined,
+              projectManagerUserId: other.projectManagerUserId || undefined,
+              supervisorContractorId: other.supervisorContractorId || undefined,
+              startTime: other.startTime || undefined,
+              endTime: other.endTime || undefined,
+              sovItemIds: merged.sovItemIds.length > 0 ? merged.sovItemIds : undefined,
+              scopeItems: merged.scopeItems.length > 0 ? merged.scopeItems : undefined,
+              changeOrderIds: merged.changeOrderIds.length > 0 ? merged.changeOrderIds : undefined,
+              comment: merged.comment || undefined,
+            }),
+          });
+          const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
+          if (!res.ok) throw new Error(data.error || "Failed to add the work to a day");
+          mergedDays.push({ ...merged, id: data.id ?? other.id });
+          // This work's crew joins that day too, skipping anyone already on it.
+          const there = workerAssignments.filter((w) => w.projectId === projectId && w.dateKey === k);
+          for (const w of crew) {
+            if (there.some((t) => (w.employeeId && t.employeeId === w.employeeId) || (w.contractorId && t.contractorId === w.contractorId))) continue;
+            const wRes = await fetch("/api/erp/schedule/worker-assignments", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                projectId,
+                employeeId: w.employeeId || undefined,
+                contractorId: w.contractorId || undefined,
+                date: k,
+                assignedSovItemId: w.assignedSovItemId,
+                assignedScopeItem: w.assignedScopeItem,
+              }),
+            });
+            const wData = (await wRes.json().catch(() => ({}))) as { id?: string };
+            if (wRes.ok && wData.id) createdCrew.push({ ...w, id: wData.id, dateKey: k, seriesId: null });
+          }
+          continue;
+        }
         const res = await fetch("/api/erp/schedule/day-assignments", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -1118,7 +1195,11 @@ export function SchedulePlanner({
           if (wRes.ok && wData.id) createdCrew.push({ ...w, id: wData.id, dateKey: k, seriesId: null });
         }
       }
-      setDayAssignments((prev) => [...prev, ...createdDays]);
+      setDayAssignments((prev) => [
+        ...prev.filter((x) => !mergedDays.some((m) => m.projectId === x.projectId && m.dateKey === x.dateKey)),
+        ...mergedDays,
+        ...createdDays,
+      ]);
       setWorkerAssignments((prev) => [...prev, ...createdCrew]);
 
       // Days dropped from the range (the route clears their crew too).
