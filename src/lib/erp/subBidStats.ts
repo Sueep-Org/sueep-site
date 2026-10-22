@@ -24,6 +24,7 @@ export type ContractorBidLine = {
   otherBids: number;
   receivedOn: string | null;
   status: SubBidStatus;
+  files: { id: string; filename: string }[];
 };
 
 export type ContractorBidSummary = {
@@ -63,6 +64,7 @@ const bidPick = {
   createdAt: true,
   status: true,
   sovItems: { select: { id: true } },
+  attachments: { select: { id: true, filename: true }, orderBy: { createdAt: "asc" } },
 } satisfies Prisma.SubBidSelect;
 
 /** The bids `where` picks, worked out against every bid on their projects, grouped by `groupOf` (null skips). */
@@ -117,6 +119,7 @@ async function loadBidLinesGrouped(
       otherBids: others.length,
       receivedOn: b.receivedOn ? b.receivedOn.toISOString().slice(0, 10) : null,
       status: b.status as SubBidStatus,
+      files: b.attachments,
     };
     const group = groupOf(b);
     if (!group) continue;
