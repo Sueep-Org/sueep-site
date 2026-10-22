@@ -13,6 +13,10 @@
       "schedule": "20 * * * *"
     },
     {
+      "path": "/api/cron/hubspot-walk-dates",
+      "schedule": "40 * * * *"
+    },
+    {
       "path": "/api/cron/schedule-nudge-morning",
       "schedule": "0 12 * * *"
     },

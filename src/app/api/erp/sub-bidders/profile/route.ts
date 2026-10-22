@@ -1,3 +1,5 @@
+import { revalidateTag } from "next/cache";
+import { SUB_SCORES_TAG } from "@/lib/erp/subBidStats";
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -43,6 +45,7 @@ export async function POST(req: Request) {
       if (bidIds.length) await tx.subBid.updateMany({ where: { id: { in: bidIds }, contractorId: null }, data: { contractorId: c.id } });
       return c;
     });
+    revalidateTag(SUB_SCORES_TAG);
     return NextResponse.json({ id: contractor.id, linked: bidIds.length }, { status: 201 });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {

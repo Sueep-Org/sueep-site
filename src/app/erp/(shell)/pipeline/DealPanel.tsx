@@ -74,6 +74,7 @@ export function DealPanel({
   onClose,
   onNextStep,
   onEditInfo,
+  onBookWalk,
   onMoveTo,
   onLost,
   onRebid,
@@ -90,6 +91,7 @@ export function DealPanel({
   onClose: () => void;
   onNextStep: () => void;
   onEditInfo: () => void;
+  onBookWalk: () => void;
   onMoveTo: () => void;
   /** Mark lost (open deals) or change the lost reason (lost deals) */
   onLost: () => void;
@@ -419,7 +421,7 @@ export function DealPanel({
             <>
               <Section
                 title={`Activity${data.activity.length ? ` (${data.activity.length}${data.activityMore ? "+" : ""})` : ""}`}
-                info="Calls, notes, tasks and meetings on this deal in HubSpot, newest first. Emails show here once the ERP is allowed to read them; until then the count links to HubSpot."
+                info="Emails, calls, notes, tasks and meetings on this deal in HubSpot, newest first. Emails show the first lines; open HubSpot for the full email."
               >
                 {data.activity.length === 0 && !data.hiddenEmails ? (
                   <p className="text-xs text-gray-400">Nothing logged in HubSpot.</p>
@@ -438,6 +440,7 @@ export function DealPanel({
                               {KIND_LABEL[a.kind]} · {when(a.at)}
                               {a.detail ? ` · ${a.detail}` : ""}
                             </p>
+                            {a.preview && <p className="line-clamp-2 text-gray-500">{a.preview}</p>}
                           </div>
                         </li>
                       )}
@@ -507,6 +510,9 @@ export function DealPanel({
               </Button>
               <Button size="xs" variant="secondary" onClick={onEditInfo}>
                 Edit info
+              </Button>
+              <Button size="xs" variant="secondary" onClick={onBookWalk}>
+                Book job walk
               </Button>
               <Button size="xs" variant="secondary" onClick={onMoveTo}>
                 Move to

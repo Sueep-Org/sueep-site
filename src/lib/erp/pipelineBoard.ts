@@ -28,6 +28,7 @@ import {
   dealUrl,
   loadDealBundle,
   loadJanitorialDealBundle,
+  mergeHubSpotChanges,
   outcomeOf,
   type Bundle,
   type Outcome,
@@ -158,8 +159,8 @@ export async function loadPipelineBoard(
     openNextSteps(pipeline),
     pipeline === "post-con" ? loadRebids() : Promise.resolve(new Map<string, { newDealId: string; winningName: string }>()),
   ]);
-  // ERP changes since the cached HubSpot read show right away (dealEdits.ts).
-  const bundle = await applyErpEdits(cached, pipeline);
+  // HubSpot and ERP changes since the hour-long HubSpot read show right away (dealEdits.ts).
+  const bundle = await applyErpEdits(preloaded ? cached : await mergeHubSpotChanges(cached, pipeline), pipeline);
   const winnerOf = new Map(winners.map((w) => [w.hubspotDealId, { name: w.winningName, priceCents: w.winningPriceCents }]));
   const match = companyMatcher(companies);
   const companyType = new Map(companies.map((c) => [c.id, c.type]));
@@ -279,6 +280,6 @@ export async function loadPipelineBoard(
     activeOwners: Object.keys(bundle.ownerEmails)
       .map((id) => ({ id, name: bundle.owners[id] ?? id }))
       .sort((a, b) => a.name.localeCompare(b.name)),
-    fetchedAt: bundle.fetchedAt,
+    fetchedAt: bundle.freshAt ?? bundle.fetchedAt,
   };
 }

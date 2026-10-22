@@ -9,8 +9,7 @@
  * Employee fields.
  */
 
-import type { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { prisma, type TxClient } from "@/lib/prisma";
 import { todayEasternKey, utcDateKey } from "@/lib/erp/dates";
 
 /** A standard full-time year (40 hours x 52 weeks). A salaried or offshore
@@ -126,7 +125,7 @@ export function samePay(a: PayValues, b: PayValues): boolean {
  * so the old rate isn't lost.
  */
 export async function recordPayChange(
-  tx: Prisma.TransactionClient,
+  tx: TxClient,
   employee: CurrentPay & { hireDate: Date | null; createdAt: Date },
   next: PayValues,
   effectiveFrom: string,
@@ -169,7 +168,7 @@ export async function recordPayChange(
 
 /** Starting pay for a brand-new employee. */
 export async function recordInitialPay(
-  tx: Prisma.TransactionClient,
+  tx: TxClient,
   employee: CurrentPay & { hireDate: Date | null; createdAt: Date },
   changedBy: string | null,
 ): Promise<void> {

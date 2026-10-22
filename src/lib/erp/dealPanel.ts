@@ -4,8 +4,8 @@
  * the ERP's own history for the deal. Read-only.
  *
  * - Activity: emails, calls, notes, tasks and meetings on the deal, newest
- *   first. Emails show subject, who and date only (never the body, user
- *   decision 2026-10-19); the full email is in HubSpot. Notes show their text.
+ *   first. Emails show subject, who, date and HubSpot's short body preview
+ *   (user decision 2026-10-22); the full email is in HubSpot. Notes show their text.
  * - GC record: every deal (both outcomes and open) matched to the same GC.
  * - ERP history: lost reasons, Mark lost, info edits and next steps.
  */
@@ -21,7 +21,15 @@ const MAX_ACTIVITY = 40;
 const MAX_HISTORY = 40;
 
 export type ActivityKind = "email" | "call" | "note" | "task" | "meeting";
-export type ActivityItem = { id: string; kind: ActivityKind; at: string; title: string; detail: string | null };
+export type ActivityItem = {
+  id: string;
+  kind: ActivityKind;
+  at: string;
+  title: string;
+  detail: string | null;
+  /** Emails only: the start of the body */
+  preview?: string | null;
+};
 export type LineItem = { id: string; name: string; quantity: number | null; priceCents: number | null; amountCents: number | null };
 export type GcRecord = {
   label: string;
@@ -41,7 +49,7 @@ export type DealPanelData = {
   activity: ActivityItem[];
   /** True when there was more than we show */
   activityMore: boolean;
-  /** Emails on the deal HubSpot wouldn't let us read (the ERP app lacks sales-email-read) */
+  /** Emails on the deal HubSpot wouldn't let us read (if the ERP app loses sales-email-read) */
   hiddenEmails: number;
   lineItems: LineItem[];
   gc: GcRecord | null;
@@ -49,7 +57,7 @@ export type DealPanelData = {
 };
 
 const OBJECTS: { kind: ActivityKind; type: string; props: string[] }[] = [
-  { kind: "email", type: "emails", props: ["hs_email_subject", "hs_email_direction", "hs_email_from_email", "hs_email_to_email", "hs_timestamp"] },
+  { kind: "email", type: "emails", props: ["hs_email_subject", "hs_email_direction", "hs_email_from_email", "hs_email_to_email", "hs_body_preview", "hs_timestamp"] },
   { kind: "call", type: "calls", props: ["hs_call_title", "hs_call_direction", "hs_call_duration", "hs_timestamp"] },
   { kind: "note", type: "notes", props: ["hs_note_body", "hs_timestamp"] },
   { kind: "task", type: "tasks", props: ["hs_task_subject", "hs_task_status", "hs_timestamp"] },
@@ -83,7 +91,7 @@ async function batchRead(
   return { rows, denied: false };
 }
 
-/** Note bodies are HTML; the panel shows plain text, shortened. */
+/** Note bodies are HTML (email previews can carry entities too); the panel shows plain text, shortened. */
 function plainText(html: string | null | undefined, max = 400): string | null {
   const t = (html ?? "")
     .replace(/<br\s*\/?>|<\/p>/gi, " ")
@@ -111,6 +119,7 @@ function toItem(kind: ActivityKind, o: { id: string; properties: Record<string, 
       at,
       title: p.hs_email_subject?.trim() || "(no subject)",
       detail: [incoming ? "Received" : "Sent", who ? `${incoming ? "from" : "to"} ${who}` : null].filter(Boolean).join(" "),
+      preview: plainText(p.hs_body_preview, 200),
     };
   }
   if (kind === "call") {

@@ -1,3 +1,5 @@
+import { revalidateTag } from "next/cache";
+import { SUB_SCORES_TAG } from "@/lib/erp/subBidStats";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth } from "@/lib/erpAuth";
@@ -19,5 +21,6 @@ export async function POST(req: Request, ctx: Ctx) {
   if (bidIds.length === 0) return NextResponse.json({ error: "Pick at least one bid" }, { status: 400 });
 
   const { count } = await prisma.subBid.updateMany({ where: { id: { in: bidIds }, contractorId: null }, data: { contractorId: id } });
+  revalidateTag(SUB_SCORES_TAG);
   return NextResponse.json({ linked: count });
 }

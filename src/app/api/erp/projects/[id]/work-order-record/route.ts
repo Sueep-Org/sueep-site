@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { cleanContactList, contactsToText, isValidEmail } from "@/lib/erp/workOrderContacts";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -28,9 +29,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
 
   const projectName = String(body.projectName || "").trim();
   const startDate = str(body.startDate) ?? null;
+  const contactList = body.contactList !== undefined ? cleanContactList(body.contactList) : undefined;
+  const badEmail = contactList?.find((c) => c.email && !isValidEmail(c.email));
+  if (badEmail) return NextResponse.json({ error: `Check the email for ${badEmail.name || "a contact"}: ${badEmail.email}` }, { status: 400 });
   const data = {
     siteAddress: str(body.siteAddress),
-    contacts: str(body.contacts),
+    ...(contactList ? { contactList, contacts: contactsToText(contactList) || null } : { contacts: str(body.contacts) }),
     startDate,
     serviceType: str(body.serviceType),
     notes: str(body.notes),

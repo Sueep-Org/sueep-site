@@ -55,6 +55,22 @@ const TIME_OFF_TYPE_LABEL: Record<string, string> = {
 
 /** Projects costed at a time for the Overview margins widget. */
 const MARGIN_BATCH = 16;
+/** What the margins card needs to cost a project, same as the Projects table. */
+const MARGIN_COST_SELECT = {
+  id: true, contractValueCents: true, actualLaborCents: true, actualMaterialCents: true,
+  laborEntries: { select: { id: true, employeeId: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true } },
+  materialEntries: { select: { costCents: true } },
+  contractorAssignments: { select: { costCents: true } },
+  changeOrders: {
+    select: {
+      id: true, status: true, contractValueCents: true, estimatedCostCents: true,
+      actualLaborCents: true, actualMaterialCents: true,
+      materialEntries: { select: { costCents: true } },
+      laborers: { select: { id: true, employeeId: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true } },
+      contractorAssignments: { select: { costCents: true } },
+    },
+  },
+} as const;
 
 /** A role's tabs as Customize's "Open the dashboard on" choices. */
 function tabOptions(tabs: DashboardTab[]): { value: string; label: string }[] {
@@ -630,6 +646,20 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
         const pmRequestCountPromise = canManagePropertyManagers(role)
           ? Promise.all([prisma.propertyManagerRequest.count({ where: { status: "REQUESTED" } }), prisma.propertyManagerChange.count({ where: { status: "OPEN" } })]).then(([a, b]) => a + b)
           : Promise.resolve(0);
+        // Projects and change orders with a day where a sub who runs jobs without
+        // a supervisor is on it (Contractor.runsWithoutSupervisor). Clears "No
+        // supervisor" below. Flat lists, not nested in the project query, where
+        // Prisma ran them one after another.
+        const soloSubPromise = Promise.all([
+          prisma.projectWorkerDayAssignment.findMany({ where: { contractor: { runsWithoutSupervisor: true } }, select: { projectId: true }, distinct: ["projectId"] }),
+          prisma.projectDayAssignment.findMany({ where: { supervisorContractor: { runsWithoutSupervisor: true } }, select: { projectId: true }, distinct: ["projectId"] }),
+          prisma.changeOrderWorkerDayAssignment.findMany({ where: { contractor: { runsWithoutSupervisor: true } }, select: { changeOrderId: true }, distinct: ["changeOrderId"] }),
+          prisma.changeOrderDayAssignment.findMany({ where: { supervisorContractor: { runsWithoutSupervisor: true } }, select: { changeOrderId: true }, distinct: ["changeOrderId"] }),
+        ]).then(([pw, pd, cw, cd]) => ({
+          projects: new Set([...pw, ...pd].map((r) => r.projectId)),
+          changeOrders: new Set([...cw, ...cd].map((r) => r.changeOrderId)),
+        }));
+        soloSubPromise.catch(() => {});
         // If the main batch fails first, these are never awaited; keep that
         // from surfacing as an unhandled rejection (awaiting them still throws).
         // Subs' change order requests on turnovers waiting on the office
@@ -647,29 +677,19 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
         subCoWaitingPromise.catch(() => {});
 
         const [allProjects, employees, candidates, contractors, recentProjects, laborForFlags, todayDayAssignments, todayWorkerAssignments, todaySafetyChecks, openIncidentCount, escalatedIncidentCount, overdueDayAssignments, loggedDaysForMissingCheck, upcomingTimeOff] = await Promise.all([
+          // Light on purpose: counts and dates for every card. Labor and costs
+          // are only read for the few projects the margins card costs, below.
+          // Reading them for all 500 here took 5 seconds and 400 KB.
           prisma.project.findMany({
             select: {
               id: true, jobTitle: true, status: true, projectDate: true, projectEndDate: true, supervisorUserId: true,
               contractValueCents: true, segment: true,
               recurringContractPeriodId: true, turnoverRequestId: true,
-              actualLaborCents: true, actualMaterialCents: true,
-              laborEntries: { select: { id: true, employeeId: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true } },
-              materialEntries: { select: { costCents: true } },
-              contractorAssignments: { select: { costCents: true } },
-              // Any day with a sub who runs jobs without a supervisor on it, see
-              // Contractor.runsWithoutSupervisor. Clears "No supervisor" below.
-              workerDayAssignments: { where: { contractor: { runsWithoutSupervisor: true } }, select: { id: true }, take: 1 },
-              dayAssignments: { where: { supervisorContractor: { runsWithoutSupervisor: true } }, select: { id: true }, take: 1 },
+              _count: { select: { laborEntries: true } },
               changeOrders: {
                 select: {
                   id: true, title: true, status: true, supervisorUserId: true, startDate: true,
-                  coWorkerAssignments: { where: { contractor: { runsWithoutSupervisor: true } }, select: { id: true }, take: 1 },
-                  coDayAssignments: { where: { supervisorContractor: { runsWithoutSupervisor: true } }, select: { id: true }, take: 1 },
-                  contractValueCents: true, estimatedCostCents: true,
-                  actualLaborCents: true, actualMaterialCents: true,
-                  materialEntries: { select: { costCents: true } },
-                  laborers: { select: { id: true, employeeId: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true } },
-                  contractorAssignments: { select: { costCents: true } },
+                  _count: { select: { laborers: true } },
                 },
               },
             },
@@ -784,7 +804,9 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
         const priced = allProjects.filter((p) => p.contractValueCents != null || p.changeOrders.length > 0);
         for (let i = 0; i < priced.length && recentMarginProjects.length < 8; i += MARGIN_BATCH) {
           const batch = priced.slice(i, i + MARGIN_BATCH);
-          const projectActuals = await computeProjectActualsWithChangeOrders(batch);
+          const projectActuals = await computeProjectActualsWithChangeOrders(
+            await prisma.project.findMany({ where: { id: { in: batch.map((p) => p.id) } }, select: MARGIN_COST_SELECT }),
+          );
           for (const p of batch) {
             const actuals = projectActuals.get(p.id);
             if (!actuals || actuals.contractValueCents == null || actuals.contractValueCents === 0 || actuals.marginCents == null) continue;
@@ -1037,6 +1059,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
         const NEEDS_ATTENTION_SINCE = new Date(Date.UTC(2026, 7, 1));
         type NoSupervisorItem = { key: string; projectId: string; title: string; dateKey: string; overdue: boolean };
         const noSupervisorItems: NoSupervisorItem[] = [];
+        const soloSub = await soloSubPromise;
         for (const p of allProjects) {
           // A recurring contract's own billing placeholder (see the same
           // exclusion on the Schedule calendar query) never legitimately gets a
@@ -1046,8 +1069,8 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
           if (p.supervisorUserId) continue;
           if (p.status === "COMPLETE" || p.status === "ARCHIVED") continue;
           if (!p.projectDate || p.projectDate < NEEDS_ATTENTION_SINCE) continue;
-          if (p.laborEntries.length > 0) continue;
-          if (p.workerDayAssignments.length > 0 || p.dayAssignments.length > 0) continue;
+          if (p._count.laborEntries > 0) continue;
+          if (soloSub.projects.has(p.id)) continue;
           noSupervisorItems.push({
             key: `proj-${p.id}`, projectId: p.id, title: p.jobTitle,
             dateKey: utcDateKey(p.projectDate), overdue: p.projectDate < adminTodayStart,
@@ -1056,8 +1079,8 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
             if (co.supervisorUserId) continue;
             if (co.status === "COMPLETED" || co.status === "REJECTED" || co.status === "VOID") continue;
             if (!co.startDate || co.startDate < NEEDS_ATTENTION_SINCE) continue;
-            if (co.laborers.length > 0) continue;
-            if (co.coWorkerAssignments.length > 0 || co.coDayAssignments.length > 0) continue;
+            if (co._count.laborers > 0) continue;
+            if (soloSub.changeOrders.has(co.id)) continue;
             noSupervisorItems.push({
               key: `co-${co.id}`, projectId: p.id, title: co.title,
               dateKey: utcDateKey(co.startDate), overdue: co.startDate < adminTodayStart,

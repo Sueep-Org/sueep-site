@@ -475,13 +475,15 @@ export async function loadWinLoss(
         excluded: all.length - kept.length,
       };
     }),
-    fetchedAt: bundle.fetchedAt,
+    fetchedAt: bundle.freshAt ?? bundle.fetchedAt,
   };
 }
 
 // ── GC scorecard (company page) ─────────────────────────────────────────────
 
 export type GcScorecard = Stat & {
+  /** Win rate over every decided post-con deal, to compare against */
+  ourWinRate: number | null;
   gcNotAwarded: number;
   perSqftQuoted: number | null;
   perSqftWon: number | null;
@@ -586,6 +588,8 @@ export async function loadGcScorecard(companyId: string, preloaded?: Bundle): Pr
   const deals = (await withErpWonAmounts(bundle)).deals.filter((d) => match(d)?.companyId === companyId);
   if (!deals.length && pay.n === 0) return null;
   const s = emptyStat();
+  const ours = emptyStat();
+  for (const d of bundle.deals) addTo(ours, outcomeOf(bundle, d.stageId), 0);
   let gcNotAwarded = 0;
   const all: number[] = [],
     won: number[] = [];
@@ -604,6 +608,7 @@ export async function loadGcScorecard(companyId: string, preloaded?: Bundle): Pr
   }
   return {
     ...finish(s),
+    ourWinRate: finish(ours).winRate,
     gcNotAwarded,
     perSqftQuoted: median(all),
     perSqftWon: median(won),

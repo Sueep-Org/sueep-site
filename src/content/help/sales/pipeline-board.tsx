@@ -8,7 +8,7 @@ export function PipelineBoardHelp() {
         <strong>Deals</strong> (left menu, Projects) shows every post-construction deal from HubSpot as a card, in a column
         for its stage, like HubSpot&apos;s board view. It goes from the first stage through <strong>Work Completed</strong>,
         with <strong>Deal Lost</strong> last. Admins, Project Managers, the Business Manager, Sales and Estimation can open it.
-        It&apos;s read live from HubSpot and refreshed every hour.
+        It&apos;s read live from HubSpot. Changes made in HubSpot show within a couple of minutes.
       </P>
       <P>
         The buttons under the title switch between the <strong>Post-construction</strong> and <strong>Janitorial</strong>{" "}
@@ -19,7 +19,7 @@ export function PipelineBoardHelp() {
       <Callout type="info">
         The board can change five things in HubSpot: new deals (<strong>New deal</strong>), a deal&apos;s stage (drag the card
         or use Move to), its info (owner, GC, dates, amount, sq ft), its lost reason, and marking an open deal lost. Next steps are kept in the ERP. The board
-        picks up changes made in HubSpot on the next refresh (within an hour).
+        picks up changes made in HubSpot within a couple of minutes: reload the page to see them. A deal deleted in HubSpot can take up to an hour to drop off.
       </Callout>
 
       <H2>New deals</H2>
@@ -86,8 +86,8 @@ export function PipelineBoardHelp() {
           last week&apos;s open deals: <strong>Moved forward</strong> (blue), <strong>Won</strong> (green, the same green as
           won everywhere),{" "}
           <strong>Closed lost</strong> (orange) and <strong>Same stage</strong> (gray), with the count for each below it.
-          Next to it: <strong>New</strong> deals and their $, and <strong>Open pipeline</strong> with a line showing the last
-          30 days. The ERP saves the pipeline every morning, so this starts a day after it goes live and compares a full
+          Next to it: <strong>New</strong> deals and their $, and <strong>Open pipeline</strong>, the total $ of open deals as of
+          this morning. The ERP saves the pipeline every morning, so this starts a day after it goes live and compares a full
           week from the eighth day on.
         </LI>
         <LI>
@@ -206,11 +206,17 @@ export function PipelineBoardHelp() {
           with them (once there are 3 wins) and what we usually win at.
         </LI>
         <LI>
-          Below that: key dates, then <strong>Activity</strong> (calls, notes, tasks, meetings), the{" "}
+          Below that: key dates, then <strong>Activity</strong> (emails, calls, notes, tasks, meetings), the{" "}
           <strong>Quote</strong> line items and <strong>Changes from the ERP</strong>, each showing the newest few with Show
-          all. Emails show as a count with a link to HubSpot until the ERP is allowed to read them.
+          all. Emails show the subject, who sent it, the date and the first lines. Open HubSpot for the full email.
         </LI>
-        <LI>All the actions are in one row at the bottom: Next step, Edit info, Move to, Mark lost (or the lost reason and Re-bid).</LI>
+        <LI>All the actions are in one row at the bottom: Next step, Edit info, Book job walk, Move to, Mark lost (or the lost reason and Re-bid).</LI>
+        <LI>
+          <strong>Book job walk</strong> picks a date, time and length, logs a meeting on the deal in HubSpot and sets Job Walk
+          Date. It doesn&apos;t go on your Outlook or Google calendar, so add it there too. Walks booked in a calendar that
+          syncs to HubSpot (a meeting on the deal with walk, walkthrough or walk-through in the title) fill an empty Job Walk
+          Date by themselves within the hour, and follow the meeting if it moves. A date typed in Edit info is never changed.
+        </LI>
         <LI>Escape, the ×, or clicking outside closes it.</LI>
       </UL>
 
@@ -321,7 +327,7 @@ export function PipelineBoardHelp() {
           <strong> Only show &gt; Ready to re-bid</strong> lists the ones with a winner but no re-bid yet.
         </LI>
         <LI>
-          The new deal shows in Lead after the next refresh (within an hour). Win/Loss has a Re-bids section with how many
+          The new deal shows in Lead within a couple of minutes. Win/Loss has a Re-bids section with how many
           were made and how they turned out.
         </LI>
       </UL>

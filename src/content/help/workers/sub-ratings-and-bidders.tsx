@@ -67,6 +67,11 @@ export function SubRatingsAndBidders() {
       <P>
         Open <strong>Jobs counted</strong> on the Pricing card to see which jobs went in and each one&apos;s margin.
       </P>
+      <P>
+        A sub&apos;s own profile always shows the latest score. The Contractors list and a project&apos;s Proposals tab
+        update right away after a bid, rating or override is saved, and within 10 minutes after job costs change (labor
+        logged, a sub paid).
+      </P>
       <Callout type="info">
         A job&apos;s margin is only as good as its logs. If labor wasn&apos;t logged on a job, its margin looks higher than it
         was.

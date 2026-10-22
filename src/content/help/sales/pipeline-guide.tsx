@@ -25,7 +25,7 @@ export function PipelineGuide() {
         <A href="/erp/help/sales/pipeline-board">Deals Board</A>.
       </P>
       <Callout type="info">
-        HubSpot is still where deals live. The board reads from it every hour. Moving cards, Edit info, lost reasons and
+        HubSpot is still where deals live. The board reads from it and picks up changes made in HubSpot within a couple of minutes. Moving cards, Edit info, lost reasons and
         Mark lost save straight to HubSpot. Next steps are kept in the ERP.
       </Callout>
 
@@ -87,7 +87,7 @@ export function PipelineGuide() {
           <strong>Follow-ups</strong> tab of the Bids card.
         </Step>
         <Step n={3} title="Clear the red">
-          Click the <strong>My to-dos</strong> quick view. Late next steps show in red. Click a card to open its panel: the latest calls and notes,
+          Click the <strong>My to-dos</strong> quick view. Late next steps show in red. Click a card to open its panel: the latest emails, calls and notes,
           the quote&apos;s line items and the GC&apos;s record are all there. Do the step, click <strong>Done</strong>, and add
           what comes next. If it can&apos;t happen yet, move the date.
         </Step>
@@ -118,6 +118,12 @@ export function PipelineGuide() {
         but add the GC, owner and Bid Date if you have them. It&apos;s created in HubSpot and shows on the board right away,
         in Lead unless you pick another stage. If a deal with a similar name is already on the board you&apos;ll see a warning,
         so check it isn&apos;t the same job first.
+      </P>
+      <H3>A job walk is set</H3>
+      <P>
+        Open the deal and click <strong>Book job walk</strong>. It goes on the deal in HubSpot and on the management
+        calendar, and you get a reminder 3 days and 1 day before. Put it in your own calendar too. If you already booked
+        it in a calendar that syncs with HubSpot and linked the meeting to the deal, the walk date fills in by itself.
       </P>
       <H3>Our GC lost the job</H3>
       <P>
@@ -152,11 +158,6 @@ export function PipelineGuide() {
         the numbers before the quote goes out.
       </P>
 
-      <H2>Coming later</H2>
-      <P>More is planned for the board. This guide is updated as each piece is added.</P>
-      <UL>
-        <LI>Emails in the deal panel (each one&apos;s subject, who and date), once the ERP is allowed to read them in HubSpot.</LI>
-      </UL>
     </>
   );
 }

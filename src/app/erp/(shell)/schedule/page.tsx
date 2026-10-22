@@ -100,6 +100,8 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     contractorAssignmentRows,
     coContractorAssignmentRows,
     dayRemovalRows,
+    requestNoteRows,
+    supervisorSelf,
   ] = await Promise.all([
     prisma.project.findMany({
       // Excludes a recurring contract's own billing placeholder — it has
@@ -255,6 +257,23 @@ export default async function SchedulePage({ searchParams }: PageProps) {
       select: { changeOrderId: true, contractorId: true, assignedDate: true, startDate: true, endDate: true },
     }),
     prisma.scheduleDayRemoval.findMany({ orderBy: { createdAt: "asc" } }),
+    // Notes a property manager typed on their turnover request, shown on the unit's chip and card.
+    prisma.propertyManagerRequest
+      .findMany({ where: { projectId: { not: null }, notes: { not: null } }, select: { projectId: true, notes: true } })
+      .catch(() => []),
+    // A supervisor only sees their own work. auth.uid is the Firebase UID (from
+    // the session token), not the ErpUser.id that Project.supervisorUserId /
+    // ProjectDayAssignment.supervisorUserId actually reference, so it's
+    // resolved here, alongside everything else.
+    auth?.role === "SUPERVISOR"
+      ? Promise.all([
+          auth.uid ? prisma.erpUser.findUnique({ where: { firebaseUid: auth.uid }, select: { id: true } }) : null,
+          prisma.employee.findFirst({
+            where: { email: { equals: auth.email, mode: "insensitive" } },
+            select: { id: true, firstName: true, lastName: true },
+          }),
+        ])
+      : Promise.resolve(null),
   ]);
 
   const dayRemovals: ScheduleDayRemovalRow[] = dayRemovalRows.map((r) => ({
@@ -569,11 +588,19 @@ export default async function SchedulePage({ searchParams }: PageProps) {
 
   // Resolve display names for ERP supervisors and PMs from employee records,
   // same as the per-project setup editor does.
+  // Who could have asked for a day, for the day card's Requested by picker:
+  // anyone already set on a day, portal change order requesters, and contacts
+  // with an email. Loaded together with the names above.
   const scheduleErpEmails = [...supervisorUsers, ...projectManagerUsers].map((u) => u.email);
-  const scheduleEmployees = await prisma.employee.findMany({
-    where: { email: { in: scheduleErpEmails, mode: "insensitive" } },
-    select: { id: true, email: true, firstName: true, lastName: true },
-  });
+  const projectIds = projectRows.map((r) => r.id);
+  const [scheduleEmployees, contactRows, coRequesterRows] = await Promise.all([
+    prisma.employee.findMany({
+      where: { email: { in: scheduleErpEmails, mode: "insensitive" } },
+      select: { id: true, email: true, firstName: true, lastName: true },
+    }),
+    prisma.projectContact.findMany({ where: { projectId: { in: projectIds }, email: { not: null } }, select: { projectId: true, fullName: true, email: true } }),
+    prisma.projectChangeOrder.findMany({ where: { projectId: { in: projectIds }, requestedBy: { contains: "@" } }, select: { projectId: true, requestedBy: true } }),
+  ]);
   const employeeNameByEmail = new Map(
     scheduleEmployees
       .filter((e): e is typeof e & { email: string } => e.email != null)
@@ -589,19 +616,8 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     pickable: u.role === "PROJECT_MANAGER",
   }));
 
-  // Notes a property manager typed on their turnover request, shown on the unit's chip and card.
-  const requestNoteRows = await prisma.propertyManagerRequest
-    .findMany({ where: { projectId: { not: null }, notes: { not: null } }, select: { projectId: true, notes: true } })
-    .catch(() => []);
   const requestNotesByProject = new Map(requestNoteRows.map((r) => [r.projectId!, r.notes!.trim()]));
 
-  // Who could have asked for a day, for the day card's Requested by picker:
-  // anyone already set on a day, portal change order requesters, and contacts with an email.
-  const projectIds = projectRows.map((r) => r.id);
-  const [contactRows, coRequesterRows] = await Promise.all([
-    prisma.projectContact.findMany({ where: { projectId: { in: projectIds }, email: { not: null } }, select: { projectId: true, fullName: true, email: true } }),
-    prisma.projectChangeOrder.findMany({ where: { projectId: { in: projectIds }, requestedBy: { contains: "@" } }, select: { projectId: true, requestedBy: true } }),
-  ]);
   const requesterOptionsByProject = new Map<string, Map<string, { name: string; email: string }>>();
   const addRequesterOption = (projectId: string, name: string | null, email: string | null) => {
     const r = email ? parseRequester(name && !email.includes("<") ? `${name} <${email}>` : email) : null;
@@ -686,17 +702,9 @@ export default async function SchedulePage({ searchParams }: PageProps) {
   let visibleWorkerAssignments = workerAssignments;
   let visibleCoDayAssignments = coDayAssignments;
   let visibleCoWorkerAssignments = coWorkerAssignments;
-  if (auth?.role === "SUPERVISOR") {
-    // auth.uid is the Firebase UID (from the session token), not the
-    // ErpUser.id that Project.supervisorUserId / ProjectDayAssignment.supervisorUserId
-    // actually reference — has to be resolved first, same as the dashboard does.
-    const [supervisorErpUser, supervisorEmployee] = await Promise.all([
-      auth.uid ? prisma.erpUser.findUnique({ where: { firebaseUid: auth.uid }, select: { id: true } }) : null,
-      prisma.employee.findFirst({
-        where: { email: { equals: auth.email, mode: "insensitive" } },
-        select: { id: true, firstName: true, lastName: true },
-      }),
-    ]);
+  if (auth?.role === "SUPERVISOR" && supervisorSelf) {
+    // Looked up with the main batch above.
+    const [supervisorErpUser, supervisorEmployee] = supervisorSelf;
     const supervisorFullName = supervisorEmployee
       ? `${supervisorEmployee.firstName} ${supervisorEmployee.lastName}`.trim().toLowerCase()
       : null;

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { cleanContactList, contactsToText, isValidEmail } from "@/lib/erp/workOrderContacts";
 import { sendEmail, buildWorkOrderNotificationEmailHtml } from "@/lib/email";
 import { dateLocale, parseLang, tr, type Lang } from "@/lib/erp/language";
 
@@ -40,7 +41,10 @@ export async function POST(req: Request, ctx: Ctx) {
 
   const projectName = String(body.projectName || project.jobTitle || "").trim();
   const siteAddress = String(body.siteAddress || "").trim();
-  const contacts = String(body.contacts || "").trim();
+  const contactList = body.contactList !== undefined ? cleanContactList(body.contactList) : null;
+  const badEmail = contactList?.find((c) => c.email && !isValidEmail(c.email));
+  if (badEmail) return NextResponse.json({ error: `Check the email for ${badEmail.name || "a contact"}: ${badEmail.email}` }, { status: 400 });
+  const contacts = contactList ? contactsToText(contactList) : String(body.contacts || "").trim();
   const startDate = String(body.startDate || "").trim();
   const serviceType = String(body.serviceType || "").trim();
   const notes = String(body.notes || "").trim();
@@ -92,6 +96,7 @@ export async function POST(req: Request, ctx: Ctx) {
     projectName,
     siteAddress: siteAddress || null,
     contacts: contacts || null,
+    ...(contactList ? { contactList } : {}),
     startDate: startDate || null,
     serviceType: serviceType || null,
     notes: notes || null,

@@ -1,3 +1,5 @@
+import { revalidateTag } from "next/cache";
+import { SUB_SCORES_TAG } from "@/lib/erp/subBidStats";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth } from "@/lib/erpAuth";
@@ -36,6 +38,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     },
     include: subBidInclude,
   });
+  revalidateTag(SUB_SCORES_TAG);
   return NextResponse.json(serializeSubBid(bid));
 }
 
@@ -45,6 +48,7 @@ export async function DELETE(_req: Request, ctx: Ctx) {
   if (!canSeeProposals(auth.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id, bidId } = await ctx.params;
   const { count } = await prisma.subBid.deleteMany({ where: { id: bidId, projectId: id } });
+  revalidateTag(SUB_SCORES_TAG);
   if (count === 0) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json({ ok: true });
 }

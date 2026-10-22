@@ -103,7 +103,7 @@ export function ManagementCalendar() {
       <P>
         The <strong>Bids</strong> category shows post-construction bid due dates, job walks and expected award
         dates, from the <strong>Bid Date</strong>, <strong>Job Walk Date</strong> and <strong>Award Date</strong> fields
-        on HubSpot deals (refreshed every hour). Lost
+        on HubSpot deals (changes show within a couple of minutes), plus job walks on janitorial deals. Job walk meetings on a deal fill in Job Walk Date by themselves. Lost
         bids are left off. Click one to open the deal in HubSpot. Reminders go out 3 days and 1 day before.
       </P>
       <P>

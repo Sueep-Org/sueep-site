@@ -1,5 +1,5 @@
-import type { ClientCompanyContact, Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import type { ClientCompanyContact } from "@prisma/client";
+import { prisma, type TxClient } from "@/lib/prisma";
 import { todayEasternKey } from "./dates";
 import { isBillingMethod, isCompanyType, type CompanyContactRow, type CompanyListRow } from "./clientCompanies";
 
@@ -57,7 +57,7 @@ export function dateKeyToDate(key: unknown): Date | null {
  * since it usually managed the building long before the ERP knew.
  */
 export async function setBuildingManager(
-  tx: Prisma.TransactionClient,
+  tx: TxClient,
   buildingId: string,
   newCompanyId: string | null,
   asOfKey: string | null,

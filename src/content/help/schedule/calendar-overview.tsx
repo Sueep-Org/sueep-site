@@ -134,6 +134,11 @@ export function ScheduleCalendarOverview() {
               the invite.
             </LI>
             <LI>
+              <strong>Invites for a date range:</strong> when one Save covers several days, each person gets one
+              email listing every day, with the pay shown once. Each day still has its own Confirm button and its
+              own calendar event. Days saved one at a time still send one email each.
+            </LI>
+            <LI>
               <strong>Workers scheduled this day:</strong> add or remove workers (employees or
               contractors) planned for this project on this day.
             </LI>

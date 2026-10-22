@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "async_hooks";
 import { createHash } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
@@ -211,17 +212,7 @@ async function inviteNotes(uid: string, dateKey: string, lang: Lang = "en"): Pro
   return parts.length ? parts.join("\n") : null;
 }
 
-/** Sends (or cancels) the invite for one specific day. `uid` should be
- * stable across re-sends for the same assignment (reuse the row's id) so
- * calendar apps update/remove the existing event instead of duplicating
- * it — same convention every call site already used before this helper
- * existed.
- *
- * Many schedule edits re-run this for everyone on a day. It only emails
- * when something the person sees changed since the last invite for this
- * uid (date, times, title, address, scope), and only sends a cancellation
- * to someone who actually got an invite. */
-export async function sendDayInvite(params: {
+type DayInviteParams = {
   uid: string;
   to: string;
   attendeeName?: string;
@@ -239,90 +230,253 @@ export async function sendDayInvite(params: {
   lang?: Lang;
   /** Adds the "Request a change order" button (turnover subs) */
   coRequest?: boolean;
-}): Promise<void> {
+};
+
+/** Invites queued by batchDayInvites, sent together when it finishes */
+const inviteBatch = new AsyncLocalStorage<DayInviteParams[]>();
+
+/**
+ * Runs `fn` and sends every invite it asks for at the end, one email per
+ * person instead of one per day. A two-day mobilization (Oct 23 + 24) is one
+ * email listing both days, with the pay shown once, so it doesn't read like
+ * the job pays twice. Each day keeps its own calendar event and its own
+ * Confirm / Can't make it link.
+ */
+export async function batchDayInvites(fn: () => Promise<void>): Promise<void> {
+  const queue: DayInviteParams[] = [];
+  await inviteBatch.run(queue, fn);
+  await sendDayInvites(queue);
+}
+
+/** Sends (or cancels) the invite for one specific day. `uid` should be
+ * stable across re-sends for the same assignment (reuse the row's id) so
+ * calendar apps update/remove the existing event instead of duplicating
+ * it — same convention every call site already used before this helper
+ * existed.
+ *
+ * Many schedule edits re-run this for everyone on a day. It only emails
+ * when something the person sees changed since the last invite for this
+ * uid (date, times, title, address, scope), and only sends a cancellation
+ * to someone who actually got an invite. Inside batchDayInvites it is
+ * queued and sent with the person's other days. */
+export async function sendDayInvite(params: DayInviteParams): Promise<void> {
+  const queue = inviteBatch.getStore();
+  if (queue) {
+    queue.push(params);
+    return;
+  }
+  await sendDayInvites([params]);
+}
+
+type PreparedInvite = {
+  params: DayInviteParams;
+  lang: Lang;
+  when: string;
+  notes: string | null;
+  fingerprint: string;
+  respondUrl: string | null;
+  coUrl: string | null;
+  ics: string;
+};
+
+/** Everything up to the actual send for one day. Null when nothing needs to go out. */
+async function prepareDayInvite(params: DayInviteParams): Promise<PreparedInvite | null> {
   // Never notify for a day that's already passed — a schedule change on a
   // date behind "today" (adding/moving/cancelling someone on a past chip,
   // e.g. editing a completed job's history) has nobody left to actually
   // notify about it. Applies to cancellations too, not just new invites.
-  if (params.dateKey < todayEasternKey()) return;
+  if (params.dateKey < todayEasternKey()) return null;
   const baseFingerprint = inviteFingerprint(params);
-  try {
-    const lang = params.lang ?? (await languageForEmail(params.to));
-    const when = formatInviteWhen(params.dateKey, params.startTime, params.endTime, lang);
-    const notes = params.cancelled ? null : await inviteNotes(params.uid, params.dateKey, lang).catch(() => null);
-    // A changed note re-sends the invite but isn't a changed day: answers stay. Kept off
-    // the fingerprint when there's no note, so invites sent before notes existed match.
-    const fingerprint = notes ? `${baseFingerprint}|${createHash("sha256").update(notes).digest("hex").slice(0, 16)}` : baseFingerprint;
-    const last = await prisma.scheduleInviteSent.findUnique({ where: { uid: params.uid } });
-    if (params.cancelled ? !last || last.cancelled : last && !last.cancelled && last.fingerprint === fingerprint) return;
-    const dayChanged = !!last && !last.cancelled && last.fingerprint.split("|")[0] !== baseFingerprint;
+  const lang = params.lang ?? (await languageForEmail(params.to));
+  const when = formatInviteWhen(params.dateKey, params.startTime, params.endTime, lang);
+  const notes = params.cancelled ? null : await inviteNotes(params.uid, params.dateKey, lang).catch(() => null);
+  // A changed note re-sends the invite but isn't a changed day: answers stay. Kept off
+  // the fingerprint when there's no note, so invites sent before notes existed match.
+  const fingerprint = notes ? `${baseFingerprint}|${createHash("sha256").update(notes).digest("hex").slice(0, 16)}` : baseFingerprint;
+  const last = await prisma.scheduleInviteSent.findUnique({ where: { uid: params.uid } });
+  if (params.cancelled ? !last || last.cancelled : last && !last.cancelled && last.fingerprint === fingerprint) return null;
+  const dayChanged = !!last && !last.cancelled && last.fingerprint.split("|")[0] !== baseFingerprint;
 
-    // Confirm / Can't make it: a response link per invite. A changed day asks again.
-    let respondUrl: string | null = null;
-    let coUrl: string | null = null;
-    if (!params.cancelled) {
-      const path = params.url ? new URL(params.url, "https://x").pathname : undefined;
-      const token = await prepareConfirmation({
-        uid: params.uid,
-        to: params.to,
-        name: params.attendeeName,
-        title: params.title,
-        dateKey: params.dateKey,
-        link: path,
-        changed: dayChanged,
-      }).catch((e) => {
-        console.error("Schedule confirmation link failed", { uid: params.uid }, e);
-        return null;
-      });
-      respondUrl = token ? responseUrl(token) : null;
-      coUrl = token && params.coRequest ? coRequestUrl(token) : null;
-    }
-
-    const ics = buildDayAssignmentInvite({
+  // Confirm / Can't make it: a response link per invite. A changed day asks again.
+  let respondUrl: string | null = null;
+  let coUrl: string | null = null;
+  if (!params.cancelled) {
+    const path = params.url ? new URL(params.url, "https://x").pathname : undefined;
+    const token = await prepareConfirmation({
       uid: params.uid,
-      dateKey: params.dateKey,
-      startTime: params.startTime,
-      endTime: params.endTime,
-      summary: `${ROLE_SUMMARY[params.role][lang]}: ${params.title}`,
-      description: [
-        params.title,
-        params.scopeText ? `${tr(lang, { en: "Scope", es: "Trabajo" })}: ${params.scopeText}` : "",
-        notes ? `${tr(lang, { en: "Notes", es: "Notas" })}: ${notes}` : "",
-        params.url ?? "",
-      ]
-        .filter(Boolean)
-        .join("\n"),
-      location: params.location,
-      url: params.url,
-      organizerEmail: organizerEmail(),
-      organizerName: "Sueep Schedule",
-      attendeeEmail: params.to,
-      attendeeName: params.attendeeName,
-      cancelled: params.cancelled,
-    });
-    const result = await sendEmail({
-      type: "SCHEDULE_INVITE",
-      link: params.url ? new URL(params.url, "https://x").pathname : undefined,
       to: params.to,
-      subject: `${params.cancelled ? tr(lang, { en: "Cancelled", es: "Cancelado" }) : tr(lang, { en: "You're scheduled", es: "Estás programado" })}: ${params.title}, ${when}`,
-      html: inviteHtml({ ...params, when, respondUrl, coRequestUrl: coUrl, notes, lang }),
-      lang,
-      attachments: [{ filename: "invite.ics", content: Buffer.from(ics) }],
+      name: params.attendeeName,
+      title: params.title,
+      dateKey: params.dateKey,
+      link: path,
+      changed: dayChanged,
+    }).catch((e) => {
+      console.error("Schedule confirmation link failed", { uid: params.uid }, e);
+      return null;
     });
-    // Only remember invites that really went out, so turning email back on
-    // (or a test copy with email not set up) doesn't swallow the next one.
-    if (params.cancelled) await cancelConfirmation(params.uid).catch(() => {});
-    if (result !== "SENT") return;
-    if (!params.cancelled) await markInviteSent(params.uid).catch(() => {});
-    const cancelled = !!params.cancelled;
-    await prisma.scheduleInviteSent.upsert({
-      where: { uid: params.uid },
-      update: { fingerprint, cancelled, sentAt: new Date() },
-      create: { uid: params.uid, fingerprint, cancelled },
-    });
-  } catch (e) {
-    console.error("Failed to send schedule invite", { uid: params.uid, cancelled: params.cancelled }, e);
+    respondUrl = token ? responseUrl(token) : null;
+    coUrl = token && params.coRequest ? coRequestUrl(token) : null;
   }
+
+  const ics = buildDayAssignmentInvite({
+    uid: params.uid,
+    dateKey: params.dateKey,
+    startTime: params.startTime,
+    endTime: params.endTime,
+    summary: `${ROLE_SUMMARY[params.role][lang]}: ${params.title}`,
+    description: [
+      params.title,
+      params.scopeText ? `${tr(lang, { en: "Scope", es: "Trabajo" })}: ${params.scopeText}` : "",
+      notes ? `${tr(lang, { en: "Notes", es: "Notas" })}: ${notes}` : "",
+      params.url ?? "",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    location: params.location,
+    url: params.url,
+    organizerEmail: organizerEmail(),
+    organizerName: "Sueep Schedule",
+    attendeeEmail: params.to,
+    attendeeName: params.attendeeName,
+    cancelled: params.cancelled,
+  });
+  return { params, lang, when, notes, fingerprint, respondUrl, coUrl, ics };
+}
+
+/** After the email: remember what went out, per day. */
+async function recordDayInvite(p: PreparedInvite, result: Awaited<ReturnType<typeof sendEmail>>): Promise<void> {
+  // Only remember invites that really went out, so turning email back on
+  // (or a test copy with email not set up) doesn't swallow the next one.
+  if (p.params.cancelled) await cancelConfirmation(p.params.uid).catch(() => {});
+  if (result !== "SENT") return;
+  if (!p.params.cancelled) await markInviteSent(p.params.uid).catch(() => {});
+  const cancelled = !!p.params.cancelled;
+  await prisma.scheduleInviteSent.upsert({
+    where: { uid: p.params.uid },
+    update: { fingerprint: p.fingerprint, cancelled, sentAt: new Date() },
+    create: { uid: p.params.uid, fingerprint: p.fingerprint, cancelled },
+  });
+}
+
+/** One email per person (and job, role, invite or cancellation), listing every day they're on. */
+async function sendDayInvites(list: DayInviteParams[]): Promise<void> {
+  const prepared = await Promise.all(
+    list.map((params) =>
+      prepareDayInvite(params).catch((e) => {
+        console.error("Failed to send schedule invite", { uid: params.uid, cancelled: params.cancelled }, e);
+        return null;
+      })
+    )
+  );
+  const groups = new Map<string, PreparedInvite[]>();
+  for (const p of prepared) {
+    if (!p) continue;
+    const key = JSON.stringify([p.params.to.toLowerCase(), !!p.params.cancelled, p.params.role, p.params.title]);
+    groups.set(key, [...(groups.get(key) ?? []), p]);
+  }
+  await Promise.all(
+    [...groups.values()].map(async (group) => {
+      group.sort((a, b) => a.params.dateKey.localeCompare(b.params.dateKey));
+      try {
+        const result = group.length === 1 ? await sendOneDay(group[0]!) : await sendManyDays(group);
+        await Promise.all(group.map((p) => recordDayInvite(p, result)));
+      } catch (e) {
+        console.error("Failed to send schedule invite", { uids: group.map((p) => p.params.uid), cancelled: group[0]!.params.cancelled }, e);
+      }
+    })
+  );
+}
+
+async function sendOneDay(p: PreparedInvite) {
+  const { params, lang, when } = p;
+  return sendEmail({
+    type: "SCHEDULE_INVITE",
+    link: params.url ? new URL(params.url, "https://x").pathname : undefined,
+    to: params.to,
+    subject: `${params.cancelled ? tr(lang, { en: "Cancelled", es: "Cancelado" }) : tr(lang, { en: "You're scheduled", es: "Estás programado" })}: ${params.title}, ${when}`,
+    html: inviteHtml({ ...params, when, respondUrl: p.respondUrl, coRequestUrl: p.coUrl, notes: p.notes, lang }),
+    lang,
+    attachments: [{ filename: "invite.ics", content: Buffer.from(p.ics) }],
+  });
+}
+
+/** Short day for subjects and lists, e.g. "Thu, Oct 23" */
+function shortDayLabel(dateKey: string, lang: Lang): string {
+  return new Date(`${dateKey}T00:00:00.000Z`).toLocaleDateString(dateLocale(lang), { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+/** The same value on every day, or null when the days differ (then it's shown per day). */
+function shared<T>(group: PreparedInvite[], pick: (p: PreparedInvite) => T): T | null {
+  const first = pick(group[0]!);
+  return group.every((p) => pick(p) === first) ? first : null;
+}
+
+async function sendManyDays(group: PreparedInvite[]) {
+  const first = group[0]!;
+  const { params, lang } = first;
+  const cancelled = !!params.cancelled;
+  const title = escapeHtml(params.title);
+  const range = `${shortDayLabel(first.params.dateKey, lang)} - ${shortDayLabel(group[group.length - 1]!.params.dateKey, lang)}`;
+  const count = group.length;
+  const verb =
+    params.role === "Supervising"
+      ? tr(lang, { en: "assigned to supervise", es: "asignado para supervisar" })
+      : params.role === "Running"
+        ? tr(lang, { en: "assigned to run", es: "asignado para dirigir" })
+        : tr(lang, { en: "scheduled to work on", es: "programado para trabajar en" });
+
+  const scope = shared(group, (p) => p.params.scopeText ?? null);
+  const location = shared(group, (p) => p.params.location ?? null);
+  const notes = shared(group, (p) => p.notes);
+  const extra = shared(group, (p) => p.params.extraHtml ?? "");
+  const smallBtn = (url: string, label: string, bg: string) =>
+    `<a href="${escapeHtml(url)}" style="display:inline-block;padding:6px 12px;margin:4px 6px 0 0;border-radius:6px;background:${bg};color:#fff;text-decoration:none;font-weight:600;font-size:13px">${label}</a>`;
+
+  const dayRows = group
+    .map((p) => {
+      const details = [
+        scope === null && p.params.scopeText ? `${tr(lang, { en: "Scope", es: "Trabajo" })}: ${escapeHtml(p.params.scopeText)}` : "",
+        location === null && p.params.location ? `${tr(lang, { en: "Address", es: "Dirección" })}: ${escapeHtml(p.params.location)}` : "",
+        extra === null && p.params.extraHtml ? p.params.extraHtml : "",
+        !cancelled && notes === null && p.notes ? `${tr(lang, { en: "Notes", es: "Notas" })}: ${escapeHtml(p.notes).replace(/\n/g, "<br>")}` : "",
+      ].filter(Boolean);
+      const buttons =
+        !cancelled && p.respondUrl
+          ? `<br>${smallBtn(p.respondUrl, tr(lang, { en: "Confirm", es: "Confirmar" }), "#16a34a")}${smallBtn(p.respondUrl, tr(lang, { en: "Can't make it", es: "No puedo ir" }), "#6b7280")}`
+          : "";
+      return `<li style="margin-bottom:12px"><strong>${escapeHtml(p.when)}</strong>${details.length ? `<br>${details.join("<br>")}` : ""}${buttons}</li>`;
+    })
+    .join("");
+
+  const lines = [
+    cancelled
+      ? tr(lang, {
+          en: `<p>Your assignment to <strong>${title}</strong> on these ${count} days has been removed:</p>`,
+          es: `<p>Tu asignación a <strong>${title}</strong> en estos ${count} días fue cancelada:</p>`,
+        })
+      : tr(lang, {
+          en: `<p>You've been ${verb} <strong>${title}</strong> for ${count} days. This is one job.</p>`,
+          es: `<p>Has sido ${verb} <strong>${title}</strong> por ${count} días. Es un solo trabajo.</p>`,
+        }),
+    extra ? extra : "",
+    scope ? `<p><strong>${tr(lang, { en: "Scope", es: "Trabajo" })}:</strong> ${escapeHtml(scope)}</p>` : "",
+    location ? `<p><strong>${tr(lang, { en: "Address", es: "Dirección" })}:</strong> ${escapeHtml(location)}</p>` : "",
+    !cancelled && notes ? `<p><strong>${tr(lang, { en: "Notes", es: "Notas" })}:</strong><br>${escapeHtml(notes).replace(/\n/g, "<br>")}</p>` : "",
+    !cancelled && group.some((p) => p.respondUrl) ? `<p style="margin:16px 0 4px">${tr(lang, { en: "Can you make each day?", es: "¿Puedes ir cada día?" })}</p>` : "",
+    `<ul style="padding-left:18px">${dayRows}</ul>`,
+    !cancelled && first.coUrl ? coRequestButtonHtml(first.coUrl, lang) : "",
+    !cancelled ? `<p>${tr(lang, { en: "Add the attached invites to your calendar, one per day.", es: "Agrega las invitaciones adjuntas a tu calendario, una por día." })}</p>` : "",
+  ];
+
+  return sendEmail({
+    type: "SCHEDULE_INVITE",
+    link: params.url ? new URL(params.url, "https://x").pathname : undefined,
+    to: params.to,
+    subject: `${cancelled ? tr(lang, { en: "Cancelled", es: "Cancelado" }) : tr(lang, { en: "You're scheduled", es: "Estás programado" })}: ${params.title}, ${range} (${tr(lang, { en: `${count} days`, es: `${count} días` })})`,
+    html: lines.filter(Boolean).join(""),
+    lang,
+    attachments: group.map((p) => ({ filename: `invite-${p.params.dateKey}.ics`, content: Buffer.from(p.ics) })),
+  });
 }
 
 /**
@@ -458,7 +612,7 @@ async function subPayHtml(projectId: string | null | undefined, contractorId: st
   if (!p || !hasCalendarSubPay(p.segment)) return undefined;
   const cents = await getSubPayCents(projectId, contractorId);
   if (cents == null) return undefined;
-  return `<p><strong>${tr(lang, { en: "Pay", es: "Pago" })}:</strong> ${centsToDollars(cents)}</p>`;
+  return `<p><strong>${tr(lang, { en: "Pay", es: "Pago" })}:</strong> ${centsToDollars(cents)} ${tr(lang, { en: "total for the job, not per day", es: "en total por el trabajo, no por día" })}</p>`;
 }
 
 export async function sendSubLeadInvite(params: {

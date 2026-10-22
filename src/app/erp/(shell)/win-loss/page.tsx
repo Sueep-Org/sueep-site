@@ -354,7 +354,7 @@ export default async function WinLossPage({ searchParams }: { searchParams: Prom
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="flex items-center gap-1 text-2xl font-semibold text-gray-900">
           Win/loss
-          <InfoTip text="Post-construction bids from HubSpot, counted by when they came in. Read live from HubSpot and refreshed every hour." />
+          <InfoTip text="Post-construction bids from HubSpot, counted by when they came in. Read live from HubSpot; changes show within a couple of minutes." />
         </h1>
         {/* The filter scopes everything below it; this says what's picked. */}
         <span className="text-sm text-gray-500">

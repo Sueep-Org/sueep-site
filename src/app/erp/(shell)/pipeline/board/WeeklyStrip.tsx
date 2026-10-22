@@ -25,28 +25,7 @@ function Tile({ label, info, children }: { label: string; info: string; children
   );
 }
 
-/** Open pipeline $ per saved day. One series, so no legend; the tile names it. */
-function Sparkline({ points }: { points: { day: string; cents: number }[] }) {
-  if (points.length < 2) return <p className="mt-1 text-[11px] text-gray-400">Trend after 2 saved days</p>;
-  const w = 120;
-  const h = 28;
-  const max = Math.max(...points.map((p) => p.cents));
-  const min = Math.min(...points.map((p) => p.cents));
-  const span = max - min || 1;
-  const xy = points.map((p, i) => [(i / (points.length - 1)) * w, h - 2 - ((p.cents - min) / span) * (h - 4)] as const);
-  const last = xy[xy.length - 1]!;
-  const first = points[0]!;
-  const end = points[points.length - 1]!;
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="mt-1 h-7 w-[120px] overflow-visible" role="img" aria-label="Open pipeline by day">
-      <title>{`${shortDay(first.day)}: ${centsToDollarsCompact(first.cents)} · ${shortDay(end.day)}: ${centsToDollarsCompact(end.cents)}`}</title>
-      <polyline points={xy.map(([x, y]) => `${x},${y}`).join(" ")} fill="none" stroke="#6b7280" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-      <circle cx={last[0]} cy={last[1]} r={3} fill={CHART.ink} stroke="#fff" strokeWidth={1.5} />
-    </svg>
-  );
-}
-
-/** "This week" above the board: last week's open deals as one bar, new deals, the open pipeline trend and the forecast. */
+/** "This week" above the board: last week's open deals as one bar, new deals, the open pipeline total and the forecast. */
 export function WeeklyStrip({ board }: { board: PipelineBoard }) {
   const w = board.weekly;
   const f = board.forecast;
@@ -106,10 +85,9 @@ export function WeeklyStrip({ board }: { board: PipelineBoard }) {
       {w && (
         <Tile
           label="Open pipeline"
-          info="Open deals' HubSpot amounts added up, per saved day over the last 30 days. Hover the line for the first and last day."
+          info="Open deals' HubSpot amounts added up, as of this morning's saved pipeline."
         >
           <p className="text-lg font-semibold tabular-nums text-gray-900">{open ? centsToDollarsCompact(open.cents) : "-"}</p>
-          <Sparkline points={w.trend} />
         </Tile>
       )}
 

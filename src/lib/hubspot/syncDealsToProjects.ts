@@ -148,6 +148,12 @@ export async function syncHubSpotDealsToProjects(): Promise<{
       const projectDate = parseHubSpotDate(startRaw ?? closeRaw);
       const projectEndDate = parseHubSpotDate(endRaw ?? closeRaw);
       if (existing) {
+        // Stage-based status and billing only apply when the deal's stage actually
+        // changed in HubSpot. This sync runs on every webhook for any deal, and
+        // re-applying the stage each time undid hand edits: a project set to WIP
+        // in the ERP went back to Upcoming because its deal still sat in Quote
+        // Approved (Ardmore House II, 2026-10-22).
+        const stageChanged = existing.hubspotStageId !== stageId;
         const completionBillingStatus = await resolveCompletionBillingStatus(
           phase,
           existing.billingStatus,
@@ -167,7 +173,7 @@ export async function syncHubSpotDealsToProjects(): Promise<{
             // that are still billing often sit in WIP in HubSpot, and the
             // next sync used to flip the project back to ACTIVE. Reopening
             // a completed project is done by hand in the ERP.
-            status: existing.status === "COMPLETE" ? existing.status : status,
+            ...(stageChanged && existing.status !== "COMPLETE" ? { status } : {}),
             hubspotPipelineId: pipelineId,
             hubspotStageId: stageId,
             // Once a project has a start date, the ERP schedule owns it —
@@ -191,7 +197,7 @@ export async function syncHubSpotDealsToProjects(): Promise<{
               : // A project already marked Paid in the ERP stays Paid. The deal
                 // often sits in the Billing stage in HubSpot long after the
                 // money came in, and every sync used to pull it back to Billed.
-                phase === "BILLING" && !isPaidStatus(existing.billingStatus)
+                stageChanged && phase === "BILLING" && !isPaidStatus(existing.billingStatus)
                 ? { billingStatus: "BILLED" }
                 : {}),
           },
