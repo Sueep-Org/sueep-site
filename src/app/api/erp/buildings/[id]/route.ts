@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { canEditPricing } from "@/lib/erpAuth";
 import { sanitizeTurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
+import { sanitizeCoPricingPackage } from "@/lib/coPricingPackage";
 import type { ErpRole } from "@/lib/erpSession";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -80,6 +81,14 @@ export async function PATCH(req: Request, ctx: Ctx) {
     }
     data.pricingPackage =
       body.pricingPackage == null ? null : sanitizeTurnoverPricingPackage(body.pricingPackage);
+  }
+  if (body.coPricingPackage !== undefined) {
+    if (!canEditPricing(role)) {
+      return NextResponse.json({ error: "Only Admin, Project Manager, or Estimation roles can edit pricing packages" }, { status: 403 });
+    }
+    // null resets the building to the default CO package
+    data.coPricingPackage =
+      body.coPricingPackage == null ? Prisma.DbNull : sanitizeCoPricingPackage(body.coPricingPackage);
   }
   if (body.commissionEmployeeId !== undefined) {
     if (!canEditPricing(role)) {

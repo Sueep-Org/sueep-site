@@ -33,7 +33,7 @@ import {
   type ScheduleWorkerAssignment,
 } from "@/lib/erp/schedule";
 import { todayEasternAsUtcMidnight } from "@/lib/erp/dates";
-import { calendarSegmentGroup, type CalendarSegmentGroup } from "@/lib/erp/projectSegments";
+import { calendarSegmentGroup, hasCalendarSubPay, type CalendarSegmentGroup } from "@/lib/erp/projectSegments";
 import { TURNOVER_SCOPE_OPTIONS, turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
 import { SOVMultiCombobox, SOVPriceSummary } from "@/app/erp/components/SOVCombobox";
 import { centsToDollars } from "@/lib/erp/money";
@@ -614,7 +614,7 @@ export function SchedulePlanner({
   initialCoWorkerAssignments: ScheduleCoWorkerAssignment[];
   /** Confirm / Can't make it answers by invite uid (AnswerMark.tsx), loaded with the page */
   answers?: Answers;
-  /** Roles that see prices can type a sub's pay on a turnover day (see subPay.ts) */
+  /** Roles that see prices can type a sub's pay on a turnover or post-con day (see subPay.ts) */
   canSetSubPay?: boolean;
   /** Planned days removed for a real reason, drawn grayed out (see scheduleRemovals.ts) */
   initialDayRemovals?: ScheduleDayRemovalRow[];
@@ -869,7 +869,7 @@ export function SchedulePlanner({
   }
   const centsToInput = (c: number | null) => (c == null ? "" : (c / 100).toFixed(2).replace(/\.00$/, ""));
   const showSubPay = (p: ScheduleProject, contractorId: string) =>
-    canSetSubPay && !!contractorId && calendarSegmentGroup(p.segment) === "JANITORIAL_TURNOVER_REQUESTS";
+    canSetSubPay && !!contractorId && hasCalendarSubPay(p.segment);
   // The client emailed once everyone on the day confirms; "other" types someone not in the list.
   const [eventRequesterEmail, setEventRequesterEmail] = useState("");
   const [eventRequesterName, setEventRequesterName] = useState("");
@@ -2082,6 +2082,7 @@ export function SchedulePlanner({
     if (eventPopoverKey !== `${k}:${p.id}`) return null;
 
     const dayWorkers = workerAssignments.filter((a) => a.dateKey === k && a.projectId === p.id);
+    const isTurnover = calendarSegmentGroup(p.segment) === "JANITORIAL_TURNOVER_REQUESTS";
     // Only offered for turnover units with sibling units actually scheduled
     // this same day — see siblingTurnoverUnitIds/handleApplyCrewToBuilding.
     const siblingUnitIds = isGroupableTurnoverProject(p) ? siblingTurnoverUnitIds(k, p) : [];
@@ -2296,8 +2297,14 @@ export function SchedulePlanner({
           {showSubPay(p, eventDaySupervisorContractorId) ? (
             <div className="mt-1.5">
               <div className="flex items-center gap-1 text-[9px] text-gray-400">
-                Contractor pay
-                <InfoTip text="Shows on the contractor's invite as their pay, and saves as their cost on the project. Leave blank to keep pay off the invite." />
+                {isTurnover ? "Contractor pay" : "Contractor pay (whole job)"}
+                <InfoTip
+                  text={
+                    isTurnover
+                      ? "Shows on the contractor's invite as their pay, and saves as their cost on the project. Leave blank to keep pay off the invite."
+                      : "Their total pay for this job, not per day. Shows on every invite for this job and saves as their cost on the project. Leave blank to keep pay off the invite."
+                  }
+                />
               </div>
               <div className="mt-0.5 flex items-center gap-1.5">
                 <div className="relative w-28">
@@ -2310,7 +2317,9 @@ export function SchedulePlanner({
                     className="w-full rounded border border-gray-300 bg-white py-1 pl-4 pr-1.5 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
                   />
                 </div>
-                {p.contractValueCents ? (
+                {p.contractValueCents && !isTurnover ? (
+                  <span className="text-[10px] text-gray-500">Job price {centsToDollars(p.contractValueCents)}</span>
+                ) : p.contractValueCents ? (
                   <span className="text-[10px] text-gray-500">
                     50% of {centsToDollars(p.contractValueCents)} is{" "}
                     <button
@@ -2805,10 +2814,20 @@ export function SchedulePlanner({
     );
   }, [contractors, coWorkerAssignments, coDayAssignments]);
 
-  const projectSpanMarkersByDay = useMemo(
-    () => computeProjectSpanMarkersByDay(projects, dayAssignments, supervisorOverrides, projectSoloCoverage.ownerIds),
-    [projects, dayAssignments, supervisorOverrides, projectSoloCoverage]
-  );
+  // A day removed for a real reason already shows as its grayed-out chip,
+  // so the project's own start/end marker is dropped there instead of
+  // drawing the same day a second time as a "needs supervisor" alert.
+  const projectSpanMarkersByDay = useMemo(() => {
+    const markers = computeProjectSpanMarkersByDay(projects, dayAssignments, supervisorOverrides, projectSoloCoverage.ownerIds);
+    if (dayRemovals.length === 0) return markers;
+    const removed = new Set(dayRemovals.map((r) => `${r.projectId}|${r.dateKey}`));
+    for (const [k, list] of markers) {
+      const kept = list.filter((e) => !removed.has(`${e.project.id}|${k}`));
+      if (kept.length === 0) markers.delete(k);
+      else if (kept.length !== list.length) markers.set(k, kept);
+    }
+    return markers;
+  }, [projects, dayAssignments, supervisorOverrides, projectSoloCoverage, dayRemovals]);
   const hasNeedsSupervisorMarkers = useMemo(
     () => Array.from(projectSpanMarkersByDay.values()).some((list) => list.some((e) => e.kind === "needsSupervisor")),
     [projectSpanMarkersByDay]

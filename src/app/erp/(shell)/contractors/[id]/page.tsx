@@ -25,6 +25,13 @@ import { ContractorApplicationLinkSection } from "./ContractorApplicationLinkSec
 import { ContractorQuestionnaireCard } from "./ContractorQuestionnaireCard";
 import { CONTRACTOR_LABOR_PAGE_SIZE } from "./laborPagination";
 import { ContractorDeleteButton } from "./ContractorDeleteButton";
+import { ContractorBidsSection } from "./ContractorBidsSection";
+import { canSeeProposals } from "@/lib/erp/subBids";
+import { loadContractorBidLines, loadSubScores, summarizeBids } from "@/lib/erp/subBidStats";
+import { Stars } from "@/app/erp/components/Stars";
+import { ContractorRatingsSection, type RatingRow } from "./ContractorRatingsSection";
+import { loadUnlinkedBidsFor } from "@/lib/erp/subBidLinks";
+import { ContractorBidLinker } from "./ContractorBidLinker";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -57,6 +64,9 @@ export default async function ContractorDetailPage({ params }: PageProps) {
   const auth = await getErpAuth();
   const canSeeSsn = canViewSsn(auth?.role ?? "EMPLOYEE");
   const canSeePay = canEditPayInfo(auth?.role ?? "EMPLOYEE");
+  const bidLines = canSeeProposals(auth?.role) ? ((await loadContractorBidLines([contractor.id])).get(contractor.id) ?? []) : null;
+  const unlinkedBids = bidLines ? await loadUnlinkedBidsFor(contractor.id) : [];
+  const suggestedBidCount = unlinkedBids.filter((b) => b.matchReason).length;
 
   // Company profile / Insurance / Licensing are always editable. A value
   // saved on the contractor (Contractor.manualApplicationInfo) wins; any
@@ -238,6 +248,40 @@ export default async function ContractorDetailPage({ params }: PageProps) {
       })
     : [];
 
+  // Ratings tab: scores, every rating, and the jobs a rating can be about
+  // (jobs they worked plus jobs they bid on).
+  const ratingsData = bidLines
+    ? await (async () => {
+        const [scores, ratings] = await Promise.all([
+          loadSubScores([contractor.id]),
+          prisma.contractorRating.findMany({
+            where: { contractorId: contractor.id },
+            orderBy: { createdAt: "desc" },
+            include: { project: { select: { jobTitle: true } } },
+          }),
+        ]);
+        const projectOptions = new Map(laborProjects.map((p) => [p.id, p.jobTitle]));
+        for (const l of bidLines) projectOptions.set(l.projectId, l.projectTitle);
+        const rows: RatingRow[] = ratings.map((r) => ({
+          id: r.id,
+          createdAt: r.createdAt.toISOString(),
+          projectId: r.projectId,
+          projectTitle: r.project?.jobTitle ?? null,
+          quality: r.quality,
+          reliability: r.reliability,
+          communication: r.communication,
+          note: r.note,
+          ratedBy: r.ratedByName ?? r.ratedBy,
+          canDelete: auth?.role === "ADMIN" || r.ratedBy.toLowerCase() === auth?.email.toLowerCase(),
+        }));
+        return {
+          scores: scores.get(contractor.id) ?? null,
+          rows,
+          projectOptions: [...projectOptions].map(([id, jobTitle]) => ({ id, jobTitle })).sort((x, y) => x.jobTitle.localeCompare(y.jobTitle)),
+        };
+      })()
+    : null;
+
   const combinedLaborRows = [
     ...assignments.map((a) => ({
       id: a.id,
@@ -331,6 +375,13 @@ export default async function ContractorDetailPage({ params }: PageProps) {
             {contractor.status === "ACTIVE" ? "Active" : "Inactive"}
           </span>
           {contractor.role && <span className="text-sm text-gray-500">{contractor.role}</span>}
+          {ratingsData?.scores && (ratingsData.scores.confidence != null || ratingsData.scores.pricing != null) ? (
+            <a href="?tab=Ratings" className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-pink-600">
+              Confidence <Stars value={ratingsData.scores.confidence} size="sm" />
+              <span className="text-gray-300">·</span>
+              Pricing <Stars value={ratingsData.scores.pricing} size="sm" />
+            </a>
+          ) : null}
         </div>
           {auth && auth.role !== "SUPERVISOR" && auth.role !== "EMPLOYEE" ? (
             <ContractorDeleteButton
@@ -345,6 +396,18 @@ export default async function ContractorDetailPage({ params }: PageProps) {
           ) : null}
         </div>
       </div>
+
+      {suggestedBidCount > 0 ? (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <span>
+            {suggestedBidCount} past bid{suggestedBidCount === 1 ? "" : "s"} may be from this sub.
+          </span>
+          {/* Plain link: DetailTabs only reads ?tab= when the page loads */}
+          <a href="?tab=Bids" className="font-medium underline hover:text-amber-700">
+            Review
+          </a>
+        </div>
+      ) : null}
 
       <DetailTabs tabs={[
         {
@@ -575,6 +638,29 @@ export default async function ContractorDetailPage({ params }: PageProps) {
             </div>
           ),
         },
+        ...(bidLines
+          ? [{ label: "Bids", content: <ContractorBidsSection lines={bidLines} summary={summarizeBids(bidLines)} linker={<ContractorBidLinker contractorId={contractor.id} unlinked={unlinkedBids} />} /> }]
+          : []),
+        ...(ratingsData
+          ? [
+              {
+                label: "Ratings",
+                content: (
+                  <ContractorRatingsSection
+                    contractorId={contractor.id}
+                    scores={ratingsData.scores}
+                    ratings={ratingsData.rows}
+                    projectOptions={ratingsData.projectOptions}
+                    override={{
+                      note: contractor.pricingScoreOverrideNote,
+                      by: contractor.pricingScoreOverrideBy,
+                      at: contractor.pricingScoreOverrideAt?.toISOString() ?? null,
+                    }}
+                  />
+                ),
+              },
+            ]
+          : []),
         {
           label: "Signing",
           content: (

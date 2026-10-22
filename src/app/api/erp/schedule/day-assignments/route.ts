@@ -7,6 +7,7 @@ import { isTurnoverScopeValue, parseCompletedScopeItems, turnoverScopeDisplayLab
 import { appUrl, notifyProjectCrew, scopeText, sendDayInvite, sendSubLeadInvite } from "@/lib/erp/scheduleInvites";
 import { notifyProjectDayRequester, requesterFromBody } from "@/lib/erp/scheduleRequester";
 import { saveSubPay, subPayFromBody } from "@/lib/erp/subPay";
+import { hasCalendarSubPay } from "@/lib/erp/projectSegments";
 import { canSeeFinancials, getErpAuth } from "@/lib/erpAuth";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -36,7 +37,7 @@ export async function POST(req: Request) {
   const internalNote = "internalNote" in body ? (typeof body.internalNote === "string" && body.internalNote.trim() ? body.internalNote.trim() : null) : undefined;
   // The client to tell once everyone confirms; left as is when not sent
   const requester = requesterFromBody(body);
-  // The sub's pay on a turnover (see subPay.ts); only roles that see prices can set it
+  // The sub's pay on a turnover or post-con job (see subPay.ts); only roles that see prices can set it
   const subPayCents = subPayFromBody(body);
   if (subPayCents !== undefined) {
     const auth = await getErpAuth();
@@ -236,7 +237,7 @@ export async function POST(req: Request) {
   }
 
   // Saved before any invite goes out, so the sub's invite shows it
-  if (subPayCents !== undefined && supervisorContractorId && project.segment === "JANITORIAL_TURNOVER_REQUESTS") {
+  if (subPayCents !== undefined && supervisorContractorId && hasCalendarSubPay(project.segment)) {
     await saveSubPay(projectId, supervisorContractorId, subPayCents, date);
   }
 

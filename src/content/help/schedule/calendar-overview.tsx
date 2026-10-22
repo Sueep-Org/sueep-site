@@ -127,9 +127,11 @@ export function ScheduleCalendarOverview() {
               declines, pay or who the sub is.
             </LI>
             <LI>
-              <strong>Contractor pay</strong> (turnover days run by a sub, roles that see prices only): what the sub
-              gets paid for the day. It shows on their invite and saves as their cost on the project. Click the
-              &quot;50% of&quot; amount to fill it in. Leave it blank and no pay line goes on the invite.
+              <strong>Contractor pay</strong> (turnover and post-construction days run by a sub, roles that see prices
+              only): what the sub gets paid. It shows on their invite and saves as their cost on the project. On a
+              turnover, click the &quot;50% of&quot; amount to fill it in. On post-construction it is their pay for
+              the whole job, not per day, and the job price shows next to it. Leave it blank and no pay line goes on
+              the invite.
             </LI>
             <LI>
               <strong>Workers scheduled this day:</strong> add or remove workers (employees or
@@ -208,10 +210,9 @@ export function ScheduleCalendarOverview() {
           <Callout type="info">
             Everyone put on a day gets a &quot;You&apos;re scheduled&quot; email with a calendar invite:
             the supervisor, each worker, and a subcontractor running the day in the
-            supervisor&apos;s place. A sub added to a project&apos;s or change order&apos;s subs also
-            gets a &quot;You&apos;ve been assigned&quot; email with the job, address, work and dates
-            (never the cost). Changing a day&apos;s time or scope sends an update; nothing is sent
-            for past days or to someone with no email on file.
+            supervisor&apos;s place. Adding a sub to a project&apos;s or change order&apos;s subs doesn&apos;t
+            email them on its own; they hear about it once they&apos;re put on a day. Changing a day&apos;s time
+            or scope sends an update; nothing is sent for past days or to someone with no email on file.
           </Callout>
           <Callout type="tip">
             Every schedule email has <strong>Confirm</strong> and <strong>Can&apos;t make it</strong> buttons (no login
@@ -223,6 +224,11 @@ export function ScheduleCalendarOverview() {
             dashboard&apos;s Crew conflicts card has Declined and No answer tabs. For one job, open the
             project&apos;s <strong>Contractors</strong> tab: <strong>Invite responses</strong> lists every invite sent
             with Pending, Accepted or Declined, the reason, and when they answered.
+          </Callout>
+          <Callout type="tip">
+            A sub running a turnover day also gets a <strong>Request a change order</strong> button in their email, to send
+            photos of extra work and see their pay. See{" "}
+            <A href="/erp/help/turnover/sub-change-orders">Sub Change Orders on Turnovers</A>.
           </Callout>
         </Step>
 

@@ -632,8 +632,19 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
           : Promise.resolve(0);
         // If the main batch fails first, these are never awaited; keep that
         // from surfacing as an unhandled rejection (awaiting them still throws).
+        // Subs' change order requests on turnovers waiting on the office
+        const subCoWaitingPromise = isPmLevel(role)
+          ? prisma.subCoRequest.findMany({
+              // READY means the property manager email didn't go out
+              where: { status: { in: ["SUBMITTED", "OFFICE_REVIEW", "READY"] } },
+              orderBy: { createdAt: "asc" },
+              take: 50,
+              select: { projectId: true, project: { select: { jobTitle: true } } },
+            })
+          : Promise.resolve([]);
         coiAlertsPromise.catch(() => {});
         pmRequestCountPromise.catch(() => {});
+        subCoWaitingPromise.catch(() => {});
 
         const [allProjects, employees, candidates, contractors, recentProjects, laborForFlags, todayDayAssignments, todayWorkerAssignments, todaySafetyChecks, openIncidentCount, escalatedIncidentCount, overdueDayAssignments, loggedDaysForMissingCheck, upcomingTimeOff] = await Promise.all([
           prisma.project.findMany({
@@ -1115,6 +1126,30 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
             </Link>
           ) : null;
 
+        const subCoWaiting = await subCoWaitingPromise;
+        const subCoUnits = [...new Map(subCoWaiting.map((r) => [r.projectId, { id: r.projectId, title: r.project.jobTitle, count: subCoWaiting.filter((x) => x.projectId === r.projectId).length }])).values()];
+        const subCoWidget =
+          subCoUnits.length > 0 ? (
+            <div className="overflow-hidden rounded-xl border border-amber-100 bg-white shadow-sm">
+              <div className="flex items-center justify-between border-b border-amber-100 bg-amber-50/60 px-4 py-3">
+                <h3 className="text-sm font-semibold text-gray-900" title="Change orders subs asked for on turnovers that need a price or a property manager email, or whose email to the property manager didn't go out">
+                  Sub change orders to review
+                </h3>
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">{subCoWaiting.length}</span>
+              </div>
+              <ul className="divide-y divide-gray-100">
+                {subCoUnits.slice(0, 6).map((u) => (
+                  <li key={u.id}>
+                    <Link href={`/erp/projects/${u.id}?tab=${encodeURIComponent("CO Requests")}`} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm hover:bg-gray-50">
+                      <span className="truncate text-gray-900">{u.title}</span>
+                      {u.count > 1 && <span className="text-xs text-gray-500">{u.count}</span>}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null;
+
         const noSupervisorWidget = (
           <div className="overflow-hidden rounded-xl border border-red-100 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-red-100 bg-red-50/60 px-4 py-3">
@@ -1176,7 +1211,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
                   { label: "Non-Compliant", value: nonCompliant.length, sub: null, href: "/erp/employees", dot: "bg-red-400", val: "text-gray-900", alert: nonCompliant.length > 0 },
                   { label: "BG Failed", value: bgCheckFailedCount, sub: null, href: "/erp/employees?backgroundCheck=FAILED", dot: "bg-red-400", val: "text-gray-900", alert: bgCheckFailedCount > 0 },
                   { label: "Sub Insurance", value: wcMissingOrExpiredCount, sub: null, href: "/erp/contractors", dot: "bg-red-400", val: "text-gray-900", alert: wcMissingOrExpiredCount > 0 },
-                  { label: "Candidates", value: pendingCandidates, sub: null, href: "/erp/candidates", dot: "bg-amber-400", val: "text-gray-900", alert: pendingCandidates > 0 },
+                  { label: "Recruitment", value: pendingCandidates, sub: null, href: "/erp/candidates", dot: "bg-amber-400", val: "text-gray-900", alert: pendingCandidates > 0 },
                 ].map((k) => (
                   <Link key={k.label} href={k.href} className="px-4 py-3 transition hover:bg-gray-50">
                     <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-gray-400">
@@ -1304,6 +1339,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
 
                 {needsLaborLoggedWidget}
                 {pmRequestsWidget}
+                {subCoWidget}
                 {coiAlertsWidget}
               </div>
             </div>

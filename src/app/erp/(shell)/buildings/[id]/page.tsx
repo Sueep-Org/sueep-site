@@ -162,6 +162,7 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
           hubspotDealId: building.hubspotDealId,
         }}
         initialPackage={building.pricingPackage}
+        initialCoPackage={building.coPricingPackage}
         employees={employees.map((e) => ({ id: e.id, name: `${e.firstName} ${e.lastName}`.trim() }))}
         laborEmployees={employees}
         canLogHours={auth ? canAddLaborLogs(auth.role) : false}

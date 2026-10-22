@@ -236,7 +236,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
       <div className="flex items-start justify-between gap-4">
         <div>
           <Link href="/erp/candidates" className="text-xs text-pink-600 hover:underline">
-            ← Candidates
+            ← Recruitment
           </Link>
           <h1 className="mt-2 flex items-center gap-2 text-2xl font-semibold text-gray-900">
             {row.fullName}

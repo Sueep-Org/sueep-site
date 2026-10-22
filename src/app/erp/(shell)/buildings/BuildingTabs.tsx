@@ -7,6 +7,7 @@ import { centsToDollars } from "@/lib/erp/money";
 import { BuildingProfileEditor } from "./BuildingProfileEditor";
 import { BuildingReadOnlySummary } from "./[id]/BuildingReadOnlySummary";
 import { BuildingPricingPackageEditor } from "./BuildingPricingPackageEditor";
+import { BuildingCoPricingPackageEditor } from "./BuildingCoPricingPackageEditor";
 import { BuildingUnitsSection, type BuildingUnit } from "./[id]/BuildingUnitsSection";
 import { BuildingLaborSection, type LaborEmployeeOption } from "./[id]/BuildingLaborSection";
 import { BuildingNotesSection, type BuildingNoteRow } from "./[id]/BuildingNotesSection";
@@ -26,6 +27,8 @@ type Props = {
     hubspotDealId: string | null;
   };
   initialPackage: unknown;
+  /** Building.coPricingPackage, null means the default CO package */
+  initialCoPackage?: unknown;
   isSupervisor?: boolean;
   canEditPricing?: boolean;
   canAddUnit?: boolean;
@@ -52,6 +55,7 @@ export function BuildingTabs({
   buildingName,
   initial,
   initialPackage,
+  initialCoPackage = null,
   isSupervisor,
   canEditPricing = false,
   canAddUnit = false,
@@ -136,6 +140,9 @@ export function BuildingTabs({
             initialPackage={initialPackage}
             canEdit={canEditPricing}
           />
+          <div className="mt-4">
+            <BuildingCoPricingPackageEditor buildingId={buildingId} initialPackage={initialCoPackage} canEdit={canEditPricing} />
+          </div>
         </div>
       ),
     },

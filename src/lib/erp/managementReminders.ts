@@ -2,13 +2,13 @@
  * Daily reminder email for the Management calendar. An item is included on
  * the mornings its category's reminder days land on (e.g. 30 and 7 days
  * before), and on the day itself when 0 is in the list. Done items are
- * skipped. Goes to every Admin, Project Manager and Business Manager.
+ * skipped. Goes to the list set on the Notifications page.
  * Sales and Estimation get their own email with only the Bids category.
  */
 
 import { prisma } from "@/lib/prisma";
-import { PM_LEVEL_ROLES } from "@/lib/erpRoles";
 import { buildManagementReminderEmail, sendEmail } from "@/lib/email";
+import { getNotificationSetting } from "@/lib/notificationSettings";
 import { todayEasternKey } from "./dates";
 import { BID_CATEGORY_KEY, addDaysKey, daysBetween, formatItemDates } from "./managementCalendar";
 import { loadManagementCategories, loadManagementItems } from "./managementCalendarServer";
@@ -28,10 +28,11 @@ export async function sendManagementReminders(todayKey: string = todayEasternKey
 
   const bidCategoryId = categories.find((c) => c.builtinKey === BID_CATEGORY_KEY)?.id;
   const bidItems = items.filter((i) => i.categoryId === bidCategoryId);
-  const [recipients, bidRecipients] = await Promise.all([
-    prisma.erpUser.findMany({ where: { role: { in: [...PM_LEVEL_ROLES] } }, select: { email: true } }),
+  const [setting, bidRecipients] = await Promise.all([
+    getNotificationSetting("MANAGEMENT_REMINDERS"),
     bidItems.length ? prisma.erpUser.findMany({ where: { role: { in: ["SALES", "ESTIMATION"] } }, select: { email: true } }) : [],
   ]);
+  const recipients = setting.to.map((email) => ({ email }));
   if (!recipients.length && !bidRecipients.length) return { sent: 0, items: items.length };
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || "";

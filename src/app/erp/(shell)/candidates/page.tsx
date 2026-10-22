@@ -24,7 +24,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Candidates</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">Recruitment</h1>
           <TrackTabs office />
         </div>
         <OfficeTab search={search} showAll={sp.openings === "all"} />
@@ -105,7 +105,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Candidates</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Recruitment</h1>
         {officeAllowed ? <TrackTabs office={false} /> : null}
 
         <div className="mt-3 flex items-center justify-between gap-4">
