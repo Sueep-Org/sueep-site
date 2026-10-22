@@ -2,6 +2,14 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { NewContractorForm } from "./NewContractorForm";
 import { subCoverage, type CoverageItem } from "@/lib/erp/subCoverage";
+import { getErpAuth } from "@/lib/erpAuth";
+import { canSeeProposals } from "@/lib/erp/subBids";
+import { loadBidderBidLines, loadContractorBidLines, loadSubScores, summarizeBids } from "@/lib/erp/subBidStats";
+import { loadPastBidders } from "@/lib/erp/subBidLinks";
+import { DetailTabs } from "@/app/erp/components/DetailTabs";
+import { BiddersTab, type BidderRow } from "./BiddersTab";
+import { PRICING_SCORE_HELP } from "@/lib/erp/subScores";
+import { Stars } from "@/app/erp/components/Stars";
 
 const SHORT_DATE: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" };
 
@@ -28,12 +36,17 @@ export default async function ContractorsPage() {
   const contractors = await prisma.contractor.findMany({
     orderBy: { name: "asc" },
   });
+  const auth = await getErpAuth();
+  const showBids = canSeeProposals(auth?.role);
+  const [bidLines, scores, pastBidders, bidderLines] = showBids
+    ? await Promise.all([loadContractorBidLines(), loadSubScores(), loadPastBidders(), loadBidderBidLines()])
+    : [new Map(), new Map(), [], new Map()];
+  const bidders: BidderRow[] = pastBidders.map((b) => {
+    const lines = bidderLines.get(b.key) ?? [];
+    return { ...b, lines, summary: summarizeBids(lines) };
+  });
 
-  return (
-    <div className="space-y-6">
-      <NewContractorForm title={<h1 className="text-2xl font-semibold text-gray-900">Contractor Verification</h1>} />
-      
-      {contractors.length === 0 ? (
+  const contractorList = (contractors.length === 0 ? (
         <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-10 text-center text-sm text-gray-500">
           No contractors yet. Add one above.
         </div>
@@ -48,6 +61,14 @@ export default async function ContractorsPage() {
                 <th className="px-4 py-2">Status</th>
                 <th className="px-4 py-2 text-center">GL</th>
                 <th className="px-4 py-2 text-center">WC</th>
+                {showBids ? (
+                  <>
+                    <th className="px-4 py-2 text-right">Bids</th>
+                    <th className="px-4 py-2 text-right">Avg margin</th>
+                    <th className="px-4 py-2 text-right" title="Average of the quality, reliability and communication ratings, out of 5">Confidence</th>
+                    <th className="px-4 py-2 text-right" title={PRICING_SCORE_HELP}>Pricing</th>
+                  </>
+                ) : null}
                 <th className="px-4 py-2">Added</th>
               </tr>
             </thead>
@@ -56,6 +77,8 @@ export default async function ContractorsPage() {
                 const coverage = subCoverage(c);
                 const gl = coverage.items.find((it) => it.key === "gl");
                 const wc = coverage.items.find((it) => it.key === "wc");
+                const bids = showBids ? summarizeBids(bidLines.get(c.id) ?? []) : null;
+                const score = scores.get(c.id);
                 return (
                 <tr key={c.id} className={`${i % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100 transition-colors`}>
                   <td className="px-4 py-3 font-medium text-gray-900">
@@ -89,6 +112,18 @@ export default async function ContractorsPage() {
                   </td>
                   <td className="px-4 py-3 text-center"><CoverageCheck item={gl} /></td>
                   <td className="px-4 py-3 text-center"><CoverageCheck item={wc} /></td>
+                  {bids ? (
+                    <>
+                      <td className="px-4 py-3 text-right text-gray-700">
+                        {bids.bids === 0 ? "-" : `${bids.bids}${bids.awarded ? ` · ${bids.awarded} won` : ""}`}
+                      </td>
+                      <td className="px-4 py-3 text-right text-gray-700">
+                        {bids.avgMarginPct == null ? "-" : `${Math.round(bids.avgMarginPct)}%`}
+                      </td>
+                      <td className="px-4 py-3 text-right"><Stars value={score?.confidence ?? null} size="xs" /></td>
+                      <td className="px-4 py-3 text-right"><Stars value={score?.pricing ?? null} size="xs" /></td>
+                    </>
+                  ) : null}
                   <td className="px-4 py-3 text-gray-500">
                     {c.createdAt.toLocaleDateString()}
                   </td>
@@ -98,6 +133,21 @@ export default async function ContractorsPage() {
             </tbody>
           </table>
         </div>
+      ));
+
+  return (
+    <div className="space-y-6">
+      <NewContractorForm title={<h1 className="text-2xl font-semibold text-gray-900">Contractor Verification</h1>} />
+      
+      {showBids ? (
+        <DetailTabs
+          tabs={[
+            { label: "Contractors", content: contractorList },
+            { label: "Bidders", content: <BiddersTab bidders={bidders} /> },
+          ]}
+        />
+      ) : (
+        contractorList
       )}
     </div>
   );

@@ -174,6 +174,9 @@ model Project {
   /// Doesn't expire; the GC keeps using it for the life of the job.
   coiRequestToken       String?                       @unique
   contractorAssignments ContractorAssignment[]
+  subCoRequests         SubCoRequest[]
+  subBids               SubBid[]
+  contractorRatings     ContractorRating[]
   laborAssignments      ProjectLaborAssignment[]
   checklistItems        ProjectChecklistItem[]
   unitTurnoverChecklist UnitTurnoverChecklist?
@@ -253,6 +256,10 @@ model Building {
   pmEmail        String?
   pmPhone        String?
   pricingPackage Json?
+  /// Change order issues subs can pick on this building's turnovers, with
+  /// our charge and the sub pay (see src/lib/coPricingPackage.ts). Null
+  /// means the building uses DEFAULT_CO_PRICING_PACKAGE.
+  coPricingPackage Json?
 
   /// Salesperson who gets commission credit on turnover unit projects
   /// created for this building — stamped onto each unit Project at creation
@@ -1049,6 +1056,9 @@ model ProjectChangeOrder {
 
   @@index([projectId, createdAt])
   @@index([status])
+
+  /// The sub's request this change order came from (see SubCoRequest)
+  subCoRequests SubCoRequest[]
 }
 
 /// A planned supervisor/PM coverage of a ProjectChangeOrder on a specific
@@ -2109,6 +2119,16 @@ model Contractor {
   assignments            ContractorAssignment[]
   contracts              ContractorContract[]
   changeOrderAssignments ChangeOrderContractorAssignment[]
+  subCoRequests          SubCoRequest[]
+  subBids                SubBid[]
+  ratings                ContractorRating[]
+
+  /// Pricing score (1-5) typed in by hand, used instead of the one worked out
+  /// from their bids (see src/lib/erp/subScores.ts). Null means use the bids.
+  pricingScoreOverride     Int?
+  pricingScoreOverrideNote String?
+  pricingScoreOverrideBy   String?
+  pricingScoreOverrideAt   DateTime?
   workerDayAssignments   ProjectWorkerDayAssignment[]
   coWorkerDayAssignments ChangeOrderWorkerDayAssignment[]
   backgroundCheckEvents  ContractorBackgroundCheckEvent[]
@@ -2579,6 +2599,7 @@ model ProjectSOVItem {
   hubspotAliases        HubSpotSovAlias[]
   hubspotInvoiceMatches HubSpotInvoiceLineItemMatch[]
   hubspotSovInvoices    HubSpotSovInvoice[]
+  subBids               SubBid[]                      @relation("SubBidSOVItems")
 
   @@index([sovId])
 }
@@ -4032,4 +4053,198 @@ model ScheduleConfirmation {
   unansweredAlertAt DateTime?
 
   @@index([dateKey, status])
+}
+
+/// A sub's change order request on a turnover, sent from the link in their
+/// schedule invite (/co-request/[token], see src/lib/erp/subCoRequests.ts).
+/// Prices are copied from the building's CO package when submitted, so later
+/// package edits don't change it. The sub only ever sees sub pay; the
+/// property manager only ever sees the charge.
+model SubCoRequest {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  contractorId String
+  contractor   Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+
+  /// The schedule invite (ScheduleConfirmation.uid) whose link it came from
+  confirmationUid String
+
+  /// SUBMITTED (just sent) | OFFICE_REVIEW (an Other line needs a price, or
+  /// the building has no property manager email) | READY (priced, the email
+  /// to the property manager didn't go out yet) | WAITING_PM (emailed, no
+  /// answer) | APPROVED | DENIED | CANCELLED
+  status String @default("SUBMITTED")
+  /// The sub's note
+  note   String?
+  /// en | es, the sub's language when they sent it
+  lang   String @default("en")
+
+  /// Sums of the lines plus the surcharge; Other lines count once the
+  /// office prices them
+  subTotalCents    Int @default(0)
+  chargeTotalCents Int @default(0)
+
+  /// Next day / Weekend, added by the office. Copied from the building's CO
+  /// package; the same percent goes on the charge and the sub pay.
+  surchargeId      String?
+  surchargeLabel   String?
+  surchargePercent Float?
+
+  /// Why the office cancelled it, told to the sub
+  cancelReason String?
+
+  /// Secret for the property manager's Approve / Deny page (/co-approve/[token]).
+  /// Set the first time it's emailed to them.
+  pmToken      String?   @unique
+  pmSentAt     DateTime?
+  /// Who the approval email went to
+  pmSentTo     String[]  @default([])
+  pmAnsweredAt DateTime?
+  /// Optional, from the property manager's Deny
+  pmDenyReason String?
+  /// Weekday reminders to the property manager while unanswered (capped,
+  /// see subCoReminders.ts)
+  pmRemindedAt    DateTime?
+  pmReminderCount Int       @default(0)
+
+  /// The change order made when it was approved (charge as its price, the
+  /// sub's pay as its contractor cost). Voided if the answer changes to denied.
+  changeOrderId String?
+  changeOrder   ProjectChangeOrder? @relation(fields: [changeOrderId], references: [id], onDelete: SetNull)
+
+  items  SubCoRequestItem[]
+  photos SubCoRequestPhoto[]
+  events SubCoRequestEvent[]
+
+  @@index([projectId])
+  @@index([contractorId])
+  @@index([status])
+}
+
+model SubCoRequestItem {
+  id String @id @default(cuid())
+
+  requestId String
+  request   SubCoRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  /// CoIssue.id from the building's package; null for Other
+  issueId     String?
+  label       String
+  labelEs     String?
+  /// room | unit | spot | load | each
+  per         String?
+  quantity    Int     @default(1)
+  /// What the sub wrote, for Other
+  description String?
+  /// Per one, in cents. Null on Other until the office prices it.
+  unitChargeCents Int?
+  unitSubPayCents Int?
+  sortOrder   Int     @default(0)
+
+  @@index([requestId])
+}
+
+/// Uploaded one at a time before the request is sent (Vercel caps request
+/// bodies), so requestId is null until then. Unattached ones older than a
+/// day are deleted on the next upload.
+model SubCoRequestPhoto {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  requestId String?
+  request   SubCoRequest? @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  /// The invite link it was uploaded from, so only that link can attach it
+  confirmationUid String
+
+  filename String
+  mimeType String
+  size     Int
+  data     Bytes
+
+  @@index([requestId])
+  @@index([confirmationUid])
+}
+
+
+/// History line on a sub CO request (sent, priced, cancelled...).
+model SubCoRequestEvent {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  requestId String
+  request   SubCoRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  /// Who did it: a staff name, the sub's name, or "Sueep" for automatic steps
+  actor String
+  text  String
+
+  @@index([requestId, createdAt])
+}
+
+/// A sub's bid on our work, entered on the project's Proposals tab. The sub
+/// is either a contractor profile or, for a sub we don't have a profile for
+/// yet, just the bidder fields (kept on linked bids too, as typed).
+/// Margin is worked out, never stored: our price for the bid's SOV lines (or
+/// the contract value when it covers the whole job) minus the bid.
+model SubBid {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  contractorId String?
+  contractor   Contractor? @relation(fields: [contractorId], references: [id], onDelete: SetNull)
+
+  bidderName    String?
+  bidderCompany String?
+  bidderEmail   String?
+  bidderPhone   String?
+
+  amountCents Int
+  /// Midnight UTC label
+  receivedOn  DateTime?
+  /// RECEIVED | AWARDED | DECLINED | WITHDRAWN
+  status      String    @default("RECEIVED")
+  notes       String?
+  createdBy   String?
+
+  /// Lines the bid covers. None means the whole job.
+  sovItems ProjectSOVItem[] @relation("SubBidSOVItems")
+
+  @@index([projectId])
+  @@index([contractorId])
+  @@index([bidderEmail])
+}
+
+/// One person's rating of a sub, 1-5 on each. Kept as history; the profile
+/// shows the averages.
+model ContractorRating {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  contractorId String
+  contractor   Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+
+  /// The job it's about, if any
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  quality       Int
+  reliability   Int
+  communication Int
+  note          String?
+
+  /// Email and name of who rated
+  ratedBy     String
+  ratedByName String?
+
+  @@index([contractorId])
 }

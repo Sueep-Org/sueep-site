@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canEditPricing } from "@/lib/erpAuth";
 import { BuildingPricingPackageEditor } from "../../BuildingPricingPackageEditor";
+import { BuildingCoPricingPackageEditor } from "../../BuildingCoPricingPackageEditor";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -45,6 +46,13 @@ export default async function BuildingPricingPackagePage({ params }: PageProps) 
           initialPackage={building.pricingPackage}
           canEdit={auth ? canEditPricing(auth.role) : false}
         />
+        <div className="mt-4">
+          <BuildingCoPricingPackageEditor
+            buildingId={building.id}
+            initialPackage={building.coPricingPackage}
+            canEdit={auth ? canEditPricing(auth.role) : false}
+          />
+        </div>
       </div>
     </div>
   );

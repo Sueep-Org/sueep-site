@@ -24,7 +24,11 @@ function isPublicAppPath(pathname: string): boolean {
     // Property managers' private turnover calendar links
     pathname.startsWith("/pm/") ||
     // Confirm / Can't make it page from schedule invites (no login, the link is the key).
-    pathname.startsWith("/schedule-response/")
+    pathname.startsWith("/schedule-response/") ||
+    // Subs' change order requests on turnovers, from the same invite link token.
+    pathname.startsWith("/co-request/") ||
+    // Property managers approving or denying those change orders, from their email.
+    pathname.startsWith("/co-approve/")
   );
 }
 

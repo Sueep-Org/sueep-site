@@ -56,3 +56,9 @@ export const PROJECT_SEGMENTS = [
   export function calendarSegmentGroup(segment: string): CalendarSegmentGroup {
     return SEGMENT_TO_CALENDAR_GROUP[normalizeProjectSegment(segment)];
   }
+
+  // Jobs where the schedule day card has a contractor pay box (see subPay.ts)
+  export function hasCalendarSubPay(segment: string): boolean {
+    const group = calendarSegmentGroup(segment);
+    return group === "JANITORIAL_TURNOVER_REQUESTS" || group === "POST_CONSTRUCTION";
+  }

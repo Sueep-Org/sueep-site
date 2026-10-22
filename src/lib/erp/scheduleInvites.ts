@@ -6,10 +6,12 @@ import { dayKey } from "@/lib/erp/schedule";
 import { todayEasternKey } from "@/lib/erp/dates";
 import { centsToDollars } from "@/lib/erp/money";
 import { getSubPayCents } from "@/lib/erp/subPay";
+import { hasCalendarSubPay } from "@/lib/erp/projectSegments";
 import { turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
 import { cancelConfirmation, markInviteSent, parseInviteUid, prepareConfirmation, responseButtonsHtml, responseUrl } from "@/lib/erp/scheduleConfirmations";
 import { dateLocale, tr, type Lang } from "@/lib/erp/language";
 import { languageForEmail } from "@/lib/erp/languageLookup";
+import { coRequestUrl, isTurnoverProject } from "@/lib/erp/subCoRequests";
 
 /** Shared "you're on the schedule" notification path — used by both the
  * supervisor day-assignment routes and the crew (employee/contractor)
@@ -115,6 +117,8 @@ function inviteHtml(params: {
   extraHtml?: string;
   /** Confirm / Can't make it page (scheduleConfirmations.ts) */
   respondUrl?: string | null;
+  /** Turnover subs: change order request page (subCoRequests.ts) */
+  coRequestUrl?: string | null;
   /** The day's note and the property manager's request notes (inviteNotes) */
   notes?: string | null;
   lang: Lang;
@@ -139,9 +143,20 @@ function inviteHtml(params: {
     params.location ? `<p><strong>${tr(lang, { en: "Address", es: "Dirección" })}:</strong> ${escapeHtml(params.location)}</p>` : "",
     !params.cancelled && params.notes ? `<p><strong>${tr(lang, { en: "Notes", es: "Notas" })}:</strong><br>${escapeHtml(params.notes).replace(/\n/g, "<br>")}</p>` : "",
     !params.cancelled && params.respondUrl ? responseButtonsHtml(params.respondUrl, lang) : "",
+    !params.cancelled && params.coRequestUrl ? coRequestButtonHtml(params.coRequestUrl, lang) : "",
     !params.cancelled ? `<p>${tr(lang, { en: "Add the attached invite to your calendar.", es: "Agrega la invitación adjunta a tu calendario." })}</p>` : "",
   ];
   return lines.filter(Boolean).join("");
+}
+
+function coRequestButtonHtml(url: string, lang: Lang): string {
+  return `<p style="margin:16px 0 4px">${tr(lang, {
+    en: "Extra work at the unit? Send photos and see your pay before you do it.",
+    es: "¿Trabajo extra en la unidad? Envía fotos y mira tu pago antes de hacerlo.",
+  })}</p><p><a href="${escapeHtml(url)}" style="display:inline-block;padding:10px 18px;border-radius:6px;background:#E73C6E;color:#fff;text-decoration:none;font-weight:600">${tr(lang, {
+    en: "Request a change order",
+    es: "Solicitar una orden de cambio",
+  })}</a></p>`;
 }
 
 function escapeHtml(value: string) {
@@ -222,6 +237,8 @@ export async function sendDayInvite(params: {
   extraHtml?: string;
   /** Looked up from the employee or contractor with this email when left out */
   lang?: Lang;
+  /** Adds the "Request a change order" button (turnover subs) */
+  coRequest?: boolean;
 }): Promise<void> {
   // Never notify for a day that's already passed — a schedule change on a
   // date behind "today" (adding/moving/cancelling someone on a past chip,
@@ -242,6 +259,7 @@ export async function sendDayInvite(params: {
 
     // Confirm / Can't make it: a response link per invite. A changed day asks again.
     let respondUrl: string | null = null;
+    let coUrl: string | null = null;
     if (!params.cancelled) {
       const path = params.url ? new URL(params.url, "https://x").pathname : undefined;
       const token = await prepareConfirmation({
@@ -257,6 +275,7 @@ export async function sendDayInvite(params: {
         return null;
       });
       respondUrl = token ? responseUrl(token) : null;
+      coUrl = token && params.coRequest ? coRequestUrl(token) : null;
     }
 
     const ics = buildDayAssignmentInvite({
@@ -286,7 +305,7 @@ export async function sendDayInvite(params: {
       link: params.url ? new URL(params.url, "https://x").pathname : undefined,
       to: params.to,
       subject: `${params.cancelled ? tr(lang, { en: "Cancelled", es: "Cancelado" }) : tr(lang, { en: "You're scheduled", es: "Estás programado" })}: ${params.title}, ${when}`,
-      html: inviteHtml({ ...params, when, respondUrl, notes, lang }),
+      html: inviteHtml({ ...params, when, respondUrl, coRequestUrl: coUrl, notes, lang }),
       lang,
       attachments: [{ filename: "invite.ics", content: Buffer.from(ics) }],
     });
@@ -432,11 +451,11 @@ export async function notifyChangeOrderCrew(params: {
  * and the one replaced can be sent a cancellation. Skipped when the sub has
  * no email on file. Same rules as every other invite (sendDayInvite).
  */
-/** A sub's pay on a janitorial turnover, as typed on the day card (see subPay.ts). No pay line until someone enters it. */
-async function turnoverSubPayHtml(projectId: string | null | undefined, contractorId: string, lang: Lang = "en"): Promise<string | undefined> {
+/** A sub's pay on a turnover or post-con job, as typed on the day card (see subPay.ts). No pay line until someone enters it. */
+async function subPayHtml(projectId: string | null | undefined, contractorId: string, lang: Lang = "en"): Promise<string | undefined> {
   if (!projectId) return undefined;
   const p = await prisma.project.findUnique({ where: { id: projectId }, select: { segment: true } });
-  if (p?.segment !== "JANITORIAL_TURNOVER_REQUESTS") return undefined;
+  if (!p || !hasCalendarSubPay(p.segment)) return undefined;
   const cents = await getSubPayCents(projectId, contractorId);
   if (cents == null) return undefined;
   return `<p><strong>${tr(lang, { en: "Pay", es: "Pago" })}:</strong> ${centsToDollars(cents)}</p>`;
@@ -457,13 +476,15 @@ export async function sendSubLeadInvite(params: {
 }): Promise<void> {
   const contact = await resolveWorkerContact(null, params.contractorId);
   if (!contact) return;
-  const extraHtml =
+  const projectId =
     params.kind === "day" && !params.cancelled
       ? await prisma.projectDayAssignment
           .findUnique({ where: { id: params.assignmentId }, select: { projectId: true } })
-          .then((a) => turnoverSubPayHtml(a?.projectId, params.contractorId, contact.lang))
-          .catch(() => undefined)
-      : undefined;
+          .then((a) => a?.projectId ?? null)
+          .catch(() => null)
+      : null;
+  const extraHtml = await subPayHtml(projectId, params.contractorId, contact.lang).catch(() => undefined);
+  const coRequest = await isTurnoverProject(projectId).catch(() => false);
   await sendDayInvite({
     uid: `${params.kind}-assignment-${params.assignmentId}-sub-${params.contractorId}@sueep.com`,
     to: contact.email,
@@ -479,5 +500,6 @@ export async function sendSubLeadInvite(params: {
     cancelled: params.cancelled,
     extraHtml,
     lang: contact.lang,
+    coRequest,
   });
 }

@@ -5,7 +5,7 @@ export function OfficeHiring() {
     <>
       <H2>Overview</H2>
       <P>
-        <strong>Candidates</strong> has two tabs. <strong>Field</strong> is cleaners, painters and supervisors, same as
+        <strong>Recruitment</strong> has two tabs. <strong>Field</strong> is cleaners, painters and supervisors, same as
         before. <strong>Office</strong> tracks office job openings (like a Marketing Manager), the people who applied,
         and what the job ads cost. Only Admins, PMs and the Business Manager see the Office tab.
       </P>

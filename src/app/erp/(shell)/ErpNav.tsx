@@ -579,7 +579,7 @@ const employmentGroupItems: NavItem[] = [
   },
   {
     href: "/erp/candidates",
-    label: "Candidates",
+    label: "Recruitment",
     roles: PM_SALES,
     icon: UserPlusIcon,
   },

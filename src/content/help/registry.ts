@@ -11,6 +11,7 @@ import { ProjectsOverview } from "./projects/projects-overview";
 import { InputtingLaborLogs } from "./workers/labor-logs";
 import { AddingEmployees } from "./workers/adding-employees";
 import { MaterialsLog } from "./projects/material-logs";
+import { SubProposals } from "./projects/sub-proposals";
 import { AddingContractors } from "./workers/adding-contractors";
 import { LoggingContractors } from "./workers/logging-contractors";
 import { ScheduleCalendarOverview } from "./schedule/calendar-overview";
@@ -28,6 +29,7 @@ import { FinanceDashboard } from "./finance/finance-dashboard";
 import { InsuranceOverview } from "./insurance/insurance-overview";
 import { CoiQuickStart } from "./insurance/coi-quick-start";
 import { PropertyManagerLinks } from "./turnover/property-manager-links";
+import { SubChangeOrders } from "./turnover/sub-change-orders";
 import { CompanyInfoOverview } from "./company-info/company-info-overview";
 import { CompaniesOverview } from "./companies/companies-overview";
 import { RolesAndPermissions } from "./people/roles-and-permissions";
@@ -137,6 +139,15 @@ export const registry: ArticleEntry[] = [
     order: 4,
     component: MaterialsLog,
     roles: [...PM_LEVEL_ROLES, "SALES"],
+  },
+  {
+    slug: "projects/sub-proposals",
+    title: "Sub Bids (Proposals)",
+    category: "Projects",
+    description: "Log the bids subs give on a job and see the margin each one leaves us.",
+    order: 8,
+    component: SubProposals,
+    roles: [...PM_LEVEL_ROLES, "SALES", "ESTIMATION"],
   },
   {
     slug: "workers/adding-contractors",
@@ -251,6 +262,15 @@ export const registry: ArticleEntry[] = [
     order: 3,
     component: PropertyManagerLinks,
     roles: [...PM_LEVEL_ROLES, "SALES"],
+  },
+  {
+    slug: "turnover/sub-change-orders",
+    title: "Sub Change Orders on Turnovers",
+    category: "Turnovers & Buildings",
+    description: "Subs ask for change orders from their schedule email with photos, property managers approve by email, and approved ones become change orders.",
+    order: 4,
+    component: SubChangeOrders,
+    roles: [...PM_LEVEL_ROLES],
   },
   {
     slug: "companies/companies-overview",

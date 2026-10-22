@@ -54,6 +54,13 @@ import { ProjectsBackLink } from "@/app/erp/components/ProjectsBackLink";
 import { ProjectInviteResponses } from "./ProjectInviteResponses";
 import { inviteResponsesForProject } from "@/lib/erp/scheduleConfirmations";
 import { todayEasternKey } from "@/lib/erp/dates";
+import { ProjectSubCoRequests } from "./ProjectSubCoRequests";
+import { loadSubCoTab } from "@/lib/erp/subCoRequestReview";
+import { ProjectProposalsSection } from "./ProjectProposalsSection";
+import { canSeeProposals } from "@/lib/erp/subBids";
+import { serializeSubBid, subBidInclude } from "@/lib/erp/subBidRows";
+import { loadSubScores } from "@/lib/erp/subBidStats";
+import { loadPastBidders } from "@/lib/erp/subBidLinks";
 
 export const dynamic = "force-dynamic";
 
@@ -68,7 +75,7 @@ type PageProps = { params: Promise<{ id: string }> };
 const PROJECT_TAB_GROUPS: { label: string; members: Record<string, string> }[] = [
   {
     label: "Financials",
-    members: { Financials: "Summary", Materials: "Materials", "Pricing Package": "Pricing Package", "Invoices & Quotes": "Invoices & Quotes", Liens: "Liens" },
+    members: { Financials: "Summary", Materials: "Materials", "Pricing Package": "Pricing Package", "Invoices & Quotes": "Invoices & Quotes", Proposals: "Proposals", Liens: "Liens" },
   },
   { label: "Labor", members: { Labor: "Hourly", Contractors: "Contractors" } },
   { label: "Quality & Safety", members: { Checklist: "Checklist", "Safety Checklist": "Safety Checklist", "Quality Checks": "Quality Checks" } },
@@ -528,6 +535,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   }
 
   const inviteResponses = await inviteResponsesForProject(project.id).catch(() => []);
+  // Subs' change order requests, office roles only (shows our charge and the sub pay)
+  const subCoTab = isTurnover && auth && isPmLevel(auth.role) ? await loadSubCoTab(project.id) : null;
   const contractorRows = project.contractorAssignments.map((a) => ({
     id: a.id,
     contractorId: a.contractorId,
@@ -916,6 +925,14 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           },
         ]
       : []),
+    ...(subCoTab
+      ? [
+          {
+            label: "CO Requests",
+            content: <ProjectSubCoRequests data={subCoTab} buildingId={project.buildingId} projectId={project.id} />,
+          },
+        ]
+      : []),
     // Hidden (not removed) for post-construction and janitorial for now —
     // signing for those segments happens per change order instead, via
     // ChangeOrderSigningSection on each CO's own detail page, which is
@@ -983,6 +1000,29 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           endpoint={`/api/erp/projects/${project.id}/hubspot-documents`}
           noDealMessage="No HubSpot deal is linked to this project."
           invoicesInfo="Read live from this project's HubSpot deal."
+        />
+      ),
+    });
+  }
+  if (canSeeProposals(auth?.role)) {
+    const [subBids, subScores, pastBidders] = await Promise.all([
+      prisma.subBid.findMany({ where: { projectId: project.id }, include: subBidInclude }),
+      loadSubScores(),
+      loadPastBidders(),
+    ]);
+    allTabs.push({
+      label: "Proposals",
+      content: (
+        <ProjectProposalsSection
+          projectId={project.id}
+          contractValueCents={project.contractValueCents}
+          sovItems={sovItems}
+          contractors={contractors.map((c) => {
+            const sc = subScores.get(c.id);
+            return { id: c.id, name: c.name, status: c.status, confidence: sc?.confidence ?? null, pricing: sc?.pricing ?? null };
+          })}
+          initialBids={subBids.map(serializeSubBid)}
+          pastBidders={pastBidders}
         />
       ),
     });

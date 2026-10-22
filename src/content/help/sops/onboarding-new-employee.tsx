@@ -6,17 +6,15 @@ export function OnboardingNewEmployee() {
       <H2>Overview</H2>
       <P>
         This covers onboarding a person from job applicant to active Employee record in the ERP,
-        using the <strong>Candidates</strong> section.
+        using the <strong>Recruitment</strong> section.
       </P>
 
       <Steps>
         <Step n={1} title="Where candidates come from">
-          Candidates aren&apos;t added manually. They come in through the public Careers
-          application form on the website, and show up automatically in the Candidates list.
-          <Callout type="info">
-            There&apos;s no &quot;Add candidate&quot; button. If someone applied outside that form,
-            they&apos;ll need to submit the application before they&apos;ll show up here.
-          </Callout>
+          Most candidates come in through the public Careers application form on the website and show up
+          automatically in the Recruitment list. If someone applied another way, use the <strong>+</strong> (Add
+          candidate) button next to the filters on the <strong>Field</strong> tab. Office job candidates live on the{" "}
+          <strong>Office</strong> tab instead, see <A href="/erp/help/people/office-hiring">Office Hiring</A>.
         </Step>
 
         <Step n={2} title="Pipeline tab">
@@ -48,7 +46,7 @@ export function OnboardingNewEmployee() {
           <Img src="/help/employees/onboarding.png" alt="Employees details" />
           This creates a new Employee record, copying over their name, email, phone, role, and
           bank info, and moves their uploaded documents and contracts onto that new Employee profile.
-          The candidate profile is then deleted, so they no longer show on the Candidates page.
+          The candidate profile is then deleted, so they no longer show on the Recruitment page.
           Converting a candidate to a contractor works the same way: documents, contracts and their
           questionnaire answers move to the contractor profile.
           <Callout type="warning">

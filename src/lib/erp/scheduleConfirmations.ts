@@ -23,6 +23,7 @@ import { todayEasternKey } from "./dates";
 import { notifyRequesterAfterConfirm } from "./scheduleRequester";
 import { dateLocale, tr, type Lang } from "./language";
 import { languageForEmail } from "./languageLookup";
+import { coRequestOpenFor, coRequestPath } from "./subCoRequests";
 
 export type ConfirmationKind = "day" | "co-day" | "worker" | "co-worker" | "day-sub" | "co-day-sub";
 export type ConfirmationStatus = "PENDING" | "CONFIRMED" | "DECLINED" | "CANCELLED";
@@ -113,6 +114,8 @@ export type ResponseView = {
   reason: string | null;
   past: boolean;
   lang: Lang;
+  /** Turnover subs: their change order request page, while it takes requests */
+  coRequestPath: string | null;
 };
 
 export async function loadResponse(token: string): Promise<ResponseView | null> {
@@ -128,6 +131,7 @@ export async function loadResponse(token: string): Promise<ResponseView | null> 
     status: c.status as ConfirmationStatus,
     reason: c.reason,
     past: c.dateKey < todayEasternKey(),
+    coRequestPath: c.kind === "day-sub" && (await coRequestOpenFor(token)) ? coRequestPath(token) : null,
   };
 }
 

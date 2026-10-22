@@ -114,6 +114,15 @@ export function ResponseForm({ token, view }: { token: string; view: ResponseVie
       )}
 
       {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+
+      {view.coRequestPath && status === "CONFIRMED" && (
+        <div className="border-t border-gray-100 pt-4">
+          <p className="text-sm text-gray-700">{t("Extra work at the unit? Send photos and see your pay before you do it.", "¿Trabajo extra en la unidad? Envía fotos y mira tu pago antes de hacerlo.")}</p>
+          <a href={view.coRequestPath} className="mt-2 inline-block rounded-md bg-pink-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-pink-500">
+            {t("Request a change order", "Solicitar una orden de cambio")}
+          </a>
+        </div>
+      )}
     </div>
   );
 }

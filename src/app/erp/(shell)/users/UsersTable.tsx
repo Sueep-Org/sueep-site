@@ -47,7 +47,7 @@ const PERMISSION_ROWS: { label: string; roles: ErpRole[] }[] = [
   { label: "Edit companies and billing overrides", roles: ["ADMIN", "BUSINESS_MANAGER"] },
   { label: "Win/loss reports and GC scorecards", roles: PM_UP },
   { label: "Insurance & COIs", roles: PM_UP },
-  { label: "Candidates", roles: PM_UP },
+  { label: "Recruitment", roles: PM_UP },
   { label: "Contractor verification", roles: PM_UP },
   { label: "AI Estimator", roles: PM_EST },
   { label: "Edit employee pay info", roles: PM_UP },

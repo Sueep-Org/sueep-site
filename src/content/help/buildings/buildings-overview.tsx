@@ -71,7 +71,9 @@ export function BuildingsOverview() {
           layout (studio, 1/1, 2/1, 2/2, 3/1, 3/2, 3/3) for cleaning, painting, touch-up paint,
           carpet cleaning, additional materials, ceiling paint, and compounding, plus any custom
           line items specific to this building (e.g. a den surcharge). Editing requires a role that
-          can edit pricing.
+          can edit pricing. Below it, the <strong>CO pricing package</strong> sets what subs can ask
+          for on a change order, with our charge and the sub pay; see{" "}
+          <A href="/erp/help/turnover/sub-change-orders">Sub Change Orders on Turnovers</A>.
           <ImgPlaceholder label="Pricing Package tab" />
         </Step>
 

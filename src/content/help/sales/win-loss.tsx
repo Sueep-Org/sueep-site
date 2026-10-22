@@ -30,7 +30,7 @@ export function WinLossHelp() {
         by type of work, by job size), <strong>Price</strong> (won vs lost price chart, $ per sq ft by type of work),{" "}
         <strong>Losses</strong> (why we lose by quarter and overall, re-bids, stale quotes) and <strong>Clients</strong> (by
         GC, property managers and owners, link companies). The filter applies to every tab, and the tab you&apos;re on stays
-        open when you change it. Green means won and orange means lost on every chart, here and on the Pipeline board.
+        open when you change it. Green means won and orange means lost on every chart, here and on the Deals board.
       </P>
       <UL>
         <LI>
