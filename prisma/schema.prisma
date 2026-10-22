@@ -4219,6 +4219,9 @@ model SubBid {
   /// Lines the bid covers. None means the whole job.
   sovItems ProjectSOVItem[] @relation("SubBidSOVItems")
 
+  /// The sub's proposal, quote sheet, photos
+  attachments SubBidAttachment[]
+
   @@index([projectId])
   @@index([contractorId])
   @@index([bidderEmail])
@@ -4247,4 +4250,22 @@ model ContractorRating {
   ratedByName String?
 
   @@index([contractorId])
+}
+
+/// A file on a sub's bid (their proposal PDF, quote sheet, photos). Stored in
+/// the database like ContractorDocument and ProjectWorkOrderAttachment.
+model SubBidAttachment {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  bidId String
+  bid   SubBid @relation(fields: [bidId], references: [id], onDelete: Cascade)
+
+  filename   String
+  mimeType   String
+  size       Int
+  data       Bytes
+  uploadedBy String?
+
+  @@index([bidId])
 }

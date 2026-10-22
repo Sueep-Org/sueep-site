@@ -20,6 +20,7 @@ export async function checkSubBidRefs(projectId: string, contractorId: string | 
 export const subBidInclude = {
   contractor: { select: { name: true } },
   sovItems: { select: { id: true } },
+  attachments: { select: { id: true, filename: true, mimeType: true, size: true }, orderBy: { createdAt: "asc" } },
 } satisfies Prisma.SubBidInclude;
 
 type BidWithIncludes = Prisma.SubBidGetPayload<{ include: typeof subBidInclude }>;
@@ -39,5 +40,6 @@ export function serializeSubBid(b: BidWithIncludes): SubBidRow {
     notes: b.notes,
     createdBy: b.createdBy,
     sovItemIds: b.sovItems.map((s) => s.id),
+    attachments: b.attachments,
   };
 }

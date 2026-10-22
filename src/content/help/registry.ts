@@ -12,6 +12,7 @@ import { InputtingLaborLogs } from "./workers/labor-logs";
 import { AddingEmployees } from "./workers/adding-employees";
 import { MaterialsLog } from "./projects/material-logs";
 import { SubProposals } from "./projects/sub-proposals";
+import { SubRatingsAndBidders } from "./workers/sub-ratings-and-bidders";
 import { AddingContractors } from "./workers/adding-contractors";
 import { LoggingContractors } from "./workers/logging-contractors";
 import { ScheduleCalendarOverview } from "./schedule/calendar-overview";
@@ -144,7 +145,7 @@ export const registry: ArticleEntry[] = [
     slug: "projects/sub-proposals",
     title: "Sub Bids (Proposals)",
     category: "Projects",
-    description: "Log the bids subs give on a job and see the margin each one leaves us.",
+    description: "Log the bids subs give on a job on the Proposals tab and see the margin each one leaves us.",
     order: 8,
     component: SubProposals,
     roles: [...PM_LEVEL_ROLES, "SALES", "ESTIMATION"],
@@ -166,6 +167,15 @@ export const registry: ArticleEntry[] = [
     order: 5,
     component: LoggingContractors,
     roles: [...PM_LEVEL_ROLES, "SALES"],
+  },
+  {
+    slug: "workers/sub-ratings-and-bidders",
+    title: "Rating Subs and Bidders",
+    category: "People & Schedule",
+    description: "Star ratings for subs (confidence and pricing), the Bidders tab for subs without a profile, and moving their bids onto a new profile.",
+    order: 5,
+    component: SubRatingsAndBidders,
+    roles: [...PM_LEVEL_ROLES, "SALES", "ESTIMATION"],
   },
   {
     slug: "people/roles-and-permissions",

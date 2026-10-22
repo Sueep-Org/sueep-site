@@ -32,7 +32,37 @@ export type SubBidRow = {
   notes: string | null;
   createdBy: string | null;
   sovItemIds: string[];
+  attachments: SubBidFile[];
 };
+
+export type SubBidFile = { id: string; filename: string; mimeType: string; size: number };
+
+/**
+ * Files a bid can carry: proposals usually come as a PDF or a spreadsheet,
+ * sometimes photos. 4 MB because Vercel turns away uploads over 4.5 MB
+ * before they reach the route.
+ */
+export const SUB_BID_FILE_MAX_BYTES = 4 * 1024 * 1024;
+export const SUB_BID_FILE_TYPES: Record<string, string> = {
+  "application/pdf": ".pdf",
+  "image/jpeg": ".jpg,.jpeg",
+  "image/png": ".png",
+  "image/webp": ".webp",
+  "image/heic": ".heic",
+  "image/heif": ".heif",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+  "application/vnd.ms-excel": ".xls",
+  "text/csv": ".csv",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+  "application/msword": ".doc",
+};
+/** For the file picker's accept attribute */
+export const SUB_BID_FILE_ACCEPT = Object.values(SUB_BID_FILE_TYPES).join(",");
+
+/** Link that opens a bid's file */
+export function subBidFileUrl(projectId: string, bidId: string, fileId: string): string {
+  return `/api/erp/projects/${projectId}/sub-bids/${bidId}/attachments/${fileId}`;
+}
 
 /** Who bid, for display: the profile name, else the company, else the person typed in. */
 export function bidderLabel(row: Pick<SubBidRow, "contractorName" | "bidderName" | "bidderCompany">): string {

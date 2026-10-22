@@ -9,14 +9,19 @@ import { centsToDollars } from "@/lib/erp/money";
 import { todayEasternKey } from "@/lib/erp/dates";
 import { starsText } from "@/lib/erp/subScores";
 import { Stars } from "@/app/erp/components/Stars";
+import { BidFileLinks } from "@/app/erp/components/BidFileLinks";
 import type { PastBidder } from "@/lib/erp/subBidLinks";
 import {
+  SUB_BID_FILE_ACCEPT,
+  SUB_BID_FILE_MAX_BYTES,
   SUB_BID_STATUSES,
   SUB_BID_STATUS_LABELS,
   bidOurPriceCents,
   bidScopeKey,
   bidderKey,
   bidderLabel,
+  subBidFileUrl,
+  type SubBidFile,
   type SubBidRow,
   type SubBidStatus,
 } from "@/lib/erp/subBids";
@@ -129,6 +134,10 @@ export function ProjectProposalsSection({
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
+  /** Files picked in the form, uploaded once the bid saves */
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  /** Files already on the bid being edited */
+  const [existingFiles, setExistingFiles] = useState<SubBidFile[]>([]);
   const [error, setError] = useState("");
   const [pastBidders, setPastBidders] = useState(initialPastBidders);
   const [suggestField, setSuggestField] = useState<"bidderName" | "bidderCompany" | null>(null);
@@ -226,6 +235,8 @@ export function ProjectProposalsSection({
     setForm(emptyForm());
     setError("");
     setSuggestField(null);
+    setPendingFiles([]);
+    setExistingFiles([]);
     setFormOpen(true);
   }
 
@@ -233,7 +244,44 @@ export function ProjectProposalsSection({
     setEditingId(b.id);
     setForm(formFromBid(b));
     setError("");
+    setPendingFiles([]);
+    setExistingFiles(b.attachments);
     setFormOpen(true);
+  }
+
+  function pickFiles(list: FileList | null) {
+    const picked = Array.from(list ?? []);
+    const tooBig = picked.filter((f) => f.size > SUB_BID_FILE_MAX_BYTES);
+    setError(tooBig.length ? `Too big (max 4 MB): ${tooBig.map((f) => f.name).join(", ")}` : "");
+    setPendingFiles((prev) => [...prev, ...picked.filter((f) => f.size <= SUB_BID_FILE_MAX_BYTES)]);
+  }
+
+  /** Uploads the picked files one at a time. Returns the ones that made it and why the others didn't. */
+  async function uploadFiles(bidId: string): Promise<{ uploaded: SubBidFile[]; failed: string[] }> {
+    const uploaded: SubBidFile[] = [];
+    const failed: string[] = [];
+    for (const file of pendingFiles) {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`/api/erp/projects/${projectId}/sub-bids/${bidId}/attachments`, { method: "POST", body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) uploaded.push(data as SubBidFile);
+      else failed.push(data.error ?? `${file.name} didn't upload`);
+    }
+    return { uploaded, failed };
+  }
+
+  async function removeFile(f: SubBidFile) {
+    if (!editingId) return;
+    const ok = await confirm({ title: "Remove this file?", message: f.filename, confirmLabel: "Remove" });
+    if (!ok) return;
+    const res = await fetch(subBidFileUrl(projectId, editingId, f.id), { method: "DELETE" });
+    if (!res.ok) {
+      toast("Could not remove the file.");
+      return;
+    }
+    setExistingFiles((prev) => prev.filter((x) => x.id !== f.id));
+    setBids((prev) => prev.map((b) => (b.id === editingId ? { ...b, attachments: b.attachments.filter((x) => x.id !== f.id) } : b)));
   }
 
   async function save() {
@@ -257,15 +305,19 @@ export function ProjectProposalsSection({
       body: JSON.stringify(payload),
     });
     const data = await res.json().catch(() => ({}));
-    setSaving(false);
     if (!res.ok) {
+      setSaving(false);
       setError(data.error ?? "Could not save.");
       return;
     }
-    const row = data as SubBidRow;
+    const saved = data as SubBidRow;
+    const { uploaded, failed } = await uploadFiles(saved.id);
+    setSaving(false);
+    const row = { ...saved, attachments: [...saved.attachments, ...uploaded] };
     rememberBidder(row);
     setBids((prev) => (editingId ? prev.map((b) => (b.id === row.id ? row : b)) : [...prev, row]));
     setFormOpen(false);
+    if (failed.length) toast(`Bid saved, but: ${failed.join("; ")}`);
   }
 
   async function setStatus(b: SubBidRow, status: SubBidStatus) {
@@ -355,6 +407,7 @@ export function ProjectProposalsSection({
                             ) : null}
                             {details ? <InfoTip text={details} wide /> : null}
                           </span>
+                          <BidFileLinks projectId={projectId} bidId={b.id} files={b.attachments} />
                         </td>
                         <td className="px-3 py-2 text-right">{centsToDollars(b.amountCents)}</td>
                         <td className={`px-3 py-2 text-right ${margin != null && margin < 0 && !inactive ? "text-red-600" : ""}`}>
@@ -519,6 +572,44 @@ export function ProjectProposalsSection({
           ) : null}
 
           <div>
+            <label className={`${label} flex items-center gap-1`}>
+              Files
+              <InfoTip text="Their proposal, quote sheet or photos. PDF, image, Excel, Word or CSV, up to 4 MB each." />
+            </label>
+            {existingFiles.length || pendingFiles.length ? (
+              <ul className="mt-1 divide-y divide-gray-100 rounded-md border border-gray-200 text-sm">
+                {existingFiles.map((f) => (
+                  <li key={f.id} className="flex items-center justify-between gap-2 px-3 py-1.5">
+                    <a href={subBidFileUrl(projectId, editingId!, f.id)} target="_blank" rel="noreferrer" className="truncate text-gray-800 hover:text-pink-600 hover:underline">
+                      {f.filename}
+                    </a>
+                    <Button variant="ghost" size="xs" onClick={() => removeFile(f)}>Remove</Button>
+                  </li>
+                ))}
+                {pendingFiles.map((f, i) => (
+                  <li key={`new-${i}`} className="flex items-center justify-between gap-2 px-3 py-1.5">
+                    <span className="truncate text-gray-600">{f.name} <span className="text-[11px] text-gray-400">(uploads when you save)</span></span>
+                    <Button variant="ghost" size="xs" onClick={() => setPendingFiles((prev) => prev.filter((_, j) => j !== i))}>Remove</Button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <label className="mt-1.5 inline-flex cursor-pointer items-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+              Add files
+              <input
+                type="file"
+                multiple
+                accept={SUB_BID_FILE_ACCEPT}
+                className="hidden"
+                onChange={(e) => {
+                  pickFiles(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          </div>
+
+          <div>
             <label className={label}>Notes</label>
             <textarea className={input} rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} />
           </div>
@@ -527,7 +618,7 @@ export function ProjectProposalsSection({
 
           <div className="flex justify-end gap-2">
             <Button variant="secondary" size="sm" onClick={() => setFormOpen(false)}>Cancel</Button>
-            <Button size="sm" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
+            <Button size="sm" onClick={save} disabled={saving}>{saving ? (pendingFiles.length ? "Saving and uploading..." : "Saving...") : "Save"}</Button>
           </div>
         </div>
       </Modal>

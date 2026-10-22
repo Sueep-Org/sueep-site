@@ -63,6 +63,11 @@ export function ProjectsOverview() {
           the right month. To fix a date, open the line&apos;s menu, click <strong>Edit</strong>,
           and pick the date. Keep the SOV total equal to the contract value, since each line counts
           as its share of the contract.
+          <br />
+          <br />
+          The Financials menu also has a <strong>Proposals</strong> tab for logging the bids subs give
+          on the job and the margin each would leave us. See{" "}
+          <A href="/erp/help/projects/sub-proposals">Sub Bids (Proposals)</A>.
         </Step>
 
         <Step n={5} title="Labor, Contractors, and Materials tabs">

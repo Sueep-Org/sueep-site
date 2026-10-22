@@ -15,6 +15,11 @@ export function AddingContractors() {
                 To add a new contractor click the add contractor button which will bring up a input for their name and email.
                 <Img src="/help/add_contractor/contractor_2.png" alt="Contractor" />
                 Hit <strong>Save contractor</strong> and congrats! You created your first contractor!
+                <Callout type="info">
+                    Already have bids from this sub? Go to the <strong>Bidders</strong> tab on the same page and press{" "}
+                    <strong>Create profile</strong> on their row instead, so their past bids come with them. If you already
+                    made the profile, it shows a yellow note offering to link their past bids.
+                </Callout>
             </Step>
 
             <Step n={2} title="Contractor Details">
@@ -22,7 +27,7 @@ export function AddingContractors() {
                 <br></br><br></br>
                 Sections start collapsed, with a status line on each; only the most urgent problem opens on its own.
                 <br></br><br></br>
-                The profile has five tabs: <strong>Overview</strong> (name, email, status, application and company profile), <strong>Compliance</strong> (insurance, background check, documents, licensing), <strong>Pay &amp; Personal</strong> (info form link, personal info, bank, SSN), <strong>Work</strong> (labor and time off), and <strong>Signing</strong>. Time off for a contractor needs an Admin, PM or Business Manager to approve it, same as an employee&apos;s, but there&apos;s no yearly day limit.
+                The profile has these tabs: <strong>Overview</strong> (name, email, status, application and company profile), <strong>Compliance</strong> (insurance, background check, documents, licensing), <strong>Pay &amp; Personal</strong> (info form link, personal info, bank, SSN), <strong>Work</strong> (labor and time off), <strong>Bids</strong> (every bid they gave us), <strong>Ratings</strong> (their star scores), and <strong>Signing</strong>. Bids and Ratings are covered in <A href="/erp/help/workers/sub-ratings-and-bidders">Rating Subs and Bidders</A>. Time off for a contractor needs an Admin, PM or Business Manager to approve it, same as an employee&apos;s, but there&apos;s no yearly day limit.
                 <br></br><br></br>
                 On <strong>Overview</strong>, open <strong>General information</strong> to edit their name, email, status (active or inactive), and <strong>Language</strong> (English or Spanish). Language sets the emails we send them (schedule invites, info form and upload links) and the pages those emails open. There&apos;s also a <strong>Delete contractor</strong> button there if you need to remove one entirely.
                 <Img src="/help/add_contractor/contractor_3.png" alt="Contractor" />

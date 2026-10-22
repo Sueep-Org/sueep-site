@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { InfoTip } from "@/app/erp/components/ui";
+import { BidFileLinks } from "@/app/erp/components/BidFileLinks";
 import { centsToDollars } from "@/lib/erp/money";
 import { SUB_BID_STATUS_LABELS } from "@/lib/erp/subBids";
 import type { ContractorBidLine, ContractorBidSummary } from "@/lib/erp/subBidStats";
@@ -84,6 +85,7 @@ export function ContractorBidsSection({
                     <Link href={`/erp/projects/${l.projectId}?tab=Proposals`} className="font-medium hover:text-pink-600 hover:underline">
                       {l.projectTitle}
                     </Link>
+                    <BidFileLinks projectId={l.projectId} bidId={l.id} files={l.files} />
                   </td>
                   <td className="max-w-[220px] truncate px-3 py-2" title={l.scopeLabel}>{l.scopeLabel}</td>
                   <td className="px-3 py-2 text-right">{centsToDollars(l.amountCents)}</td>
