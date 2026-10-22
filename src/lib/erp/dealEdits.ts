@@ -1,11 +1,12 @@
 /**
- * HubSpot deals with the ERP's own recent changes on top. The HubSpot read is
- * cached for an hour (postConDeals.ts), so lost reasons, Mark lost, Edit info,
- * stage moves and new deals made in the ERP since that read are applied here.
+ * HubSpot deals with recent changes on top. The full HubSpot read is cached
+ * for an hour (postConDeals.ts); deals HubSpot changed since then are swapped
+ * in (one search, cached a minute), then lost reasons, Mark lost, Edit info,
+ * stage moves and new deals made in the ERP since that read are applied.
  * Every page that shows deals loads them through this, so a change shows
  * everywhere at once (board, Win/Loss, dashboard cards, emails), not after the refresh.
  */
-import { loadDealBundle, loadJanitorialDealBundle, type Bundle, type PipelineKey } from "./postConDeals";
+import { loadDealBundle, loadJanitorialDealBundle, mergeHubSpotChanges, type Bundle, type PipelineKey } from "./postConDeals";
 import { lostChangesSince } from "./dealLostReasons";
 import { infoChangesSince } from "./dealInfo";
 import { createdDealsMissing } from "./dealCreate";
@@ -46,12 +47,12 @@ export async function applyErpEdits(cached: Bundle, pipeline: PipelineKey): Prom
 
 /** Post-construction deals, as HubSpot has them plus the ERP's recent changes. */
 export async function loadDeals(): Promise<Bundle> {
-  return applyErpEdits(await loadDealBundle(), "post-con");
+  return applyErpEdits(await mergeHubSpotChanges(await loadDealBundle(), "post-con"), "post-con");
 }
 
 /** Janitorial deals, the same way. */
 export async function loadJanitorialDeals(): Promise<Bundle> {
-  return applyErpEdits(await loadJanitorialDealBundle(), "janitorial");
+  return applyErpEdits(await mergeHubSpotChanges(await loadJanitorialDealBundle(), "janitorial"), "janitorial");
 }
 
 export function loadDealsFor(pipeline: PipelineKey): Promise<Bundle> {

@@ -14,7 +14,7 @@ import { utcDateKey } from "./dates";
 import { COMPANY_INFO_SECTIONS } from "./companyInfo";
 import { checkerName, namesByEmail } from "./janitorialQualityChecks";
 import { dealUrl, outcomeOf } from "./postConDeals";
-import { loadDeals } from "./dealEdits";
+import { loadDeals, loadJanitorialDeals } from "./dealEdits";
 import { centsToDollarsCompact } from "./money";
 import { cutoffsBetween, loadCutoffJobs } from "./billingCutoffs";
 import {
@@ -381,24 +381,31 @@ export async function loadManagementItems(
   }
 
   if (want("BIDS")) {
-    // From HubSpot (cached an hour). A HubSpot problem leaves the category empty instead of breaking the calendar.
-    try {
-      const bundle = await loadDeals();
-      for (const d of bundle.deals) {
-        if (outcomeOf(bundle, d.stageId) === "lost") continue;
-        const detail = [bundle.stageLabels[d.stageId]?.trim(), d.ownerId ? bundle.owners[d.ownerId] : null, d.cents ? centsToDollarsCompact(d.cents) : null].filter(Boolean).join(" · ");
-        const href = dealUrl(bundle.hubId, d.id);
-        for (const [day, label, kind] of [
-          [d.bidDate, "Bid due", "bid"],
-          [d.walkDate, "Job walk", "walk"],
-          [d.awardDate, "Award expected", "award"],
-        ] as const) {
-          if (!day || day < startKey || day > endKey) continue;
-          add("BIDS", { key: `${kind}:${d.id}`, title: `${label}: ${d.name}`, detail, href, start: day, end: day });
+    // From HubSpot. A HubSpot problem leaves the category empty instead of breaking the calendar.
+    // Post-construction: bid, walk and award dates. Janitorial: job walks only (filled from walk meetings, dealWalks.ts).
+    const pipelines = [
+      { load: loadDeals, fields: ["bid", "walk", "award"] },
+      { load: loadJanitorialDeals, fields: ["walk"] },
+    ] as const;
+    for (const { load, fields } of pipelines) {
+      try {
+        const bundle = await load();
+        for (const d of bundle.deals) {
+          if (outcomeOf(bundle, d.stageId) === "lost") continue;
+          const detail = [bundle.stageLabels[d.stageId]?.trim(), d.ownerId ? bundle.owners[d.ownerId] : null, d.cents ? centsToDollarsCompact(d.cents) : null].filter(Boolean).join(" · ");
+          const href = dealUrl(bundle.hubId, d.id);
+          for (const [day, label, kind] of [
+            [d.bidDate, "Bid due", "bid"],
+            [d.walkDate, "Job walk", "walk"],
+            [d.awardDate, "Award expected", "award"],
+          ] as const) {
+            if (!day || day < startKey || day > endKey || !(fields as readonly string[]).includes(kind)) continue;
+            add("BIDS", { key: `${kind}:${d.id}`, title: `${label}: ${d.name}`, detail, href, start: day, end: day });
+          }
         }
+      } catch (e) {
+        console.error("Management calendar: HubSpot bids", e);
       }
-    } catch (e) {
-      console.error("Management calendar: HubSpot bids", e);
     }
   }
 

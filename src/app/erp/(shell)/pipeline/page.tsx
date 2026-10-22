@@ -42,7 +42,7 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
     <div className="space-y-4">
       <h1 className="flex items-center gap-1 text-2xl font-semibold text-gray-900">
         Deals
-        <InfoTip text="HubSpot deals by stage, like HubSpot's board. New deals, stage moves and edits made here save to HubSpot. Refreshed from HubSpot every hour." />
+        <InfoTip text="HubSpot deals by stage, like HubSpot's board. New deals, stage moves and edits made here save to HubSpot. Changes made in HubSpot show within a couple of minutes." />
       </h1>
       <div className="flex flex-wrap gap-2">
         {PIPELINES.map((p) => (

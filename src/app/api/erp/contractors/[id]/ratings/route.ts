@@ -1,3 +1,5 @@
+import { revalidateTag } from "next/cache";
+import { SUB_SCORES_TAG } from "@/lib/erp/subBidStats";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth } from "@/lib/erpAuth";
@@ -39,5 +41,6 @@ export async function POST(req: Request, ctx: Ctx) {
       ratedByName: employee ? `${employee.firstName} ${employee.lastName}`.trim() : null,
     },
   });
+  revalidateTag(SUB_SCORES_TAG);
   return NextResponse.json({ id: rating.id });
 }

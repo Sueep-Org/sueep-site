@@ -4,7 +4,7 @@ import { dayKey } from "@/lib/erp/schedule";
 import { computeSeriesDates, parseDatesList, SeriesDateRangeError } from "@/lib/erp/scheduleSeries";
 import { formatTurnoverHoursBudgetText } from "@/lib/erp/turnoverHoursBudget";
 import { isTurnoverScopeValue, parseCompletedScopeItems, turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
-import { appUrl, notifyProjectCrew, scopeText, sendDayInvite, sendSubLeadInvite } from "@/lib/erp/scheduleInvites";
+import { appUrl, batchDayInvites, notifyProjectCrew, scopeText, sendDayInvite, sendSubLeadInvite } from "@/lib/erp/scheduleInvites";
 import { notifyProjectDayRequester, requesterFromBody } from "@/lib/erp/scheduleRequester";
 import { saveSubPay, subPayFromBody } from "@/lib/erp/subPay";
 import { hasCalendarSubPay } from "@/lib/erp/projectSegments";
@@ -278,46 +278,47 @@ export async function POST(req: Request) {
       : await prisma.$transaction(writes)) as Awaited<(typeof writes)[number]>[];
 
     // No calendar invite for a PM-only series, see the field comment above.
-    // One email per occurrence, each with its own accept/decline link, so
-    // the supervisor can respond to each day independently (accept Monday,
-    // decline Wednesday) — not one combined recurring invite for the whole
-    // range like this used to send.
-    if (supervisorUserId && supervisor) {
-      await Promise.all(
-        assignments.map(async (a) => {
-          const hoursBudgetText = await hoursBudgetTextFor(a.date);
-          await sendDayInvite({
-            uid: `day-assignment-${a.id}@sueep.com`,
-            to: supervisor.email,
-            role: "Supervising",
-            title: project.jobTitle,
-            dateKey: dayKey(a.date),
-            startTime,
-            endTime,
-            location,
-            scopeText: dayScopeText,
-            url,
-            extraHtml: hoursBudgetText ? `<p>${hoursBudgetText.replace(/\n/g, "<br>")}</p>` : undefined,
-          });
-        })
-      );
-    }
+    // One email per person for the whole range (batchDayInvites), but each
+    // day keeps its own calendar event and accept/decline link, so they can
+    // still answer each day on its own (accept Monday, decline Wednesday).
+    await batchDayInvites(async () => {
+      if (supervisorUserId && supervisor) {
+        await Promise.all(
+          assignments.map(async (a) => {
+            const hoursBudgetText = await hoursBudgetTextFor(a.date);
+            await sendDayInvite({
+              uid: `day-assignment-${a.id}@sueep.com`,
+              to: supervisor.email,
+              role: "Supervising",
+              title: project.jobTitle,
+              dateKey: dayKey(a.date),
+              startTime,
+              endTime,
+              location,
+              scopeText: dayScopeText,
+              url,
+              extraHtml: hoursBudgetText ? `<p>${hoursBudgetText.replace(/\n/g, "<br>")}</p>` : undefined,
+            });
+          })
+        );
+      }
 
-    await Promise.all(assignments.map((a) => notifySubLead(a)));
+      await Promise.all(assignments.map((a) => notifySubLead(a)));
 
-    // Refreshes the invite for every crew member already on one of these
-    // days — their own time/scope may have just changed even though their
-    // ProjectWorkerDayAssignment row wasn't touched by this request.
-    await notifyProjectCrew({
-      projectId,
-      dates: seriesDates,
-      projectTitle: project.jobTitle,
-      location,
-      startTime,
-      endTime,
-      daySovDescriptions: sovDescriptions,
-      dayScopeLabels: scopeItems.map(scopeLabel),
-      url,
+      // Refreshes the invite for every crew member already on one of these
+      // days — their own time/scope may have just changed even though their
+      // ProjectWorkerDayAssignment row wasn't touched by this request.
+      await notifyProjectCrew({
+        projectId,
+        dates: seriesDates,
+        projectTitle: project.jobTitle,
+        location,
+        startTime,
+        endTime,
+        daySovDescriptions: sovDescriptions,
+        dayScopeLabels: scopeItems.map(scopeLabel),
+        url,
+      });
     });
 
     // A day that's already fully confirmed tells a newly set requester now

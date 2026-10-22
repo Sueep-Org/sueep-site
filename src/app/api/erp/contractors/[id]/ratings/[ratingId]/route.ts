@@ -1,3 +1,5 @@
+import { revalidateTag } from "next/cache";
+import { SUB_SCORES_TAG } from "@/lib/erp/subBidStats";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth } from "@/lib/erpAuth";
@@ -17,5 +19,6 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "Only who rated, or an Admin, can delete this" }, { status: 403 });
   }
   await prisma.contractorRating.delete({ where: { id: ratingId } });
+  revalidateTag(SUB_SCORES_TAG);
   return NextResponse.json({ ok: true });
 }

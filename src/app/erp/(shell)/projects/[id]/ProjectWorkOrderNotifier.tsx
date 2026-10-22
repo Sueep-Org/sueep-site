@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SERVICE_TYPE_OPTIONS } from "@/lib/erp/serviceTypes";
 import { Button } from "@/app/erp/components/ui";
+import { EMPTY_CONTACT, formatPhone, parseContactsText, type WorkOrderContact } from "@/lib/erp/workOrderContacts";
 
 const inputCls =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
@@ -28,6 +29,8 @@ export type WorkOrderRecord = {
   projectName: string;
   siteAddress: string | null;
   contacts: string | null;
+  /** Null until the brief is saved with rows (or converted); then read the old text */
+  contactList: WorkOrderContact[] | null;
   startDate: string | null;
   serviceType: string | null;
   notes: string | null;
@@ -76,16 +79,54 @@ function extractServiceType(description: string | null): string {
   return "";
 }
 
-function formatContacts(contacts: ContactRow[]): string {
-  return contacts
-    .map((c) => {
-      const parts: string[] = [c.fullName];
-      if (c.role) parts.push(c.role);
-      if (c.email) parts.push(c.email);
-      if (c.phone) parts.push(c.phone);
-      return parts.join(" · ");
-    })
-    .join("\n");
+function fromProjectContacts(contacts: ContactRow[]): WorkOrderContact[] {
+  return contacts.map((c) => ({ name: c.fullName, role: c.role ?? "", email: c.email ?? "", phone: c.phone ? formatPhone(c.phone) : "" }));
+}
+
+function ContactRowsEditor({ rows, onChange }: { rows: WorkOrderContact[]; onChange: (rows: WorkOrderContact[]) => void }) {
+  const set = (i: number, patch: Partial<WorkOrderContact>) => onChange(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const cell = "w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
+  return (
+    <div className="mt-1 space-y-2">
+      {rows.length > 0 && (
+        <div className="hidden grid-cols-[1fr_1fr_1.2fr_9rem_1.5rem] gap-2 text-[11px] font-medium text-gray-500 sm:grid">
+          <span>Name</span>
+          <span>Role</span>
+          <span>Email</span>
+          <span>Phone</span>
+          <span />
+        </div>
+      )}
+      {rows.map((r, i) => (
+        <div key={i} className="grid grid-cols-2 gap-2 rounded-md border border-gray-100 p-2 sm:grid-cols-[1fr_1fr_1.2fr_9rem_1.5rem] sm:border-0 sm:p-0">
+          <input className={cell} aria-label="Name" placeholder="Name" value={r.name} onChange={(e) => set(i, { name: e.target.value })} />
+          <input className={cell} aria-label="Role" placeholder="Role" value={r.role} onChange={(e) => set(i, { role: e.target.value })} />
+          <input className={cell} type="email" aria-label="Email" placeholder="Email" value={r.email} onChange={(e) => set(i, { email: e.target.value })} />
+          <input
+            className={cell}
+            type="tel"
+            aria-label="Phone"
+            placeholder="Phone"
+            value={r.phone}
+            onChange={(e) => set(i, { phone: e.target.value })}
+            onBlur={(e) => set(i, { phone: formatPhone(e.target.value) })}
+          />
+          <button
+            type="button"
+            onClick={() => onChange(rows.filter((_, j) => j !== i))}
+            className="col-span-2 justify-self-end text-lg leading-none text-gray-400 hover:text-red-600 sm:col-span-1 sm:self-center"
+            aria-label={`Remove ${r.name || "contact"}`}
+            title="Remove"
+          >
+            ×
+          </button>
+        </div>
+      ))}
+      <button type="button" onClick={() => onChange([...rows, { ...EMPTY_CONTACT }])} className="text-xs font-medium text-pink-600 hover:underline">
+        + Add contact
+      </button>
+    </div>
+  );
 }
 
 
@@ -214,16 +255,15 @@ export function ProjectWorkOrderNotifier({
 
   const fallbackServiceType = useMemo(() => extractServiceType(description), [description]);
 
-  const fallbackContacts = useMemo(() => {
+  const fallbackContacts = useMemo((): WorkOrderContact[] => {
     if (isRealEstate) {
       const agentName = getDetailLine(description, "Agent");
-      const agentEmail = getDetailLine(description, "Agent Email");
-      const agentPhone = getDetailLine(description, "Agent Phone");
       if (agentName) {
-        return [agentName, "Agent", agentEmail, agentPhone].filter(Boolean).join(" · ");
+        const agentPhone = getDetailLine(description, "Agent Phone");
+        return [{ name: agentName, role: "Agent", email: getDetailLine(description, "Agent Email"), phone: agentPhone ? formatPhone(agentPhone) : "" }];
       }
     }
-    return formatContacts(contacts);
+    return fromProjectContacts(contacts);
   }, [contacts, description, isRealEstate]);
   // Keep as YYYY-MM-DD for the date picker — no formatting
   const fallbackStartDate = projectDateIso ? projectDateIso.slice(0, 10) : null;
@@ -231,12 +271,14 @@ export function ProjectWorkOrderNotifier({
   // Prefer saved record, fall back to derived values
   const initName = savedRecord?.projectName ?? jobTitle;
   const initAddress = savedRecord?.siteAddress ?? fallbackAddress;
-  const initContacts = savedRecord?.contacts ?? fallbackContacts;
+  // Briefs saved before contacts became rows: read the old text. Lines that aren't contacts go to the notes, so nothing is lost.
+  const fromText = savedRecord && !savedRecord.contactList && savedRecord.contacts ? parseContactsText(savedRecord.contacts) : null;
+  const initContacts = savedRecord?.contactList ?? fromText?.contacts ?? fallbackContacts;
   const initStartDateRaw = savedRecord?.startDate ?? fallbackStartDate;
   // If stored value is YYYY-MM-DD it's a precise date; anything else is "other"
   const initStartIsDate = initStartDateRaw ? /^\d{4}-\d{2}-\d{2}$/.test(initStartDateRaw) : true;
   const initServiceType = savedRecord?.serviceType ?? fallbackServiceType;
-  const initNotes = savedRecord?.notes ?? "";
+  const initNotes = [savedRecord?.notes ?? "", ...(fromText?.other ?? []).map((l) => `Contact note: ${l}`)].filter(Boolean).join("\n");
 
   const { selected: initSelected, custom: initCustom } = useMemo(
     () => resolveServiceTypeState(initServiceType),
@@ -245,7 +287,7 @@ export function ProjectWorkOrderNotifier({
 
   const [projectName, setProjectName] = useState(initName);
   const [siteAddress, setSiteAddress] = useState(initAddress);
-  const [contactsText, setContactsText] = useState(initContacts);
+  const [contactRows, setContactRows] = useState<WorkOrderContact[]>(initContacts);
   const [startDateMode, setStartDateMode] = useState<"date" | "other">(initStartIsDate ? "date" : "other");
   const [startDateValue, setStartDateValue] = useState(initStartIsDate ? (initStartDateRaw ?? "") : "");
   const [startDateOther, setStartDateOther] = useState(!initStartIsDate ? (initStartDateRaw ?? "") : "");
@@ -276,7 +318,7 @@ export function ProjectWorkOrderNotifier({
     return {
       projectName,
       siteAddress,
-      contacts: contactsText,
+      contactList: contactRows,
       startDate: getStartDate(),
       serviceType: currentServiceType(),
       notes,
@@ -432,15 +474,8 @@ export function ProjectWorkOrderNotifier({
         )}
 
         <div className="sm:col-span-2">
-          <label className={labelCls} htmlFor="wo-contacts">Main Point of Contacts</label>
-          <textarea
-            id="wo-contacts"
-            rows={3}
-            className={inputCls}
-            value={contactsText}
-            onChange={(e) => setContactsText(e.target.value)}
-            placeholder="Name · Role · email@example.com · phone"
-          />
+          <p className={labelCls}>Main Point of Contacts</p>
+          <ContactRowsEditor rows={contactRows} onChange={setContactRows} />
         </div>
 
         <div className="sm:col-span-2">

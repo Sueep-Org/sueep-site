@@ -30,6 +30,7 @@ import { ProjectJobTitleEditor } from "./ProjectJobTitleEditor";
 import { ProjectMaterialsSection } from "./ProjectMaterialsSection";
 import { DetailTabs, type DetailTab } from "@/app/erp/components/DetailTabs";
 import { ProjectWorkOrderNotifier } from "./ProjectWorkOrderNotifier";
+import { cleanContactList } from "@/lib/erp/workOrderContacts";
 import { ProjectChecklistSection } from "./ProjectChecklistSection";
 import { ProjectUnitTurnoverChecklist } from "./ProjectUnitTurnoverChecklist";
 import { BuildingPricingPackageEditor } from "@/app/erp/(shell)/buildings/BuildingPricingPackageEditor";
@@ -59,7 +60,7 @@ import { loadSubCoTab } from "@/lib/erp/subCoRequestReview";
 import { ProjectProposalsSection } from "./ProjectProposalsSection";
 import { canSeeProposals } from "@/lib/erp/subBids";
 import { serializeSubBid, subBidInclude } from "@/lib/erp/subBidRows";
-import { loadSubScores } from "@/lib/erp/subBidStats";
+import { loadAllSubScoresCached } from "@/lib/erp/subBidStats";
 import { loadPastBidders } from "@/lib/erp/subBidLinks";
 
 export const dynamic = "force-dynamic";
@@ -242,13 +243,81 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   if (!project) notFound();
 
   const showCompanies = !!auth && canViewCompanies(auth.role);
-  const [companyOptions, invoiceDestination] = showCompanies
-    ? await Promise.all([loadCompanyOptions([project.clientCompanyId]), loadProjectInvoiceDestination(project.id)])
-    : [[], null];
-  // The client company's cutoff, shown as the default under this job's own.
-  const companyCutoffDay = project.clientCompanyId
-    ? ((await prisma.clientCompany.findUnique({ where: { id: project.clientCompanyId }, select: { billingCutoffDay: true } }))?.billingCutoffDay ?? null)
-    : null;
+  const isTurnover = project.segment === "JANITORIAL_TURNOVER_REQUESTS";
+
+  // Subs must carry what the GC requires on this job. Warn on any who fall
+  // short (insurance roles only).
+  async function loadContractorInsurance(): Promise<{ required: string[]; sources: string[]; gaps: Record<string, string[]> } | undefined> {
+    const jobReq = (await loadJobRequirements([project!.id])).get(project!.id);
+    if (!jobReq) return undefined;
+    const subIds = [...new Set(project!.contractorAssignments.map((a) => a.contractorId))];
+    const subs = await prisma.contractor.findMany({
+      where: { id: { in: subIds } },
+      select: {
+        id: true,
+        glOccurrenceCents: true,
+        glAggregateCents: true,
+        autoLimitCents: true,
+        umbrellaLimitCents: true,
+        workersCompExpiresAt: true,
+        workersCompExempt: true,
+        sueepAdditionalInsured: true,
+        sueepWaiverOfSubrogation: true,
+        sueepPrimaryNoncontributory: true,
+      },
+    });
+    return {
+      required: requirementSummary(jobReq),
+      sources: jobReq.sources,
+      gaps: Object.fromEntries(subs.map((s) => [s.id, subGaps(s, jobReq)])),
+    };
+  }
+
+  // Everything below needs only the project, so it all runs at once instead
+  // of one step after another (each step is a database round trip).
+  const [
+    [companyOptions, invoiceDestination],
+    companyCutoffDay,
+    supervisorEmployees,
+    unitInvoiceRows,
+    lineCosts,
+    contractorInsurance,
+    inviteResponses,
+    subCoTab,
+    proposals,
+  ] = await Promise.all([
+    showCompanies
+      ? Promise.all([loadCompanyOptions([project.clientCompanyId]), loadProjectInvoiceDestination(project.id)])
+      : Promise.resolve<[Awaited<ReturnType<typeof loadCompanyOptions>>, Awaited<ReturnType<typeof loadProjectInvoiceDestination>>]>([[], null]),
+    // The client company's cutoff, shown as the default under this job's own.
+    project.clientCompanyId
+      ? prisma.clientCompany.findUnique({ where: { id: project.clientCompanyId }, select: { billingCutoffDay: true } }).then((c) => c?.billingCutoffDay ?? null)
+      : Promise.resolve(null),
+    // Display names for ERP supervisors from employee records, in one query.
+    erpSupervisorUsers.length
+      ? prisma.employee.findMany({
+          where: { OR: erpSupervisorUsers.map((u) => ({ email: { equals: u.email, mode: "insensitive" as const } })) },
+          select: { email: true, firstName: true, lastName: true },
+        })
+      : Promise.resolve([]),
+    project.turnoverRequest && canSeeCommission
+      ? prisma.hubSpotUnitInvoice.findMany({ where: { turnoverRequestId: project.turnoverRequest.id }, orderBy: { invoiceDate: "desc" } })
+      : Promise.resolve([]),
+    // Costs and margin come from the one shared calculation (projectMargin.ts),
+    // the same numbers the Projects table, dashboard, commission and Finance
+    // tab show for this project.
+    costLaborLogs(
+      project.laborEntries,
+      changeOrders.flatMap((co) => co.laborers.map((l) => ({ ...l, workerName: l.name }))),
+    ),
+    canSeeCois ? loadContractorInsurance() : Promise.resolve(undefined),
+    inviteResponsesForProject(project.id).catch(() => []),
+    // Subs' change order requests, office roles only (shows our charge and the sub pay)
+    isTurnover && auth && isPmLevel(auth.role) ? loadSubCoTab(project.id) : Promise.resolve(null),
+    canSeeProposals(auth?.role)
+      ? Promise.all([prisma.subBid.findMany({ where: { projectId: project.id }, include: subBidInclude }), loadAllSubScoresCached(), loadPastBidders()])
+      : Promise.resolve(null),
+  ]);
 
   // Commission owner must be someone with an ERP login — most Employee rows
   // are crew (painters/cleaners) with no ErpUser account at all.
@@ -271,19 +340,14 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const autoMatchedCommissionEmployee =
     commissionEligibleEmployees.find((e) => e.id === autoMatchedEmployeeId) ?? null;
 
-  // Resolve display names for ERP supervisors from employee records
-  const erpSupervisors = await Promise.all(
-    erpSupervisorUsers.map(async (u) => {
-      const emp = await prisma.employee.findFirst({
-        where: { email: { equals: u.email, mode: "insensitive" } },
-        select: { firstName: true, lastName: true },
-      });
-      const displayName = emp
-        ? `${emp.firstName} ${emp.lastName}`.trim()
-        : u.email.split("@")[0];
-      return { id: u.id, email: u.email, displayName };
-    })
-  );
+  // Display names for ERP supervisors from employee records
+  const employeeByEmail = new Map<string, { firstName: string; lastName: string }>();
+  for (const e of supervisorEmployees) if (e.email && !employeeByEmail.has(e.email.toLowerCase())) employeeByEmail.set(e.email.toLowerCase(), e);
+  const erpSupervisors = erpSupervisorUsers.map((u) => {
+    const emp = employeeByEmail.get(u.email.toLowerCase());
+    const displayName = emp ? `${emp.firstName} ${emp.lastName}`.trim() : u.email.split("@")[0];
+    return { id: u.id, email: u.email, displayName };
+  });
 
   // Build serializable array of keys for labor warning badge: "emp:{id}:{date}" or "name:{lower}:{date}"
   const safetyPassedKeysArr: string[] = [];
@@ -348,25 +412,16 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       .join("\n")
       .trim() || null;
   }
-  const isTurnover = project.segment === "JANITORIAL_TURNOVER_REQUESTS";
-  const unitInvoices =
-    project.turnoverRequest && canSeeCommission
-      ? (
-          await prisma.hubSpotUnitInvoice.findMany({
-            where: { turnoverRequestId: project.turnoverRequest.id },
-            orderBy: { invoiceDate: "desc" },
-          })
-        ).map((i) => ({
-          id: i.id,
-          invoiceNumber: i.invoiceNumber,
-          status: i.status,
-          dueDate: i.dueDate?.toISOString() ?? null,
-          paidDate: i.paidDate?.toISOString() ?? null,
-          amountCents: i.amountCents,
-          viewUrl: i.viewUrl,
-          pdfUrl: i.pdfUrl,
-        }))
-      : [];
+  const unitInvoices = unitInvoiceRows.map((i) => ({
+    id: i.id,
+    invoiceNumber: i.invoiceNumber,
+    status: i.status,
+    dueDate: i.dueDate?.toISOString() ?? null,
+    paidDate: i.paidDate?.toISOString() ?? null,
+    amountCents: i.amountCents,
+    viewUrl: i.viewUrl,
+    pdfUrl: i.pdfUrl,
+  }));
   // Once the unit's overall status is COMPLETED, every contracted scope item
   // counts as done regardless of what was individually checked off along the
   // way, that's the whole point of the overall status. Otherwise, only what
@@ -391,13 +446,6 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     ? stripDescLines(project.description, ["Property", "Units"])
     : project.description;
 
-  // Costs and margin come from the one shared calculation (projectMargin.ts),
-  // the same numbers the Projects table, dashboard, commission and Finance
-  // tab show for this project.
-  const lineCosts = await costLaborLogs(
-    project.laborEntries,
-    changeOrders.flatMap((co) => co.laborers.map((l) => ({ ...l, workerName: l.name }))),
-  );
   const actuals = (await computeProjectActualsWithChangeOrders(
     [{
       id: project.id,
@@ -504,39 +552,6 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     noCrewRequired: co.noCrewRequired,
   }));
 
-  // Subs must carry what the GC requires on this job. Warn on any who fall
-  // short (insurance roles only).
-  let contractorInsurance: { required: string[]; sources: string[]; gaps: Record<string, string[]> } | undefined;
-  if (canSeeCois) {
-    const jobReq = (await loadJobRequirements([project.id])).get(project.id);
-    if (jobReq) {
-      const subIds = [...new Set(project.contractorAssignments.map((a) => a.contractorId))];
-      const subs = await prisma.contractor.findMany({
-        where: { id: { in: subIds } },
-        select: {
-          id: true,
-          glOccurrenceCents: true,
-          glAggregateCents: true,
-          autoLimitCents: true,
-          umbrellaLimitCents: true,
-          workersCompExpiresAt: true,
-          workersCompExempt: true,
-          sueepAdditionalInsured: true,
-          sueepWaiverOfSubrogation: true,
-          sueepPrimaryNoncontributory: true,
-        },
-      });
-      contractorInsurance = {
-        required: requirementSummary(jobReq),
-        sources: jobReq.sources,
-        gaps: Object.fromEntries(subs.map((s) => [s.id, subGaps(s, jobReq)])),
-      };
-    }
-  }
-
-  const inviteResponses = await inviteResponsesForProject(project.id).catch(() => []);
-  // Subs' change order requests, office roles only (shows our charge and the sub pay)
-  const subCoTab = isTurnover && auth && isPmLevel(auth.role) ? await loadSubCoTab(project.id) : null;
   const contractorRows = project.contractorAssignments.map((a) => ({
     id: a.id,
     contractorId: a.contractorId,
@@ -641,6 +656,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
               projectName: workOrderRecord.projectName,
               siteAddress: workOrderRecord.siteAddress,
               contacts: workOrderRecord.contacts,
+              contactList: workOrderRecord.contactList == null ? null : cleanContactList(workOrderRecord.contactList),
               startDate: workOrderRecord.startDate,
               serviceType: workOrderRecord.serviceType,
               notes: workOrderRecord.notes,
@@ -1004,12 +1020,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       ),
     });
   }
-  if (canSeeProposals(auth?.role)) {
-    const [subBids, subScores, pastBidders] = await Promise.all([
-      prisma.subBid.findMany({ where: { projectId: project.id }, include: subBidInclude }),
-      loadSubScores(),
-      loadPastBidders(),
-    ]);
+  if (proposals) {
+    const [subBids, subScores, pastBidders] = proposals;
     allTabs.push({
       label: "Proposals",
       content: (

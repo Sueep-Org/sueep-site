@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { bidOurPriceCents, bidScopeKey, bidderKey, type SubBidStatus } from "@/lib/erp/subBids";
@@ -264,4 +265,22 @@ export async function loadSubScores(contractorIds?: string[]): Promise<Map<strin
     });
   }
   return out;
+}
+
+/** Cleared when a bid, rating or pricing override is saved, so those show at once. */
+export const SUB_SCORES_TAG = "sub-scores";
+
+/**
+ * Every contractor's scores, cached 10 minutes. Scoring everyone costs every
+ * job any sub worked on (5.6s locally), and the project page's Proposals tab
+ * and the Contractors list ask on each load. Job cost changes (labor logged)
+ * show within the 10 minutes; bids, ratings and overrides clear it at once.
+ */
+const cachedAllSubScores = unstable_cache(async () => [...(await loadSubScores())], ["sub-scores-all-v1"], {
+  revalidate: 600,
+  tags: [SUB_SCORES_TAG],
+});
+
+export async function loadAllSubScoresCached(): Promise<Map<string, SubScores>> {
+  return new Map(await cachedAllSubScores());
 }

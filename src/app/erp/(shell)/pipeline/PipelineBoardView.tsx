@@ -10,6 +10,7 @@ import { dealAttention } from "@/lib/erp/dealAttention";
 import { BAND_COLOR, todayKey } from "@/lib/erp/pipelineUi";
 import { DealInfoModal } from "./DealInfoModal";
 import { DealPanel } from "./DealPanel";
+import { JobWalkModal } from "./JobWalkModal";
 import { RebidModal } from "./RebidModal";
 import { NewDealModal } from "./NewDealModal";
 import { MoveToModal } from "./MoveToModal";
@@ -65,6 +66,7 @@ export function PipelineBoardView({
   // Editors and the side panel.
   const [editingLost, setEditingLost] = useState<{ card: BoardCard; markLost: boolean } | null>(null);
   const [editingNext, setEditingNext] = useState<BoardCard | null>(null);
+  const [bookingWalk, setBookingWalk] = useState<BoardCard | null>(null);
   const [editingInfo, setEditingInfo] = useState<BoardCard | null>(null);
   const [editingRebid, setEditingRebid] = useState<BoardCard | null>(null);
   const [movingTo, setMovingTo] = useState<BoardCard | null>(null);
@@ -304,6 +306,7 @@ export function PipelineBoardView({
           onClose={closePanel}
           onNextStep={() => setEditingNext(panelCard)}
           onEditInfo={() => setEditingInfo(panelCard)}
+          onBookWalk={() => setBookingWalk(panelCard)}
           onMoveTo={() => setMovingTo(panelCard)}
           onLost={() => setEditingLost({ card: panelCard, markLost: columnOf.get(panelCard.stageId)?.outcome !== "lost" })}
           onRebid={panelCard.gcNotAwarded && panelCard.winner && !panelCard.rebid ? () => setEditingRebid(panelCard) : undefined}
@@ -365,6 +368,20 @@ export function PipelineBoardView({
             edits.saveInfo(editingInfo.id, info);
             setEditingInfo(null);
             toast("Saved in HubSpot.", "success");
+          }}
+        />
+      )}
+      {bookingWalk && (
+        <JobWalkModal
+          card={bookingWalk}
+          pipeline={board.pipeline}
+          today={today}
+          onClose={() => setBookingWalk(null)}
+          onSaved={(day) => {
+            const c = bookingWalk;
+            edits.saveInfo(c.id, { ownerId: c.ownerId, owner: c.owner, companyText: c.companyText, gc: c.gc, bidDate: c.bidDate, walkDate: day, cents: c.cents, sqft: c.sqft });
+            setBookingWalk(null);
+            toast("Job walk booked in HubSpot.", "success");
           }}
         />
       )}

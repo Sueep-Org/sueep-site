@@ -4,7 +4,7 @@ import { NewContractorForm } from "./NewContractorForm";
 import { subCoverage, type CoverageItem } from "@/lib/erp/subCoverage";
 import { getErpAuth } from "@/lib/erpAuth";
 import { canSeeProposals } from "@/lib/erp/subBids";
-import { loadBidderBidLines, loadContractorBidLines, loadSubScores, summarizeBids } from "@/lib/erp/subBidStats";
+import { loadAllSubScoresCached, loadBidderBidLines, loadContractorBidLines, summarizeBids } from "@/lib/erp/subBidStats";
 import { loadPastBidders } from "@/lib/erp/subBidLinks";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { BiddersTab, type BidderRow } from "./BiddersTab";
@@ -39,7 +39,7 @@ export default async function ContractorsPage() {
   const auth = await getErpAuth();
   const showBids = canSeeProposals(auth?.role);
   const [bidLines, scores, pastBidders, bidderLines] = showBids
-    ? await Promise.all([loadContractorBidLines(), loadSubScores(), loadPastBidders(), loadBidderBidLines()])
+    ? await Promise.all([loadContractorBidLines(), loadAllSubScoresCached(), loadPastBidders(), loadBidderBidLines()])
     : [new Map(), new Map(), [], new Map()];
   const bidders: BidderRow[] = pastBidders.map((b) => {
     const lines = bidderLines.get(b.key) ?? [];

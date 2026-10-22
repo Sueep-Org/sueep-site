@@ -946,6 +946,8 @@ model ProjectWorkOrderRecord {
   projectName String
   siteAddress String?
   contacts    String?
+  /// [{ name, role, email, phone }] (src/lib/erp/workOrderContacts.ts). Null until saved or converted; then `contacts` is these rows as text.
+  contactList Json?
   startDate   String?
   serviceType String?
   notes       String?

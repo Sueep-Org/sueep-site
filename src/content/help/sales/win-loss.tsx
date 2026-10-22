@@ -6,7 +6,7 @@ export function WinLossHelp() {
       <H2>What this is</H2>
       <P>
         <strong>Win/Loss</strong> (left menu, Projects, then Clients) shows how post-construction bids turn out, read live from HubSpot
-        and refreshed every hour. Admins, Project Managers, the Business Manager and Sales can open it. The filter button at
+        (changes show within a couple of minutes). Admins, Project Managers, the Business Manager and Sales can open it. The filter button at
         the top right picks the period (<strong>Last 12 months</strong>, <strong>This year</strong>, <strong>All time</strong>)
         and a type of work (<strong>Cleaning</strong>, <strong>Painting</strong>, <strong>Cleaning + painting</strong>) to see
         only those bids. What&apos;s picked shows next to the title.
@@ -146,11 +146,15 @@ export function WinLossHelp() {
 
       <H2>GC scorecard</H2>
       <P>
-        Each company page shows a <strong>Scorecard</strong> when it has bids or paid invoices: bids, win rate, how often the GC
-        didn&apos;t win the job, price per square foot on won jobs, average days to pay, and its latest bids.
+        Each company page shows a <strong>Scorecard</strong> when it has bids or paid invoices. At the top: their win rate next
+        to our average, and one bar of won (green), lost (orange) and open (gray) bids. Below: total bids, how often the GC
+        didn&apos;t win the job, and average days to pay (amber when slower than their payment terms). Price per square foot
+        shows bars for what we quote them, what we win at with them and what we usually win at, with an above or below usual
+        tag. Last, their latest bids with a Won, Lost or Open tag. The page opens right away and the scorecard fills in a moment
+        later.
       </P>
       <Callout type="info">
-        Lost bids are read from HubSpot because the ERP doesn&apos;t keep lost deals. Numbers update within an hour of a change
+        Lost bids are read from HubSpot because the ERP doesn&apos;t keep lost deals. Numbers update within a couple of minutes of a change
         in HubSpot.
       </Callout>
     </>

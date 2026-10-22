@@ -86,7 +86,7 @@ export const BUILTIN_SOURCE: Record<BuiltinKey, string> = {
   BIRTHDAYS: "Date of birth on active employees' and contractors' profiles",
   COMPANY_INFO: "Expiration dates on Company Info (licenses, registrations, certifications)",
   QUALITY_CHECKS: "Quality check visits scheduled on janitorial contracts",
-  BIDS: "Bid Date, Job Walk Date and Award Date on open and won post-construction deals in HubSpot (refreshed hourly)",
+  BIDS: "Bid Date, Job Walk Date and Award Date on open and won post-construction deals in HubSpot, plus janitorial job walks",
   BILLING_CUTOFFS: "Each active job's billing cutoff: the client company's cutoff day, or the job's own",
 };
 

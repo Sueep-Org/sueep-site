@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { dayKey } from "@/lib/erp/schedule";
-import { resolveWorkerContact, sendDayInvite, sendSubLeadInvite } from "@/lib/erp/scheduleInvites";
+import { batchDayInvites, resolveWorkerContact, sendDayInvite, sendSubLeadInvite } from "@/lib/erp/scheduleInvites";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -37,69 +37,72 @@ export async function DELETE(_req: Request, ctx: Ctx) {
   // flow have no seriesId and are left alone.
   await prisma.projectScheduleSeries.delete({ where: { id } });
 
-  if (series.supervisorUserId) {
-    const supervisor = await prisma.erpUser.findUnique({
-      where: { id: series.supervisorUserId },
-      select: { email: true },
-    });
-    if (supervisor) {
-      await Promise.all(
-        series.dayAssignments.map((a) =>
-          sendDayInvite({
-            uid: `day-assignment-${a.id}@sueep.com`,
-            to: supervisor.email,
-            role: "Supervising",
+  // One cancellation email per person for the whole range (each day's calendar event is still removed).
+  await batchDayInvites(async () => {
+    if (series.supervisorUserId) {
+      const supervisor = await prisma.erpUser.findUnique({
+        where: { id: series.supervisorUserId },
+        select: { email: true },
+      });
+      if (supervisor) {
+        await Promise.all(
+          series.dayAssignments.map((a) =>
+            sendDayInvite({
+              uid: `day-assignment-${a.id}@sueep.com`,
+              to: supervisor.email,
+              role: "Supervising",
+              title: series.project.jobTitle,
+              dateKey: dayKey(a.date),
+              startTime: series.startTime,
+              endTime: series.endTime,
+              location,
+              cancelled: true,
+            })
+          )
+        );
+      }
+    }
+
+    // A sub who was running any of these days gets a cancellation per day (each day's own sub, in case one was changed).
+    await Promise.all(
+      series.dayAssignments
+        .filter((a) => a.supervisorContractorId)
+        .map((a) =>
+          sendSubLeadInvite({
+            kind: "day",
+            assignmentId: a.id,
+            contractorId: a.supervisorContractorId!,
             title: series.project.jobTitle,
             dateKey: dayKey(a.date),
             startTime: series.startTime,
             endTime: series.endTime,
             location,
             cancelled: true,
-          })
-        )
-      );
-    }
-  }
+          }),
+        ),
+    );
 
-  // A sub who was running any of these days gets a cancellation per day (each day's own sub, in case one was changed).
-  await Promise.all(
-    series.dayAssignments
-      .filter((a) => a.supervisorContractorId)
-      .map((a) =>
-        sendSubLeadInvite({
-          kind: "day",
-          assignmentId: a.id,
-          contractorId: a.supervisorContractorId!,
+    // One cancellation per crew row (not per unique worker) — each occurrence
+    // was sent its own invite, so each gets its own cancellation.
+    await Promise.all(
+      series.workerAssignments.map(async (w) => {
+        const contact = await resolveWorkerContact(w.employeeId, w.contractorId);
+        if (!contact) return;
+        await sendDayInvite({
+          uid: `worker-assignment-${w.id}@sueep.com`,
+          to: contact.email,
+          attendeeName: contact.name,
+          role: "Working",
           title: series.project.jobTitle,
-          dateKey: dayKey(a.date),
+          dateKey: dayKey(w.date),
           startTime: series.startTime,
           endTime: series.endTime,
           location,
           cancelled: true,
-        }),
-      ),
-  );
-
-  // One cancellation per crew row (not per unique worker) — each occurrence
-  // was sent its own invite, so each gets its own cancellation.
-  await Promise.all(
-    series.workerAssignments.map(async (w) => {
-      const contact = await resolveWorkerContact(w.employeeId, w.contractorId);
-      if (!contact) return;
-      await sendDayInvite({
-        uid: `worker-assignment-${w.id}@sueep.com`,
-        to: contact.email,
-        attendeeName: contact.name,
-        role: "Working",
-        title: series.project.jobTitle,
-        dateKey: dayKey(w.date),
-        startTime: series.startTime,
-        endTime: series.endTime,
-        location,
-        cancelled: true,
-      });
-    })
-  );
+        });
+      })
+    );
+  });
 
   return NextResponse.json({ ok: true });
 }

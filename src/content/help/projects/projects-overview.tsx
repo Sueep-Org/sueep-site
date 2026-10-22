@@ -34,6 +34,9 @@ export function ProjectsOverview() {
           order fields (name, address, service type, main points of contact, and any notes to the
           PM), plus its setup fields: lifecycle (Upcoming, WIP, or Completed), segment, PM,
           supervisor, and start/end dates.
+          Each main point of contact has its own Name, Role, Email and Phone boxes. Use{" "}
+          <strong>+ Add contact</strong> for another person and the <strong>×</strong> to remove one. Phone numbers tidy
+          themselves into (610) 555-0100 form.
           <Callout type="warning">Remember to save after editing, either section.</Callout>
           You can also send the work order to employees in the system from here, to notify them of
           the project and link them to its page. If someone doesn&apos;t have an ERP login, they

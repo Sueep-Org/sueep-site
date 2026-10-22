@@ -82,11 +82,14 @@ export type Bundle = {
   ownerEmails: Record<string, string>;
   hubId: string | null;
   fetchedAt: string;
+  /** When HubSpot was last checked for changes since fetchedAt (mergeHubSpotChanges) */
+  freshAt?: string;
 };
 
 const PROPS = ["dealname", "dealstage", "amount", "createdate", "hubspot_owner_id", "company", "deal_lost_reason", "how_the_customer_reach_sueep", "area_sqft", "notes_last_updated", "hs_lastmodifieddate", "type_of_business", "bid_date", "completion_date", "award_date"];
 
-async function searchAll(pipelineId: string, stageIds: string[]): Promise<RawDeal[]> {
+/** Every deal in the pipeline, or with `sinceMs` only those HubSpot changed since then. */
+async function searchAll(pipelineId: string, stageIds: string[], sinceMs?: number): Promise<RawDeal[]> {
   // HubSpot keeps one "date entered" property per stage; the old hs_date_entered_ names come back empty.
   const enteredProps = stageIds.map((id) => `hs_v2_date_entered_${id}`);
   const out: RawDeal[] = [];
@@ -95,7 +98,14 @@ async function searchAll(pipelineId: string, stageIds: string[]): Promise<RawDea
     const res = await hubspotFetch("/crm/v3/objects/deals/search", {
       method: "POST",
       body: JSON.stringify({
-        filterGroups: [{ filters: [{ propertyName: "pipeline", operator: "EQ", value: pipelineId }] }],
+        filterGroups: [
+          {
+            filters: [
+              { propertyName: "pipeline", operator: "EQ", value: pipelineId },
+              ...(sinceMs != null ? [{ propertyName: "hs_lastmodifieddate", operator: "GTE", value: String(sinceMs) }] : []),
+            ],
+          },
+        ],
         properties: [...PROPS, ...enteredProps],
         sorts: [{ propertyName: "createdate", direction: "ASCENDING" }],
         limit: 200,
@@ -134,29 +144,41 @@ async function searchAll(pipelineId: string, stageIds: string[]): Promise<RawDea
   return out;
 }
 
+/** Splits `ids` into batches and runs `run` on PARALLEL_BATCHES of them at a time, results in order. */
+async function inBatches<T>(ids: string[], size: number, run: (batch: string[]) => Promise<T>): Promise<T[]> {
+  const batches: string[][] = [];
+  for (let i = 0; i < ids.length; i += size) batches.push(ids.slice(i, i + size));
+  const out: T[] = [];
+  for (let i = 0; i < batches.length; i += PARALLEL_BATCHES) out.push(...(await Promise.all(batches.slice(i, i + PARALLEL_BATCHES).map(run))));
+  return out;
+}
+
+/** HubSpot batch reads sent at once. 4 halved the line item read (6.2s to 3.1s) and stays well under HubSpot's rate limit. */
+const PARALLEL_BATCHES = 4;
+
 /** Every deal's line item text, in a few batch calls (associations, then the items). */
 async function loadLineItemText(dealIds: string[]): Promise<Map<string, string>> {
   const itemsByDeal = new Map<string, string[]>();
-  for (let i = 0; i < dealIds.length; i += 500) {
+  const links = await inBatches(dealIds, 500, async (batch) => {
     const res = await hubspotFetch("/crm/v4/associations/deals/line_items/batch/read", {
       method: "POST",
-      body: JSON.stringify({ inputs: dealIds.slice(i, i + 500).map((id) => ({ id })) }),
+      body: JSON.stringify({ inputs: batch.map((id) => ({ id })) }),
     });
     if (!res.ok) throw new Error(`HubSpot line item links failed: ${res.status}`);
-    const data = (await res.json()) as { results?: { from: { id: string }; to: { toObjectId: number | string }[] }[] };
-    for (const r of data.results ?? []) itemsByDeal.set(String(r.from.id), r.to.map((t) => String(t.toObjectId)));
-  }
+    return ((await res.json()) as { results?: { from: { id: string }; to: { toObjectId: number | string }[] }[] }).results ?? [];
+  });
+  for (const r of links.flat()) itemsByDeal.set(String(r.from.id), r.to.map((t) => String(t.toObjectId)));
   const allItems = [...new Set([...itemsByDeal.values()].flat())];
   const textByItem = new Map<string, string>();
-  for (let i = 0; i < allItems.length; i += 100) {
+  const items = await inBatches(allItems, 100, async (batch) => {
     const res = await hubspotFetch("/crm/v3/objects/line_items/batch/read", {
       method: "POST",
-      body: JSON.stringify({ properties: ["name", "description"], inputs: allItems.slice(i, i + 100).map((id) => ({ id })) }),
+      body: JSON.stringify({ properties: ["name", "description"], inputs: batch.map((id) => ({ id })) }),
     });
     if (!res.ok) throw new Error(`HubSpot line items failed: ${res.status}`);
-    const data = (await res.json()) as { results?: { id: string; properties: Record<string, string | null> }[] };
-    for (const li of data.results ?? []) textByItem.set(li.id, `${li.properties.name ?? ""} ${li.properties.description ?? ""}`);
-  }
+    return ((await res.json()) as { results?: { id: string; properties: Record<string, string | null> }[] }).results ?? [];
+  });
+  for (const li of items.flat()) textByItem.set(li.id, `${li.properties.name ?? ""} ${li.properties.description ?? ""}`);
   return new Map([...itemsByDeal].map(([deal, items]) => [deal, items.map((id) => textByItem.get(id) ?? "").join(" | ")]));
 }
 
@@ -231,6 +253,49 @@ export async function computeBundle(key: PipelineKey = "post-con"): Promise<Bund
     ownerEmails,
     hubId,
     fetchedAt: new Date().toISOString(),
+  };
+}
+
+/** HubSpot's search can lag a write by a little, so look back a bit before the cached read. */
+const CHANGES_LOOKBACK_MS = 2 * 60_000;
+const CHANGES_CACHE_SECONDS = 60;
+
+/**
+ * Deals HubSpot changed since the hour-long read (stage, amount, owner,
+ * anything), one search call cached a minute. Type of work comes from
+ * Type of business here, not line items; mergeHubSpotChanges keeps the
+ * line-item one for deals the cached read already has. Deleted deals and
+ * deals moved to another pipeline wait for the hourly read.
+ */
+export const loadHubSpotChanges = unstable_cache(
+  async (key: PipelineKey, fetchedAt: string, stageIds: string[]): Promise<{ deals: RawDeal[]; checkedAt: string }> => {
+    const rules = (await loadRules()).find((r) => r.key === key);
+    if (!rules) return { deals: [], checkedAt: fetchedAt };
+    const checkedAt = new Date().toISOString();
+    const deals = await searchAll(rules.pipelineId, stageIds, Date.parse(fetchedAt) - CHANGES_LOOKBACK_MS);
+    return { deals, checkedAt };
+  },
+  ["deal-changes-v1"],
+  { revalidate: CHANGES_CACHE_SECONDS },
+);
+
+/** The cached read with HubSpot's newer copies swapped in and new deals added. Never fails: on a HubSpot error the cached read stands. */
+export async function mergeHubSpotChanges(cached: Bundle, key: PipelineKey): Promise<Bundle> {
+  const changes = await loadHubSpotChanges(key, cached.fetchedAt, cached.stageOrder).catch(() => null);
+  if (!changes) return cached;
+  if (!changes.deals.length) return { ...cached, freshAt: changes.checkedAt };
+  const fresh = new Map(changes.deals.map((d) => [d.id, d]));
+  const have = new Set(cached.deals.map((d) => d.id));
+  return {
+    ...cached,
+    deals: [
+      ...cached.deals.map((d) => {
+        const f = fresh.get(d.id);
+        return f ? { ...f, scope: d.scope !== "UNKNOWN" ? d.scope : f.scope } : d;
+      }),
+      ...changes.deals.filter((d) => !have.has(d.id)),
+    ],
+    freshAt: changes.checkedAt,
   };
 }
 

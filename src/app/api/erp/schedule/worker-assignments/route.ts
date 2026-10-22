@@ -5,7 +5,7 @@ import { dayKey } from "@/lib/erp/schedule";
 import { computeSeriesDates, parseDatesList, SeriesDateRangeError } from "@/lib/erp/scheduleSeries";
 import { getErpAuth, canOverridePto, canOverrideBackgroundCheck } from "@/lib/erpAuth";
 import { isTurnoverScopeValue, turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
-import { appUrl, resolveWorkerContact, scopeText, sendDayInvite } from "@/lib/erp/scheduleInvites";
+import { appUrl, batchDayInvites, resolveWorkerContact, scopeText, sendDayInvite } from "@/lib/erp/scheduleInvites";
 
 /** Exactly one of employeeId/contractorId is ever set per row, this builds
  * the right upsert shape (and compound-unique key) for whichever it is.
@@ -274,28 +274,27 @@ export async function POST(req: Request) {
       )
     );
 
-    // One email per occurrence, each with its own accept/decline link, so
-    // this worker can respond to each day independently (accept Monday,
-    // decline Wednesday) — not one combined recurring invite for the whole
-    // range like this used to send.
+    // One email for the whole range (batchDayInvites), but each day keeps
+    // its own calendar event and accept/decline link, so this worker can
+    // still answer each day on its own (accept Monday, decline Wednesday).
     if (contact) {
-      await Promise.all(
-        assignments.map((a) =>
-          sendDayInvite({
-            uid: `worker-assignment-${a.id}@sueep.com`,
-            to: contact.email,
-            attendeeName: contact.name,
-            role: "Working",
-            title: project.jobTitle,
-            dateKey: dayKey(a.date),
-            startTime: seriesStartTime,
-            endTime: seriesEndTime,
-            location,
-            scopeText: ownScope,
-            url,
-          })
-        )
-      );
+      await batchDayInvites(() => Promise.all(
+          assignments.map((a) =>
+            sendDayInvite({
+              uid: `worker-assignment-${a.id}@sueep.com`,
+              to: contact.email,
+              attendeeName: contact.name,
+              role: "Working",
+              title: project.jobTitle,
+              dateKey: dayKey(a.date),
+              startTime: seriesStartTime,
+              endTime: seriesEndTime,
+              location,
+              scopeText: ownScope,
+              url,
+            })
+          )
+      ).then(() => {}));
     }
 
     return NextResponse.json({ seriesId, assignments }, { status: 201 });
