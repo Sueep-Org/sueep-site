@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { canSeeOfficeHiring, getErpAuth } from "@/lib/erpAuth";
 import { formatSalaryRange, officeStageMeta, openingStatusMeta, workModeLabel } from "@/lib/erp/officeHiring";
+import { isoToday, offerFlag } from "@/lib/erp/offerLetters";
 import { DeleteOpeningButton, EditOpeningButton } from "../../office/OpeningFormModal";
 import { AddOfficeCandidateButton } from "../../office/OfficeCandidateControls";
 import { OpeningCandidatesView } from "../../office/OpeningCandidatesView";
@@ -35,6 +36,12 @@ export default async function JobOpeningPage({ params }: PageProps) {
             shortlisted: true,
             source: true,
             createdAt: true,
+            offerLetters: {
+              where: { status: { not: "VOID" } },
+              orderBy: { createdAt: "desc" },
+              take: 1,
+              select: { status: true, sentAt: true, signByDate: true },
+            },
           },
         },
       },
@@ -44,6 +51,7 @@ export default async function JobOpeningPage({ params }: PageProps) {
   if (!opening) notFound();
 
   const status = openingStatusMeta(opening.status);
+  const today = isoToday();
   const salary = formatSalaryRange(opening.salaryMinCents, opening.salaryMaxCents);
   const meta = [opening.department, opening.location, workModeLabel(opening.workMode), salary].filter(Boolean);
 
@@ -114,6 +122,16 @@ export default async function JobOpeningPage({ params }: PageProps) {
             shortlisted: c.shortlisted,
             source: c.source,
             createdAt: c.createdAt.toISOString(),
+            offer: offerFlag(
+              c.offerLetters[0]
+                ? {
+                    status: c.offerLetters[0].status,
+                    sentAt: c.offerLetters[0].sentAt?.toISOString() ?? null,
+                    signByDate: c.offerLetters[0].signByDate?.toISOString() ?? null,
+                  }
+                : null,
+              today,
+            ),
           };
         })}
       />

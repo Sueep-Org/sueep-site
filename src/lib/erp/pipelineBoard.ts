@@ -22,6 +22,8 @@
  *   post-con no Area SQFT. Job Walk Date is never flagged (unused).
  */
 import { prisma } from "@/lib/prisma";
+import { requiredByStage } from "./dealStageRules";
+import type { Priority } from "./pipelineUi";
 import { todayEasternKey } from "./dates";
 import {
   WORK_SCOPE_LABELS,
@@ -44,7 +46,7 @@ import { buildWinModel, type GcRecordShort, type WinBacktest, type WinChance } f
 import { loadRebids, rebidName } from "./dealRebids";
 import { GC_NOT_AWARDED } from "./dealLostReasons";
 import { forecastOf, weeklyChanges, type Forecast, type WeeklyChanges } from "./pipelineWeekly";
-import type { MissingField } from "./pipelineMissing";
+import { missingFrom, type MissingField } from "./pipelineMissing";
 
 export type { MissingField };
 
@@ -84,6 +86,12 @@ export type BoardCard = {
   awardDate: string | null;
   /** ISO time of the last HubSpot activity (or creation), for sorting */
   activeAt: string;
+  /** ISO time HubSpot created the deal, for the Newest sort */
+  createdAt: string;
+  /** HubSpot Priority; High shows a flame on the card */
+  priority: Priority | null;
+  /** HubSpot Type of business (raw value), for Clone */
+  typeOfBusiness: string | null;
   daysQuiet: number | null;
   stale: boolean;
   /** Days since the deal entered its current stage */
@@ -118,7 +126,16 @@ export type BoardCard = {
   url: string | null;
 };
 
-export type BoardColumn = { stageId: string; label: string; outcome: Outcome; hidden: number; stuckLimit: number | null; expectsNextStep: boolean };
+export type BoardColumn = {
+  stageId: string;
+  label: string;
+  outcome: Outcome;
+  hidden: number;
+  stuckLimit: number | null;
+  expectsNextStep: boolean;
+  /** Fields a deal needs to move into this stage (open stages only; dealStageRules.ts) */
+  required: MissingField[];
+};
 
 export type PipelineBoard = {
   pipeline: PipelineKey;
@@ -143,7 +160,7 @@ export type PipelineBoard = {
 };
 
 /** HubSpot's bulk import day; stage dates on it aren't real. */
-const IMPORT_DAY = "2024-12-26";
+export const IMPORT_DAY = "2024-12-26";
 
 export async function loadPipelineBoard(
   pipeline: PipelineKey,
@@ -181,6 +198,7 @@ export async function loadPipelineBoard(
   const since = now.getTime() - CLOSED_DAYS * DAY_MS;
   const cards: BoardCard[] = [];
   const expectsNext = nextStepStages(bundle);
+  const required = await requiredByStage(pipeline, bundle);
   const model = pipeline === "post-con" ? buildWinModel(bundle, (d) => match(d)?.key ?? null) : null;
   const firstQuote = bundle.stageOrder.findIndex((id) => bundle.quoting.includes(id));
   const early = new Set(bundle.stageOrder.filter((id, i) => outcomeOf(bundle, id) === "open" && (firstQuote < 0 || i < firstQuote)));
@@ -204,14 +222,16 @@ export async function loadPipelineBoard(
     const limit = limitOf.get(d.stageId) ?? null;
     const gc = match(d);
     const gna = pipeline === "post-con" && outcomeOf(bundle, d.stageId) === "lost" && splitReasons(d.lostReason).includes(GC_NOT_AWARDED);
-    const missing: MissingField[] = [];
-    if (outcomeOf(bundle, d.stageId) === "open") {
-      if (!d.ownerId || !bundle.ownerEmails[d.ownerId]) missing.push("owner");
-      if (!gc) missing.push("company");
-      if (pipeline === "post-con" && expectsNext.has(d.stageId) && !d.bidDate) missing.push("bidDate");
-      if (bundle.quoting.includes(d.stageId) && !d.cents) missing.push("amount");
-      if (pipeline === "post-con" && bundle.quoting.includes(d.stageId) && !d.sqft) missing.push("sqft");
-    }
+    // What its stage's rules ask for (open stages only).
+    const missing: MissingField[] = missingFrom(required.get(d.stageId) ?? [], {
+      ownerOk: !!d.ownerId && !!bundle.ownerEmails[d.ownerId],
+      hasCompany: !!gc,
+      bidDate: d.bidDate,
+      walkDate: d.walkDate,
+      awardDate: d.awardDate ?? null,
+      cents: d.cents,
+      sqft: d.sqft,
+    });
     cards.push({
       id: d.id,
       name: d.name,
@@ -227,6 +247,9 @@ export async function loadPipelineBoard(
       walkDate: d.walkDate,
       awardDate: d.awardDate ?? null,
       activeAt,
+      createdAt: d.created,
+      priority: d.priority ?? null,
+      typeOfBusiness: d.typeOfBusiness ?? null,
       daysQuiet: Number.isFinite(active) ? Math.max(0, Math.floor((now.getTime() - active) / DAY_MS)) : null,
       stale: stale.has(d.id),
       daysInStage,
@@ -268,6 +291,7 @@ export async function loadPipelineBoard(
       hidden: hidden.get(id) ?? 0,
       stuckLimit: limitOf.get(id) ?? null,
       expectsNextStep: expectsNext.has(id),
+      required: required.get(id) ?? [],
     })),
     cards,
     closed,

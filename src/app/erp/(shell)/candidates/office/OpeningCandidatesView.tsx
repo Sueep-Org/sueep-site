@@ -26,7 +26,18 @@ export type OpeningCandidate = {
   shortlisted: boolean;
   source: string | null;
   createdAt: string;
+  /** Flag from their latest offer letter (offerFlag), worked out on the server */
+  offer: { label: string; cls: string; title: string } | null;
 };
+
+function OfferPill({ offer }: { offer: OpeningCandidate["offer"] }) {
+  if (!offer) return null;
+  return (
+    <span title={offer.title || undefined} className={`inline-block rounded-full px-1.5 py-px text-[10px] font-medium ${offer.cls}`}>
+      {offer.label}
+    </span>
+  );
+}
 
 /** Off to the side of the pipeline: collapsed into one "Out" column on the board. */
 const OUT_STAGES: readonly OfficeStage[] = ["REJECTED", "WITHDREW"];
@@ -313,12 +324,17 @@ function StageColumn({
                 <Link href={`/erp/candidates/${c.id}`} className="min-w-0 flex-1 truncate text-sm font-medium text-gray-900 hover:underline">
                   {c.fullName}
                 </Link>
-                <MoveMenu current={c.stage} onMove={(s) => onMove(c.id, s)} />
+                <MoveMenu candidateId={c.id} current={c.stage} onMove={(s) => onMove(c.id, s)} />
               </div>
               {c.location || c.expectedSalary ? (
                 <p className="mt-0.5 truncate pl-5 text-[11px] text-gray-500">
                   {[c.location, c.expectedSalary].filter(Boolean).join(" · ")}
                 </p>
+              ) : null}
+              {c.offer ? (
+                <div className="mt-1 pl-5">
+                  <OfferPill offer={c.offer} />
+                </div>
               ) : null}
             </article>
           ))
@@ -342,8 +358,11 @@ function StarButton({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   );
 }
 
+/** Stages where the card menu offers "Make offer letter". */
+const OFFER_MENU_STAGES: OfficeStage[] = ["FINAL", "OFFER", "BACKUP"];
+
 /** "..." on a card: move without dragging (keyboard, phones). */
-function MoveMenu({ current, onMove }: { current: OfficeStage; onMove: (s: OfficeStage) => void }) {
+function MoveMenu({ candidateId, current, onMove }: { candidateId: string; current: OfficeStage; onMove: (s: OfficeStage) => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -381,6 +400,14 @@ function MoveMenu({ current, onMove }: { current: OfficeStage; onMove: (s: Offic
               {s.label}
             </button>
           ))}
+          {OFFER_MENU_STAGES.includes(current) ? (
+            <Link
+              href={`/erp/candidates/${candidateId}/offer-letter`}
+              className="mt-1 block border-t border-gray-100 px-2 pb-1 pt-1.5 text-xs font-medium text-pink-600 hover:underline"
+            >
+              Make offer letter
+            </Link>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -445,6 +472,11 @@ function CandidateTable({
                       <option key={s.value} value={s.value}>{s.label}</option>
                     ))}
                   </select>
+                  {c.offer ? (
+                    <span className="ml-1.5">
+                      <OfferPill offer={c.offer} />
+                    </span>
+                  ) : null}
                 </td>
               </tr>
             );

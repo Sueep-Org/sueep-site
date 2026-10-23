@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, InfoTip, useToast } from "@/app/erp/components/ui";
 import { centsToDollarsCompact } from "@/lib/erp/money";
@@ -16,13 +16,24 @@ import { NewDealModal } from "./NewDealModal";
 import { MoveToModal } from "./MoveToModal";
 import { LostReasonModal, type Option } from "./LostReasonModal";
 import { NextStepModal } from "./NextStepModal";
+import { PriorityModal } from "./PriorityModal";
 import { BoardCtx, type BoardContext } from "./board/context";
 import { BoardColumn as Column } from "./board/BoardColumn";
 import { WeeklyStrip } from "./board/WeeklyStrip";
 import { QuickViews } from "./board/QuickViews";
 import { FilterMenu } from "./board/FilterMenu";
 import { useBoardEdits } from "./board/useBoardEdits";
-import { ME, NO_OWNER, applyFilters, sameFilters, viewPreset, type Filters, type ViewKey } from "./board/filters";
+import { ME, NO_OWNER, applyFilters, normalizeFilters, sameFilters, viewPreset, type Filters, type ViewKey } from "./board/filters";
+import { CardFieldsMenu } from "./board/CardFieldsMenu";
+import { BoardTable } from "./board/BoardTable";
+import { BulkBar } from "./board/BulkBar";
+import { exportDeals } from "./board/exportDeals";
+import { DownloadCsvButton } from "@/app/erp/components/DownloadCsvButton";
+import { cardFlag } from "@/lib/erp/dealAttention";
+import { SavedViews, type SavedView } from "./board/SavedViews";
+import type { CardField } from "@/lib/erp/boardCardFields";
+
+const TOP_OPEN_KEY = "deals-top-open";
 
 /**
  * The pipeline board: This week row, quick views, search and filter menu,
@@ -39,6 +50,11 @@ export function PipelineBoardView({
   companies,
   mayEditCompanies,
   typeOptions,
+  cardFields: startCardFields,
+  savedViews,
+  mayManagePipeline,
+  followed: startFollowed,
+  openDealId,
 }: {
   board: PipelineBoard;
   closedDays: number;
@@ -53,6 +69,16 @@ export function PipelineBoardView({
   mayEditCompanies: boolean;
   /** HubSpot Type of business options, for New deal */
   typeOptions: Option[];
+  /** The viewer's card details for this pipeline */
+  cardFields: CardField[];
+  /** The viewer's own views and shared ones */
+  savedViews: SavedView[];
+  /** Admin and Business Manager: share views (and later stage rules and bulk edits) */
+  mayManagePipeline: boolean;
+  /** Deal ids the viewer follows */
+  followed: string[];
+  /** Open this deal's panel on load (?deal=, from follow emails) */
+  openDealId: string | null;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -70,11 +96,41 @@ export function PipelineBoardView({
   const [editingInfo, setEditingInfo] = useState<BoardCard | null>(null);
   const [editingRebid, setEditingRebid] = useState<BoardCard | null>(null);
   const [movingTo, setMovingTo] = useState<BoardCard | null>(null);
+  const [settingPriority, setSettingPriority] = useState<BoardCard | null>(null);
+  const [cloning, setCloning] = useState<BoardCard | null>(null);
+  const [layout, setLayout] = useState<"board" | "table">("board");
+  // "This week and views" starts folded; each person's choice is kept in their browser.
+  const [topOpen, setTopOpen] = useState(false);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(TOP_OPEN_KEY) === "1") setTopOpen(true);
+    } catch {}
+  }, []);
+  function toggleTop(open: boolean) {
+    setTopOpen(open);
+    try {
+      localStorage.setItem(TOP_OPEN_KEY, open ? "1" : "0");
+    } catch {}
+  }
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [creating, setCreating] = useState(false);
   const [panelId, setPanelId] = useState<string | null>(null);
+  // Open the linked deal's panel (?deal=) once in the browser: the panel draws into document.body, which the server doesn't have.
+  useEffect(() => {
+    if (openDealId && board.cards.some((c) => c.id === openDealId)) setPanelId(openDealId);
+    // Only on first load; later clicks open panels themselves.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const [following, setFollowing] = useState<Set<string>>(() => new Set(startFollowed));
   const [dragging, setDragging] = useState<BoardCard | null>(null);
+  const [cardFields, setCardFields] = useState<CardField[]>(startCardFields);
 
-  const edits = useBoardEdits(board, (card) => setEditingLost({ card, markLost: true }));
+  const [pendingMove, setPendingMove] = useState<{ card: BoardCard; col: BoardColumn; missing: MissingField[] } | null>(null);
+  const edits = useBoardEdits(
+    board,
+    (card) => setEditingLost({ card, markLost: true }),
+    (card, col, missing) => setPendingMove({ card, col, missing }),
+  );
   const cards = edits.cards;
 
   // What needs attention on each card: one list for the card flag, the panel and the views.
@@ -114,9 +170,10 @@ export function PipelineBoardView({
     const list: { key: ViewKey; label: string }[] = [{ key: "everything", label: "Everything" }];
     if (hasMine) list.push({ key: "mine", label: "My deals" });
     list.push({ key: "todos", label: hasMine ? "My to-dos" : "To-dos" }, { key: "cleanup", label: "Clean up" }, { key: "lost", label: "Lost follow-up" });
-    if (!isJan) list.push({ key: "bids", label: "Bids this week" });
+    if (!isJan) list.push({ key: "bids", label: "Bids this week" }, { key: "awardThis", label: "Awarding this month" }, { key: "awardNext", label: "Awarding next month" });
+    if (following.size) list.push({ key: "following", label: "Following" });
     return list;
-  }, [hasMine, isJan]);
+  }, [hasMine, isJan, following.size]);
   // A view is lit only when both its filters and its older-deals setting match.
   const activeView =
     views.find((v) => {
@@ -129,6 +186,14 @@ export function PipelineBoardView({
     setClosed(p.closed ?? "recent");
   }
   const filtersActive = !sameFilters(filters, startFilters) || !recentOnly;
+  // A quick view wins the highlight when a saved view has the same filters.
+  const activeSaved = activeView
+    ? null
+    : (savedViews.find((v) => sameFilters(normalizeFilters(v.filters), filters) && v.closed === board.closed)?.id ?? null);
+  function pickSaved(v: SavedView) {
+    setFilters(normalizeFilters(v.filters));
+    setClosed(v.closed);
+  }
 
   const ownerOptions = useMemo(() => {
     const names = [...new Set(cards.map((c) => c.owner).filter((o): o is string => !!o))].sort().map((o) => ({ value: o, label: o }));
@@ -142,8 +207,8 @@ export function PipelineBoardView({
   }, [cards]);
 
   const shown = useMemo(
-    () => applyFilters(cards, filters, { today, search, viewerOwnerId: board.viewerOwnerId, columnOf, attentionOf: attentionKeys }),
-    [cards, filters, today, search, board.viewerOwnerId, columnOf, attentionKeys],
+    () => applyFilters(cards, filters, { today, search, viewerOwnerId: board.viewerOwnerId, columnOf, attentionOf: attentionKeys, following }),
+    [cards, filters, today, search, board.viewerOwnerId, columnOf, attentionKeys, following],
   );
   const byStage = useMemo(() => {
     const m = new Map<string, BoardCard[]>();
@@ -166,6 +231,7 @@ export function PipelineBoardView({
   const ctx = useMemo<BoardContext>(
     () => ({
       today,
+      cardFields,
       companyWord,
       labelOf: (r) => labels.get(r) ?? r,
       missingLabel: (f) => (f === "company" ? companyWord : MISSING_LABELS[f]),
@@ -176,6 +242,10 @@ export function PipelineBoardView({
       editInfo: setEditingInfo,
       rebid: setEditingRebid,
       moveTo: setMovingTo,
+      setPriority: setSettingPriority,
+      clone: setCloning,
+      following: (card) => following.has(card.id),
+      toggleFollow: (card) => void toggleFollow(card),
       dragging,
       dragStart: setDragging,
       dragEnd: () => setDragging(null),
@@ -185,17 +255,76 @@ export function PipelineBoardView({
         setDragging(null);
       },
     }),
-    [today, companyWord, labels, attentionOf, dragging],
+    // toggleFollow reads the latest `following` through the state setter, so `following` covers it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [today, cardFields, companyWord, labels, attentionOf, dragging, following],
   );
 
+  /** Follow or stop following; on screen at once, back if the server refuses. */
+  async function toggleFollow(card: BoardCard) {
+    const follow = !following.has(card.id);
+    const flip = (on: boolean) =>
+      setFollowing((prev) => {
+        const next = new Set(prev);
+        if (on) next.add(card.id);
+        else next.delete(card.id);
+        return next;
+      });
+    flip(follow);
+    const res = await fetch(`/api/erp/pipeline/deals/${card.id}/follow`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pipeline: board.pipeline, follow }),
+    }).catch(() => null);
+    const data = (await res?.json().catch(() => null)) as { error?: string } | null;
+    if (!res?.ok || data?.error) {
+      flip(!follow);
+      return toast(data?.error ?? "Couldn't save. Try again.", "error");
+    }
+    toast(follow ? `Following ${card.name}. You'll hear when it changes.` : `Stopped following ${card.name}.`);
+  }
+
   const panelCard = panelId ? (cards.find((c) => c.id === panelId) ?? null) : null;
+  // Ticked rows that are still shown, so a filter change never bulk edits deals you can't see.
+  const selectedCards = shown.filter((c) => selected.has(c.id));
   const closePanel = useCallback(() => setPanelId(null), []);
   const owners = board.activeOwners.map((o) => ({ value: o.id, label: o.name }));
 
   return (
     <div className="space-y-3">
-      <WeeklyStrip board={board} />
-      <QuickViews views={views} active={activeView} onPick={pickView} />
+      <div className="rounded-lg border border-gray-200 bg-white">
+        <button
+          type="button"
+          onClick={() => toggleTop(!topOpen)}
+          aria-expanded={topOpen}
+          className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-600 hover:bg-gray-50"
+        >
+          <span aria-hidden className={`text-gray-400 transition-transform ${topOpen ? "rotate-90" : ""}`}>▸</span>
+          <span className="font-semibold text-gray-800">This week and views</span>
+          {!topOpen && (
+            <span className="truncate text-gray-500">
+              · Showing: {views.find((v) => v.key === activeView)?.label ?? savedViews.find((v) => v.id === activeSaved)?.name ?? "Custom filters"}
+            </span>
+          )}
+        </button>
+        {topOpen && (
+          <div className="space-y-3 border-t border-gray-100 px-3 py-3">
+            <WeeklyStrip board={board} />
+            <QuickViews views={views} active={activeView} onPick={pickView}>
+              <SavedViews
+                pipeline={board.pipeline}
+                views={savedViews}
+                active={activeSaved}
+                onPick={pickSaved}
+                canSave={!activeView && !activeSaved && filtersActive}
+                filters={filters}
+                closed={board.closed}
+                mayShare={mayManagePipeline}
+              />
+            </QuickViews>
+          </div>
+        )}
+      </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
@@ -222,11 +351,30 @@ export function PipelineBoardView({
               ))}
             <InfoTip
               align="right"
-              text={`Each card: deal name (opens HubSpot), ${companyWord}, amount and the owner's initials, plus the one thing that needs attention most. A next step shows when it's due this week or late.${
+              text={`Each card: deal name (opens HubSpot), ${companyWord}, amount and the owner's initials (change these under Cards), plus the one thing that needs attention most. A next step shows when it's due this week or late.${
                 isJan ? "" : " The stripe on the left is the chance to win: green Strong, gray Fair, none for Long shot."
               } Hover a card for everything else, or click it for the deal panel.`}
             />
           </div>
+          <div className="inline-flex h-8 overflow-hidden rounded-md border border-gray-300" role="group" aria-label="Layout">
+            {(["board", "table"] as const).map((l) => (
+              <button
+                key={l}
+                type="button"
+                onClick={() => setLayout(l)}
+                aria-pressed={layout === l}
+                className={`px-2.5 text-xs font-medium ${layout === l ? "bg-gray-200 text-gray-900" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+              >
+                {l === "board" ? "Board" : "Table"}
+              </button>
+            ))}
+          </div>
+          <DownloadCsvButton
+            title="Download the deals shown, after filters, as a spreadsheet"
+            disabled={!shown.length}
+            onClick={() => exportDeals(shown, board.columns, board.pipeline, (c) => cardFlag(attentionOf(c))?.text ?? "")}
+          />
+          {layout === "board" && <CardFieldsMenu pipeline={board.pipeline} fields={cardFields} onChange={setCardFields} />}
           <FilterMenu
             filters={filters}
             update={update}
@@ -254,7 +402,7 @@ export function PipelineBoardView({
         <div className="flex flex-wrap items-center gap-1.5 text-xs">
           <span className="flex items-center gap-1 text-gray-500">
             Missing
-            <InfoTip text="Open deals missing what their stage needs: an active owner and a GC always; a Bid Date from Bidding on; an amount (and on post-construction, Area SQFT) in the quote stages. Click one to see only those." />
+            <InfoTip text="Open deals missing what their stage needs, set on the Stage rules page (by default an active owner and a GC always; a Bid Date from Bidding on; an amount, and on post-construction Area SQFT, in the quote stages). Click one to see only those." />
           </span>
           {MISSING_FIELDS.map((f) => {
             const n = missingCounts.get(f) ?? 0;
@@ -275,11 +423,42 @@ export function PipelineBoardView({
       )}
 
       <BoardCtx.Provider value={ctx}>
-        <div className="-mx-1 flex gap-2.5 overflow-x-auto px-1 pb-2">
-          {board.columns.map((col) => (
-            <Column key={col.stageId} col={col} cards={byStage.get(col.stageId) ?? []} closedDays={closedDays} recentOnly={recentOnly} />
-          ))}
-        </div>
+        {layout === "table" ? (
+          <div className="space-y-2">
+            {mayManagePipeline && selectedCards.length > 0 && (
+              <BulkBar
+                pipeline={board.pipeline}
+                cards={selectedCards}
+                columns={board.columns}
+                owners={owners}
+                reasons={reasonOptions}
+                onClear={() => setSelected(new Set())}
+              />
+            )}
+            <BoardTable
+              rows={shown}
+              columns={board.columns}
+              selectable={mayManagePipeline}
+              selected={selected}
+              onSelect={(ids, on) =>
+                setSelected((prev) => {
+                  const next = new Set(prev);
+                  for (const id of ids) {
+                    if (on) next.add(id);
+                    else next.delete(id);
+                  }
+                  return next;
+                })
+              }
+            />
+          </div>
+        ) : (
+          <div className="-mx-1 flex gap-2.5 overflow-x-auto px-1 pb-2">
+            {board.columns.map((col) => (
+              <Column key={col.stageId} col={col} cards={byStage.get(col.stageId) ?? []} closedDays={closedDays} recentOnly={recentOnly} />
+            ))}
+          </div>
+        )}
       </BoardCtx.Provider>
 
       {edits.undo && (
@@ -308,6 +487,10 @@ export function PipelineBoardView({
           onEditInfo={() => setEditingInfo(panelCard)}
           onBookWalk={() => setBookingWalk(panelCard)}
           onMoveTo={() => setMovingTo(panelCard)}
+          onPriority={() => setSettingPriority(panelCard)}
+          onClone={() => setCloning(panelCard)}
+          following={following.has(panelCard.id)}
+          onToggleFollow={() => void toggleFollow(panelCard)}
           onLost={() => setEditingLost({ card: panelCard, markLost: columnOf.get(panelCard.stageId)?.outcome !== "lost" })}
           onRebid={panelCard.gcNotAwarded && panelCard.winner && !panelCard.rebid ? () => setEditingRebid(panelCard) : undefined}
         />
@@ -321,6 +504,19 @@ export function PipelineBoardView({
             const card = movingTo;
             setMovingTo(null);
             void edits.moveCard(card, col);
+          }}
+        />
+      )}
+      {settingPriority && (
+        <PriorityModal
+          card={settingPriority}
+          pipeline={board.pipeline}
+          onClose={() => setSettingPriority(null)}
+          onSaved={(priority) => {
+            const c = settingPriority;
+            setSettingPriority(null);
+            edits.saveInfo(c.id, { ownerId: c.ownerId, owner: c.owner, companyText: c.companyText, gc: c.gc, bidDate: c.bidDate, walkDate: c.walkDate, cents: c.cents, sqft: c.sqft, priority });
+            toast(priority ? `Priority set to ${priority}.` : "Priority cleared.");
           }}
         />
       )}
@@ -338,6 +534,25 @@ export function PipelineBoardView({
             setCreating(false);
             toast(`Created in HubSpot: ${deal.name}`, "success");
             // The server adds it to the board from the ERP's copy; the panel opens once it's there.
+            setPanelId(deal.newDealId);
+            router.refresh();
+          }}
+        />
+      )}
+      {cloning && (
+        <NewDealModal
+          pipeline={board.pipeline}
+          columns={board.columns.filter((c) => c.outcome === "open")}
+          cards={cards}
+          owners={owners}
+          companies={companies}
+          typeOptions={typeOptions}
+          defaultOwnerId={board.viewerOwnerId ?? ""}
+          copyFrom={cloning}
+          onClose={() => setCloning(null)}
+          onSaved={(deal) => {
+            setCloning(null);
+            toast(`Clone created in HubSpot: ${deal.name}`, "success");
             setPanelId(deal.newDealId);
             router.refresh();
           }}
@@ -371,6 +586,23 @@ export function PipelineBoardView({
           }}
         />
       )}
+      {pendingMove && (
+        <DealInfoModal
+          card={pendingMove.card}
+          pipeline={board.pipeline}
+          owners={owners}
+          companies={companies}
+          mayEditCompanies={mayEditCompanies}
+          moveTo={{ label: pendingMove.col.label, missing: pendingMove.missing }}
+          onClose={() => setPendingMove(null)}
+          onSaved={(info) => {
+            const { card, col } = pendingMove;
+            setPendingMove(null);
+            edits.saveInfo(card.id, info);
+            void edits.moveCard({ ...card, ...info, missing: [] }, col);
+          }}
+        />
+      )}
       {bookingWalk && (
         <JobWalkModal
           card={bookingWalk}
@@ -379,7 +611,7 @@ export function PipelineBoardView({
           onClose={() => setBookingWalk(null)}
           onSaved={(day) => {
             const c = bookingWalk;
-            edits.saveInfo(c.id, { ownerId: c.ownerId, owner: c.owner, companyText: c.companyText, gc: c.gc, bidDate: c.bidDate, walkDate: day, cents: c.cents, sqft: c.sqft });
+            edits.saveInfo(c.id, { ownerId: c.ownerId, owner: c.owner, companyText: c.companyText, gc: c.gc, bidDate: c.bidDate, walkDate: day, cents: c.cents, sqft: c.sqft, priority: c.priority });
             setBookingWalk(null);
             toast("Job walk booked in HubSpot.", "success");
           }}

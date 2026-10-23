@@ -2332,6 +2332,7 @@ model CandidateApplication {
 
   documents  CandidateDocument[]
   contracts  CandidateContract[]
+  offerLetters OfferLetter[]
   /// Set once this application has been converted to (or linked with) a Contractor profile.
   contractor Contractor?
   /// Set once "Finish onboarding" has created (or merged into) an Employee profile.
@@ -2393,6 +2394,145 @@ model JobPosting {
   notes          String?
 
   @@index([jobOpeningId])
+}
+
+/// Offer letter wording for office hires. Sections are filled with blanks
+/// like {firstName} when a letter is made (see src/lib/erp/offerLetters.ts).
+model OfferLetterTemplate {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  name               String
+  description        String?
+  /// Ordered list of { key, title, kind: "text" | "commission" | "signature", body, enabled }
+  sections           Json
+  /// Saved ladder, accelerator and margin tier defaults (commission letters only)
+  commissionDefaults Json?
+  signerName         String?
+  signerTitle        String?
+  archived           Boolean @default(false)
+  createdBy          String?
+  updatedBy          String?
+
+  letters OfferLetter[]
+
+  @@index([archived])
+}
+
+/// One offer letter made for an office candidate from a template.
+model OfferLetter {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  candidateId String
+  candidate   CandidateApplication @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  templateId  String?
+  template    OfferLetterTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  /// Every blank as filled in for this letter
+  values              Json
+  /// Section list copied from the template when the letter was made, so later template edits don't change it
+  sections            Json
+  commission          Json?
+  /// The exact PDF sent
+  renderedPdf         Bytes?
+  /// DRAFT | SENT | SIGNED | DECLINED | VOID
+  status              String    @default("DRAFT")
+  signByDate          DateTime?
+  sentAt              DateTime?
+  signedAt            DateTime?
+  sentBy              String?
+  createdBy           String?
+  /// The CandidateContract row DocuSeal signing runs through
+  candidateContractId String?   @unique
+
+  @@index([candidateId])
+  @@index([status])
+}
+
+/// Each person's Deals board card setup, per pipeline (PIPELINE_EXTRAS_PLAN Phase 2).
+model BoardPreference {
+  id         String   @id @default(cuid())
+  updatedAt  DateTime @updatedAt
+  userEmail  String
+  /// post-con | janitorial
+  pipeline   String
+  /// Up to 3 card details, in order (see CARD_FIELDS in pipeline/board/cardFields.ts)
+  cardFields String[]
+
+  @@unique([userEmail, pipeline])
+}
+
+/// A Deals board filter setup saved under a name. Shared ones show for everyone.
+model SavedBoardView {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userEmail String
+  /// post-con | janitorial
+  pipeline  String
+  name      String
+  /// The board's Filters object
+  filters   Json
+  /// recent | all (older won and lost deals)
+  closed    String   @default("recent")
+  shared    Boolean  @default(false)
+
+  @@index([pipeline, userEmail])
+  @@index([pipeline, shared])
+}
+
+/// What a deal needs before it moves into an open stage (PIPELINE_EXTRAS_PLAN Phase 4).
+/// Stages with no row use the defaults in dealStageRules.ts.
+model DealStageRule {
+  id             String   @id @default(cuid())
+  updatedAt      DateTime @updatedAt
+  /// post-con | janitorial
+  pipeline       String
+  /// HubSpot stage id
+  stageId        String
+  /// MissingField values (pipelineMissing.ts)
+  requiredFields String[]
+  /// Next step added when a deal moves forward into this stage (Phase 5); none when empty
+  nextStepText    String?
+  nextStepDays    Int?
+  /// Due on the deal's Bid Date when it has a future one (post-con)
+  nextStepBidDate Boolean @default(false)
+  updatedBy      String?
+
+  @@unique([pipeline, stageId])
+}
+
+/// The last stage the ERP saw each open deal in, so moves made in HubSpot
+/// get the stage's automatic next step once (dealStageSteps.ts).
+model DealStageSeen {
+  hubspotDealId String   @id
+  pipeline      String
+  stageId       String
+  updatedAt     DateTime @updatedAt
+}
+
+/// Someone following a deal on the Deals board (PIPELINE_EXTRAS_PLAN Phase 7).
+model DealFollower {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  hubspotDealId String
+  /// post-con | janitorial
+  pipeline      String
+  userEmail     String
+
+  @@unique([hubspotDealId, userEmail])
+  @@index([userEmail, pipeline])
+}
+
+/// Stage and owner last alerted on, per followed deal, so each change is sent once (dealFollowers.ts).
+model DealFollowSnapshot {
+  hubspotDealId String   @id
+  stageId       String
+  ownerId       String?
+  updatedAt     DateTime @updatedAt
 }
 
 model FranchiseInquiry {

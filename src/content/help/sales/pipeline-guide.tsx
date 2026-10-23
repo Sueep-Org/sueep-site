@@ -94,6 +94,8 @@ export function PipelineGuide() {
         <Step n={4} title="Give every live deal a plan">
           Filter <strong>Only show &gt; No next step</strong>. Add a next step to each: who to call, what to send, by when.
           Deals from Bidding to Competitive Quote (Walkthrough and Proposal on janitorial) should always have one.
+          If the <strong>Stage rules</strong> page has an automatic next step for a stage, moving a deal there adds it for you
+          (marked as added by Stage rule). Change it or mark it done like any other.
         </Step>
         <Step n={5} title="Check stuck and quiet deals">
           A <strong>Stuck</strong> or <strong>Quiet</strong> flag means the deal isn&apos;t moving. Call, then drag the card
@@ -101,7 +103,9 @@ export function PipelineGuide() {
         </Step>
         <Step n={6} title="Fill in missing info">
           A blue <strong>Missing</strong> flag means the deal is missing something its stage needs, like a Bid Date once you&apos;re
-          bidding or an amount once the quote is out. Click it and fill it in.
+          bidding or an amount once the quote is out. Click it and fill it in. When you move a deal forward into a stage that needs
+          something it doesn&apos;t have, the board asks for it first, then moves it. What each stage needs is on the{" "}
+          <strong>Stage rules</strong> page (Admins and the Business Manager can change it).
         </Step>
       </Steps>
 
@@ -118,6 +122,13 @@ export function PipelineGuide() {
         but add the GC, owner and Bid Date if you have them. It&apos;s created in HubSpot and shows on the board right away,
         in Lead unless you pick another stage. If a deal with a similar name is already on the board you&apos;ll see a warning,
         so check it isn&apos;t the same job first.
+      </P>
+      <H3>Same job, another deal</H3>
+      <P>
+        For a new phase of a job, or the same building bid to a second GC, use <strong>⋯ &gt; Clone</strong> on the card (or{" "}
+        <strong>Clone</strong> in the panel). The New deal form opens filled in from that deal, without its dates; change what&apos;s
+        different and create it. It starts in Lead, and its HubSpot description says which deal it came from. Lost and won
+        deals can be cloned too.
       </P>
       <H3>A job walk is set</H3>
       <P>
@@ -140,16 +151,51 @@ export function PipelineGuide() {
       </P>
       <H3>Waiting to hear back</H3>
       <P>
-        Use <strong>Award date &gt; Next 7 days</strong> to see which GCs should be deciding soon, soonest first. Put the Award
+        Use <strong>Award date &gt; Next 7 days</strong> to see which GCs should be deciding soon, soonest first, or the{" "}
+        <strong>Awarding this month</strong> and <strong>Awarding next month</strong> quick views for the bigger picture. Put the Award
         Date in HubSpot when the GC tells you, so it shows here, on the dashboard and on the Management calendar.
       </P>
       <H3>Deciding where to spend time</H3>
       <P>
         Each open bid has a chance to win from how similar bids turned out for us: a green stripe on the card means Strong,
         gray means Fair, none means Long shot. Put your best effort into Strong and Fair ones, and use <strong>Sort &gt; Chance to win</strong> to
-        see them first. On new leads, hover to see the GC&apos;s record; a <strong>Skip?</strong> flag means we&apos;ve bid
+        see them first. The top of each column shows <strong>~$ likely</strong>: every deal&apos;s amount times its chance, added up, so
+        you can see where the real money is. <strong>Sort</strong> also has amount, bid date, newest and longest in stage. On new leads, hover to see the GC&apos;s record; a <strong>Skip?</strong> flag means we&apos;ve bid
         with that GC 10 or more times and never won. Fill in where the bid came from in HubSpot, since that&apos;s the
         strongest signal.
+      </P>
+      <H3>A deal matters more than most</H3>
+      <P>
+        Set its priority from the card&apos;s <strong>⋯ &gt; Priority</strong>, the panel or Edit info. High shows a small flame on the
+        card. It saves to HubSpot&apos;s own Priority field, so it shows there too. Filter by <strong>Priority</strong> or use{" "}
+        <strong>Sort &gt; Priority, high first</strong> to see them together. Keep High for the few deals that really need it,
+        or the flame stops meaning anything.
+      </P>
+      <H3>Setting the board up your way</H3>
+      <P>
+        Click <strong>Cards</strong> to pick up to 3 details for your cards, like bid date, sq ft or days in stage instead of the
+        owner. Only you see it. Set the filters and sort you use often, then click <strong>+ Save view</strong> to keep them as a
+        one-click chip next to the quick views. Admins and the Business Manager can share a view with everyone, for example a
+        Monday review view.
+      </P>
+      <H3>Keeping an eye on someone else&apos;s deal</H3>
+      <P>
+        Click <strong>Follow</strong> at the top of the deal&apos;s panel (or <strong>⋯ &gt; Follow</strong> on the card). When it changes
+        stage, is won or lost, or gets a new owner, you get an email within the hour, and it shows in your inbox. Changes you
+        make yourself don&apos;t alert you. The <strong>Following</strong> quick view shows every deal you follow. Handy for the
+        estimator who priced a job.
+      </P>
+      <H3>Working through a long list</H3>
+      <P>
+        Switch to <strong>Table</strong> next to Cards to see the deals as rows: click a column header to sort, click a row for the
+        panel. <strong>Download CSV</strong> exports whatever the filters show. Admins and the Business Manager can tick rows and
+        change the owner, set the priority, move them to an open stage, or mark them lost with one reason, up to 50 at a time.
+        Each deal is checked like a single edit, and any that can&apos;t be changed are listed with the reason.
+      </P>
+      <H3>Seeing where a deal has been</H3>
+      <P>
+        Open the deal and look at <strong>Stage history</strong> in the panel: each stage it went through, when it got there and how
+        many days it spent. Useful for spotting deals that sat in Quote Sent for a month before anyone followed up.
       </P>
       <H3>A quote shows a price flag</H3>
       <P>

@@ -316,6 +316,23 @@ export function buildPaperworkUploadEmail(params: {
   `;
 }
 
+/** Offer letter email: the sender's message as paragraphs, the letter attached. */
+export function buildOfferLetterEmail(params: { message: string }) {
+  const paragraphs = params.message
+    .replace(/\r\n/g, "\n")
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => `<p>${escapeHtml(p).replace(/\n/g, "<br/>")}</p>`)
+    .join("");
+  return `
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:560px">
+      ${paragraphs}
+      <p style="font-size:12px;color:#555;margin-top:20px">Your offer letter is attached as a PDF.</p>
+    </div>
+  `;
+}
+
 export function buildContractorDocUploadEmail(params: {
   name: string;
   uploadUrl: string;
@@ -814,6 +831,43 @@ export function buildTurnoverCompletionDigestEmail(params: {
       <ul style="margin:12px 0 20px;padding-left:20px">${items}</ul>
       ${upcomingSection}
       <p style="margin-top:24px;font-size:13px;color:#6b7280">The Sueep Team</p>
+    </div>
+  `;
+}
+
+/** Hourly email to someone following deals: what changed on each. */
+export function buildDealFollowEmail(params: { deals: { name: string; url: string; changes: string[] }[] }) {
+  const items = params.deals
+    .map(
+      (d) =>
+        `<li style="margin-bottom:10px"><a href="${escapeHtml(d.url)}" style="color:#E73C6E;font-weight:bold">${escapeHtml(d.name)}</a><br/>${d.changes.map(escapeHtml).join("<br/>")}</li>`,
+    )
+    .join("");
+  const n = params.deals.length;
+  return `
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:560px">
+      <h2 style="margin-bottom:8px;color:#E73C6E">${n === 1 ? "A deal you follow changed" : `${n} deals you follow changed`}</h2>
+      <ul style="margin:12px 0;padding-left:20px">${items}</ul>
+      <p style="font-size:12px;color:#888">Stop following a deal from its panel on the Deals board.</p>
+    </div>
+  `;
+}
+
+/** Morning email to whoever sent offer letters that are due back tomorrow. */
+export function buildOfferLetterDueEmail(params: { letters: { name: string; title: string; signBy: string; url: string }[] }) {
+  const items = params.letters
+    .map(
+      (l) =>
+        `<li style="margin-bottom:6px"><a href="${escapeHtml(l.url)}" style="color:#E73C6E">${escapeHtml(l.name)}</a>${l.title ? `, ${escapeHtml(l.title)}` : ""} (sign by ${escapeHtml(l.signBy)})</li>`,
+    )
+    .join("");
+  const n = params.letters.length;
+  return `
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:560px">
+      <h2 style="margin-bottom:8px;color:#E73C6E">${n === 1 ? "An offer letter is" : `${n} offer letters are`} due back tomorrow</h2>
+      <p>Not signed yet:</p>
+      <ul style="margin:12px 0;padding-left:20px">${items}</ul>
+      <p style="font-size:13px;color:#555">Upload the signed copy when it comes in, or mark it declined.</p>
     </div>
   `;
 }

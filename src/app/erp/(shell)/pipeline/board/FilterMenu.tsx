@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Button, InfoTip } from "@/app/erp/components/ui";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
-import { AWARD_OPTIONS, BID_OPTIONS, FLAG_GROUPS, type Filters, type Flag } from "./filters";
+import { AWARD_OPTIONS, BID_OPTIONS, FLAG_GROUPS, PRIORITY_FILTER, SORT_OPTIONS, type Filters, type Flag } from "./filters";
 
 type Option = { value: string; label: string };
 
@@ -147,6 +147,9 @@ export function FilterMenu({
               placeholder={`All ${companies}`}
             />
           </Section>
+          <Section title="Priority" info="HubSpot's deal Priority. High shows a flame on the card.">
+            <Radios name={`${name}-priority`} value={filters.priority} onPick={(v) => update({ priority: v })} options={PRIORITY_FILTER} />
+          </Section>
           <Section
             title="Company type"
             info="GCs: general contractors. Property managers and owners: clients who hire us directly. Not linked: a company name that matches no company in the ERP. No company: none on the deal."
@@ -194,19 +197,12 @@ export function FilterMenu({
               )}
             </Section>
           )}
-          {!isJan && (
-            <Section title="Sort" info="Recent activity: deals touched most recently on top. Chance to win: best odds on top.">
-              <Radios
-                name={`${name}-sort`}
-                value={filters.sortBy}
-                onPick={(v) => update({ sortBy: v })}
-                options={[
-                  { value: "activity", label: "Recent activity" },
-                  { value: "chance", label: "Chance to win" },
-                ]}
-              />
-            </Section>
-          )}
+          <Section
+            title="Sort"
+            info={`Order of the cards in each column. Recent activity: deals touched most recently on top.${isJan ? "" : " Chance to win: best odds on top."} Bid date: soonest first, no date last. Longest in stage: most days in the current stage first.`}
+          >
+            <Radios name={`${name}-sort`} value={filters.sortBy} onPick={(v) => update({ sortBy: v })} options={SORT_OPTIONS.filter((o) => !isJan || !o.postConOnly)} />
+          </Section>
           <Section title="Older deals" info={`Lead, won and lost stages show deals created or active in the last ${closedDays} days unless All is picked.`}>
             <Radios
               name={`${name}-closed`}

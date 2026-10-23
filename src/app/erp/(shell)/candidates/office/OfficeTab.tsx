@@ -88,6 +88,9 @@ export async function OfficeTab({ search, showAll }: { search: string; showAll: 
           >
             {showAll ? "Hide filled and closed" : "Show filled and closed"}
           </Link>
+          <Link href="/erp/candidates/offer-templates" className="text-xs text-pink-600 hover:underline">
+            Offer templates
+          </Link>
           <NewOpeningButton managers={managers} />
         </div>
       </div>

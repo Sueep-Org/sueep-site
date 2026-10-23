@@ -5,8 +5,10 @@ import { Button, InfoTip, Modal, inputClass, labelClass } from "@/app/erp/compon
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { parseMoneyInput } from "@/lib/erp/money";
 import type { BoardCard } from "@/lib/erp/pipelineBoard";
-import type { MissingField } from "@/lib/erp/pipelineMissing";
+import { MISSING_LABELS, type MissingField } from "@/lib/erp/pipelineMissing";
 import type { Option } from "./LostReasonModal";
+import { PRIORITIES, type Priority } from "@/lib/erp/pipelineUi";
+import { FlameIcon } from "./board/FlameIcon";
 
 const OTHER = "__other";
 
@@ -18,12 +20,38 @@ export type InfoSaved = {
   gc: BoardCard["gc"];
   bidDate: string | null;
   walkDate: string | null;
+  awardDate?: string | null;
   cents: number;
   sqft: number | null;
+  priority?: Priority | null;
 };
 
+/** None / Low / Medium / High as one row of buttons. */
+export function PriorityPicker({ value, onChange, disabled }: { value: Priority | ""; onChange: (v: Priority | "") => void; disabled?: boolean }) {
+  const options: { value: Priority | ""; label: string }[] = [{ value: "", label: "None" }, ...[...PRIORITIES].reverse()];
+  return (
+    <div className="mt-1 inline-flex overflow-hidden rounded-md border border-gray-300">
+      {options.map((o) => (
+        <button
+          key={o.value || "none"}
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange(o.value)}
+          aria-pressed={value === o.value}
+          className={`flex items-center gap-1 border-l border-gray-300 px-3 py-1.5 text-xs font-medium first:border-l-0 disabled:opacity-50 ${
+            value === o.value ? "bg-pink-50 text-pink-700" : "bg-white text-gray-600 hover:bg-gray-50"
+          }`}
+        >
+          {o.value === "high" && <FlameIcon />}
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /**
- * Edit an open deal's owner, GC, dates, amount and sq ft. Saves to HubSpot;
+ * Edit an open deal's owner, GC, dates, amount, sq ft and priority. Saves to HubSpot;
  * only changed fields are sent. Missing fields for the deal's stage are
  * marked so the person knows what to fill in.
  */
@@ -35,6 +63,7 @@ export function DealInfoModal({
   mayEditCompanies,
   onClose,
   onSaved,
+  moveTo,
 }: {
   card: BoardCard;
   pipeline: "post-con" | "janitorial";
@@ -44,6 +73,8 @@ export function DealInfoModal({
   mayEditCompanies: boolean;
   onClose: () => void;
   onSaved: (saved: InfoSaved) => void;
+  /** Opened by a move into a stage that needs these fields: they're marked, and Save must fill them */
+  moveTo?: { label: string; missing: MissingField[] };
 }) {
   const startCompany = card.gc?.companyId ?? (card.companyText ? OTHER : "");
   const startName = startCompany === OTHER ? (card.companyText ?? "") : startCompany ? (companies.find((c) => c.value === startCompany)?.label ?? "") : "";
@@ -53,12 +84,19 @@ export function DealInfoModal({
   const [aliasOf, setAliasOf] = useState("");
   const [bidDate, setBidDate] = useState(card.bidDate ?? "");
   const [walkDate, setWalkDate] = useState(card.walkDate ?? "");
+  const [awardDate, setAwardDate] = useState(card.awardDate ?? "");
   const [amount, setAmount] = useState(card.cents ? (card.cents / 100).toFixed(2) : "");
   const [sqft, setSqft] = useState(card.sqft != null ? String(card.sqft) : "");
+  const [priority, setPriority] = useState<Priority | "">(card.priority ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const need = (f: MissingField) => card.missing.includes(f);
+  const need = (f: MissingField) => (moveTo ? moveTo.missing : card.missing).includes(f);
   const tag = (f: MissingField) => (need(f) ? <span className="ml-1 rounded bg-sky-50 px-1 text-[10px] font-medium text-sky-700">Missing</span> : null);
+
+  /** The card as it is, for a move whose fields were already filled. */
+  function currentInfo(): InfoSaved {
+    return { ownerId: card.ownerId, owner: card.owner, companyText: card.companyText, gc: card.gc, bidDate: card.bidDate, walkDate: card.walkDate, awardDate: card.awardDate, cents: card.cents, sqft: card.sqft, priority: card.priority };
+  }
 
   async function save() {
     setError(null);
@@ -75,10 +113,26 @@ export function DealInfoModal({
     if (companyName !== startName) changes.company = companyName || null;
     if (bidDate !== (card.bidDate ?? "")) changes.bidDate = bidDate || null;
     if (walkDate !== (card.walkDate ?? "")) changes.walkDate = walkDate || null;
+    if (awardDate !== (card.awardDate ?? "")) changes.awardDate = awardDate || null;
     if ((cents ?? 0) !== card.cents) changes.cents = cents;
     if (sq !== card.sqft) changes.sqft = sq;
+    if (priority !== (card.priority ?? "")) changes.priority = priority || null;
     const alias = company === OTHER && aliasOf ? aliasOf : null;
-    if (!Object.keys(changes).length && !alias) return onClose();
+    if (moveTo) {
+      // Everything the stage needs must be filled before the move can go ahead.
+      const filled: Record<MissingField, boolean> = {
+        owner: !!ownerId || owners.some((o) => o.value === card.ownerId),
+        company: !!companyName || (!!card.gc && companyName === startName),
+        bidDate: !!bidDate,
+        walkDate: !!walkDate,
+        awardDate: !!awardDate,
+        amount: (cents ?? 0) > 0,
+        sqft: !!sq && sq > 0,
+      };
+      const left = moveTo.missing.filter((f) => !filled[f]);
+      if (left.length) return setError(`To move to ${moveTo.label}, fill in: ${left.map((f) => (f === "company" ? (pipeline === "janitorial" ? "Company" : "GC") : MISSING_LABELS[f])).join(", ")}.`);
+    }
+    if (!Object.keys(changes).length && !alias) return moveTo ? onSaved(currentInfo()) : onClose();
 
     setSaving(true);
     try {
@@ -106,8 +160,10 @@ export function DealInfoModal({
               : null,
         bidDate: bidDate || null,
         walkDate: walkDate || null,
+        awardDate: awardDate || null,
         cents: cents ?? 0,
         sqft: sq,
+        priority: priority || null,
       });
     } catch {
       setError("Couldn't reach the server. Try again.");
@@ -127,7 +183,7 @@ export function DealInfoModal({
       >
         <div>
           <h2 className="flex items-center gap-1 text-base font-semibold text-gray-900">
-            Edit info
+            {moveTo ? `Fill in to move to ${moveTo.label}` : "Edit info"}
             <InfoTip text="Saves to the HubSpot deal. Only the fields you change are sent. Leave a field blank to clear it. Missing marks what this deal should have for its stage." />
           </h2>
           <p className="mt-0.5 text-sm text-gray-500">{card.name}</p>
@@ -194,10 +250,18 @@ export function DealInfoModal({
           </div>
           <div>
             <label htmlFor={`walk-${card.id}`} className={labelClass.default}>
-              Job Walk Date
+              Job Walk Date{tag("walkDate")}
             </label>
             <input id={`walk-${card.id}`} type="date" value={walkDate} onChange={(e) => setWalkDate(e.target.value)} className={inputClass.md} />
           </div>
+          {pipeline === "post-con" && (
+            <div>
+              <label htmlFor={`award-${card.id}`} className={labelClass.default}>
+                Award Date{tag("awardDate")}
+              </label>
+              <input id={`award-${card.id}`} type="date" value={awardDate} onChange={(e) => setAwardDate(e.target.value)} className={inputClass.md} />
+            </div>
+          )}
           <div>
             <label htmlFor={`amt-${card.id}`} className={labelClass.default}>
               Amount{tag("amount")}
@@ -217,6 +281,13 @@ export function DealInfoModal({
             </label>
             <input id={`sqft-${card.id}`} value={sqft} onChange={(e) => setSqft(e.target.value)} inputMode="numeric" className={inputClass.md} />
           </div>
+          <div className="sm:col-span-2">
+            <p className={`${labelClass.default} flex items-center gap-1`}>
+              Priority
+              <InfoTip text="HubSpot's deal Priority. High shows a flame on the card." />
+            </p>
+            <PriorityPicker value={priority} onChange={setPriority} />
+          </div>
         </div>
 
         {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
@@ -225,7 +296,7 @@ export function DealInfoModal({
             Cancel
           </Button>
           <Button type="submit" disabled={saving}>
-            {saving ? "Saving…" : "Save"}
+            {saving ? "Saving…" : moveTo ? "Save and move" : "Save"}
           </Button>
         </div>
       </form>

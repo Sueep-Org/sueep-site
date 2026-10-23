@@ -8,6 +8,9 @@
  *   (user decision 2026-10-22); the full email is in HubSpot. Notes show their text.
  * - GC record: every deal (both outcomes and open) matched to the same GC.
  * - ERP history: lost reasons, Mark lost, info edits and next steps.
+ * - Stage history: HubSpot's date entered and exited for each stage
+ *   (hs_v2_date_entered_ / hs_v2_date_exited_). A stage entered twice shows
+ *   its latest visit, which is what HubSpot keeps.
  */
 import { prisma } from "@/lib/prisma";
 import { hubspotFetch } from "@/lib/hubspot/client";
@@ -16,6 +19,7 @@ import { companyMatcher, gcPrices, type GcPrice } from "./winLoss";
 import { outcomeOf, type Bundle, type PipelineKey } from "./postConDeals";
 import { loadDeals, loadJanitorialDeals } from "./dealEdits";
 import { loadLostReasonOptions } from "./dealLostReasons";
+import { IMPORT_DAY } from "./pipelineBoard";
 
 const MAX_ACTIVITY = 40;
 const MAX_HISTORY = 40;
@@ -44,6 +48,16 @@ export type GcRecord = {
   price: GcPrice | null;
 };
 export type HistoryItem = { at: string; by: string; text: string };
+export type StageStep = {
+  stageId: string;
+  label: string;
+  enteredAt: string;
+  /** Null for the stage it's in now */
+  exitedAt: string | null;
+  days: number;
+  /** Entered on the 2024-12-26 bulk import, so the real date is earlier */
+  imported: boolean;
+};
 
 export type DealPanelData = {
   activity: ActivityItem[];
@@ -54,7 +68,34 @@ export type DealPanelData = {
   lineItems: LineItem[];
   gc: GcRecord | null;
   history: HistoryItem[];
+  stages: StageStep[];
 };
+
+/** The deal's stages in the order it entered them. Empty if HubSpot can't be read. */
+async function loadStageHistory(dealId: string, stageIds: string[], labels: Record<string, string>, currentStageId: string | null): Promise<StageStep[]> {
+  if (!stageIds.length) return [];
+  const props = stageIds.flatMap((id) => [`hs_v2_date_entered_${id}`, `hs_v2_date_exited_${id}`]);
+  const res = await hubspotFetch(`/crm/v3/objects/deals/${encodeURIComponent(dealId)}?properties=${props.join(",")}`).catch(() => null);
+  if (!res?.ok) return [];
+  const p = ((await res.json()) as { properties?: Record<string, string | null> }).properties ?? {};
+  const now = Date.now();
+  return stageIds
+    .map((id) => ({ id, entered: p[`hs_v2_date_entered_${id}`], exited: p[`hs_v2_date_exited_${id}`] }))
+    .filter((s): s is { id: string; entered: string; exited: string | null } => !!s.entered)
+    .sort((a, b) => a.entered.localeCompare(b.entered))
+    .map((s) => {
+      // Only the stage it's in now has no exit; an older stage missing one ended when the next began.
+      const exitedAt = s.id === currentStageId ? null : (s.exited ?? null);
+      return {
+        stageId: s.id,
+        label: (labels[s.id] ?? s.id).trim(),
+        enteredAt: s.entered,
+        exitedAt,
+        days: Math.max(0, Math.round(((exitedAt ? Date.parse(exitedAt) : now) - Date.parse(s.entered)) / 86_400_000)),
+        imported: s.entered.startsWith(IMPORT_DAY),
+      };
+    });
+}
 
 const OBJECTS: { kind: ActivityKind; type: string; props: string[] }[] = [
   { kind: "email", type: "emails", props: ["hs_email_subject", "hs_email_direction", "hs_email_from_email", "hs_email_to_email", "hs_body_preview", "hs_timestamp"] },
@@ -170,9 +211,11 @@ const PROP_LABELS: Record<string, string> = {
   company: "GC",
   bid_date: "Bid Date",
   completion_date: "Job Walk Date",
+  award_date: "Award Date",
   amount: "Amount",
   area_sqft: "Area SQFT",
   dealstage: "Stage",
+  hs_priority: "Priority",
 };
 
 /** `preloaded` skips the cache, for checks run outside the app. */
@@ -218,8 +261,9 @@ export async function loadDealPanel(dealId: string, pipeline: PipelineKey, prelo
     if (!v) return "blank";
     if (prop === "hubspot_owner_id") return bundle.owners[v] ?? v;
     if (prop === "amount") return centsToDollars(Math.round(Number(v) * 100));
-    if (prop === "bid_date" || prop === "completion_date") return v.slice(0, 10);
+    if (prop === "bid_date" || prop === "completion_date" || prop === "award_date") return v.slice(0, 10);
     if (prop === "dealstage") return stage(v);
+    if (prop === "hs_priority") return v[0].toUpperCase() + v.slice(1);
     return v;
   };
   const history: HistoryItem[] = [
@@ -244,5 +288,7 @@ export async function loadDealPanel(dealId: string, pipeline: PipelineKey, prelo
     .sort((a, b) => b.at.localeCompare(a.at))
     .slice(0, MAX_HISTORY);
 
-  return { activity: activity.items, activityMore: activity.more, hiddenEmails: activity.hiddenEmails, lineItems, gc, history };
+  const stages = await loadStageHistory(dealId, bundle.stageOrder, bundle.stageLabels, deal?.stageId ?? null);
+
+  return { activity: activity.items, activityMore: activity.more, hiddenEmails: activity.hiddenEmails, lineItems, gc, history, stages };
 }

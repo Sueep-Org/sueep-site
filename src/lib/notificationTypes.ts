@@ -342,6 +342,14 @@ export const NOTIFICATIONS = {
     ccEditable: true,
     sender: "sueep",
   }),
+  OFFER_LETTER: def({
+    label: "Offer letter",
+    group: "People",
+    when: "Someone emails an office candidate their offer letter",
+    automatic: "The candidate (or the address typed when sending), with the sender copied",
+    ccEditable: true,
+    sender: "sueep",
+  }),
   EMPLOYEE_INFO_LINK: def({
     label: "Employee info form link",
     group: "People",
@@ -437,6 +445,20 @@ export const NOTIFICATIONS = {
     defaultTo: () => ["edwin@sueep.com", "emma@sueep.com", "david@sueep.com", "jennifer@sueep.com", "nick@sueep.com"],
   }),
 
+  OFFER_LETTER_DUE: def({
+    label: "Offer letter due tomorrow",
+    group: "Reminders",
+    when: "About 8am, the day before a sent offer letter's sign-by date, if it isn't signed yet",
+    automatic: "Whoever sent the letter",
+    ccEditable: true,
+  }),
+
+  DEAL_FOLLOW: def({
+    label: "Followed deal changes",
+    group: "Reminders",
+    when: "Within the hour after a deal someone follows changes stage, is won or lost, or gets a new owner",
+    automatic: "Everyone following the deal on the Deals board, except whoever made the change",
+  }),
   PIPELINE_FOLLOW_UPS: def({
     label: "Deal follow-ups",
     group: "Reminders",

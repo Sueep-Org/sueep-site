@@ -13,6 +13,7 @@ import { canSeeOfficeHiring, getErpAuth } from "@/lib/erpAuth";
 import { officeStageMeta } from "@/lib/erp/officeHiring";
 import { OfficeCandidateEditor } from "./OfficeCandidateEditor";
 import { ShortlistStar } from "../office/OfficeCandidateControls";
+import { OfferLettersSection } from "./OfferLettersSection";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -203,6 +204,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
                 />
               ),
             },
+            { label: "Offer", content: <OfferLettersSection candidateId={row.id} /> },
             ...(hired
               ? [
                   {

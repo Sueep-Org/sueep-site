@@ -63,6 +63,14 @@
     {
       "path": "/api/cron/schedule-confirmations",
       "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/cron/offer-letter-reminders",
+      "schedule": "5 12 * * *"
+    },
+    {
+      "path": "/api/cron/deal-stage-steps",
+      "schedule": "50 * * * *"
     }
   ]
 }

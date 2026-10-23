@@ -51,7 +51,9 @@ export function OfficeHiring() {
         </Step>
 
         <Step n={4} title="Hiring someone">
-          Set the stage to <strong>Hired</strong>. That opens the Paperwork, Onboarding and Signing tabs on their page,
+          Make their offer letter from the <strong>Offer</strong> tab on their page (see the Offer Letters article).
+          Sending it moves them to Offer, and uploading the signed copy moves them to Hired. You can also set the stage
+          to <strong>Hired</strong> by hand. Hired opens the Paperwork, Onboarding and Signing tabs on their page,
           the same as a field hire, so you can finish onboarding them as an employee.
           <Callout type="tip">
             Office candidates are never deleted automatically. Field candidates who were denied still are, after a while.

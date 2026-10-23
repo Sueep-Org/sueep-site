@@ -35,6 +35,7 @@ import { CompanyInfoOverview } from "./company-info/company-info-overview";
 import { CompaniesOverview } from "./companies/companies-overview";
 import { RolesAndPermissions } from "./people/roles-and-permissions";
 import { OfficeHiring } from "./people/office-hiring";
+import { OfferLetters } from "./people/offer-letters";
 import { WinLossHelp } from "./sales/win-loss";
 import { PipelineBoardHelp } from "./sales/pipeline-board";
 import { PipelineGuide } from "./sales/pipeline-guide";
@@ -192,6 +193,15 @@ export const registry: ArticleEntry[] = [
     description: "Office job openings, candidates, stages, and what job ads cost.",
     order: 2,
     component: OfficeHiring,
+    roles: [...PM_LEVEL_ROLES],
+  },
+  {
+    slug: "people/offer-letters",
+    title: "Offer Letters",
+    category: "People & Schedule",
+    description: "Offer letter templates, commission tables, sending a letter and recording the signed copy.",
+    order: 2,
+    component: OfferLetters,
     roles: [...PM_LEVEL_ROLES],
   },
   {
