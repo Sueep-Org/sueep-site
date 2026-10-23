@@ -7,6 +7,8 @@ import type { BoardCard as Card, BoardColumn } from "@/lib/erp/pipelineBoard";
 import { cardFlag, TONE_CLASS, type Attention } from "@/lib/erp/dealAttention";
 import { addDays, BAND_COLOR, initials, money2, shortDay } from "@/lib/erp/pipelineUi";
 import { useBoard, type BoardContext } from "./context";
+import type { CardField } from "@/lib/erp/boardCardFields";
+import { FlameIcon } from "./FlameIcon";
 
 /** Deal names often end with the GC ("... - Russo Development"); the card shows the GC on its own line. */
 function shortName(c: Card): string {
@@ -18,6 +20,7 @@ function shortName(c: Card): string {
 function details(c: Card, b: BoardContext, items: Attention[]): string {
   return [
     c.name,
+    c.priority && `${c.priority[0].toUpperCase()}${c.priority.slice(1)} priority`,
     c.cents ? centsToDollars(c.cents) : "No amount",
     c.owner ? `Owner: ${c.owner}` : "No owner",
     c.scopeLabel,
@@ -84,15 +87,24 @@ function CardMenu({ items }: { items: { label: string; onClick: () => void }[] }
 }
 
 /**
- * One deal: name, GC, amount, owner initials, and only the most urgent flag
- * (dealAttention.ts), plus the next step when it's due this week or late.
+ * One deal: name and only the most urgent flag (dealAttention.ts), plus the
+ * details the viewer picked under Cards (GC, amount and owner initials unless
+ * they changed it), and the next step when it's due this week or late.
  * The left stripe is the chance to win. Clicking the card opens the panel.
  */
 export function BoardCard({ c, outcome }: { c: Card; outcome: BoardColumn["outcome"] }) {
   const b = useBoard();
   const items = b.attentionOf(c);
   const flag = cardFlag(items);
-  const step = outcome === "open" && c.nextStep && c.nextStep.dueDate <= addDays(b.today, 6) ? c.nextStep : null;
+  const show = (f: CardField) => b.cardFields.includes(f);
+  // A late or due-this-week next step always shows; "Next step" under Cards shows any open one.
+  const step = outcome === "open" && c.nextStep && (show("nextStep") || c.nextStep.dueDate <= addDays(b.today, 6)) ? c.nextStep : null;
+  const extras = [
+    show("bidDate") && c.bidDate ? `Bid ${shortDay(c.bidDate)}` : null,
+    show("awardDate") && c.awardDate ? `Award ${shortDay(c.awardDate)}` : null,
+    show("sqft") && c.sqft ? `${c.sqft.toLocaleString("en-US")} sq ft` : null,
+    show("daysInStage") && c.daysInStage != null ? `${c.daysInStage}d in stage` : null,
+  ].filter(Boolean);
   const stripe = c.chance && c.chance.band !== "Long shot" ? BAND_COLOR[c.chance.band] : undefined;
   // Flags that open the editor that fixes them.
   const onFlag =
@@ -124,12 +136,17 @@ export function BoardCard({ c, outcome }: { c: Card; outcome: BoardColumn["outco
     >
       {stripe && <span aria-hidden className="absolute inset-y-0 left-0 w-1" style={{ background: stripe }} />}
       <div className="flex items-start justify-between gap-1">
+        {c.priority === "high" && (
+          <span title="High priority" className="mt-0.5">
+            <FlameIcon />
+          </span>
+        )}
         {c.url ? (
-          <a href={c.url} target="_blank" rel="noreferrer" className="line-clamp-2 text-xs font-medium leading-snug text-gray-900 hover:text-pink-600">
+          <a href={c.url} target="_blank" rel="noreferrer" className="line-clamp-2 min-w-0 flex-1 text-xs font-medium leading-snug text-gray-900 hover:text-pink-600">
             {shortName(c)}
           </a>
         ) : (
-          <span className="line-clamp-2 text-xs font-medium leading-snug text-gray-900">{shortName(c)}</span>
+          <span className="line-clamp-2 min-w-0 flex-1 text-xs font-medium leading-snug text-gray-900">{shortName(c)}</span>
         )}
         {outcome === "open" && (
           <CardMenu
@@ -137,13 +154,32 @@ export function BoardCard({ c, outcome }: { c: Card; outcome: BoardColumn["outco
               { label: "Next step", onClick: () => b.editNext(c) },
               { label: "Edit info", onClick: () => b.editInfo(c) },
               { label: "Move to", onClick: () => b.moveTo(c) },
+              { label: "Priority", onClick: () => b.setPriority(c) },
+              { label: "Clone", onClick: () => b.clone(c) },
+              { label: b.following(c) ? "Unfollow" : "Follow", onClick: () => b.toggleFollow(c) },
               { label: "Mark lost", onClick: () => b.editLost(c, true) },
             ]}
           />
         )}
-        {outcome === "won" && <CardMenu items={[{ label: "Move to", onClick: () => b.moveTo(c) }]} />}
+        {outcome === "won" && (
+          <CardMenu
+            items={[
+              { label: "Move to", onClick: () => b.moveTo(c) },
+              { label: "Clone", onClick: () => b.clone(c) },
+              { label: b.following(c) ? "Unfollow" : "Follow", onClick: () => b.toggleFollow(c) },
+            ]}
+          />
+        )}
+        {outcome === "lost" && (
+          <CardMenu
+            items={[
+              { label: "Clone", onClick: () => b.clone(c) },
+              { label: b.following(c) ? "Unfollow" : "Follow", onClick: () => b.toggleFollow(c) },
+            ]}
+          />
+        )}
       </div>
-      {c.gc && (
+      {show("gc") && c.gc && (
         <p className="mt-0.5 truncate text-[11px] text-gray-400">
           {c.gc.companyId ? (
             <Link href={`/erp/companies/${c.gc.companyId}`} className="hover:text-pink-600">
@@ -154,6 +190,7 @@ export function BoardCard({ c, outcome }: { c: Card; outcome: BoardColumn["outco
           )}
         </p>
       )}
+      {extras.length > 0 && <p className="mt-0.5 truncate text-[11px] text-gray-500">{extras.join(" · ")}</p>}
       {step && (
         <button
           type="button"
@@ -177,7 +214,7 @@ export function BoardCard({ c, outcome }: { c: Card; outcome: BoardColumn["outco
         </p>
       )}
       <div className="mt-2 flex items-center justify-between gap-2">
-        <span className="text-sm font-semibold tabular-nums text-gray-900">{c.cents ? centsToDollarsCompact(c.cents) : "-"}</span>
+        <span className="text-sm font-semibold tabular-nums text-gray-900">{show("amount") ? (c.cents ? centsToDollarsCompact(c.cents) : "-") : ""}</span>
         <div className="flex min-w-0 items-center gap-1.5 text-[10px] font-medium">
           {flag &&
             (onFlag ? (
@@ -187,7 +224,7 @@ export function BoardCard({ c, outcome }: { c: Card; outcome: BoardColumn["outco
             ) : (
               <span className={`truncate rounded px-1.5 py-0.5 ${TONE_CLASS[flag.tone]}`}>{flag.chip}</span>
             ))}
-          {c.owner && (
+          {show("owner") && c.owner && (
             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-100 text-[9px] font-semibold text-gray-600" title={c.owner}>
               {initials(c.owner)}
             </span>

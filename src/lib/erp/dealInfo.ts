@@ -1,6 +1,7 @@
 /**
  * Deal info edits from the pipeline board (PIPELINE_PLAN Phase 7): owner,
- * company (GC), Bid Date, Job Walk Date, Amount and Area SQFT, saved to
+ * company (GC), Bid Date, Job Walk Date, Amount, Area SQFT and Priority
+ * (PIPELINE_EXTRAS_PLAN Phase 3), saved to
  * HubSpot on open deals only. Each changed field is logged (DealInfoChange).
  *
  * - The deal is read from HubSpot first: it must still be open and in the
@@ -14,12 +15,13 @@ import { prisma } from "@/lib/prisma";
 import { normalizeCompanyName } from "./clientCompanies";
 import type { PipelineKey } from "./postConDeals";
 import { isActiveOwner, patchDeal, readDealForChange } from "./dealGuard";
+import { asPriority } from "./pipelineUi";
 
 const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_CENTS = 1_000_000_000_00;
 const MAX_SQFT = 100_000_000;
 
-export const INFO_PROPS = ["hubspot_owner_id", "company", "bid_date", "completion_date", "amount", "area_sqft"] as const;
+export const INFO_PROPS = ["hubspot_owner_id", "company", "bid_date", "completion_date", "amount", "area_sqft", "hs_priority", "award_date"] as const;
 export type InfoProp = (typeof INFO_PROPS)[number];
 
 /** Fields to change; leave a key out to keep it, null or "" to clear it. */
@@ -28,8 +30,10 @@ export type DealInfoChanges = {
   company?: string | null;
   bidDate?: string | null;
   walkDate?: string | null;
+  awardDate?: string | null;
   cents?: number | null;
   sqft?: number | null;
+  priority?: string | null;
 };
 
 export type SaveDealInfoInput = {
@@ -54,6 +58,7 @@ function toHubSpot(changes: DealInfoChanges): { patch: Partial<Record<InfoProp, 
   for (const [key, prop, label] of [
     ["bidDate", "bid_date", "Bid Date"],
     ["walkDate", "completion_date", "Job Walk Date"],
+    ["awardDate", "award_date", "Award Date"],
   ] as const) {
     if (!(key in changes)) continue;
     const v = changes[key] ?? "";
@@ -70,6 +75,11 @@ function toHubSpot(changes: DealInfoChanges): { patch: Partial<Record<InfoProp, 
     if (q != null && (!Number.isFinite(q) || q < 0 || q > MAX_SQFT)) return { error: "Check the square footage." };
     patch.area_sqft = q == null ? "" : String(q);
   }
+  if ("priority" in changes) {
+    const v = changes.priority ?? "";
+    if (v && !asPriority(v)) return { error: "Pick High, Medium or Low." };
+    patch.hs_priority = v;
+  }
   return { patch };
 }
 
@@ -77,7 +87,7 @@ function toHubSpot(changes: DealInfoChanges): { patch: Partial<Record<InfoProp, 
 function same(prop: InfoProp, hubspot: string | null | undefined, next: string): boolean {
   const cur = (hubspot ?? "").trim();
   if (prop === "amount" || prop === "area_sqft") return (cur === "" && next === "") || (cur !== "" && next !== "" && Number(cur) === Number(next));
-  if (prop === "bid_date" || prop === "completion_date") return cur.slice(0, 10) === next;
+  if (prop === "bid_date" || prop === "completion_date" || prop === "award_date") return cur.slice(0, 10) === next;
   return cur === next;
 }
 

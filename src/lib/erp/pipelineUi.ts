@@ -43,6 +43,17 @@ export function shortDay(dayKey: string): string {
 }
 
 /** "YYYY-MM-DD" plus n days. */
+/** HubSpot's built-in deal Priority (hs_priority). */
+export type Priority = "high" | "medium" | "low";
+export const PRIORITIES: { value: Priority; label: string }[] = [
+  { value: "high", label: "High" },
+  { value: "medium", label: "Medium" },
+  { value: "low", label: "Low" },
+];
+export function asPriority(v: string | null | undefined): Priority | null {
+  return v === "high" || v === "medium" || v === "low" ? v : null;
+}
+
 export function addDays(dayKey: string, n: number): string {
   const [y, m, d] = dayKey.split("-").map(Number);
   return new Date(Date.UTC(y!, m! - 1, d! + n)).toISOString().slice(0, 10);

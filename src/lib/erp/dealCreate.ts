@@ -8,6 +8,8 @@
  * - Company is HubSpot's company text, the same field Edit info and re-bids
  *   set, which is what the board matches GCs on.
  * - Owner must be an active HubSpot owner. Blank fields are left out.
+ * - Clone (PIPELINE_EXTRAS_PLAN Phase 6): `copyFromDealId` puts "Copied from"
+ *   and the source deal's description in the new deal's description.
  */
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
@@ -47,6 +49,8 @@ export type CreateDealInput = {
   cents: number | null;
   sqft: number | null;
   typeOfBusiness: string | null;
+  /** Cloning: the deal it was copied from */
+  copyFromDealId?: string | null;
   byEmail: string;
 };
 
@@ -86,6 +90,12 @@ export async function createDeal(input: CreateDealInput): Promise<{ error: strin
   if (c != null) properties.amount = (c / 100).toFixed(2);
   if (sqft != null) properties.area_sqft = String(sqft);
   if (input.typeOfBusiness) properties.type_of_business = input.typeOfBusiness;
+  if (input.copyFromDealId) {
+    const src = await hubspotFetch(`/crm/v3/objects/deals/${encodeURIComponent(input.copyFromDealId)}?properties=dealname,description`);
+    if (!src.ok) return { error: "Couldn't read the deal being copied from HubSpot." };
+    const sp = ((await src.json()) as { properties: Record<string, string | null> }).properties;
+    properties.description = [`Copied from deal: ${sp.dealname ?? input.copyFromDealId} (${input.copyFromDealId})`, sp.description?.trim()].filter(Boolean).join("\n\n").slice(0, 60_000);
+  }
 
   // The table must exist before HubSpot gets a new deal, or the board wouldn't show it until the next read.
   await prisma.dealCreated.findFirst({ select: { id: true } });

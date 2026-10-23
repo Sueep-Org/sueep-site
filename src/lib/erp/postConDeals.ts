@@ -15,6 +15,7 @@
  *   value (withErpWonAmounts); HubSpot's Amount is often stale on those.
  */
 import { unstable_cache } from "next/cache";
+import { asPriority, type Priority } from "./pipelineUi";
 import { prisma } from "@/lib/prisma";
 import { hubspotFetch } from "@/lib/hubspot/client";
 import { loadRules } from "@/lib/hubspot/pipelineRules";
@@ -41,6 +42,10 @@ export type RawDeal = {
   awardDate?: string | null;
   /** When the deal entered its current stage (HubSpot hs_v2_date_entered_<stage>), for days in stage */
   stageEnteredAt: string | null;
+  /** HubSpot Priority (hs_priority). Optional so older cached bundles still read. */
+  priority?: Priority | null;
+  /** HubSpot Type of business, raw value, for cloning a deal. Optional for older cached bundles. */
+  typeOfBusiness?: string | null;
 };
 
 export const WORK_SCOPES = ["CLEANING", "PAINTING", "BOTH", "UNKNOWN"] as const;
@@ -86,7 +91,7 @@ export type Bundle = {
   freshAt?: string;
 };
 
-const PROPS = ["dealname", "dealstage", "amount", "createdate", "hubspot_owner_id", "company", "deal_lost_reason", "how_the_customer_reach_sueep", "area_sqft", "notes_last_updated", "hs_lastmodifieddate", "type_of_business", "bid_date", "completion_date", "award_date"];
+const PROPS = ["dealname", "dealstage", "amount", "createdate", "hubspot_owner_id", "company", "deal_lost_reason", "how_the_customer_reach_sueep", "area_sqft", "notes_last_updated", "hs_lastmodifieddate", "type_of_business", "bid_date", "completion_date", "award_date", "hs_priority"];
 
 /** Every deal in the pipeline, or with `sinceMs` only those HubSpot changed since then. */
 async function searchAll(pipelineId: string, stageIds: string[], sinceMs?: number): Promise<RawDeal[]> {
@@ -136,6 +141,8 @@ async function searchAll(pipelineId: string, stageIds: string[], sinceMs?: numbe
         walkDate: p.completion_date?.slice(0, 10) || null,
         awardDate: p.award_date?.slice(0, 10) || null,
         stageEnteredAt: (p.dealstage && p[`hs_v2_date_entered_${p.dealstage}`]) || null,
+        priority: asPriority(p.hs_priority),
+        typeOfBusiness: p.type_of_business?.trim() || null,
       });
     }
     after = data.paging?.next?.after;

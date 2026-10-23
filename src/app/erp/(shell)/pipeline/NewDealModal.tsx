@@ -16,7 +16,8 @@ const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 /**
  * New deal on the Deals board: creates it in HubSpot in this pipeline, in an
  * open stage (Lead to start). Warns when a deal with a similar name is
- * already on the board.
+ * already on the board. With `copyFrom` (Clone) the form starts filled from
+ * that deal, except its dates, and the new deal's description names it.
  */
 export function NewDealModal({
   pipeline,
@@ -26,6 +27,7 @@ export function NewDealModal({
   companies,
   typeOptions,
   defaultOwnerId,
+  copyFrom,
   onClose,
   onSaved,
 }: {
@@ -39,20 +41,24 @@ export function NewDealModal({
   /** HubSpot Type of business options; the field is hidden when there are none */
   typeOptions: Option[];
   defaultOwnerId: string;
+  /** Clone: the deal to start from */
+  copyFrom?: BoardCard;
   onClose: () => void;
   onSaved: (deal: { newDealId: string; name: string }) => void;
 }) {
   const isJan = pipeline === "janitorial";
-  const [name, setName] = useState("");
+  const src = copyFrom;
+  const srcCompany = src?.gc?.companyId && companies.some((c) => c.value === src.gc!.companyId) ? src.gc.companyId : src?.companyText ? OTHER : "";
+  const [name, setName] = useState(src ? `${src.name} (copy)` : "");
   const [stageId, setStageId] = useState((columns.find((c) => LEAD.test(c.label)) ?? columns[0])?.stageId ?? "");
-  const [ownerId, setOwnerId] = useState(defaultOwnerId);
-  const [company, setCompany] = useState("");
-  const [otherName, setOtherName] = useState("");
+  const [ownerId, setOwnerId] = useState(src?.ownerId && owners.some((o) => o.value === src.ownerId) ? src.ownerId : defaultOwnerId);
+  const [company, setCompany] = useState(srcCompany);
+  const [otherName, setOtherName] = useState(srcCompany === OTHER ? (src?.companyText ?? "") : "");
   const [bidDate, setBidDate] = useState("");
   const [walkDate, setWalkDate] = useState("");
-  const [amount, setAmount] = useState("");
-  const [sqft, setSqft] = useState("");
-  const [typeOfBusiness, setTypeOfBusiness] = useState("");
+  const [amount, setAmount] = useState(src?.cents ? (src.cents / 100).toFixed(2) : "");
+  const [sqft, setSqft] = useState(src?.sqft != null ? String(src.sqft) : "");
+  const [typeOfBusiness, setTypeOfBusiness] = useState(src?.typeOfBusiness && typeOptions.some((o) => o.value === src.typeOfBusiness) ? src.typeOfBusiness : "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,10 +66,11 @@ export function NewDealModal({
     const q = squash(name);
     if (q.length < 4) return [];
     return cards.filter((c) => {
+      if (c.id === src?.id) return false;
       const n = squash(c.name);
       return n === q || (q.length >= 8 && (n.includes(q) || q.includes(n)));
     });
-  }, [name, cards]);
+  }, [name, cards, src?.id]);
 
   async function save() {
     setError(null);
@@ -89,6 +96,7 @@ export function NewDealModal({
           cents,
           sqft: sq,
           typeOfBusiness: typeOfBusiness || null,
+          copyFromDealId: src?.id ?? null,
         }),
       });
       const data = (await res.json().catch(() => null)) as { error?: string; newDealId?: string } | null;
@@ -111,8 +119,14 @@ export function NewDealModal({
         }}
       >
         <h2 className="flex items-center gap-1 text-base font-semibold text-gray-900">
-          New {isJan ? "janitorial" : "post-construction"} deal
-          <InfoTip text="Creates the deal in HubSpot and adds it to this board. Only the name is needed; fill the rest in now or later with Edit info. Won and lost are set later, by moving the card." />
+          {src ? "Clone deal" : `New ${isJan ? "janitorial" : "post-construction"} deal`}
+          <InfoTip
+            text={
+              src
+                ? "Starts from the deal you picked, without its dates. Change anything before creating. The new deal's description in HubSpot says which deal it was copied from."
+                : "Creates the deal in HubSpot and adds it to this board. Only the name is needed; fill the rest in now or later with Edit info. Won and lost are set later, by moving the card."
+            }
+          />
         </h2>
 
         <div>

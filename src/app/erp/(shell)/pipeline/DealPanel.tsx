@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Button, InfoTip } from "@/app/erp/components/ui";
 import { centsToDollars, centsToDollarsCompact } from "@/lib/erp/money";
 import type { BoardCard, BoardColumn, PipelineBoard } from "@/lib/erp/pipelineBoard";
+import { FlameIcon } from "./board/FlameIcon";
 import type { ActivityKind, DealPanelData } from "@/lib/erp/dealPanel";
 import type { WinBacktest } from "@/lib/erp/winChance";
 import { CHART, BAND_COLOR, BAND_TEXT, fullDate, pct, shortDay } from "@/lib/erp/pipelineUi";
@@ -78,6 +79,10 @@ export function DealPanel({
   onMoveTo,
   onLost,
   onRebid,
+  onPriority,
+  onClone,
+  following,
+  onToggleFollow,
 }: {
   card: BoardCard;
   column: BoardColumn | undefined;
@@ -97,6 +102,10 @@ export function DealPanel({
   onLost: () => void;
   /** Re-bid with the GC that won, when there's one recorded and no re-bid yet */
   onRebid?: () => void;
+  onPriority: () => void;
+  onClone: () => void;
+  following: boolean;
+  onToggleFollow: () => void;
 }) {
   const [data, setData] = useState<DealPanelData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -171,14 +180,25 @@ export function DealPanel({
                 {card.owner && ` · ${card.owner}`}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close"
-              className="rounded px-1.5 text-lg leading-none text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-            >
-              ×
-            </button>
+            <div className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                onClick={onToggleFollow}
+                aria-pressed={following}
+                title={following ? "You get an email and an inbox item when this deal changes stage, is won or lost, or gets a new owner" : "Get an email and an inbox item when this deal changes"}
+                className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${following ? "border-pink-300 bg-pink-50 text-pink-700" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+              >
+                {following ? "Following" : "Follow"}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close"
+                className="rounded px-1.5 text-lg leading-none text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+              >
+                ×
+              </button>
+            </div>
           </div>
 
           {/* Deal at a glance: amount, stage, chance to win */}
@@ -189,6 +209,12 @@ export function DealPanel({
                 {column?.label}
                 {card.daysInStage != null && outcome === "open" ? ` · ${card.daysInStage} days` : ""}
               </p>
+              {card.priority && (
+                <p className="mt-0.5 flex items-center gap-1 text-xs text-gray-600">
+                  {card.priority === "high" && <FlameIcon />}
+                  {card.priority[0].toUpperCase() + card.priority.slice(1)} priority
+                </p>
+              )}
             </div>
             {card.chance && (
               <div className="w-36 text-right" title={`About ${pct(card.chance.p)}. Our average: ${winBase != null ? pct(winBase) : "-"}`}>
@@ -474,6 +500,26 @@ export function DealPanel({
                 </Section>
               )}
 
+              {data.stages.length > 0 && (
+                <Section
+                  title="Stage history"
+                  info="When the deal entered and left each stage, from HubSpot, oldest first. A stage it went back to shows its latest visit. Dates marked imported are the day deals were loaded into HubSpot, so the real date is earlier."
+                >
+                  <ol className="space-y-1.5">
+                    {data.stages.map((st) => (
+                      <li key={st.stageId} className="flex items-baseline gap-2 text-xs">
+                        <span aria-hidden className={`mt-1 h-2 w-2 shrink-0 rounded-full ${st.exitedAt ? "bg-gray-300" : "bg-pink-500"}`} />
+                        <span className={`min-w-0 flex-1 truncate ${st.exitedAt ? "text-gray-700" : "font-medium text-gray-900"}`}>{st.label}</span>
+                        <span className="shrink-0 tabular-nums text-gray-500">
+                          {st.exitedAt ? `${when(st.enteredAt)} to ${when(st.exitedAt)}` : `Since ${when(st.enteredAt)}`}
+                          {st.imported ? " (imported)" : ""} · {st.days === 1 ? "1 day" : `${st.days} days`}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                </Section>
+              )}
+
               {data.history.length > 0 && (
                 <Section
                   title="Changes from the ERP"
@@ -517,6 +563,9 @@ export function DealPanel({
               <Button size="xs" variant="secondary" onClick={onMoveTo}>
                 Move to
               </Button>
+              <Button size="xs" variant="secondary" onClick={onPriority}>
+                Priority
+              </Button>
               <Button size="xs" variant="secondary" onClick={onLost}>
                 Mark lost
               </Button>
@@ -539,6 +588,9 @@ export function DealPanel({
               )}
             </>
           )}
+          <Button size="xs" variant="ghost" onClick={onClone}>
+            Clone
+          </Button>
         </footer>
       </aside>
     </div>,

@@ -7,7 +7,7 @@ type Ctx = { params: Promise<{ dealId: string }> };
 const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
 const num = (v: unknown): number | null => (v == null || v === "" ? null : Number(v));
 
-/** Edit an open deal's owner, company, dates, amount or sq ft. Writes to HubSpot. Keys left out are kept. */
+/** Edit an open deal's owner, company, dates, amount, sq ft or priority. Writes to HubSpot. Keys left out are kept. */
 export async function PUT(req: Request, ctx: Ctx) {
   const auth = await getErpAuth();
   if (!auth || !canViewPipelineBoard(auth.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -22,8 +22,10 @@ export async function PUT(req: Request, ctx: Ctx) {
   if ("company" in c) changes.company = str(c.company);
   if ("bidDate" in c) changes.bidDate = str(c.bidDate);
   if ("walkDate" in c) changes.walkDate = str(c.walkDate);
+  if ("awardDate" in c) changes.awardDate = str(c.awardDate);
   if ("cents" in c) changes.cents = num(c.cents);
   if ("sqft" in c) changes.sqft = num(c.sqft);
+  if ("priority" in c) changes.priority = str(c.priority);
   const result = await saveDealInfo({
     dealId,
     pipeline,

@@ -7,6 +7,7 @@
  * everywhere at once (board, Win/Loss, dashboard cards, emails), not after the refresh.
  */
 import { loadDealBundle, loadJanitorialDealBundle, mergeHubSpotChanges, type Bundle, type PipelineKey } from "./postConDeals";
+import { asPriority } from "./pipelineUi";
 import { lostChangesSince } from "./dealLostReasons";
 import { infoChangesSince } from "./dealInfo";
 import { createdDealsMissing } from "./dealCreate";
@@ -36,8 +37,10 @@ export async function applyErpEdits(cached: Bundle, pipeline: PipelineKey): Prom
         else if (e.property === "company") next = { ...next, company: v || null };
         else if (e.property === "bid_date") next = { ...next, bidDate: v || null };
         else if (e.property === "completion_date") next = { ...next, walkDate: v || null };
+        else if (e.property === "award_date") next = { ...next, awardDate: v || null };
         else if (e.property === "amount") next = { ...next, cents: v ? Math.round(Number(v) * 100) : 0 };
         else if (e.property === "area_sqft") next = { ...next, sqft: v && Number(v) > 0 ? Number(v) : null };
+        else if (e.property === "hs_priority") next = { ...next, priority: asPriority(v) };
         else if (e.property === "dealstage") next = { ...next, stageId: v, stageEnteredAt: e.createdAt.toISOString(), lastActivity: e.createdAt.toISOString() };
       }
       return next;

@@ -6,6 +6,20 @@ import type { BoardCard, BoardColumn, PipelineBoard } from "@/lib/erp/pipelineBo
 import type { NextStep } from "@/lib/erp/dealFollowUps";
 import type { LostSaved } from "../LostReasonModal";
 import type { InfoSaved } from "../DealInfoModal";
+import { missingFrom, type MissingField } from "@/lib/erp/pipelineMissing";
+
+/** What the stage rules look at, from a card. */
+export function factsOf(c: BoardCard, activeOwners: { id: string }[]) {
+  return {
+    ownerOk: !!c.ownerId && activeOwners.some((o) => o.id === c.ownerId),
+    hasCompany: !!c.gc,
+    bidDate: c.bidDate,
+    walkDate: c.walkDate,
+    awardDate: c.awardDate,
+    cents: c.cents,
+    sqft: c.sqft,
+  };
+}
 
 export type Undo = { id: string; name: string; from: string; to: string; toLabel: string };
 
@@ -15,7 +29,12 @@ export type Undo = { id: string; name: string; from: string; to: string; toLabel
  * applies them itself (dealEdits.ts), so these only bridge until then.
  * Also the stage move rules and Undo.
  */
-export function useBoardEdits(board: PipelineBoard, onNeedLostReason: (card: BoardCard) => void) {
+export function useBoardEdits(
+  board: PipelineBoard,
+  onNeedLostReason: (card: BoardCard) => void,
+  /** A forward move into a stage whose rules ask for info the deal doesn't have */
+  onNeedInfo: (card: BoardCard, col: BoardColumn, missing: MissingField[]) => void,
+) {
   const toast = useToast();
   const confirm = useConfirm();
   const [lost, setLost] = useState<Map<string, LostSaved>>(new Map());
@@ -32,17 +51,8 @@ export function useBoardEdits(board: PipelineBoard, onNeedLostReason: (card: Boa
       const i = info.get(c.id);
       if (i) {
         // Fixed fields drop off Missing; the server works it out again on the next load.
-        const still = (m: BoardCard["missing"][number]) =>
-          m === "owner"
-            ? !i.ownerId || !board.activeOwners.some((o) => o.id === i.ownerId)
-            : m === "company"
-              ? !i.gc
-              : m === "bidDate"
-                ? !i.bidDate
-                : m === "amount"
-                  ? !i.cents
-                  : !i.sqft;
-        c = { ...c, ...i, missing: c.missing.filter(still) };
+        const merged = { ...c, ...i };
+        c = { ...merged, missing: missingFrom(c.missing, factsOf(merged, board.activeOwners)) };
       }
       // A stage move starts the clock over: no Stuck, Clean up or Quiet until the next refresh says otherwise.
       const st = stages.get(c.id);
@@ -101,12 +111,14 @@ export function useBoardEdits(board: PipelineBoard, onNeedLostReason: (card: Boa
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pipeline: board.pipeline, fromStageId: from, toStageId: to, confirmWon }),
       });
-      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      const data = (await res.json().catch(() => null)) as { error?: string; nextStep?: NextStep | null } | null;
       if (!res.ok || !data || data.error) {
         revert();
         toast(data?.error ?? "Couldn't move it. Try again.", "error");
         return false;
       }
+      // The stage's automatic next step, added by the move.
+      if (data.nextStep) setNext((m) => new Map(m).set(card.id, data.nextStep!));
       return true;
     } catch {
       revert();
@@ -115,9 +127,18 @@ export function useBoardEdits(board: PipelineBoard, onNeedLostReason: (card: Boa
     }
   }
 
-  /** Drag or Move to: lost asks for the reason, won asks to confirm, open moves at once with Undo. */
+  /**
+   * Drag or Move to: lost asks for the reason, won asks to confirm, open moves
+   * at once with Undo. Forward into an open stage first checks its rules and
+   * asks for anything missing (the server checks again).
+   */
   async function moveCard(card: BoardCard, col: BoardColumn) {
     if (!canMove(card, col)) return;
+    const forward = board.columns.indexOf(col) > board.columns.findIndex((c) => c.stageId === card.stageId);
+    if (col.outcome === "open" && forward) {
+      const missing = missingFrom(col.required, factsOf(card, board.activeOwners));
+      if (missing.length) return onNeedInfo(card, col, missing);
+    }
     const fromWon = board.columns.some((c) => c.stageId === card.stageId && c.outcome === "won");
     if (fromWon) {
       const effect = /billing/i.test(col.label)

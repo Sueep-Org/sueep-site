@@ -131,9 +131,19 @@ export function canSeeOfficeHiring(role: ErpRole): boolean {
   return isPmLevel(role);
 }
 
+/** Offer letter templates: Admin and Business Manager edit, PMs can view and use them. */
+export function canEditOfferTemplates(role: ErpRole): boolean {
+  return role === "ADMIN" || role === "BUSINESS_MANAGER";
+}
+
 /** Post-construction pipeline board (read-only view of HubSpot deals). */
 export function canViewPipelineBoard(role: ErpRole): boolean {
   return isPmLevel(role) || role === "SALES" || role === "ESTIMATION";
+}
+
+/** Deals board settings that affect everyone: shared views, stage rules, bulk edits. */
+export function canManagePipeline(role: ErpRole): boolean {
+  return role === "ADMIN" || role === "BUSINESS_MANAGER";
 }
 
 export function canAddLaborLogs(role: ErpRole): boolean {
