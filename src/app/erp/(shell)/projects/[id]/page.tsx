@@ -564,6 +564,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     costCents: a.costCents ?? null,
     taskDescription: a.taskDescription,
     sovItemIds: a.sovItems.map((s) => s.id),
+    setOnSchedule: a.setOnSchedule,
   }));
 
   const allTabs = [

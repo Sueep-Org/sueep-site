@@ -45,6 +45,20 @@ type ManualEntryRow = {
   repeatId: string | null; repeatEveryDays: number | null;
 };
 
+/**
+ * A contractor's cost is paid once, in the period holding its end date (or
+ * its start date, or assigned date, when that's all it has). A job running
+ * across two periods used to count in full in both.
+ */
+function contractorPayDateIn(periodStart: Date, periodEnd: Date) {
+  const inPeriod = { gte: periodStart, lte: periodEnd };
+  return [
+    { endDate: inPeriod },
+    { endDate: null, startDate: inPeriod },
+    { endDate: null, startDate: null, assignedDate: inPeriod },
+  ];
+}
+
 /** Payroll rows for [periodStart, periodEnd] (start of first day, end of last day). */
 export async function computePayrollRows(periodStart: Date, periodEnd: Date) {
   await fillRepeatingManualHours(periodEnd);
@@ -70,19 +84,7 @@ export async function computePayrollRows(periodStart: Date, periodEnd: Date) {
       orderBy: { workDate: "asc" },
     }),
     prisma.contractorAssignment.findMany({
-      where: {
-        costCents: { not: null },
-        OR: [
-          // Assignment starts within period
-          { startDate: { gte: periodStart, lte: periodEnd } },
-          // Assignment ends within period
-          { endDate: { gte: periodStart, lte: periodEnd } },
-          // Assignment spans the entire period
-          { AND: [{ startDate: { lte: periodStart } }, { endDate: { gte: periodEnd } }] },
-          // No dates set — include if assignedDate is within period
-          { AND: [{ startDate: null }, { endDate: null }, { assignedDate: { gte: periodStart, lte: periodEnd } }] },
-        ],
-      },
+      where: { costCents: { not: null }, OR: contractorPayDateIn(periodStart, periodEnd) },
       include: {
         contractor: { select: { id: true, name: true } },
         project: { select: { jobTitle: true } },
@@ -95,15 +97,7 @@ export async function computePayrollRows(periodStart: Date, periodEnd: Date) {
     // only queried the former, so any contractor cost billed through a
     // change order never made it into a payroll run at all.
     prisma.changeOrderContractorAssignment.findMany({
-      where: {
-        costCents: { not: null },
-        OR: [
-          { startDate: { gte: periodStart, lte: periodEnd } },
-          { endDate: { gte: periodStart, lte: periodEnd } },
-          { AND: [{ startDate: { lte: periodStart } }, { endDate: { gte: periodEnd } }] },
-          { AND: [{ startDate: null }, { endDate: null }, { assignedDate: { gte: periodStart, lte: periodEnd } }] },
-        ],
-      },
+      where: { costCents: { not: null }, OR: contractorPayDateIn(periodStart, periodEnd) },
       include: {
         contractor: { select: { id: true, name: true } },
         changeOrder: { select: { project: { select: { jobTitle: true } } } },

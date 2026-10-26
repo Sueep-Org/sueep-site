@@ -251,7 +251,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     prisma.contractorAssignment.findMany({
       where: { projectId: { not: null } },
       orderBy: { createdAt: "asc" },
-      select: { projectId: true, contractorId: true, assignedDate: true, startDate: true, endDate: true, costCents: true },
+      select: { projectId: true, contractorId: true, assignedDate: true, startDate: true, endDate: true, costCents: true, setOnSchedule: true },
     }),
     prisma.changeOrderContractorAssignment.findMany({
       select: { changeOrderId: true, contractorId: true, assignedDate: true, startDate: true, endDate: true },
@@ -630,12 +630,19 @@ export default async function SchedulePage({ searchParams }: PageProps) {
   for (const c of coRequesterRows) addRequesterOption(c.projectId, null, c.requestedBy);
   for (const c of contactRows) addRequesterOption(c.projectId, c.fullName, c.email);
 
-  // A sub's pay on a turnover, newest wins (same row subPay.ts edits). Prices-only roles.
+  // A sub's pay set on the calendar (the line subPay.ts edits), and pay
+  // entered in the Contractors tab instead, added up. Prices-only roles.
   const subPayByProject = new Map<string, Record<string, number>>();
+  const subPayElsewhereByProject = new Map<string, Record<string, number>>();
   if (showSovPrices) {
     for (const ca of contractorAssignmentRows) {
       if (!ca.projectId || ca.costCents == null) continue;
-      subPayByProject.set(ca.projectId, { ...subPayByProject.get(ca.projectId), [ca.contractorId]: ca.costCents });
+      if (ca.setOnSchedule) {
+        subPayByProject.set(ca.projectId, { ...subPayByProject.get(ca.projectId), [ca.contractorId]: ca.costCents });
+      } else {
+        const prev = subPayElsewhereByProject.get(ca.projectId) ?? {};
+        subPayElsewhereByProject.set(ca.projectId, { ...prev, [ca.contractorId]: (prev[ca.contractorId] ?? 0) + ca.costCents });
+      }
     }
   }
 
@@ -685,6 +692,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
       requesterOptions: [...(requesterOptionsByProject.get(r.id)?.values() ?? [])],
       contractValueCents: showSovPrices ? r.contractValueCents : null,
       subPayByContractor: subPayByProject.get(r.id) ?? {},
+      subPaySetElsewhere: subPayElsewhereByProject.get(r.id) ?? {},
       completedScopeItems: r.turnoverRequest ? parseCompletedScopeItems(r.turnoverRequest.completedScopeItems) : [],
       changeOrders: changeOrdersByProject.get(r.id) ?? [],
       buildingId: r.turnoverRequest?.buildingId ?? null,

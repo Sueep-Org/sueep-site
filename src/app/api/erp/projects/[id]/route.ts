@@ -13,6 +13,7 @@ import { resolveCommissionEmployeeId } from "@/lib/erp/commission";
 import { paidDayToTimestamp } from "@/lib/erp/payPeriods";
 import { isLienManualStepKey, parseLienDecision, parseLienManualSteps, parseLienRole, parseLienState } from "@/lib/erp/lienDeadline";
 import type { ErpRole } from "@/lib/erpSession";
+import { syncScheduleSubPay } from "@/lib/erp/subPay";
 
 const STATUSES = ["ACTIVE", "UPCOMING", "ON_HOLD", "COMPLETE", "ARCHIVED"] as const;
 
@@ -373,6 +374,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
               data: { date: newProjectDate! },
             }),
           ]);
+          // Calendar pay is booked on the sub's last day, which just moved.
+          await syncScheduleSubPay(id);
         }
       } catch (e) {
         console.error("Failed to move day assignment alongside projectDate", e);

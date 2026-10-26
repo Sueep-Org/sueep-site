@@ -6,7 +6,7 @@ import { formatTurnoverHoursBudgetText } from "@/lib/erp/turnoverHoursBudget";
 import { isTurnoverScopeValue, parseCompletedScopeItems, turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
 import { appUrl, batchDayInvites, notifyProjectCrew, scopeText, sendDayInvite, sendSubLeadInvite } from "@/lib/erp/scheduleInvites";
 import { notifyProjectDayRequester, requesterFromBody } from "@/lib/erp/scheduleRequester";
-import { saveSubPay, subPayFromBody } from "@/lib/erp/subPay";
+import { saveSubPay, subPayFromBody, syncScheduleSubPay } from "@/lib/erp/subPay";
 import { hasCalendarSubPay } from "@/lib/erp/projectSegments";
 import { canSeeFinancials, getErpAuth } from "@/lib/erpAuth";
 
@@ -237,9 +237,10 @@ export async function POST(req: Request) {
   }
 
   // Saved before any invite goes out, so the sub's invite shows it
-  if (subPayCents !== undefined && supervisorContractorId && hasCalendarSubPay(project.segment)) {
-    await saveSubPay(projectId, supervisorContractorId, subPayCents, date);
-  }
+  const subPay =
+    subPayCents !== undefined && supervisorContractorId && hasCalendarSubPay(project.segment)
+      ? await saveSubPay(projectId, supervisorContractorId, subPayCents, date)
+      : null;
 
   if (seriesDates && repeatUntil) {
     const series = await prisma.projectScheduleSeries.create({
@@ -324,7 +325,8 @@ export async function POST(req: Request) {
     // A day that's already fully confirmed tells a newly set requester now
     await Promise.all(assignments.map(notifyRequester));
 
-    return NextResponse.json({ seriesId: series.id, assignments }, { status: 201 });
+    await syncScheduleSubPay(projectId);
+    return NextResponse.json({ seriesId: series.id, assignments, subPay }, { status: 201 });
   }
 
   const writeAssignment = prisma.projectDayAssignment.upsert({
@@ -386,5 +388,6 @@ export async function POST(req: Request) {
 
   await notifyRequester(assignment);
 
-  return NextResponse.json(assignment, { status: 201 });
+  await syncScheduleSubPay(projectId);
+  return NextResponse.json({ ...assignment, subPay }, { status: 201 });
 }

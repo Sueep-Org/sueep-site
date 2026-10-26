@@ -4,6 +4,7 @@ import { dayKey } from "@/lib/erp/schedule";
 import { notifyProjectCrew, sendDayInvite, sendSubLeadInvite } from "@/lib/erp/scheduleInvites";
 import { isScheduleRemovalReason } from "@/lib/erp/scheduleRemovals";
 import { getErpAuth } from "@/lib/erpAuth";
+import { syncScheduleSubPay } from "@/lib/erp/subPay";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -88,6 +89,8 @@ export async function DELETE(req: Request, ctx: Ctx) {
     prisma.projectDayAssignment.delete({ where: { id } }),
     prisma.projectWorkerDayAssignment.deleteMany({ where: { projectId: existing.projectId, date: existing.date } }),
   ]);
+  // A sub with no days left on the job loses the pay set on the calendar.
+  await syncScheduleSubPay(existing.projectId);
 
   // Send a cancellation for the invite sent when this assignment was
   // created, reusing the same UID so calendar apps remove the right event.
