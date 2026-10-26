@@ -14,7 +14,7 @@ import { Prisma } from "@prisma/client";
  * Query params:
  *   - contractorId: Filter by contractor
  *   - projectId: Filter by project
- *   - startDate / endDate: Filter by assignment start date range (inclusive)
+ *   - startDate / endDate: Filter by the row's shown date (start, else assigned, else end), inclusive
  *   - skip / take: Pagination, same convention as /api/erp/labor
  */
 export async function GET(request: NextRequest) {
@@ -36,15 +36,23 @@ export async function GET(request: NextRequest) {
       };
     }
 
+    // Filters on the date each row is shown with: start date, else assigned
+    // date, else end date (pay set on the schedule only has an end date).
+    const shownDateIn = (f: Prisma.DateTimeFilter) => [
+      { startDate: f },
+      { startDate: null, assignedDate: f },
+      { startDate: null, assignedDate: null, endDate: f },
+    ];
+
     const where: Prisma.ContractorAssignmentWhereInput = {};
     if (contractorId) where.contractorId = contractorId;
     if (projectId) where.projectId = projectId;
-    if (dateFilter) where.startDate = dateFilter;
+    if (dateFilter) where.OR = shownDateIn(dateFilter);
 
     const coWhere: Prisma.ChangeOrderContractorAssignmentWhereInput = {};
     if (contractorId) coWhere.contractorId = contractorId;
     if (projectId) coWhere.changeOrder = { projectId };
-    if (dateFilter) coWhere.startDate = dateFilter;
+    if (dateFilter) coWhere.OR = shownDateIn(dateFilter);
 
     const [rows, coRows] = await Promise.all([
       prisma.contractorAssignment.findMany({
@@ -89,8 +97,9 @@ export async function GET(request: NextRequest) {
         changeOrderTitle: null as string | null,
         role: r.role,
         // Falls back to assignedDate for older rows created before
-        // startDate/endDate existed on this form.
-        date: r.startDate ?? r.assignedDate,
+        // startDate/endDate existed on this form, then endDate for pay set
+        // on the schedule, which only has an end date (see subPay.ts).
+        date: r.startDate ?? r.assignedDate ?? r.endDate,
         endDate: r.endDate,
         costCents: r.costCents,
         taskDescription: r.taskDescription,
@@ -104,7 +113,7 @@ export async function GET(request: NextRequest) {
         buildingName: null as string | null,
         changeOrderTitle: r.changeOrder.title,
         role: r.role,
-        date: r.startDate ?? r.assignedDate,
+        date: r.startDate ?? r.assignedDate ?? r.endDate,
         endDate: r.endDate,
         costCents: r.costCents,
         // ChangeOrderContractorAssignment has no taskDescription field, notes is its closest equivalent.

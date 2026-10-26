@@ -2221,6 +2221,11 @@ model ContractorAssignment {
 
   taskDescription String?
 
+  /// Pay typed on the schedule's day card, one per sub per project. The
+  /// calendar keeps its endDate on the sub's last day and removes it when
+  /// they have no days left (see subPay.ts).
+  setOnSchedule Boolean @default(false)
+
   /// SOV items this assignment's work covers. A contractor can be responsible
   /// for multiple line items.
   sovItems ProjectSOVItem[] @relation("ContractorAssignmentSOVItems")

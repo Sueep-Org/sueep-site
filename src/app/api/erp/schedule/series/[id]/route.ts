@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { dayKey } from "@/lib/erp/schedule";
 import { batchDayInvites, resolveWorkerContact, sendDayInvite, sendSubLeadInvite } from "@/lib/erp/scheduleInvites";
+import { syncScheduleSubPay } from "@/lib/erp/subPay";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -36,6 +37,7 @@ export async function DELETE(_req: Request, ctx: Ctx) {
   // added manually to one of these days without going through the repeat
   // flow have no seriesId and are left alone.
   await prisma.projectScheduleSeries.delete({ where: { id } });
+  await syncScheduleSubPay(series.projectId);
 
   // One cancellation email per person for the whole range (each day's calendar event is still removed).
   await batchDayInvites(async () => {

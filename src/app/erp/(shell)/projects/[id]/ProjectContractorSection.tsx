@@ -21,6 +21,8 @@ export type ContractorRow = {
   costCents: number | null;
   taskDescription: string | null;
   sovItemIds: string[];
+  /** Pay typed on the schedule's day card (see subPay.ts). */
+  setOnSchedule?: boolean;
 };
 
 export type ContractorOption = {
@@ -161,6 +163,11 @@ export function ProjectContractorSection({
       setSovCompletedMap((prev) => ({ ...prev, [sovItemId]: !next }));
     }
   }
+
+  // Pay this contractor already has on the job. Payroll adds every line, so
+  // a second cost for the same work pays them twice.
+  const existingPay = assignments.filter((a) => a.contractorId === addContractorId && a.costCents != null);
+  const existingPayCents = existingPay.reduce((s, a) => s + (a.costCents ?? 0), 0);
 
   function startEdit(row: ContractorRow) {
     setEditingId(row.id);
@@ -366,6 +373,23 @@ export function ProjectContractorSection({
               allLabel="Select contractor…"
               className="mt-1"
             />
+            {existingPay.length > 0 && (
+              <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" role="alert">
+                {existingPay[0]!.contractorName} already has {fmt(existingPayCents)} on this job
+                {existingPay.some((a) => a.setOnSchedule) ? ", set on the schedule" : ""}. Payroll pays every line, so a cost
+                added here pays them again.{" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddForm(false);
+                    startEdit(existingPay.find((a) => a.setOnSchedule) ?? existingPay[0]!);
+                  }}
+                  className="font-medium text-pink-600 hover:underline"
+                >
+                  Edit that line instead
+                </button>
+              </div>
+            )}
           </div>
           <div>
             <label className={label} htmlFor="c-role">Role</label>
@@ -482,7 +506,7 @@ export function ProjectContractorSection({
         {addError ? <p className="mt-3 text-sm text-red-400" role="alert">{addError}</p> : null}
         <Button size="md" className="mt-4" type="submit"
           disabled={loading}>
-          {loading ? "Adding…" : "Add contractor"}
+          {loading ? "Adding…" : existingPay.length > 0 ? "Add anyway" : "Add contractor"}
         </Button>
       </form>}
 

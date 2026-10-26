@@ -870,6 +870,11 @@ export function SchedulePlanner({
   const centsToInput = (c: number | null) => (c == null ? "" : (c / 100).toFixed(2).replace(/\.00$/, ""));
   const showSubPay = (p: ScheduleProject, contractorId: string) =>
     canSetSubPay && !!contractorId && hasCalendarSubPay(p.segment);
+  /** Pay entered in the project's Contractors tab, when the calendar has none of its own. Shown, not editable, so it isn't paid twice. */
+  function subPaySetElsewhere(p: ScheduleProject, contractorId: string): number | null {
+    if (!contractorId || savedSubPayCents(p, contractorId) != null) return null;
+    return p.subPaySetElsewhere[contractorId] ?? null;
+  }
   // The client emailed once everyone on the day confirms; "other" types someone not in the list.
   const [eventRequesterEmail, setEventRequesterEmail] = useState("");
   const [eventRequesterName, setEventRequesterName] = useState("");
@@ -1672,7 +1677,7 @@ export function SchedulePlanner({
     const existing = dayAssignments.find((a) => a.dateKey === k && a.projectId === projectId);
     const same = (x: string[], y: string[]) => [...x].sort().join() === [...y].sort().join();
     const proj = projects.find((x) => x.id === projectId);
-    const sendPay = !!proj && showSubPay(proj, eventDaySupervisorContractorId);
+    const sendPay = !!proj && showSubPay(proj, eventDaySupervisorContractorId) && subPaySetElsewhere(proj, eventDaySupervisorContractorId) == null;
     const payCents = eventSubPay.trim() ? Math.round(Number(eventSubPay.replace(/[$,\s]/g, "")) * 100) : null;
     if (sendPay && payCents != null && (!Number.isFinite(payCents) || payCents < 0)) {
       setEventDayError("Contractor pay needs to be a dollar amount");
@@ -2294,14 +2299,19 @@ export function SchedulePlanner({
               status={answers[answerUid.daySub(eventDayAssignment.id, eventDayAssignment.supervisorContractorId)]}
             />
           ) : null}
-          {showSubPay(p, eventDaySupervisorContractorId) ? (
+          {showSubPay(p, eventDaySupervisorContractorId) && subPaySetElsewhere(p, eventDaySupervisorContractorId) != null ? (
+            <div className="mt-1.5 flex items-center gap-1 text-[10px] text-gray-500">
+              Contractor pay {centsToDollars(subPaySetElsewhere(p, eventDaySupervisorContractorId)!)}, set in the project&apos;s Contractors tab
+              <InfoTip text="Change it there. The calendar doesn't add its own pay on top, so the contractor isn't paid twice." />
+            </div>
+          ) : showSubPay(p, eventDaySupervisorContractorId) ? (
             <div className="mt-1.5">
               <div className="flex items-center gap-1 text-[9px] text-gray-400">
                 {isTurnover ? "Contractor pay" : "Contractor pay (whole job)"}
                 <InfoTip
                   text={
                     isTurnover
-                      ? "Shows on the contractor's invite as their pay, and saves as their cost on the project. Leave blank to keep pay off the invite."
+                      ? "Their pay for this job, not per day. Shows on the contractor's invite and saves as their cost on the project, paid on their last day here. Leave blank to keep pay off the invite."
                       : "Their total pay for this job, not per day. Shows on every invite for this job and saves as their cost on the project. Leave blank to keep pay off the invite."
                   }
                 />
