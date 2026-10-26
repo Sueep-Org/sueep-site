@@ -101,8 +101,9 @@ export function BillingOverview() {
         <Step n={7} title="When a HubSpot invoice is on the wrong line">
           HubSpot invoices are matched to SOV items, change orders and units automatically. To
           fix a match, open the project or building, go to <strong>Invoices &amp; Quotes</strong>,
-          and click <strong>Edit</strong> on the invoice. An invoice can cover several lines, but a
-          project line holds one invoice. On a building, an invoice can be linked to units, to
+          and click <strong>Edit</strong> on the invoice. An invoice can cover several lines. The
+          automatic match puts one invoice on a line, but you can link more by hand, for example
+          when a line is billed in parts. On a building, an invoice can be linked to units, to
           change orders on those units, and to months of the building&apos;s janitorial contract.
           Unit change orders and contract months are never matched automatically, so link them
           by hand. A <strong>not linked</strong> flag on a billing row

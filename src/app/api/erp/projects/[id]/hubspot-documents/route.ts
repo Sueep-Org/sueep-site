@@ -65,11 +65,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     }),
   ]);
   const linksByInvoice = new Map<string, unknown[]>();
-  // Which invoice each line is on, so the link editor can say a pick will move it.
-  const heldBy = new Map<string, { invoiceId: string; number: string | null }>();
+  // Which invoices each line is on, so the link editor can show them.
+  const heldBy = new Map<string, Array<{ invoiceId: string; number: string | null }>>();
   for (const r of linkRows) {
     const targetId = r.sovItemId ? `sov:${r.sovItemId}` : r.changeOrderId ? `co:${r.changeOrderId}` : null;
-    if (targetId) heldBy.set(targetId, { invoiceId: r.hubspotInvoiceId, number: r.invoiceNumber });
+    if (targetId) heldBy.set(targetId, [...(heldBy.get(targetId) ?? []), { invoiceId: r.hubspotInvoiceId, number: r.invoiceNumber }]);
     linksByInvoice.set(r.hubspotInvoiceId, [
       ...(linksByInvoice.get(r.hubspotInvoiceId) ?? []),
       {
@@ -106,8 +106,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       scope: "project",
       ownerId: id,
       targets: [
-        ...sovItems.map((i) => ({ id: `sov:${i.id}`, label: i.description, hint: `SOV · ${money(i.scheduledValueCents)}`, heldBy: heldBy.get(`sov:${i.id}`) ?? null })),
-        ...changeOrders.map((c) => ({ id: `co:${c.id}`, label: `CO: ${c.title}`, hint: `Change order · ${money(c.contractValueCents)}`, heldBy: heldBy.get(`co:${c.id}`) ?? null })),
+        ...sovItems.map((i) => ({ id: `sov:${i.id}`, label: i.description, hint: `SOV · ${money(i.scheduledValueCents)}`, heldBy: heldBy.get(`sov:${i.id}`) ?? [] })),
+        ...changeOrders.map((c) => ({ id: `co:${c.id}`, label: `CO: ${c.title}`, hint: `Change order · ${money(c.contractValueCents)}`, heldBy: heldBy.get(`co:${c.id}`) ?? [] })),
       ],
     },
   });

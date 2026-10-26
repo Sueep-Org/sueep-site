@@ -16,10 +16,12 @@ import { applyPaidInvoiceLinks } from "@/lib/hubspot/applyPaidLinks";
  * syncAllProjectInvoices runs afterwards. Invoices linked by hand are left
  * alone apart from refreshing their HubSpot details.
  *
- * A line holds one invoice at most, though one invoice can cover many lines.
- * A line someone linked by hand is off limits to the automatic match, and
- * when two invoices both match the same line only the one whose amount fits
- * it best is kept; the other shows as not linked for a person to place.
+ * The automatic match gives a line one invoice at most, though one invoice
+ * can cover many lines. Only a person can put a second invoice on a line.
+ * A line someone linked by hand gets no new automatic invoice (one it already
+ * had stays), and when two invoices both match the same line only the one
+ * whose amount fits it best is kept; the other shows as not linked for a
+ * person to place.
  */
 
 const SETTLED = new Set(["AUTO_APPLIED", "ALIAS_APPLIED", "RESOLVED", "ALREADY_PAID_SKIPPED"]);
@@ -37,12 +39,13 @@ export async function syncProjectInvoices(
     where: { projectId, manual: true },
     select: { hubspotInvoiceId: true, sovItemId: true, changeOrderId: true },
   });
-  // Automatic rows are rebuilt below, so remember which ones the sync has
-  // already counted as paid and carry that across (see applyPaidLinks.ts).
-  const appliedAt = new Map(
+  // Automatic rows are rebuilt below, so remember which ones existed (a hand
+  // link added beside one keeps it) and which the sync has already counted
+  // as paid, to carry that across (see applyPaidLinks.ts).
+  const autoRows = new Map(
     (
       await prisma.hubSpotSovInvoice.findMany({
-        where: { projectId, manual: false, paidAppliedAt: { not: null } },
+        where: { projectId, manual: false },
         select: { hubspotInvoiceId: true, sovItemId: true, changeOrderId: true, paidAppliedAt: true },
       })
     ).map((r) => [`${r.hubspotInvoiceId}|${r.sovItemId ? `sov:${r.sovItemId}` : `co:${r.changeOrderId}`}`, r.paidAppliedAt]),
@@ -69,7 +72,7 @@ export async function syncProjectInvoices(
   const targets: Target[] = [
     ...sovItems.map((i) => ({ key: `sov:${i.id}`, sovItemId: i.id, changeOrderId: null, description: i.description, valueCents: i.scheduledValueCents })),
     ...changeOrders.map((c) => ({ key: `co:${c.id}`, sovItemId: null, changeOrderId: c.id, description: c.title, valueCents: c.contractValueCents })),
-  ].filter((t) => !heldByHand.has(t.key));
+  ];
   const targetByKey = new Map(targets.map((t) => [t.key, t]));
   const aliasByText = new Map(aliases.map((a) => [a.hubspotText, a.sovItemId]));
   const ledgerByLine = new Map(ledger.map((l) => [l.hubspotLineItemId, l]));
@@ -95,7 +98,14 @@ export async function syncProjectInvoices(
       }
       byTarget.set(key, (byTarget.get(key) ?? 0) + (li.amountCents ?? 0));
     }
-    for (const [key, amountCents] of byTarget) rows.push({ invoice, target: targetByKey.get(key)!, amountCents });
+    for (const [key, amountCents] of byTarget) {
+      // A line linked by hand only keeps an automatic invoice it already had.
+      if (heldByHand.has(key) && !autoRows.has(`${invoice.id}|${key}`)) {
+        unmatchedLines += 1;
+        continue;
+      }
+      rows.push({ invoice, target: targetByKey.get(key)!, amountCents });
+    }
   }
 
   // One invoice per line: where several matched the same line, keep the one
@@ -131,7 +141,7 @@ export async function syncProjectInvoices(
         sovItemId: r.target.sovItemId,
         changeOrderId: r.target.changeOrderId,
         amountCents: r.amountCents,
-        paidAppliedAt: appliedAt.get(`${r.invoice.id}|${r.target.key}`) ?? null,
+        paidAppliedAt: autoRows.get(`${r.invoice.id}|${r.target.key}`) ?? null,
         ...invoiceSnapshot(r.invoice),
       })),
     }),

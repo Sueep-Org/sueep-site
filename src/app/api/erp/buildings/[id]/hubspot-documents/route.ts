@@ -135,7 +135,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
           id: `co:${co.id}`,
           label: coLabel(co),
           hint: [fmtDay(co.completedAt ?? co.createdAt), cents(co.contractValueCents)].filter(Boolean).join(" · "),
-          heldBy: co.hubspotSovInvoices[0] ? { invoiceId: co.hubspotSovInvoices[0].hubspotInvoiceId, number: co.hubspotSovInvoices[0].invoiceNumber } : null,
+          heldBy: co.hubspotSovInvoices.map((r) => ({ invoiceId: r.hubspotInvoiceId, number: r.invoiceNumber })),
         })),
       ],
     },
