@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canManageJanitorial } from "@/lib/erpAuth";
 import { NewContractForm } from "../../NewContractForm";
+import { loadEmployerTaxRates } from "@/lib/erp/employerTaxServer";
 
 export const metadata: Metadata = {
   title: "New Janitorial Contract",
@@ -15,7 +16,7 @@ export default async function NewJanitorialContractPage() {
   const auth = await getErpAuth();
   if (!auth || !canManageJanitorial(auth.role)) redirect("/erp");
 
-  const [buildings, employees] = await Promise.all([
+  const [buildings, employees, taxRates] = await Promise.all([
     prisma.building.findMany({
       where: { recurringContract: null },
       orderBy: { name: "asc" },
@@ -26,6 +27,7 @@ export default async function NewJanitorialContractPage() {
       orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
       select: { id: true, firstName: true, lastName: true },
     }),
+    loadEmployerTaxRates(),
   ]);
 
   return (
@@ -39,6 +41,7 @@ export default async function NewJanitorialContractPage() {
       <NewContractForm
         buildings={buildings.map((b) => ({ id: b.id, name: b.name }))}
         employees={employees.map((e) => ({ id: e.id, name: `${e.firstName} ${e.lastName}`.trim() }))}
+        taxRates={taxRates}
       />
     </div>
   );

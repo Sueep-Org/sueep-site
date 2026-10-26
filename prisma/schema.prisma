@@ -1681,6 +1681,11 @@ model Employee {
   /// pattern as isOffshore rather than a payType value.
   isJanitorialContract Boolean @default(false)
 
+  /// Paid as a W2 employee through ADP, so employer payroll taxes apply to
+  /// their pay (see lib/erp/employerTax.ts). Every employee is, except
+  /// offshore workers; untick it for anyone paid another way.
+  onAdpPayroll Boolean @default(true)
+
   defaultProject  String?
   /// ACTIVE | INACTIVE
   status          String    @default("ACTIVE")
@@ -1750,6 +1755,7 @@ model Employee {
   documents                    EmployeeDocument[]
   backgroundCheckEvents        EmployeeBackgroundCheckEvent[]
   payRates                     EmployeePayRate[]
+  healthCoverages              HealthCoverage[]
   manualHours                  ManualHoursEntry[]
   manualHoursRepeats           ManualHoursRepeat[]
   timeOff                      EmployeeTimeOff[]
@@ -4429,4 +4435,28 @@ model SubBidAttachment {
   uploadedBy String?
 
   @@index([bidId])
+}
+
+/// One person on the company health plan (Independence Blue Cross) and the
+/// full monthly premium IBX bills for them. Sueep pays a share of it
+/// (AppSetting "healthCompanySharePct", 25% by default), counted day by day
+/// on Finance and on that person's Payroll row (lib/erp/healthCost.ts). A
+/// price change ends the row and starts a new one, so past months keep the
+/// old price. Owners on the plan may have no employee profile.
+model HealthCoverage {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  personName          String
+  employeeId          String?
+  employee            Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  /// Full premium on the IBX bill, before Sueep's share
+  monthlyPremiumCents Int
+  /// First covered day (UTC-midnight date label)
+  startDate           DateTime
+  /// Last covered day, null while still covered
+  endDate             DateTime?
+
+  @@index([employeeId])
 }

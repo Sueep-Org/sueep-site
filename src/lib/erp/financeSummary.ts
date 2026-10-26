@@ -29,7 +29,7 @@
  * change orders always add up to its total there.
  *
  * Net profit also subtracts overhead: salaries, offshore pay, commission paid
- * out, reimbursements, insurance, and hiring ads. Salaried staff also log hours on jobs, and that
+ * out, reimbursements, insurance, employer payroll taxes, Sueep's share of health insurance, and hiring ads. Salaried staff also log hours on jobs, and that
  * labor is already in job cost, so only the part of each salary that isn't
  * already in a job that month counts as overhead (otherwise it would be
  * subtracted twice).
@@ -47,6 +47,8 @@ import { loadCommissionRows } from "@/lib/erp/commissionRows";
 import { insuranceCostForDays, termStartKey, type CostTerm } from "@/lib/erp/insuranceCost";
 import { policyTypeLabel } from "@/lib/erp/insurance";
 import { hiringSourceLabel } from "@/lib/erp/officeHiring";
+import { HEALTH_SHARE_SETTING_KEY, healthCompanyCostForDays, parseHealthSharePct } from "@/lib/erp/healthCost";
+import { employerTaxByDay } from "@/lib/erp/employerTaxRows";
 
 export type FinanceSegment = "POST_CONSTRUCTION" | "TURNOVERS" | "JANITORIAL_CONTRACTS" | "OTHER";
 
@@ -95,6 +97,10 @@ export type FinanceMonth = {
   reimbursementCents: number;
   /** Insurance premiums spread over each term, plus audit bills/refunds (overhead). */
   insuranceCents: number;
+  /** Employer payroll taxes (Social Security, Medicare, unemployment) on W2 pay, each pay period spread over its days (overhead). */
+  payrollTaxCents: number;
+  /** Sueep's share of each person's health plan premium, spread over each month's days (overhead). */
+  healthCents: number;
   /** Job ads for office openings (Candidates, Office tab), in full in the month posted (overhead). */
   hiringAdsCents: number;
   overheadCents: number;
@@ -120,6 +126,8 @@ export function costBreakdown(m: FinanceMonth): { label: string; cents: number; 
     { label: "Materials and travel", cents: m.materialCents, hint: "Material logs and travel typed on projects" },
     { label: "Reimbursements", cents: m.reimbursementCents, hint: "Expenses, in the month of the expense" },
     { label: "Insurance", cents: m.insuranceCents, hint: "Policy premiums spread over each term, plus audit bills or refunds on their date" },
+    { label: "Payroll taxes", cents: m.payrollTaxCents, hint: "Employer Social Security, Medicare and unemployment on employees' pay, same as the Payroll page" },
+    { label: "Health insurance", cents: m.healthCents, hint: "Sueep's share of each person's health plan premium" },
     { label: "Hiring ads", cents: m.hiringAdsCents, hint: "Job ads (LinkedIn, Indeed...) on office openings, in the month posted" },
   ];
 }
@@ -219,7 +227,7 @@ function emptyMonth(key: string): FinanceMonth {
     key, revenueCents: 0, laborCents: 0, contractorCents: 0, salaryInJobsCents: 0, offshoreInJobsCents: 0,
     materialCents: 0, grossProfitCents: 0,
     salaryCents: 0, offshoreCents: 0, manualHourlyCents: 0, commissionCents: 0, reimbursementCents: 0,
-    insuranceCents: 0, hiringAdsCents: 0, overheadCents: 0, netProfitCents: 0, paidCents: 0, billedCents: 0, notBilledCents: 0, segments: emptySegments(),
+    insuranceCents: 0, payrollTaxCents: 0, healthCents: 0, hiringAdsCents: 0, overheadCents: 0, netProfitCents: 0, paidCents: 0, billedCents: 0, notBilledCents: 0, segments: emptySegments(),
   };
 }
 
@@ -342,7 +350,7 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
   const bucketOf = (dayKey: string): string | null =>
     range ? (dayKey >= range.from && dayKey <= range.to ? FINANCE_RANGE_KEY : null) : inRange(dayKey.slice(0, 7)) ? dayKey.slice(0, 7) : null;
 
-  const [allProjects, periods, contracts, fixedPayEmployees, offshorePaid, commissionPayouts, commissionRows, reimbursements, policies, jobAds] = await Promise.all([
+  const [allProjects, periods, contracts, fixedPayEmployees, offshorePaid, commissionPayouts, commissionRows, reimbursements, policies, jobAds, healthCoverages, healthShare] = await Promise.all([
     // Complete projects (their contracts count) plus open ones (their
     // finished change orders count now, the rest is Future).
     prisma.project.findMany({
@@ -408,6 +416,8 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
     prisma.jobPosting.findMany({
       select: { id: true, source: true, costCents: true, postedAt: true, jobOpening: { select: { id: true, title: true } } },
     }),
+    prisma.healthCoverage.findMany({ select: { employeeId: true, monthlyPremiumCents: true, startDate: true, endDate: true } }),
+    prisma.appSetting.findUnique({ where: { key: HEALTH_SHARE_SETTING_KEY } }),
   ]);
 
   const months = new Map<string, FinanceMonth>();
@@ -856,6 +866,25 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
     warnings.insuranceMissingPremium.push({ id: p.id, label: `${policyTypeLabel(p.policyType)} (${p.carrier})`, href: "/erp/insurance" });
   }
 
+  // Health insurance: Sueep's share of each person's monthly premium, day by
+  // day like salaries (lib/erp/healthCost.ts).
+  const healthSpans = healthCoverages.map((c) => ({
+    employeeId: c.employeeId, monthlyPremiumCents: c.monthlyPremiumCents,
+    startKey: utcDateKey(c.startDate), endKey: c.endDate ? utcDateKey(c.endDate) : null,
+  }));
+  const healthSharePct = parseHealthSharePct(healthShare?.value);
+  for (const [key, dayKeys] of bucketDays) monthOf(key).healthCents += Math.round(healthCompanyCostForDays(healthSpans, dayKeys, healthSharePct));
+
+  // Employer payroll taxes: each pay period priced like the Payroll page,
+  // spread over its days (lib/erp/employerTaxRows.ts).
+  const viewDays = bucketDays.flatMap(([, dayKeys]) => dayKeys);
+  if (viewDays.length) {
+    const taxByDay = await employerTaxByDay(viewDays[0], viewDays[viewDays.length - 1], todayKey);
+    for (const [key, dayKeys] of bucketDays) {
+      monthOf(key).payrollTaxCents += Math.round(dayKeys.reduce((sum, d) => sum + (taxByDay.get(d) ?? 0), 0));
+    }
+  }
+
   // Hiring ads: the whole cost in the month the ad was posted, like how
   // LinkedIn and Indeed charge for a post.
   for (const ad of jobAds) {
@@ -876,7 +905,7 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
 
   for (const m of months.values()) {
     m.grossProfitCents = m.revenueCents - m.laborCents - m.materialCents;
-    m.overheadCents = m.salaryCents + m.offshoreCents + m.manualHourlyCents + m.commissionCents + m.reimbursementCents + m.insuranceCents + m.hiringAdsCents;
+    m.overheadCents = m.salaryCents + m.offshoreCents + m.manualHourlyCents + m.commissionCents + m.reimbursementCents + m.insuranceCents + m.payrollTaxCents + m.healthCents + m.hiringAdsCents;
     m.netProfitCents = m.grossProfitCents - m.overheadCents;
   }
 
@@ -919,6 +948,8 @@ export function sumMonths(key: string, list: FinanceMonth[]): FinanceMonth {
     total.commissionCents += m.commissionCents;
     total.reimbursementCents += m.reimbursementCents;
     total.insuranceCents += m.insuranceCents;
+    total.payrollTaxCents += m.payrollTaxCents;
+    total.healthCents += m.healthCents;
     total.hiringAdsCents += m.hiringAdsCents;
     total.overheadCents += m.overheadCents;
     total.netProfitCents += m.netProfitCents;

@@ -6,16 +6,19 @@ import { Button, useToast } from "@/app/erp/components/ui";
 import { centsToDollars } from "@/lib/erp/money";
 import { calculatePricing, emptyPricing, type ContractPricing } from "@/lib/erp/janitorialPricing";
 import { PricingCalculator } from "../../PricingCalculator";
+import type { EmployerTaxRates } from "@/lib/erp/employerTax";
 
 /** The contract's Pricing tab: the only place its monthly rate is set. */
 export function ContractPricingEditor({
   contractId,
   initialPricing,
   currentMonthlyRateCents,
+  taxRates,
 }: {
   contractId: string;
   initialPricing: ContractPricing | null;
   currentMonthlyRateCents: number;
+  taxRates: EmployerTaxRates;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -62,7 +65,7 @@ export function ContractPricingEditor({
         </p>
       )}
 
-      <PricingCalculator value={pricing} onChange={setPricing} />
+      <PricingCalculator value={pricing} onChange={setPricing} taxRates={taxRates} />
 
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex flex-wrap items-center justify-end gap-3 border-t border-gray-100 pt-4">

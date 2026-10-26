@@ -1412,8 +1412,15 @@ export default function BillingPage() {
   }, [searchInput]);
 
   useEffect(() => {
-    const t = new URLSearchParams(window.location.search).get("tab") as Tab | null;
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get("tab") as Tab | null;
     if (t === "post-construction" || t === "janitorial" || t === "recurring") setTab(t);
+    // Links from a project or contract open the Billing page already searched for it
+    const q = params.get("q");
+    if (q) {
+      setSearchInput(q);
+      setSearch(q);
+    }
   }, []);
 
   function updateTab(t: Tab) {

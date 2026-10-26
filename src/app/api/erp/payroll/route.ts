@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { getErpAuth, canSeePayroll } from "@/lib/erpAuth";
 import { computePayrollRows, endOfDay, startOfDay, type PayrollRow } from "@/lib/erp/payrollRows";
-import { diffPayrollRows } from "@/lib/erp/payrollClose";
+import { withEmployerTax } from "@/lib/erp/employerTaxRows";
+import { withHealthCost } from "@/lib/erp/healthCostServer";
+
+/** Company costs on top of pay: employer payroll tax and Sueep's share of health insurance. */
+async function withCompanyCosts(rows: PayrollRow[], periodStart: Date, periodEnd: Date) {
+  return withHealthCost(await withEmployerTax(rows, periodStart, periodEnd), periodStart, periodEnd);
+}
 
 export async function GET(req: Request) {
   // This route previously had no auth/role check at all — any authenticated
@@ -29,22 +34,6 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
   }
 
-  const [rows, close] = await Promise.all([
-    computePayrollRows(periodStart, periodEnd),
-    prisma.payrollPeriodClose.findUnique({ where: { periodStart } }),
-  ]);
-
-  // A closed period shows what was actually paid, plus anything that has
-  // changed in the records since it was closed.
-  if (close) {
-    const saved = close.rows as unknown as PayrollRow[];
-    return NextResponse.json({
-      periodStart: startParam,
-      periodEnd: endParam,
-      rows: saved,
-      closed: { closedAt: close.createdAt.toISOString(), closedBy: close.closedBy, totalGrossCents: close.totalGrossCents },
-      changes: diffPayrollRows(saved, rows),
-    });
-  }
-  return NextResponse.json({ periodStart: startParam, periodEnd: endParam, rows, closed: null, changes: [] });
+  const rows = await computePayrollRows(periodStart, periodEnd);
+  return NextResponse.json({ periodStart: startParam, periodEnd: endParam, rows: await withCompanyCosts(rows, periodStart, periodEnd) });
 }

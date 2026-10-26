@@ -19,6 +19,7 @@ import { ConvertToContractorButton } from "./ConvertToContractorButton";
 import { LABOR_PAGE_SIZE } from "./laborPagination";
 import { loadEmployeeJanitorialLabor } from "@/lib/erp/employeeJanitorialLabor";
 import { getErpAuth, canEditPayInfo, canViewSsn, canManageJanitorial } from "@/lib/erpAuth";
+import { HEALTH_SHARE_SETTING_KEY, parseHealthSharePct } from "@/lib/erp/healthCost";
 
 export const dynamic = "force-dynamic";
 
@@ -44,9 +45,23 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
       timeOff: { orderBy: { startDate: "desc" } },
       contractor: { select: { id: true } },
       payRates: { orderBy: { effectiveFrom: "desc" } },
+      healthCoverages: { orderBy: { startDate: "desc" } },
     },
   });
   if (!employee) notFound();
+
+  // Health insurance, view only here (changed on Payroll > gear > Health
+  // insurance). Only for viewers who can see pay.
+  const healthSharePct = canSeePay
+    ? parseHealthSharePct((await prisma.appSetting.findUnique({ where: { key: HEALTH_SHARE_SETTING_KEY } }))?.value)
+    : 0;
+  const healthTodayKey = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+  const healthRows = canSeePay ? employee.healthCoverages : [];
+  const currentHealth = healthRows.find(
+    (c) => c.startDate.toISOString().slice(0, 10) <= healthTodayKey && (!c.endDate || c.endDate.toISOString().slice(0, 10) >= healthTodayKey),
+  );
+  const healthMoney = (cents: number) => (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
+  const healthDate = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
   const timeOffReviewBlockForViewer = auth
     ? timeOffReviewBlock(auth, { email: employee.email, erpRole: await erpRoleForEmail(employee.email) })
     : "Sign in to review time off.";
@@ -244,6 +259,7 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
         {
           label: "General Info",
           content: (
+            <div className="space-y-4">
             <EmployeeProfileEditor
               employeeId={employee.id}
               canSeePay={canSeePay}
@@ -282,6 +298,7 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
                 isOffshore: employee.isOffshore,
                 offshoreMonthlyRateCents: canSeePay ? employee.offshoreMonthlyRateCents : null,
                 isJanitorialContract: employee.isJanitorialContract,
+                onAdpPayroll: employee.onAdpPayroll,
               }}
               janitorialSchedule={janitorialPatterns.map((p) => ({
                 id: p.id,
@@ -293,6 +310,50 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
                 startsOn: p.effectiveFrom > todayLabel ? p.effectiveFrom.toISOString().slice(0, 10) : null,
               }))}
             />
+            {canSeePay && (
+              <CollapsibleSection
+                title="Health insurance"
+                status={currentHealth ? `${healthMoney(currentHealth.monthlyPremiumCents)}/mo` : healthRows.length ? "Not covered now" : "Not on the plan"}
+                tone={currentHealth ? "complete" : "neutral"}
+              >
+                <div className="space-y-3 px-4 pb-4 text-sm">
+                  {currentHealth ? (
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div>
+                        <p className="text-xs text-gray-500">Monthly premium</p>
+                        <p className="font-semibold tabular-nums text-gray-900">{healthMoney(currentHealth.monthlyPremiumCents)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Sueep pays ({healthSharePct}%)</p>
+                        <p className="font-semibold tabular-nums text-gray-900">{healthMoney(Math.round((currentHealth.monthlyPremiumCents * healthSharePct) / 100))}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">They pay ({100 - healthSharePct}%)</p>
+                        <p className="font-semibold tabular-nums text-gray-900">{healthMoney(currentHealth.monthlyPremiumCents - Math.round((currentHealth.monthlyPremiumCents * healthSharePct) / 100))}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-gray-500">Not covered by the company health plan right now.</p>
+                  )}
+                  {healthRows.length > 0 ? (
+                    <ul className="divide-y divide-gray-100 rounded-md border border-gray-200 bg-white">
+                      {healthRows.map((c) => (
+                        <li key={c.id} className="flex flex-wrap items-baseline justify-between gap-2 px-3 py-1.5">
+                          <span className="text-gray-700">
+                            From {healthDate(c.startDate)}{c.endDate ? ` to ${healthDate(c.endDate)}` : ""}
+                          </span>
+                          <span className="tabular-nums text-gray-900">{healthMoney(c.monthlyPremiumCents)}/mo</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  <p className="text-xs text-gray-500">
+                    To add, change or end coverage: <Link href="/erp/payroll" className="text-pink-600 hover:underline">Payroll</Link>, gear icon, Health insurance.
+                  </p>
+                </div>
+              </CollapsibleSection>
+            )}
+            </div>
           ),
         },
         {

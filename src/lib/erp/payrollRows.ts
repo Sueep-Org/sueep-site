@@ -2,8 +2,7 @@
  * Builds the Payroll page's rows for a pay period: hourly pay from every
  * labor log, change order log, janitorial shift and hours added by hand (priced by the shared
  * labor cost rule in laborCost.ts), salary for the period from pay history,
- * contractor costs, and commission paid out. Used both to show a period live
- * and to save it when the period is closed (see PayrollPeriodClose).
+ * contractor costs, and commission paid out.
  */
 
 import { prisma } from "@/lib/prisma";
@@ -100,7 +99,7 @@ export async function computePayrollRows(periodStart: Date, periodEnd: Date) {
       where: { costCents: { not: null }, OR: contractorPayDateIn(periodStart, periodEnd) },
       include: {
         contractor: { select: { id: true, name: true } },
-        changeOrder: { select: { project: { select: { jobTitle: true } } } },
+        changeOrder: { select: { title: true, project: { select: { id: true, jobTitle: true } } } },
       },
     }),
   ]);
@@ -375,31 +374,47 @@ export async function computePayrollRows(periodStart: Date, periodEnd: Date) {
   }
 
   // ── Contractor rows — group by contractor, sum costCents ───────────────
-  const contractorMap = new Map<string, { name: string; costCents: number; projects: Set<string> }>();
+  // Each pay line is kept too, so payroll can show what the total is made of.
+  type ContractorLine = {
+    id: string; date: string | null; projectId: string | null; title: string;
+    role: string | null; amountCents: number; fromSchedule: boolean;
+  };
+  const contractorMap = new Map<string, { name: string; costCents: number; projects: Set<string>; lines: ContractorLine[] }>();
+  const dayOf = (d: Date | null) => d?.toISOString().slice(0, 10) ?? null;
 
   for (const a of contractorAssignments) {
     const key = a.contractorId;
     if (!contractorMap.has(key)) {
-      contractorMap.set(key, { name: a.contractor.name, costCents: 0, projects: new Set() });
+      contractorMap.set(key, { name: a.contractor.name, costCents: 0, projects: new Set(), lines: [] });
     }
     const c = contractorMap.get(key)!;
     c.costCents += a.costCents ?? 0;
     if (a.project?.jobTitle) c.projects.add(a.project.jobTitle);
+    c.lines.push({
+      id: a.id, date: dayOf(a.endDate ?? a.startDate ?? a.assignedDate), projectId: a.projectId,
+      title: a.project?.jobTitle ?? "No project", role: a.role, amountCents: a.costCents ?? 0, fromSchedule: a.setOnSchedule,
+    });
   }
 
   for (const a of coContractorAssignments) {
     const key = a.contractorId;
     if (!contractorMap.has(key)) {
-      contractorMap.set(key, { name: a.contractor.name, costCents: 0, projects: new Set() });
+      contractorMap.set(key, { name: a.contractor.name, costCents: 0, projects: new Set(), lines: [] });
     }
     const c = contractorMap.get(key)!;
     c.costCents += a.costCents ?? 0;
     if (a.changeOrder.project?.jobTitle) c.projects.add(a.changeOrder.project.jobTitle);
+    c.lines.push({
+      id: a.id, date: dayOf(a.endDate ?? a.startDate ?? a.assignedDate), projectId: a.changeOrder.project?.id ?? null,
+      title: `${a.changeOrder.project?.jobTitle ?? ""} · CO: ${a.changeOrder.title}`, role: a.role, amountCents: a.costCents ?? 0, fromSchedule: false,
+    });
   }
 
-  const contractorRows = Array.from(contractorMap.values()).map((c) => ({
+  const contractorRows = Array.from(contractorMap.entries()).map(([contractorId, c]) => ({
     isContractor: true as const,
     employeeId: null,
+    contractorId,
+    contractorLines: c.lines.sort((x, y) => (x.date ?? "").localeCompare(y.date ?? "")),
     name: c.name,
     lastName: lastNameOf(c.name),
     payType: "CONTRACTOR",

@@ -2,12 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { contractedTurnoverScope, turnoverScopeLabel } from "@/lib/erp/turnoverScope";
-import { normalizeBillingStatus } from "@/lib/erp/billingStatus";
-
-const JANITORIAL_SEGMENTS = [
-  "JANITORIAL_TURNOVER_REQUESTS",
-  "COMMERCIAL_CLEANING",
-];
+import { JANITORIAL_BILLING_SEGMENTS as JANITORIAL_SEGMENTS, normalizeBillingStatus } from "@/lib/erp/billingStatus";
 
 const turnoverRequestSelect = {
   id: true,

@@ -4,6 +4,7 @@ import { computeTurnoverPricing } from "@/lib/turnoverPricing";
 import { TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
 import { buildTurnoverRequestEmailHtml, sendEmail } from "@/lib/email";
 import { getNotificationSetting } from "@/lib/notificationSettings";
+import { canonicalUnitName } from "@/lib/erp/unitNamesDb";
 
 type RequestBody = Record<string, unknown>;
 
@@ -75,7 +76,8 @@ export async function POST(req: Request) {
     ? (requestTypeRaw as (typeof REQUEST_TYPES)[number])
     : "TURNOVER";
 
-  const unitNumber = body.unitNumber != null ? String(body.unitNumber).trim() : null;
+  // A unit the building already has keeps its spelling (see unitNames.ts)
+  const unitNumber = body.unitNumber != null && buildingId ? await canonicalUnitName(buildingId, String(body.unitNumber).trim()) : null;
   const bedrooms = parseIntValue(body.bedrooms);
   const bathrooms = parseIntValue(body.bathrooms);
   const isCommonArea = Boolean(body.isCommonArea) || (bedrooms === null && bathrooms === null && body.isCommonArea !== false);

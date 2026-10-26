@@ -64,7 +64,6 @@ export function CompensationOverview() {
               hours again on the same days each time (marked &#x21bb;). Each repeat can be edited on its own, or tick{" "}
               <strong>Also change the hours and note on every later repeat</strong> to change the ones after it too. Removing one asks whether to
               remove just that one, or that one and every later one, which stops the repeat (earlier ones stay).
-              Adding or removing hours in a closed period shows up in that period&apos;s list of changes after closing.
             </LI>
           </UL>
           <Callout type="info">
@@ -111,8 +110,7 @@ export function CompensationOverview() {
               their commission for it, then pick when it was paid: <strong>This pay period</strong>,{" "}
               <strong>Last pay period</strong>, or any date. The commission shows on the payroll for the
               pay period that date falls in, so commission paid on an earlier check but only marked now
-              can be dated back and won&apos;t land on the next payroll. If that period is already
-              closed, you&apos;ll see a warning and it is listed there as a change.
+              can be dated back and won&apos;t land on the next payroll.
             </LI>
             <LI>
               Click a <strong>Paid</strong> pill (it shows the paid date) to change the date or mark it

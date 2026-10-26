@@ -20,6 +20,7 @@ import { costLaborLogs, sumLineCosts } from "@/lib/erp/laborCost";
 import { computeProjectActualsWithChangeOrders, changeOrderValueCents, isQualifyingChangeOrder } from "@/lib/erp/projectMargin";
 import { ProjectSetupEditor } from "./ProjectSetupEditor";
 import { ProjectFinancialsEditor } from "./ProjectFinancialsEditor";
+import { billingPageHref, projectBillingHref } from "@/lib/erp/billingStatus";
 import { ProjectLienEditor } from "./ProjectLienEditor";
 import { ProjectLaborSection } from "./ProjectLaborSection";
 import { ProjectContractorSection } from "./ProjectContractorSection";
@@ -731,6 +732,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             percentDone={project.percentDone}
             percentInvoiced={project.percentInvoiced}
             billingStatus={project.billingStatus}
+            billingHref={projectBillingHref({ jobTitle: project.jobTitle, segment: project.segment, isPostConstruction, hasSovItems: sovItems.length > 0 })}
             estMaterialCents={project.estMaterialCents}
             estTravelCents={project.estTravelCents}
             estLaborCents={project.estLaborCents}
@@ -759,6 +761,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             projectId={project.id}
             initialItems={sovItems}
             canEdit={canEditSOV}
+            billingHref={isPostConstruction ? billingPageHref("post-construction", project.jobTitle) : null}
           />
         </>
       ),

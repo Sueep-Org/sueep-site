@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { billingPageHref } from "@/lib/erp/billingStatus";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canManageJanitorial } from "@/lib/erpAuth";
@@ -14,6 +15,7 @@ import { ContractStatusBadge } from "../../badges";
 import { ContractDetailsForm } from "./ContractDetailsForm";
 import { ContractPricingEditor } from "./ContractPricingEditor";
 import type { ContractPricing } from "@/lib/erp/janitorialPricing";
+import { loadEmployerTaxRates } from "@/lib/erp/employerTaxServer";
 import { ContractStatusActions } from "./ContractStatusActions";
 import { ContractMonthsTable } from "./ContractMonthsTable";
 import { ContractShiftPatterns } from "./ContractShiftPatterns";
@@ -200,6 +202,7 @@ export default async function JanitorialContractPage({ params }: PageProps) {
                 contractId={contract.id}
                 initialPricing={(contract.pricing as ContractPricing | null) ?? null}
                 currentMonthlyRateCents={contract.monthlyRateCents}
+                taxRates={await loadEmployerTaxRates()}
               />
             ),
           },
@@ -267,6 +270,7 @@ export default async function JanitorialContractPage({ params }: PageProps) {
               <ContractMonthsTable
                 contractId={contract.id}
                 laborByPeriod={laborByPeriod}
+                billingHref={billingPageHref("recurring", contract.building.name)}
                 months={contract.periods.map((p) => ({
                   id: p.id,
                   periodStart: p.periodStart.toISOString(),

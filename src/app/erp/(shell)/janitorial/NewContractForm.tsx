@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { emptyPricing, type ContractPricing } from "@/lib/erp/janitorialPricing";
+import type { EmployerTaxRates } from "@/lib/erp/employerTax";
 import { Button, InfoTip } from "@/app/erp/components/ui";
 import { addOneYearKey } from "@/lib/erp/dates";
 import { PricingCalculator } from "./PricingCalculator";
@@ -15,7 +16,7 @@ const inputClass =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
 const labelClass = "block text-xs font-medium text-gray-600";
 
-export function NewContractForm({ buildings, employees }: { buildings: Option[]; employees: Option[] }) {
+export function NewContractForm({ buildings, employees, taxRates }: { buildings: Option[]; employees: Option[]; taxRates: EmployerTaxRates }) {
   const router = useRouter();
   const [buildingMode, setBuildingMode] = useState<"existing" | "new">("existing");
   const [buildingId, setBuildingId] = useState("");
@@ -206,7 +207,7 @@ export function NewContractForm({ buildings, employees }: { buildings: Option[];
               Add a line per role. The monthly price is calculated from people, hours, and bill rate. Override any line or the total
               if you&apos;re quoting a round number.
             </p>
-            <PricingCalculator value={pricing} onChange={setPricing} />
+            <PricingCalculator value={pricing} onChange={setPricing} taxRates={taxRates} />
           </>
         ) : (
           <div className="max-w-xs">

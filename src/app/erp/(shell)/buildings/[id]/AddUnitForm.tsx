@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
 import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
+import { UnitNameInput } from "@/app/erp/components/UnitNameInput";
+import { unitNameKey } from "@/lib/erp/unitNames";
 
 type Props = {
   buildingId: string;
@@ -80,10 +82,11 @@ export function AddUnitForm({ buildingId, existingUnitNumbers = [] }: Props) {
     setDuplicateWarning(false);
   }
 
+  // Same unit written differently counts too (see unitNames.ts)
   function isDuplicateUnitNumber(value: string) {
-    const trimmed = value.trim().toLowerCase();
-    if (!trimmed) return false;
-    return existingUnitNumbers.some((n) => n.trim().toLowerCase() === trimmed);
+    const key = unitNameKey(value);
+    if (!key) return false;
+    return existingUnitNumbers.some((n) => unitNameKey(n) === key);
   }
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -174,12 +177,13 @@ export function AddUnitForm({ buildingId, existingUnitNumbers = [] }: Props) {
 
       <div>
         <label className={label} htmlFor="au-unit-number">Unit identifier</label>
-        <input
+        <UnitNameInput
           id="au-unit-number"
-          type="text"
+          buildingId={buildingId}
+          knownNames={existingUnitNumbers}
           value={unitNumber}
-          onChange={(e) => {
-            setUnitNumber(e.target.value);
+          onChange={(v) => {
+            setUnitNumber(v);
             setDuplicateWarning(false);
           }}
           placeholder="e.g. 4B"

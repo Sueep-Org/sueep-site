@@ -1,9 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useState } from "react";
-import { BILLING_STATUS_OPTIONS, normalizeBillingStatus } from "@/lib/erp/billingStatus";
-import { Button } from "@/app/erp/components/ui";
+import { BILLING_STATUS_OPTIONS, billingStatusLabel, normalizeBillingStatus } from "@/lib/erp/billingStatus";
+import { Button, InfoTip } from "@/app/erp/components/ui";
 
 const inputCls =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
@@ -17,6 +18,8 @@ type Props = {
   percentDone: number;
   percentInvoiced: number;
   billingStatus: string | null;
+  /** The Billing page filtered to this project, when its billing status is changed there (see projectBillingHref). Null keeps the dropdown here. */
+  billingHref: string | null;
   estMaterialCents: number | null;
   estTravelCents: number | null;
   estLaborCents: number | null;
@@ -54,6 +57,7 @@ export function ProjectFinancialsEditor({
   percentDone,
   percentInvoiced,
   billingStatus,
+  billingHref,
   estMaterialCents,
   estTravelCents,
   estLaborCents,
@@ -160,9 +164,17 @@ export function ProjectFinancialsEditor({
             </div>
             <div>
               <label className={labelCls} htmlFor="fin-bill-status">Billing status</label>
-              <select id="fin-bill-status" className={inputCls} value={billStatus} onChange={(e) => { setBillStatus(e.target.value); setBillStatusTouched(true); }}>
-                {BILLING_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
+              {billingHref ? (
+                <div className="mt-1 flex items-center gap-2 text-sm">
+                  <span className="font-medium text-gray-800">{billingStatusLabel(billingStatus)}</span>
+                  <Link href={billingHref} className="text-xs text-pink-600 hover:underline">Change on Billing</Link>
+                  <InfoTip text="Billing status is set on the Billing page, and from the HubSpot invoices linked to each line, so it's the same everywhere." />
+                </div>
+              ) : (
+                <select id="fin-bill-status" className={inputCls} value={billStatus} onChange={(e) => { setBillStatus(e.target.value); setBillStatusTouched(true); }}>
+                  {BILLING_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              )}
             </div>
           </div>
         </div>
