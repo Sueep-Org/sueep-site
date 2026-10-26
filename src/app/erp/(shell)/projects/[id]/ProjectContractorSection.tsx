@@ -164,10 +164,9 @@ export function ProjectContractorSection({
     }
   }
 
-  // Pay this contractor already has on the job. Payroll adds every line, so
-  // a second cost for the same work pays them twice.
-  const existingPay = assignments.filter((a) => a.contractorId === addContractorId && a.costCents != null);
-  const existingPayCents = existingPay.reduce((s, a) => s + (a.costCents ?? 0), 0);
+  // Pay this contractor already has from the calendar on this job. Payroll
+  // adds every line, so logging the same visit here pays them twice.
+  const existingPay = assignments.filter((a) => a.contractorId === addContractorId && a.costCents != null && a.setOnSchedule);
 
   function startEdit(row: ContractorRow) {
     setEditingId(row.id);
@@ -375,14 +374,14 @@ export function ProjectContractorSection({
             />
             {existingPay.length > 0 && (
               <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" role="alert">
-                {existingPay[0]!.contractorName} already has {fmt(existingPayCents)} on this job
-                {existingPay.some((a) => a.setOnSchedule) ? ", set on the schedule" : ""}. Payroll pays every line, so a cost
-                added here pays them again.{" "}
+                {existingPay[0]!.contractorName} already has pay set on the schedule here:{" "}
+                {existingPay.map((a) => `${fmt(a.costCents!)} for the visit ending ${a.endDate ? new Date(a.endDate).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : "-"}`).join(", ")}.
+                Payroll pays every line, so adding the same visit here pays them twice.{" "}
                 <button
                   type="button"
                   onClick={() => {
                     setShowAddForm(false);
-                    startEdit(existingPay.find((a) => a.setOnSchedule) ?? existingPay[0]!);
+                    startEdit(existingPay[0]!);
                   }}
                   className="font-medium text-pink-600 hover:underline"
                 >

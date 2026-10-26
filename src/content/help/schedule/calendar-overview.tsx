@@ -128,10 +128,13 @@ export function ScheduleCalendarOverview() {
             </LI>
             <LI>
               <strong>Contractor pay</strong> (turnover and post-construction days run by a sub, roles that see prices
-              only): what the sub gets paid. It shows on their invite and saves as their cost on the project. On a
-              turnover, click the &quot;50% of&quot; amount to fill it in. On post-construction it is their pay for
-              the whole job, not per day, and the job price shows next to it. Leave it blank and no pay line goes on
-              the invite.
+              only): what the sub gets paid for this visit, meaning the days in a row they run on the job. It is one
+              flat amount, not per day: 3 days at $100 pays $100. It shows on their invites and saves as their cost
+              on the project, paid on the visit&apos;s last day. A later visit gets its own pay and never changes an
+              earlier one. On a turnover, click the &quot;50% of&quot; amount to fill it in. If pay for those days
+              was already entered in the project&apos;s Contractors tab, the card shows it instead and doesn&apos;t
+              add a second amount. Swapping the sub or removing all of the visit&apos;s days removes its pay. Leave
+              it blank and no pay line goes on the invite.
             </LI>
             <LI>
               <strong>Invites for a date range:</strong> when one Save covers several days, each person gets one

@@ -859,21 +859,33 @@ export function SchedulePlanner({
   const [eventComment, setEventComment] = useState("");
   // Staff-only note, never sent in invites.
   const [eventInternalNote, setEventInternalNote] = useState("");
-  // Sub pay on a turnover day, in dollars as typed. Saved pay this session, by "projectId:contractorId".
+  // Sub pay for a visit, in dollars as typed. Saved pay this session, by "projectId:contractorId:dateKey".
   const [eventSubPay, setEventSubPay] = useState("");
   const [subPayOverrides, setSubPayOverrides] = useState<Record<string, number | null>>({});
-  function savedSubPayCents(p: ScheduleProject, contractorId: string): number | null {
+  /** The days of the visit holding day k: days in a row with this sub on the job share one pay (see subPay.ts). */
+  function subPayVisitKeys(p: ScheduleProject, contractorId: string, k: string): string[] {
+    const has = (d: string) => dayAssignments.some((a) => a.projectId === p.id && a.dateKey === d && a.supervisorContractorId === contractorId);
+    let first = k;
+    let last = k;
+    while (has(addDaysKey(first, -1))) first = addDaysKey(first, -1);
+    while (has(addDaysKey(last, 1))) last = addDaysKey(last, 1);
+    return Array.from({ length: daysBetween(first, last) + 1 }, (_, i) => addDaysKey(first, i));
+  }
+  function savedSubPayCents(p: ScheduleProject, contractorId: string, k: string): number | null {
     if (!contractorId) return null;
-    const k = `${p.id}:${contractorId}`;
-    return k in subPayOverrides ? subPayOverrides[k]! : (p.subPayByContractor[contractorId] ?? null);
+    const keys = subPayVisitKeys(p, contractorId, k);
+    const typed = keys.map((d) => `${p.id}:${contractorId}:${d}`).find((o) => o in subPayOverrides);
+    if (typed) return subPayOverrides[typed]!;
+    return keys.map((d) => p.subPayByDay[`${contractorId}:${d}`]).find((v) => v != null) ?? null;
   }
   const centsToInput = (c: number | null) => (c == null ? "" : (c / 100).toFixed(2).replace(/\.00$/, ""));
   const showSubPay = (p: ScheduleProject, contractorId: string) =>
     canSetSubPay && !!contractorId && hasCalendarSubPay(p.segment);
-  /** Pay entered in the project's Contractors tab, when the calendar has none of its own. Shown, not editable, so it isn't paid twice. */
-  function subPaySetElsewhere(p: ScheduleProject, contractorId: string): number | null {
-    if (!contractorId || savedSubPayCents(p, contractorId) != null) return null;
-    return p.subPaySetElsewhere[contractorId] ?? null;
+  /** Pay entered in the project's Contractors tab for this visit's days, when the calendar has none of its own. Shown, not editable, so it isn't paid twice. */
+  function subPaySetElsewhere(p: ScheduleProject, contractorId: string, k: string): number | null {
+    if (!contractorId || savedSubPayCents(p, contractorId, k) != null) return null;
+    const keys = subPayVisitKeys(p, contractorId, k);
+    return (p.subPayTabLines[contractorId] ?? []).find((l) => keys.some((d) => d >= l.from && d <= l.to))?.cents ?? null;
   }
   // The client emailed once everyone on the day confirms; "other" types someone not in the list.
   const [eventRequesterEmail, setEventRequesterEmail] = useState("");
@@ -931,7 +943,7 @@ export function SchedulePlanner({
     setEventDaySupervisorId(da?.supervisorUserId ?? currentSupervisorId(p));
     setEventDayPmId(da?.projectManagerUserId ?? "");
     setEventDaySupervisorContractorId(da?.supervisorContractorId ?? "");
-    setEventSubPay(centsToInput(savedSubPayCents(p, da?.supervisorContractorId ?? "")));
+    setEventSubPay(centsToInput(savedSubPayCents(p, da?.supervisorContractorId ?? "", k)));
     setEventDayError("");
     setEventSovPicks(da?.sovItemIds ?? []);
     setEventScopePicks(da?.scopeItems ?? []);
@@ -996,6 +1008,8 @@ export function SchedulePlanner({
           internalNote: existingAssignment.internalNote ?? "",
           requesterName: existingAssignment.requesterName ?? "",
           requesterEmail: existingAssignment.requesterEmail ?? "",
+          // Keeps the pay of the visit it's moving out of (see subPay.ts)
+          moveFromId: toK !== fromK ? assignmentId : undefined,
         }),
       });
       const dayData = (await dayRes.json().catch(() => ({}))) as { id?: string; error?: string };
@@ -1677,13 +1691,13 @@ export function SchedulePlanner({
     const existing = dayAssignments.find((a) => a.dateKey === k && a.projectId === projectId);
     const same = (x: string[], y: string[]) => [...x].sort().join() === [...y].sort().join();
     const proj = projects.find((x) => x.id === projectId);
-    const sendPay = !!proj && showSubPay(proj, eventDaySupervisorContractorId) && subPaySetElsewhere(proj, eventDaySupervisorContractorId) == null;
+    const sendPay = !!proj && showSubPay(proj, eventDaySupervisorContractorId) && subPaySetElsewhere(proj, eventDaySupervisorContractorId, k) == null;
     const payCents = eventSubPay.trim() ? Math.round(Number(eventSubPay.replace(/[$,\s]/g, "")) * 100) : null;
     if (sendPay && payCents != null && (!Number.isFinite(payCents) || payCents < 0)) {
       setEventDayError("Contractor pay needs to be a dollar amount");
       return { ok: false, row: null };
     }
-    const payChanged = sendPay && payCents !== savedSubPayCents(proj!, eventDaySupervisorContractorId);
+    const payChanged = sendPay && payCents !== savedSubPayCents(proj!, eventDaySupervisorContractorId, k);
     // Nothing on the card changed for this day, so there's nothing to send (and no invites re-sent).
     if (
       existing &&
@@ -1746,9 +1760,11 @@ export function SchedulePlanner({
           ...(sendPay ? { subPayCents: payCents } : {}),
         }),
       });
-      const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string; requesterName?: string | null; requesterEmail?: string | null };
+      const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string; requesterName?: string | null; requesterEmail?: string | null; subPay?: string | null };
       if (!res.ok) throw new Error(data.error || "Failed to save");
-      if (sendPay) setSubPayOverrides((o) => ({ ...o, [`${projectId}:${eventDaySupervisorContractorId}`]: payCents }));
+      if (sendPay && data.subPay !== "set-elsewhere") setSubPayOverrides((o) => ({ ...o, [`${projectId}:${eventDaySupervisorContractorId}:${k}`]: payCents }));
+      // The visit's other days, and pay entered in the Contractors tab meanwhile, come from the server.
+      if (payChanged || data.subPay === "set-elsewhere") router.refresh();
       let row: ScheduleDayAssignment | null = null;
       if (data.id) {
         row = {
@@ -2278,7 +2294,7 @@ export function SchedulePlanner({
                 value={eventDaySupervisorContractorId}
                 onChange={(v) => {
                   setEventDaySupervisorContractorId(v);
-                  setEventSubPay(centsToInput(savedSubPayCents(p, v)));
+                  setEventSubPay(centsToInput(savedSubPayCents(p, v, k)));
                 }}
                 options={contractors.map((c) => ({ value: c.id, label: c.displayName }))}
                 placeholder="Search…"
@@ -2299,20 +2315,20 @@ export function SchedulePlanner({
               status={answers[answerUid.daySub(eventDayAssignment.id, eventDayAssignment.supervisorContractorId)]}
             />
           ) : null}
-          {showSubPay(p, eventDaySupervisorContractorId) && subPaySetElsewhere(p, eventDaySupervisorContractorId) != null ? (
+          {showSubPay(p, eventDaySupervisorContractorId) && subPaySetElsewhere(p, eventDaySupervisorContractorId, k) != null ? (
             <div className="mt-1.5 flex items-center gap-1 text-[10px] text-gray-500">
-              Contractor pay {centsToDollars(subPaySetElsewhere(p, eventDaySupervisorContractorId)!)}, set in the project&apos;s Contractors tab
+              Contractor pay {centsToDollars(subPaySetElsewhere(p, eventDaySupervisorContractorId, k)!)}, set in the project&apos;s Contractors tab
               <InfoTip text="Change it there. The calendar doesn't add its own pay on top, so the contractor isn't paid twice." />
             </div>
           ) : showSubPay(p, eventDaySupervisorContractorId) ? (
             <div className="mt-1.5">
               <div className="flex items-center gap-1 text-[9px] text-gray-400">
-                {isTurnover ? "Contractor pay" : "Contractor pay (whole job)"}
+                {isTurnover ? "Contractor pay" : "Contractor pay (this visit)"}
                 <InfoTip
                   text={
                     isTurnover
-                      ? "Their pay for this job, not per day. Shows on the contractor's invite and saves as their cost on the project, paid on their last day here. Leave blank to keep pay off the invite."
-                      : "Their total pay for this job, not per day. Shows on every invite for this job and saves as their cost on the project. Leave blank to keep pay off the invite."
+                      ? "Their pay for this visit (the days in a row they run here), not per day. Shows on the contractor's invite and saves as their cost on the project, paid on the visit's last day. Leave blank to keep pay off the invite."
+                      : "Their pay for this visit (the days in a row they run here), not per day. Shows on the invites for those days and saves as their cost on the project, paid on the visit's last day. A later visit gets its own pay. Leave blank to keep pay off the invite."
                   }
                 />
               </div>

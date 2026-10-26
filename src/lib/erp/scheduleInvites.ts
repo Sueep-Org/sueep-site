@@ -6,7 +6,7 @@ import { buildDayAssignmentInvite } from "@/lib/calendarInvite";
 import { dayKey } from "@/lib/erp/schedule";
 import { todayEasternKey } from "@/lib/erp/dates";
 import { centsToDollars } from "@/lib/erp/money";
-import { getSubPayCents } from "@/lib/erp/subPay";
+import { subPayForDay } from "@/lib/erp/subPay";
 import { hasCalendarSubPay } from "@/lib/erp/projectSegments";
 import { turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
 import { cancelConfirmation, markInviteSent, parseInviteUid, prepareConfirmation, responseButtonsHtml, responseUrl } from "@/lib/erp/scheduleConfirmations";
@@ -605,14 +605,17 @@ export async function notifyChangeOrderCrew(params: {
  * and the one replaced can be sent a cancellation. Skipped when the sub has
  * no email on file. Same rules as every other invite (sendDayInvite).
  */
-/** A sub's pay on a turnover or post-con job, as typed on the day card (see subPay.ts). No pay line until someone enters it. */
-async function subPayHtml(projectId: string | null | undefined, contractorId: string, lang: Lang = "en"): Promise<string | undefined> {
+/** A sub's pay for the visit this day is part of, as typed on the day card (see subPay.ts). No pay line until someone enters it. */
+async function subPayHtml(projectId: string | null | undefined, dayId: string, contractorId: string, lang: Lang = "en"): Promise<string | undefined> {
   if (!projectId) return undefined;
   const p = await prisma.project.findUnique({ where: { id: projectId }, select: { segment: true } });
   if (!p || !hasCalendarSubPay(p.segment)) return undefined;
-  const cents = await getSubPayCents(projectId, contractorId);
-  if (cents == null) return undefined;
-  return `<p><strong>${tr(lang, { en: "Pay", es: "Pago" })}:</strong> ${centsToDollars(cents)} ${tr(lang, { en: "total for the job, not per day", es: "en total por el trabajo, no por día" })}</p>`;
+  const pay = await subPayForDay(dayId, contractorId);
+  if (!pay) return undefined;
+  const fmt = (d: Date) => d.toLocaleDateString(lang === "es" ? "es-US" : "en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  if (pay.from.getTime() === pay.to.getTime()) return `<p><strong>${tr(lang, { en: "Pay", es: "Pago" })}:</strong> ${centsToDollars(pay.cents)}</p>`;
+  const range = `${fmt(pay.from)} - ${fmt(pay.to)}`;
+  return `<p><strong>${tr(lang, { en: "Pay", es: "Pago" })}:</strong> ${centsToDollars(pay.cents)} ${tr(lang, { en: `total for ${range}, not per day`, es: `en total por ${range}, no por día` })}</p>`;
 }
 
 export async function sendSubLeadInvite(params: {
@@ -637,7 +640,7 @@ export async function sendSubLeadInvite(params: {
           .then((a) => a?.projectId ?? null)
           .catch(() => null)
       : null;
-  const extraHtml = await subPayHtml(projectId, params.contractorId, contact.lang).catch(() => undefined);
+  const extraHtml = await subPayHtml(projectId, params.assignmentId, params.contractorId, contact.lang).catch(() => undefined);
   const coRequest = await isTurnoverProject(projectId).catch(() => false);
   await sendDayInvite({
     uid: `${params.kind}-assignment-${params.assignmentId}-sub-${params.contractorId}@sueep.com`,
