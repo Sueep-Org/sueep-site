@@ -14,8 +14,8 @@ import { markSovItemPaid, syncSovPercentDone, syncProjectBillingFromSOV, syncPro
  * This covers what the line-by-line paid sync (processPaidInvoices) can't:
  * change orders, which that sync doesn't know about, and invoices a person
  * linked by hand. The rules:
- *  - the line's paid invoice (a line holds one; older data can have more,
- *    which are added up) has to be within AMOUNT_TOLERANCE_CENTS of the
+ *  - the line's paid invoices (usually one; several when a person linked
+ *    more by hand), added up, have to be within AMOUNT_TOLERANCE_CENTS of the
  *    line's value;
  *  - a line still Not billed is only moved when a person made the link,
  *    since jumping straight to Paid on an automatic match is a sign the

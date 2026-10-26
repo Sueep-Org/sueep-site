@@ -8,8 +8,8 @@ export type LinkTarget = {
   id: string;
   label: string;
   hint: string;
-  /** SOV items and change orders only: the invoice this line is on now. A line holds one invoice. */
-  heldBy?: { invoiceId: string; number: string | null } | null;
+  /** SOV items and change orders only: the invoices this line is on now. */
+  heldBy?: Array<{ invoiceId: string; number: string | null }>;
 };
 export type ExistingLink = { targetId: string | null; amountCents: number; manual: boolean };
 
@@ -25,8 +25,8 @@ function splitEvenly(totalCents: number, ids: string[]): Record<string, string> 
  * Pick which units, unit change orders and janitorial contract months
  * (building) or SOV items / change orders (project) one HubSpot invoice covers, with each one's share. Saves through
  * /api/erp/hubspot-invoice-links; saved picks override the automatic match.
- * Picking an SOV item or change order that's on another invoice moves it
- * here, and on a project saving with nothing picked keeps the invoice unlinked.
+ * Picking an SOV item or change order that's on another invoice adds this
+ * one beside it, and on a project saving with nothing picked keeps the invoice unlinked.
  */
 export function InvoiceLinkModal({
   open,
@@ -118,6 +118,7 @@ export function InvoiceLinkModal({
         {filtered.length === 0 && <li className="px-3 py-2 text-sm text-gray-400">No matches.</li>}
         {filtered.map((t) => {
           const checked = selected.includes(t.id);
+          const others = (t.heldBy ?? []).filter((h) => h.invoiceId !== invoice.id);
           return (
             <li key={t.id} className={`flex items-center gap-2 px-3 py-2 text-sm ${checked ? "bg-pink-50/50" : ""}`}>
               <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
@@ -125,10 +126,10 @@ export function InvoiceLinkModal({
                 <span className="min-w-0">
                   <span className="block truncate text-gray-900" title={t.label}>{t.label}</span>
                   {t.hint && <span className="block text-xs text-gray-400">{t.hint}</span>}
-                  {t.heldBy && t.heldBy.invoiceId !== invoice.id && (
+                  {others.length > 0 && (
                     <span className={`block text-xs ${checked ? "text-amber-700" : "text-gray-400"}`}>
-                      On {t.heldBy.number ?? "another invoice"}
-                      {checked ? ". Saving moves it here." : ""}
+                      On {others.map((h) => h.number ?? "another invoice").join(", ")}
+                      {checked ? ". Saving adds this invoice too." : ""}
                     </span>
                   )}
                 </span>

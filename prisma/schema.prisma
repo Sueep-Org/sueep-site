@@ -2943,8 +2943,8 @@ model HubSpotUnitInvoice {
 /// Project-side twin of HubSpotUnitInvoice: one row per (HubSpot invoice,
 /// SOV item or change order) on a project's own deal, any invoice status.
 /// A paid invoice whose amount matches marks its line Paid (see applyPaidLinks.ts).
-/// One of sovItemId / changeOrderId is set, and a line holds one invoice at
-/// most. A manual row with neither is an invoice someone chose to keep
+/// One of sovItemId / changeOrderId is set. The automatic match gives a line
+/// one invoice at most; more can only be linked by hand. A manual row with neither is an invoice someone chose to keep
 /// unlinked, so the automatic match leaves it alone.
 model HubSpotSovInvoice {
   id        String   @id @default(cuid())

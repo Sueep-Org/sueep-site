@@ -27,10 +27,11 @@ type Body = {
  * Replaces which units, unit change orders and janitorial contract months
  * (building) or SOV items / change orders (project) one HubSpot invoice is
  * linked to. One invoice can
- * cover several, but each SOV item or change order holds one invoice: linking
- * a line that's on another invoice moves it here. Saved links are marked manual so
- * the hourly sync never overwrites them. When the
- * invoice is paid and its share matches the line's value, the line is marked
+ * cover several, and a line can be on several invoices: linking a line that's
+ * on another invoice adds this one and leaves the other in place. Only a
+ * person can do that; the automatic match gives a line one invoice at most.
+ * Saved links are marked manual so the hourly sync never overwrites them.
+ * When the paid invoices on a line add up to its value, the line is marked
  * Paid (see applyPaidInvoiceLinks).
  */
 export async function PUT(req: Request) {
@@ -94,8 +95,6 @@ export async function PUT(req: Request) {
     await prisma.$transaction([
       prisma.hubSpotUnitInvoice.deleteMany({ where: { buildingId: body.ownerId, hubspotInvoiceId: invoice.id } }),
       prisma.hubSpotSovInvoice.deleteMany({ where: { hubspotInvoiceId: invoice.id, project: unitProjects } }),
-      // One invoice per change order: take these off any other invoice.
-      prisma.hubSpotSovInvoice.deleteMany({ where: { changeOrderId: { in: coLinks.map((l) => l.changeOrderId) } } }),
       prisma.hubSpotSovInvoice.createMany({
         data: coLinks.map((l) => ({
           projectId: coProjectById.get(l.changeOrderId)!,
@@ -141,15 +140,9 @@ export async function PUT(req: Request) {
 
     // A marker row with no line keeps an invoice deliberately unlinked.
     const rows = parsed.length > 0 ? parsed : body.unlinked === true ? [{ sovItemId: null, changeOrderId: null, amountCents: 0 }] : [];
-    const sovIds = parsed.flatMap((p) => p.sovItemId ?? []);
-    const coIds = parsed.flatMap((p) => p.changeOrderId ?? []);
 
     await prisma.$transaction([
       prisma.hubSpotSovInvoice.deleteMany({ where: { projectId: body.ownerId, hubspotInvoiceId: invoice.id } }),
-      // One invoice per line: take these lines off any other invoice.
-      prisma.hubSpotSovInvoice.deleteMany({
-        where: { projectId: body.ownerId, OR: [{ sovItemId: { in: sovIds } }, { changeOrderId: { in: coIds } }] },
-      }),
       prisma.hubSpotSovInvoice.createMany({
         data: rows.map((p) => ({
           projectId: body.ownerId,
@@ -164,7 +157,7 @@ export async function PUT(req: Request) {
       }),
     ]);
     // Always re-run the automatic match: it fills in an invoice that was
-    // reset, and re-places any invoice that just lost a line to this one.
+    // reset, and stops adding automatic invoices to lines now linked by hand.
     await syncProjectInvoices(body.ownerId, owner.hubspotDealId, invoices);
     await applyPaidInvoiceLinks({ projectId: body.ownerId });
   }
