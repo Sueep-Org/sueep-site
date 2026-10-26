@@ -2897,9 +2897,9 @@ model HubSpotInvoiceLineItemMatch {
 
 /// One row per (HubSpot invoice, unit) on a building's deal, any invoice
 /// status (draft/open/paid/voided). A read-only mirror for showing
-/// "INV-1395 · Open · PDF" on a turn. Billing status is processPaidInvoices'
-/// job, except a paid invoice linked by hand, which marks its unit Paid when
-/// the amount matches (see applyPaidLinks.ts).
+/// "INV-1395 · Open · PDF" on a turn. The turn's billing status follows its
+/// linked invoices: Billed once one is open, Paid once all are paid (see
+/// applyPaidLinks.ts).
 model HubSpotUnitInvoice {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
@@ -2934,6 +2934,10 @@ model HubSpotUnitInvoice {
   /// line Paid, or found it Paid already). The sync does that once: if the
   /// line is moved back afterwards, it stays where the person put it.
   paidAppliedAt     DateTime?
+  /// When the sync counted this invoice as billing its line (it marked a Not
+  /// billed line Billed, or found it Billed or Paid already). Once, like
+  /// paidAppliedAt.
+  billedAppliedAt   DateTime?
 
   @@unique([hubspotInvoiceId, unitNumber])
   @@index([buildingId, unitNumber])
@@ -2942,7 +2946,7 @@ model HubSpotUnitInvoice {
 
 /// Project-side twin of HubSpotUnitInvoice: one row per (HubSpot invoice,
 /// SOV item or change order) on a project's own deal, any invoice status.
-/// A paid invoice whose amount matches marks its line Paid (see applyPaidLinks.ts).
+/// The line's billing status follows its linked invoices (see applyPaidLinks.ts).
 /// One of sovItemId / changeOrderId is set. The automatic match gives a line
 /// one invoice at most; more can only be linked by hand. A manual row with neither is an invoice someone chose to keep
 /// unlinked, so the automatic match leaves it alone.
@@ -2978,6 +2982,10 @@ model HubSpotSovInvoice {
   /// line Paid, or found it Paid already). The sync does that once: if the
   /// line is moved back afterwards, it stays where the person put it.
   paidAppliedAt     DateTime?
+  /// When the sync counted this invoice as billing its line (it marked a Not
+  /// billed line Billed, or found it Billed or Paid already). Once, like
+  /// paidAppliedAt.
+  billedAppliedAt   DateTime?
 
   @@index([projectId])
   @@index([hubspotInvoiceId])

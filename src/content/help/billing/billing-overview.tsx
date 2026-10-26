@@ -109,10 +109,10 @@ export function BillingOverview() {
           by hand. A <strong>not linked</strong> flag on a billing row
           means an invoice on that project still needs a line.
           <Callout type="info">
-            A line or change order is marked <strong>Paid</strong> on its own when the paid
-            invoices linked to it add up to its value, within $10. Linking a paid invoice by hand
-            on the <strong>Invoices &amp; Quotes</strong> tab does the same. A line that is still{" "}
-            <strong>Not Billed</strong> is only moved to Paid this way when a person made the link.
+            A line, change order or unit follows the invoices linked to it: it is marked{" "}
+            <strong>Billed</strong> once an invoice is sent, and <strong>Paid</strong> once every
+            linked invoice is paid. Draft and voided invoices don&apos;t count. This happens once
+            per invoice, so if you move a line back by hand, it stays where you put it.
           </Callout>
         </Step>
       </Steps>

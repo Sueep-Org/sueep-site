@@ -41,14 +41,17 @@ export async function syncProjectInvoices(
   });
   // Automatic rows are rebuilt below, so remember which ones existed (a hand
   // link added beside one keeps it) and which the sync has already counted
-  // as paid, to carry that across (see applyPaidLinks.ts).
+  // as billed or paid, to carry that across (see applyPaidLinks.ts).
   const autoRows = new Map(
     (
       await prisma.hubSpotSovInvoice.findMany({
         where: { projectId, manual: false },
-        select: { hubspotInvoiceId: true, sovItemId: true, changeOrderId: true, paidAppliedAt: true },
+        select: { hubspotInvoiceId: true, sovItemId: true, changeOrderId: true, paidAppliedAt: true, billedAppliedAt: true },
       })
-    ).map((r) => [`${r.hubspotInvoiceId}|${r.sovItemId ? `sov:${r.sovItemId}` : `co:${r.changeOrderId}`}`, r.paidAppliedAt]),
+    ).map((r) => [
+      `${r.hubspotInvoiceId}|${r.sovItemId ? `sov:${r.sovItemId}` : `co:${r.changeOrderId}`}`,
+      { paidAppliedAt: r.paidAppliedAt, billedAppliedAt: r.billedAppliedAt },
+    ]),
   );
   const manualInvoiceIds = new Set(manualRows.map((r) => r.hubspotInvoiceId));
   // Lines a person already gave to an invoice that is still on the deal.
@@ -141,7 +144,7 @@ export async function syncProjectInvoices(
         sovItemId: r.target.sovItemId,
         changeOrderId: r.target.changeOrderId,
         amountCents: r.amountCents,
-        paidAppliedAt: autoRows.get(`${r.invoice.id}|${r.target.key}`) ?? null,
+        ...(autoRows.get(`${r.invoice.id}|${r.target.key}`) ?? {}),
         ...invoiceSnapshot(r.invoice),
       })),
     }),
