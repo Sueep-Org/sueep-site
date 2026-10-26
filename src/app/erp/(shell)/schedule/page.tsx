@@ -203,6 +203,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
         internalNote: true,
         requesterName: true,
         requesterEmail: true,
+        subPayAssignment: { select: { contractorId: true, costCents: true } },
       },
     }),
     prisma.projectWorkerDayAssignment.findMany({
@@ -630,19 +631,23 @@ export default async function SchedulePage({ searchParams }: PageProps) {
   for (const c of coRequesterRows) addRequesterOption(c.projectId, null, c.requestedBy);
   for (const c of contactRows) addRequesterOption(c.projectId, c.fullName, c.email);
 
-  // A sub's pay set on the calendar (the line subPay.ts edits), and pay
-  // entered in the Contractors tab instead, added up. Prices-only roles.
+  // Visit pay set on the calendar, per day of the visit, and pay entered in
+  // the Contractors tab with the days it covers (see subPay.ts). Prices-only roles.
   const subPayByProject = new Map<string, Record<string, number>>();
-  const subPayElsewhereByProject = new Map<string, Record<string, number>>();
+  const subPayTabLinesByProject = new Map<string, Record<string, { from: string; to: string; cents: number }[]>>();
   if (showSovPrices) {
+    for (const a of dayAssignmentRows) {
+      const line = a.subPayAssignment;
+      if (!line || line.costCents == null || line.contractorId !== a.supervisorContractorId) continue;
+      subPayByProject.set(a.projectId, { ...subPayByProject.get(a.projectId), [`${line.contractorId}:${dayKey(a.date)}`]: line.costCents });
+    }
     for (const ca of contractorAssignmentRows) {
-      if (!ca.projectId || ca.costCents == null) continue;
-      if (ca.setOnSchedule) {
-        subPayByProject.set(ca.projectId, { ...subPayByProject.get(ca.projectId), [ca.contractorId]: ca.costCents });
-      } else {
-        const prev = subPayElsewhereByProject.get(ca.projectId) ?? {};
-        subPayElsewhereByProject.set(ca.projectId, { ...prev, [ca.contractorId]: (prev[ca.contractorId] ?? 0) + ca.costCents });
-      }
+      if (!ca.projectId || ca.costCents == null || ca.setOnSchedule) continue;
+      const from = ca.startDate ?? ca.assignedDate ?? ca.endDate;
+      if (!from) continue;
+      const prev = subPayTabLinesByProject.get(ca.projectId) ?? {};
+      const span = { from: dayKey(from), to: dayKey(ca.endDate ?? from), cents: ca.costCents };
+      subPayTabLinesByProject.set(ca.projectId, { ...prev, [ca.contractorId]: [...(prev[ca.contractorId] ?? []), span] });
     }
   }
 
@@ -691,8 +696,8 @@ export default async function SchedulePage({ searchParams }: PageProps) {
       requestNotes: requestNotesByProject.get(r.id) || null,
       requesterOptions: [...(requesterOptionsByProject.get(r.id)?.values() ?? [])],
       contractValueCents: showSovPrices ? r.contractValueCents : null,
-      subPayByContractor: subPayByProject.get(r.id) ?? {},
-      subPaySetElsewhere: subPayElsewhereByProject.get(r.id) ?? {},
+      subPayByDay: subPayByProject.get(r.id) ?? {},
+      subPayTabLines: subPayTabLinesByProject.get(r.id) ?? {},
       completedScopeItems: r.turnoverRequest ? parseCompletedScopeItems(r.turnoverRequest.completedScopeItems) : [],
       changeOrders: changeOrdersByProject.get(r.id) ?? [],
       buildingId: r.turnoverRequest?.buildingId ?? null,

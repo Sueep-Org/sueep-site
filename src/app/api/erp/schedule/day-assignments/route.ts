@@ -6,7 +6,7 @@ import { formatTurnoverHoursBudgetText } from "@/lib/erp/turnoverHoursBudget";
 import { isTurnoverScopeValue, parseCompletedScopeItems, turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
 import { appUrl, batchDayInvites, notifyProjectCrew, scopeText, sendDayInvite, sendSubLeadInvite } from "@/lib/erp/scheduleInvites";
 import { notifyProjectDayRequester, requesterFromBody } from "@/lib/erp/scheduleRequester";
-import { saveSubPay, subPayFromBody, syncScheduleSubPay } from "@/lib/erp/subPay";
+import { joinSubPayVisit, saveSubPay, subPayFromBody, syncScheduleSubPay } from "@/lib/erp/subPay";
 import { hasCalendarSubPay } from "@/lib/erp/projectSegments";
 import { canSeeFinancials, getErpAuth } from "@/lib/erpAuth";
 
@@ -39,6 +39,8 @@ export async function POST(req: Request) {
   const requester = requesterFromBody(body);
   // The sub's pay on a turnover or post-con job (see subPay.ts); only roles that see prices can set it
   const subPayCents = subPayFromBody(body);
+  // A drag sends the day it's moving from, so the moved day keeps that visit's pay
+  const moveFromId = typeof body.moveFromId === "string" && body.moveFromId ? body.moveFromId : null;
   if (subPayCents !== undefined) {
     const auth = await getErpAuth();
     if (!auth || !canSeeFinancials(auth.role)) return NextResponse.json({ error: "Not allowed to set contractor pay" }, { status: 403 });
@@ -236,11 +238,20 @@ export async function POST(req: Request) {
     if (supervisorContractorId) await sendSubLeadInvite({ ...invite, contractorId: supervisorContractorId });
   }
 
-  // Saved before any invite goes out, so the sub's invite shows it
-  const subPay =
-    subPayCents !== undefined && supervisorContractorId && hasCalendarSubPay(project.segment)
-      ? await saveSubPay(projectId, supervisorContractorId, subPayCents, date)
-      : null;
+  // Runs after the days are written and before any invite goes out, so the
+  // sub's invite shows the visit's pay (see subPay.ts).
+  const movedFromLineId = moveFromId
+    ? ((await prisma.projectDayAssignment.findFirst({ where: { id: moveFromId, projectId }, select: { subPayAssignmentId: true } }))?.subPayAssignmentId ?? null)
+    : null;
+  async function placeSubPay(dates: Date[]): Promise<"saved" | "set-elsewhere" | null> {
+    let result: "saved" | "set-elsewhere" | null = null;
+    if (supervisorContractorId && hasCalendarSubPay(project!.segment)) {
+      if (subPayCents !== undefined) result = await saveSubPay(projectId, supervisorContractorId, subPayCents, dates);
+      else await joinSubPayVisit(projectId, supervisorContractorId, dates, movedFromLineId);
+    }
+    await syncScheduleSubPay(projectId);
+    return result;
+  }
 
   if (seriesDates && repeatUntil) {
     const series = await prisma.projectScheduleSeries.create({
@@ -277,6 +288,7 @@ export async function POST(req: Request) {
     const assignments = (supervisorUserId
       ? (await prisma.$transaction([prisma.project.update({ where: { id: projectId }, data: { supervisorUserId } }), ...writes])).slice(1)
       : await prisma.$transaction(writes)) as Awaited<(typeof writes)[number]>[];
+    const subPay = await placeSubPay(seriesDates);
 
     // No calendar invite for a PM-only series, see the field comment above.
     // One email per person for the whole range (batchDayInvites), but each
@@ -325,7 +337,6 @@ export async function POST(req: Request) {
     // A day that's already fully confirmed tells a newly set requester now
     await Promise.all(assignments.map(notifyRequester));
 
-    await syncScheduleSubPay(projectId);
     return NextResponse.json({ seriesId: series.id, assignments, subPay }, { status: 201 });
   }
 
@@ -348,6 +359,7 @@ export async function POST(req: Request) {
   const assignment = supervisorUserId
     ? (await prisma.$transaction([writeAssignment, prisma.project.update({ where: { id: projectId }, data: { supervisorUserId } })]))[0]
     : await writeAssignment;
+  const subPay = await placeSubPay([date]);
 
   // Send a calendar invite (.ics) for the assignment. Reuses the same UID on
   // every send for this assignment, so re-running this (e.g. reassigning the
@@ -388,6 +400,5 @@ export async function POST(req: Request) {
 
   await notifyRequester(assignment);
 
-  await syncScheduleSubPay(projectId);
   return NextResponse.json({ ...assignment, subPay }, { status: 201 });
 }
