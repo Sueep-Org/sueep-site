@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { centsToDollars } from "@/lib/erp/money";
@@ -33,9 +34,12 @@ export function ContractMonthsTable({
   contractId,
   months,
   laborByPeriod = {},
+  billingHref,
 }: {
   contractId: string;
   months: Month[];
+  /** The Billing page's Recurring tab, filtered to this building. Billing status is changed there. */
+  billingHref: string;
   /** Janitorial labor cost per month id (months that have started). */
   laborByPeriod?: Record<string, Labor>;
 }) {
@@ -157,7 +161,10 @@ export function ContractMonthsTable({
                 <th className="px-4 py-3 text-right">Total</th>
                 <th className="px-4 py-3 text-right">Labor cost</th>
                 <th className="px-4 py-3 text-right">Margin</th>
-                <th className="px-4 py-3">Billing status</th>
+                <th className="px-4 py-3">
+                  Billing status{" "}
+                  <Link href={billingHref} className="ml-1 font-normal normal-case text-pink-600 hover:underline">Change on Billing</Link>
+                </th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -291,16 +298,9 @@ export function ContractMonthsTable({
                       );
                     })()}
                     <td className="px-4 py-3">
-                      <select
-                        value={m.billingStatus}
-                        disabled={busy}
-                        onChange={(e) => send(`/api/erp/janitorial/periods/${m.id}`, "PATCH", { billingStatus: e.target.value })}
-                        className={`cursor-pointer rounded-full border px-2.5 py-0.5 text-xs font-semibold focus:outline-none ${billingBadgeCls(m.billingStatus)}`}
-                      >
-                        {PERIOD_BILLING_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
+                      <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${billingBadgeCls(m.billingStatus)}`}>
+                        {PERIOD_BILLING_OPTIONS.find((o) => o.value === m.billingStatus)?.label ?? m.billingStatus}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-right">
                       {m.billingStatus === "NOT_BILLED" && !m.commissionPaid && (

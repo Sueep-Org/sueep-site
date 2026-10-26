@@ -4,14 +4,17 @@
  * form, the API, and tests share one set of math.
  *
  * Per role line: people x hours/week x rate, turned monthly as
- * weekly x 52 / 12. Payroll adds a W2 + health burden (default 19%).
- * Optional overtime (premium half of pay rate) and holiday costs. Sales tax
- * is a % of the monthly price. Any line's price, or the total, can be
- * overridden by hand.
+ * weekly x 52 / 12. Optional overtime (premium half of pay rate) and holiday
+ * costs. Employer payroll taxes are worked out exactly per worker over a
+ * full year with the Payroll page's rates and yearly caps (employerTax.ts),
+ * then shown monthly. No health cost: cleaning staff aren't on the company
+ * plan. Sales tax is a % of the monthly price. Any line's price, or the
+ * total, can be overridden by hand.
  */
 
+import { DEFAULT_EMPLOYER_TAX_RATES, type EmployerTaxRates } from "@/lib/erp/employerTax";
+
 export const WEEKS_PER_MONTH = 52 / 12;
-export const DEFAULT_BURDEN_PCT = 19;
 export const DEFAULT_SALES_TAX_PCT = 6;
 export const ROLE_SUGGESTIONS = ["Janitorial", "Cleaner", "Porter", "Foreman", "Supervisor", "Concierge", "Patrol"];
 
@@ -30,7 +33,8 @@ export type PricingLine = {
 
 export type ContractPricing = {
   lines: PricingLine[];
-  burdenPct: number;
+  /** Old flat payroll add-on %. Kept on saved pricings, no longer used. */
+  burdenPct?: number;
   salesTaxPct: number;
   /** Extra overtime hours each week, paid at half the pay rate on top of regular pay. */
   overtime: { people: number; hoursPerWeek: number; payRate: number } | null;
@@ -51,8 +55,10 @@ export type PricingResult = {
   payrollCents: number;
   overtimeCents: number;
   holidaysCents: number;
+  /** Employer payroll taxes on all the pay above, a full year's worth divided by 12. */
+  employerTaxCents: number;
   salesTaxCents: number;
-  /** Monthly price minus tax, payroll, overtime, and holidays. */
+  /** Monthly price minus sales tax, pay, and employer taxes. */
   profitCents: number;
   /** Profit as a share of the monthly price (0.25 = 25%), null when price is 0. */
   marginPct: number | null;
@@ -62,7 +68,6 @@ export type PricingResult = {
 export function emptyPricing(): ContractPricing {
   return {
     lines: [newLine("Janitorial")],
-    burdenPct: DEFAULT_BURDEN_PCT,
     salesTaxPct: DEFAULT_SALES_TAX_PCT,
     overtime: null,
     holidays: null,
@@ -84,28 +89,64 @@ export function newLine(role = ""): PricingLine {
 
 const cents = (dollars: number) => Math.round(dollars * 100);
 
-export function calculatePricing(p: ContractPricing): PricingResult {
-  const burden = 1 + (p.burdenPct || 0) / 100;
+/** One worker's employer tax for a year of pay (dollars), with the yearly caps. */
+function yearlyEmployerTax(pay: number, r: EmployerTaxRates): number {
+  const capped = (capCents: number) => Math.min(pay, capCents / 100);
+  return (
+    (capped(r.socialSecurityCapCents) * r.socialSecurityPct +
+      pay * r.medicarePct +
+      capped(r.futaCapCents) * r.futaPct +
+      capped(r.paSuiCapCents) * r.paSuiPct) /
+    100
+  );
+}
+
+/**
+ * Employer tax per month for the whole contract. Each role line's workers
+ * are taxed on a year of their own pay. Overtime and holiday pay go to
+ * workers earning the average line pay, so they're taxed on top of that
+ * (usually past the unemployment caps already).
+ */
+function monthlyEmployerTax(p: ContractPricing, r: EmployerTaxRates): number {
+  let yearly = 0;
+  let people = 0;
+  let basePay = 0;
+  for (const l of p.lines) {
+    const pay = l.hoursPerWeek * l.payRate * 52;
+    yearly += l.people * yearlyEmployerTax(pay, r);
+    people += l.people;
+    basePay += l.people * pay;
+  }
+  const avgPay = people > 0 ? basePay / people : 0;
+  const extra = (count: number, extraPay: number) =>
+    count * (yearlyEmployerTax(avgPay + extraPay, r) - yearlyEmployerTax(avgPay, r));
+  if (p.overtime) yearly += extra(p.overtime.people, p.overtime.hoursPerWeek * p.overtime.payRate * 0.5 * 52);
+  if (p.holidays) yearly += extra(p.holidays.people, p.holidays.days * p.holidays.hoursPerDay * p.holidays.payRate);
+  return yearly / 12;
+}
+
+export function calculatePricing(p: ContractPricing, taxRates: EmployerTaxRates = DEFAULT_EMPLOYER_TAX_RATES): PricingResult {
   const lines = p.lines.map((l) => {
     const calculatedCents = cents(l.people * l.hoursPerWeek * l.billRate * WEEKS_PER_MONTH);
     return {
       id: l.id,
       calculatedCents,
       priceCents: l.monthlyOverrideCents ?? calculatedCents,
-      payrollCents: cents(l.people * l.hoursPerWeek * l.payRate * burden * WEEKS_PER_MONTH),
+      payrollCents: cents(l.people * l.hoursPerWeek * l.payRate * WEEKS_PER_MONTH),
     };
   });
   const calculatedMonthlyCents = lines.reduce((s, l) => s + l.priceCents, 0);
   const monthlyPriceCents = p.totalOverrideCents ?? calculatedMonthlyCents;
   const payrollCents = lines.reduce((s, l) => s + l.payrollCents, 0);
   const overtimeCents = p.overtime
-    ? cents(p.overtime.people * p.overtime.hoursPerWeek * p.overtime.payRate * 0.5 * burden * WEEKS_PER_MONTH)
+    ? cents(p.overtime.people * p.overtime.hoursPerWeek * p.overtime.payRate * 0.5 * WEEKS_PER_MONTH)
     : 0;
   const holidaysCents = p.holidays
-    ? cents((p.holidays.days * p.holidays.hoursPerDay * p.holidays.people * p.holidays.payRate * burden) / 12)
+    ? cents((p.holidays.days * p.holidays.hoursPerDay * p.holidays.people * p.holidays.payRate) / 12)
     : 0;
+  const employerTaxCents = cents(monthlyEmployerTax(p, taxRates));
   const salesTaxCents = cents((monthlyPriceCents / 100) * ((p.salesTaxPct || 0) / 100));
-  const profitCents = monthlyPriceCents - salesTaxCents - payrollCents - overtimeCents - holidaysCents;
+  const profitCents = monthlyPriceCents - salesTaxCents - payrollCents - overtimeCents - holidaysCents - employerTaxCents;
   return {
     lines,
     calculatedMonthlyCents,
@@ -113,6 +154,7 @@ export function calculatePricing(p: ContractPricing): PricingResult {
     payrollCents,
     overtimeCents,
     holidaysCents,
+    employerTaxCents,
     salesTaxCents,
     profitCents,
     marginPct: monthlyPriceCents > 0 ? profitCents / monthlyPriceCents : null,
@@ -158,10 +200,8 @@ export function parsePricing(raw: unknown): { pricing: ContractPricing } | { err
     lines.push({ id: String(l.id ?? i).slice(0, 20), role, people, hoursPerWeek, billRate, payRate, monthlyOverrideCents });
   }
 
-  const burdenPct = num(r.burdenPct, 0, 100);
   const salesTaxPct = num(r.salesTaxPct, 0, 25);
   const totalOverrideCents = optCents(r.totalOverrideCents);
-  if (burdenPct === null) return { error: "Payroll add-on must be 0 to 100%" };
   if (salesTaxPct === null) return { error: "Sales tax must be 0 to 25%" };
   if (totalOverrideCents === undefined) return { error: "Check the monthly price override" };
 
@@ -186,7 +226,7 @@ export function parsePricing(raw: unknown): { pricing: ContractPricing } | { err
     holidays = { days, hoursPerDay, people, payRate };
   }
 
-  const pricing: ContractPricing = { lines, burdenPct, salesTaxPct, overtime, holidays, totalOverrideCents };
+  const pricing: ContractPricing = { lines, salesTaxPct, overtime, holidays, totalOverrideCents };
   if (calculatePricing(pricing).monthlyPriceCents <= 0) {
     return { error: "The monthly price is $0. Add a line with a bill rate or set the monthly price by hand." };
   }

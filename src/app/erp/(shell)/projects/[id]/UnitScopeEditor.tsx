@@ -6,6 +6,7 @@ import { TurnoverPricingPackageQuestions } from "@/app/erp/(shell)/turnover-requ
 import { formatUnitDisplay } from "@/lib/erp/unitDisplay";
 import { getTurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
 import { Button } from "@/app/erp/components/ui";
+import { UnitNameInput } from "@/app/erp/components/UnitNameInput";
 
 type Props = {
   projectId: string;
@@ -164,7 +165,6 @@ export function UnitScopeEditor({
         isPartialTurn,
         partialTurnLayout: isPartialTurn ? partialTurnLayout || null : null,
       };
-      const newJobTitle = `${buildingName} - ${formatUnitDisplay(newUnitNumber)}`;
 
       let trId = turnoverRequestId;
 
@@ -176,34 +176,36 @@ export function UnitScopeEditor({
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ buildingId, ...layoutPayload }),
         });
-        const created = (await createRes.json()) as { id?: string; error?: string };
+        const created = (await createRes.json()) as { id?: string; unitNumber?: string | null; error?: string };
         if (!createRes.ok) { setError(created.error ?? "Failed to create layout record"); return; }
         trId = created.id!;
         setTurnoverRequestId(trId);
+        // The server may keep the building's existing spelling of this unit (see unitNames.ts)
+        if (created.unitNumber) setUnitNumberVal(created.unitNumber);
 
         // Link the new TurnoverRequest to the project
         const linkRes = await fetch(`/api/erp/projects/${projectId}`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ turnoverRequestId: trId, jobTitle: newJobTitle }),
+          body: JSON.stringify({ turnoverRequestId: trId, jobTitle: `${buildingName} - ${formatUnitDisplay(created.unitNumber ?? newUnitNumber)}` }),
         });
         if (!linkRes.ok) { setError("Layout created but failed to link to project"); return; }
       } else {
-        const [trRes, projRes] = await Promise.all([
-          fetch(`/api/erp/turnover-requests/${trId}`, {
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(layoutPayload),
-          }),
-          fetch(`/api/erp/projects/${projectId}`, {
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ jobTitle: newJobTitle }),
-          }),
-        ]);
-        const trData = (await trRes.json().catch(() => ({}))) as { error?: string };
-        const projData = (await projRes.json().catch(() => ({}))) as { error?: string };
+        const trRes = await fetch(`/api/erp/turnover-requests/${trId}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(layoutPayload),
+        });
+        const trData = (await trRes.json().catch(() => ({}))) as { unitNumber?: string | null; error?: string };
         if (!trRes.ok) { setError(trData.error ?? "Save failed"); return; }
+        // The server may keep the building's existing spelling of this unit (see unitNames.ts)
+        if (trData.unitNumber) setUnitNumberVal(trData.unitNumber);
+        const projRes = await fetch(`/api/erp/projects/${projectId}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ jobTitle: `${buildingName} - ${formatUnitDisplay(trData.unitNumber ?? newUnitNumber)}` }),
+        });
+        const projData = (await projRes.json().catch(() => ({}))) as { error?: string };
         if (!projRes.ok) { setError(projData.error ?? "Save failed"); return; }
       }
 
@@ -226,11 +228,11 @@ export function UnitScopeEditor({
         <label className="block text-xs font-medium text-gray-600" htmlFor="use-unit-number">
           Unit identifier
         </label>
-        <input
+        <UnitNameInput
           id="use-unit-number"
-          type="text"
+          buildingId={buildingId}
           value={unitNumberVal}
-          onChange={(e) => setUnitNumberVal(e.target.value)}
+          onChange={setUnitNumberVal}
           placeholder="e.g. Unit 1, 2000-2037: C3"
           className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
         />

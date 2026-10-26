@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 export type SOVItem = {
@@ -54,9 +55,11 @@ type Props = {
   projectId: string;
   initialItems: SOVItem[];
   canEdit: boolean;
+  /** The Billing page filtered to this project, when the lines' billing status is changed there. Null keeps the dropdowns here. */
+  billingHref?: string | null;
 };
 
-export function ProjectSOVSection({ projectId, initialItems, canEdit }: Props) {
+export function ProjectSOVSection({ projectId, initialItems, canEdit, billingHref = null }: Props) {
   const [items, setItems] = useState<SOVItem[]>(initialItems);
   const [adding, setAdding] = useState(false);
 
@@ -189,7 +192,12 @@ export function ProjectSOVSection({ projectId, initialItems, canEdit }: Props) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-gray-900">Schedule of Values</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-sm font-semibold text-gray-900">Schedule of Values</h2>
+          {billingHref && items.length > 0 && (
+            <Link href={billingHref} className="text-xs text-pink-600 hover:underline">Change billing on Billing</Link>
+          )}
+        </div>
         {canEdit && !adding && (
           <button
             type="button"
@@ -277,7 +285,7 @@ export function ProjectSOVSection({ projectId, initialItems, canEdit }: Props) {
               <span className={`text-sm font-medium tabular-nums ${item.completed ? "text-gray-400" : "text-gray-700"}`}>
                 {fmt(item.scheduledValueCents)}
               </span>
-              {canEdit ? (
+              {canEdit && !billingHref ? (
                 <select
                   value={item.billingStatus}
                   onChange={(e) => updateBilling(item, e.target.value)}

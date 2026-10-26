@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
+import { matchUnitName } from "@/lib/erp/unitNames";
 import {
   sanitizeTurnoverPricingPackage,
   TURNOVER_UNIT_LAYOUTS,
@@ -172,6 +173,8 @@ export async function createTurnoverRequestsFromPayload(body: Record<string, unk
 
   const building = await resolveBuilding(body);
   const pricingPackage = pricingPackageFromPayload(body, building.pricingPackage);
+  // A unit the building already has keeps its spelling (see unitNames.ts)
+  const knownUnitNames = (await prisma.turnoverRequest.findMany({ where: { buildingId: building.id, unitNumber: { not: null } }, select: { unitNumber: true } })).map((r) => r.unitNumber!);
 
   const requests = await Promise.all(
     units.map(async (unit, index) => {
@@ -193,7 +196,7 @@ export async function createTurnoverRequestsFromPayload(body: Record<string, unk
       const otherWork = Boolean(unit.otherWork);
       const otherDescription = otherWork ? stringValue(unit.otherDescription) : "";
       const otherCents = otherWork ? Math.round((readDollar(unit.otherPrice) ?? 0) * 100) : 0;
-      const unitNumber = stringValue(unit.unitNumber) || (isCommonArea ? "Common Area" : `Unit ${index + 1}`);
+      const unitNumber = matchUnitName(stringValue(unit.unitNumber) || (isCommonArea ? "Common Area" : `Unit ${index + 1}`), knownUnitNames);
 
       const pricing = computeTurnoverPricing({
         requestType: "TURNOVER",

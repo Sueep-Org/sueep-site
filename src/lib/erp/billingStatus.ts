@@ -55,3 +55,22 @@ export function billingStatusLabel(raw: string | null | undefined): string {
   const s = normalizeBillingStatus(raw);
   return BILLING_STATUS_OPTIONS.find((o) => o.value === s)!.label;
 }
+
+/** Segments the Billing page's Janitorial tab lists (unless the project came from the post-construction pipeline). */
+export const JANITORIAL_BILLING_SEGMENTS = ["JANITORIAL_TURNOVER_REQUESTS", "COMMERCIAL_CLEANING"];
+
+/** The Billing page on one tab, searched for one project or building. */
+export function billingPageHref(tab: "post-construction" | "janitorial" | "recurring", q: string): string {
+  return `/erp/billing?tab=${tab}&q=${encodeURIComponent(q)}`;
+}
+
+/**
+ * Where this project's billing status is changed: the Billing page, filtered
+ * to it, when the Billing page lists it. Null for projects the Billing page
+ * doesn't list, which keep their own status control.
+ */
+export function projectBillingHref(p: { jobTitle: string; segment: string; isPostConstruction: boolean; hasSovItems: boolean }): string | null {
+  if (p.isPostConstruction) return p.hasSovItems ? billingPageHref("post-construction", p.jobTitle) : null;
+  if (JANITORIAL_BILLING_SEGMENTS.includes(p.segment)) return billingPageHref("janitorial", p.jobTitle);
+  return null;
+}

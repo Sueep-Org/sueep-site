@@ -69,6 +69,7 @@ type Props = {
     isOffshore: boolean;
     offshoreMonthlyRateCents: number | null;
     isJanitorialContract: boolean;
+    onAdpPayroll: boolean;
   };
 };
 
@@ -119,6 +120,7 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, payHistory
       isOffshore: payMode === "OFFSHORE",
       offshoreMonthlyRate: payMode === "OFFSHORE" ? (fd.get("offshoreMonthlyRate") || null) : null,
       isJanitorialContract: payMode === "JANITORIAL",
+      onAdpPayroll: payMode !== "OFFSHORE" && fd.get("onAdpPayroll") === "on",
     };
     // payType/hourlyPay/annualSalary are only sent for Hourly/Salary/
     // Janitorial. For Offshore they're left out of the payload entirely so
@@ -300,6 +302,13 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, payHistory
               <input id="payEffectiveFrom" name="payEffectiveFrom" type="date" max={todayKey} defaultValue={todayKey} className={input} />
               <p className="mt-1 text-xs text-gray-500">Only used if you change pay. Earlier pay periods keep the old rate.</p>
             </div>
+          )}
+          {canSeePay && payMode !== "OFFSHORE" && (
+            <label className="sm:col-span-2 flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" name="onAdpPayroll" defaultChecked={initial.onAdpPayroll} className="h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500" />
+              Paid through ADP (W2)
+              <InfoTip text="Turn on for people on the ADP payroll. Employer payroll taxes (Social Security, Medicare, unemployment) are added to their pay as company cost." />
+            </label>
           )}
           {canSeePay && payMode === "SALARY" && (
             <p className="sm:col-span-2 -mt-2 text-xs text-gray-500">

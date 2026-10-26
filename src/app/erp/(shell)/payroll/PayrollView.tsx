@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { Fragment, useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { Button, Modal, useConfirm, useToast } from "@/app/erp/components/ui";
+import { Button, InfoTip, Modal, useConfirm, useToast } from "@/app/erp/components/ui";
 import { EmployeeCombobox, type EmployeeOption } from "@/app/erp/components/EmployeeCombobox";
 import { splitHoursOverWorkingDays } from "@/lib/erp/manualHours";
 import { DEFAULT_PAYROLL_ANCHOR, anchorDate, biweeklyIndex, biweeklyRange } from "@/lib/erp/payPeriods";
+import type { EmployerTax } from "@/lib/erp/employerTax";
+import { EmployerTaxRatesModal } from "./EmployerTaxRatesModal";
+import { HealthInsuranceModal } from "./HealthInsuranceModal";
 
 type PayrollRow = {
   isContractor: boolean;
@@ -33,30 +36,55 @@ type PayrollRow = {
   noJanitorialSchedule?: boolean;
   commissionCents: number;
   commissionBreakdown: { label: string; amountCents: number }[];
+  /** Company's share of payroll taxes on this pay. Null for contractors and anyone not on ADP. */
+  employerTax?: EmployerTax | null;
+  /** Sueep's share of their health insurance for this period (0 when not on the plan). */
+  healthCents?: number;
+  /** Contractors: the contractor and each pay line that makes up their total. */
+  contractorId?: string;
+  contractorLines?: ContractorLine[];
   /** Hours added by hand (work not on a project), so they can be removed. */
   manualEntries?: { id: string; date: string; hours: number; note: string | null; batchId?: string | null; repeatId?: string | null; repeatEveryDays?: number | null }[];
 };
+
+type ContractorLine = {
+  id: string;
+  date: string | null;
+  projectId: string | null;
+  title: string;
+  role: string | null;
+  amountCents: number;
+  fromSchedule: boolean;
+};
+
+/** Pay lines for the same job, day and role: usually entered twice by mistake. */
+function duplicateLineIds(lines: ContractorLine[]): Set<string> {
+  const seen = new Map<string, string[]>();
+  for (const l of lines) {
+    const key = `${l.projectId}|${l.date}|${(l.role ?? "").trim().toLowerCase()}`;
+    seen.set(key, [...(seen.get(key) ?? []), l.id]);
+  }
+  return new Set([...seen.values()].filter((ids) => ids.length > 1).flat());
+}
+
+/** Short problems shown under a person's name, worst first. */
+function rowWarnings(row: PayrollRow): { text: string; tone: "red" | "amber"; href?: string }[] {
+  const out: { text: string; tone: "red" | "amber"; href?: string }[] = [];
+  if (row.missingRateHours) out.push({ text: `${fmtHours(Math.round(row.missingRateHours * 100) / 100)} hrs with no rate, not paid`, tone: "red" });
+  if (row.noJanitorialSchedule) out.push({ text: "No janitorial schedule, no janitorial hours paid", tone: "red", href: "/erp/schedule?calendar=janitorial" });
+  const dupes = row.contractorLines ? duplicateLineIds(row.contractorLines).size : 0;
+  if (dupes) out.push({ text: `${dupes} pay lines look doubled`, tone: "amber" });
+  return out;
+}
 
 const manualInputCls = "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
 
 type PayFilter = "all" | "hourly" | "salary" | "janitorial" | "contractor";
 
-type PayrollChange = {
-  name: string;
-  savedGrossCents: number | null;
-  liveGrossCents: number | null;
-  savedHours: number | null;
-  liveHours: number | null;
-};
-
 type PayrollResponse = {
   periodStart: string;
   periodEnd: string;
   rows: PayrollRow[];
-  /** Set once the period is closed: rows are then what was saved when it was paid. */
-  closed: { closedAt: string; closedBy: string | null; totalGrossCents: number } | null;
-  /** What the records say now vs. what was saved, for a closed period. */
-  changes: PayrollChange[];
 };
 
 function formatDate(d: Date): string {
@@ -87,6 +115,8 @@ function buildCsv(rows: PayrollRow[], periodStart: string, periodEnd: string): s
     "Gross Pay",
     "Commission",
     "Total",
+    "Employer Tax",
+    "Health (Company Share)",
     "Projects",
   ];
 
@@ -102,6 +132,8 @@ function buildCsv(rows: PayrollRow[], periodStart: string, periodEnd: string): s
     escape((r.grossPayCents / 100).toFixed(2)),
     escape((r.commissionCents / 100).toFixed(2)),
     escape(((r.grossPayCents + r.commissionCents) / 100).toFixed(2)),
+    escape(((r.employerTax?.totalCents ?? 0) / 100).toFixed(2)),
+    escape(((r.healthCents ?? 0) / 100).toFixed(2)),
     escape(r.projects),
   ].join(","));
 
@@ -118,11 +150,15 @@ function SettingsPopover({
   onSaveAnchor,
   onDownloadCsv,
   downloadDisabled,
+  onOpenTaxRates,
+  onOpenHealth,
 }: {
   anchorISO: string;
   onSaveAnchor: (iso: string) => Promise<string | null>;
   onDownloadCsv: () => void;
   downloadDisabled: boolean;
+  onOpenTaxRates: () => void;
+  onOpenHealth: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(anchorISO);
@@ -199,6 +235,20 @@ function SettingsPopover({
           <div className="mt-3 border-t border-gray-100 pt-3">
             <button
               type="button"
+              onClick={() => { onOpenTaxRates(); setOpen(false); }}
+              className="mb-2 w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Employer tax rates
+            </button>
+            <button
+              type="button"
+              onClick={() => { onOpenHealth(); setOpen(false); }}
+              className="mb-2 w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Health insurance
+            </button>
+            <button
+              type="button"
               onClick={() => { onDownloadCsv(); setOpen(false); }}
               disabled={downloadDisabled}
               className="flex w-full items-center justify-center gap-2 rounded-md bg-pink-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-40"
@@ -251,11 +301,10 @@ function groupManualEntries(entries: NonNullable<PayrollRow["manualEntries"]>): 
   });
 }
 
-export function PayrollView({ canReopen = false, employees = [] }: { canReopen?: boolean; employees?: EmployeeOption[] }) {
+export function PayrollView({ employees = [] }: { employees?: EmployeeOption[] }) {
   const confirm = useConfirm();
   const toast = useToast();
   const [reloadKey, setReloadKey] = useState(0);
-  const [closing, setClosing] = useState(false);
   const [anchorISO, setAnchorISO] = useState(DEFAULT_PAYROLL_ANCHOR);
   const [anchorLoaded, setAnchorLoaded] = useState(false);
 
@@ -265,6 +314,16 @@ export function PayrollView({ canReopen = false, employees = [] }: { canReopen?:
   const [error, setError] = useState("");
   const [payFilter, setPayFilter] = useState<PayFilter>("all");
   const [search, setSearch] = useState("");
+  const [attentionOnly, setAttentionOnly] = useState(false);
+  const [openRows, setOpenRows] = useState<Set<string>>(new Set());
+  function toggleRow(key: string) {
+    setOpenRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
   const [addOpen, setAddOpen] = useState(false);
   const [addForm, setAddForm] = useState({ mode: "day" as "day" | "range", employeeId: "", date: "", from: "", to: "", hours: "", note: "", repeat: 0 as number });
   const [adding, setAdding] = useState(false);
@@ -273,6 +332,8 @@ export function PayrollView({ canReopen = false, employees = [] }: { canReopen?:
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState("");
   const [removingRepeat, setRemovingRepeat] = useState<{ group: ManualGroup; name: string } | null>(null);
+  const [taxRatesOpen, setTaxRatesOpen] = useState(false);
+  const [healthOpen, setHealthOpen] = useState(false);
 
   // Load anchor from API on mount
   useEffect(() => {
@@ -327,41 +388,6 @@ export function PayrollView({ canReopen = false, employees = [] }: { canReopen?:
       return "Network error";
     }
   }
-
-  async function closePeriod() {
-    if (!data) return;
-    const ok = await confirm({
-      message: `Close ${formatDate(start)} to ${formatDate(end)} as paid? This saves each person's hours and pay exactly as shown. If labor logs change later, the saved numbers stay and the changes are listed here.`,
-    });
-    if (!ok) return;
-    setClosing(true);
-    try {
-      const res = await fetch("/api/erp/payroll/close", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ start: data.periodStart, end: data.periodEnd }),
-      });
-      const result = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) { toast(result.error ?? "Could not close the period", "error"); return; }
-      toast("Pay period closed.", "success");
-      setReloadKey((k) => k + 1);
-    } finally {
-      setClosing(false);
-    }
-  }
-
-  async function reopenPeriod() {
-    if (!data) return;
-    const ok = await confirm({ message: "Reopen this pay period? The saved numbers are dropped and it goes back to showing live numbers from the records." });
-    if (!ok) return;
-    const res = await fetch(`/api/erp/payroll/close?start=${data.periodStart}`, { method: "DELETE" });
-    const result = (await res.json().catch(() => ({}))) as { error?: string };
-    if (!res.ok) { toast(result.error ?? "Could not reopen the period", "error"); return; }
-    toast("Pay period reopened.", "success");
-    setReloadKey((k) => k + 1);
-  }
-
-  const periodHasEnded = toISO(end) < toISO(new Date());
 
   function openAddHours() {
     // Default to today when it's in this period, otherwise the period's last day.
@@ -461,6 +487,8 @@ export function PayrollView({ canReopen = false, employees = [] }: { canReopen?:
     const q = search.trim().toLowerCase();
     return r.name.toLowerCase().includes(q);
   });
+  const attentionCount = filteredRows.filter((r) => rowWarnings(r).length > 0).length;
+  const shownRows = attentionOnly && attentionCount > 0 ? filteredRows.filter((r) => rowWarnings(r).length > 0) : filteredRows;
 
   function downloadCsv() {
     if (!data) return;
@@ -482,7 +510,8 @@ export function PayrollView({ canReopen = false, employees = [] }: { canReopen?:
 
   const totalGross = filteredRows.reduce((s, r) => s + r.grossPayCents, 0);
   const totalCommission = filteredRows.reduce((s, r) => s + r.commissionCents, 0);
-  const totalHours = filteredRows.reduce((s, r) => s + r.totalHours, 0);
+  const totalEmployerTax = filteredRows.reduce((s, r) => s + (r.employerTax?.totalCents ?? 0), 0);
+  const totalHealth = filteredRows.reduce((s, r) => s + (r.healthCents ?? 0), 0);
 
   return (
     <div className="space-y-4">
@@ -521,6 +550,8 @@ export function PayrollView({ canReopen = false, employees = [] }: { canReopen?:
             onSaveAnchor={saveAnchor}
             onDownloadCsv={downloadCsv}
             downloadDisabled={!data || data.rows.length === 0}
+            onOpenTaxRates={() => setTaxRatesOpen(true)}
+            onOpenHealth={() => setHealthOpen(true)}
           />
         </div>
 
@@ -747,215 +778,278 @@ export function PayrollView({ canReopen = false, employees = [] }: { canReopen?:
         )}
       </Modal>
 
-      {/* Closed (paid) period: saved numbers, plus anything changed since */}
-      {data && !loading && (data.closed ? (
-        <div className={`rounded-lg border px-4 py-3 text-sm ${data.changes.length ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-gray-800">
-              <span className="font-semibold">Closed</span> on {new Date(data.closed.closedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-              {data.closed.closedBy ? ` by ${data.closed.closedBy}` : ""}. Showing what was paid.
-            </p>
-            {canReopen && (
-              <button type="button" onClick={reopenPeriod} className="text-xs font-medium text-gray-600 hover:text-gray-900 hover:underline">
-                Reopen period
-              </button>
-            )}
-          </div>
-          {data.changes.length > 0 && (
-            <div className="mt-2">
-              <p className="font-medium text-amber-800">
-                {data.changes.length} {data.changes.length === 1 ? "person's" : "people's"} records changed after this was closed:
+      <EmployerTaxRatesModal open={taxRatesOpen} onClose={() => setTaxRatesOpen(false)} onSaved={() => setReloadKey((k) => k + 1)} />
+      <HealthInsuranceModal open={healthOpen} onClose={() => setHealthOpen(false)} onSaved={() => setReloadKey((k) => k + 1)} employees={employees} />
+
+      {/* Summary */}
+      {data && filteredRows.length > 0 && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            { label: "People paid", value: String(filteredRows.length) },
+            { label: "Gross pay", value: fmt(totalGross + totalCommission), hint: totalCommission > 0 ? `Includes ${fmt(totalCommission)} commission` : undefined },
+            { label: "Company cost", value: fmt(totalGross + totalCommission + totalEmployerTax + totalHealth), hint: "Gross pay plus employer tax and health insurance" },
+          ].map((t) => (
+            <div key={t.label} className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
+              <p className="flex items-center gap-1 text-xs text-gray-500">
+                {t.label}
+                {t.hint && <InfoTip text={t.hint} />}
               </p>
-              <ul className="mt-1 space-y-0.5 text-amber-900">
-                {data.changes.map((c) => (
-                  <li key={c.name} className="tabular-nums">
-                    {c.name}:{" "}
-                    {c.savedGrossCents == null ? `not in the closed payroll, now ${fmt(c.liveGrossCents ?? 0)} (${fmtHours(c.liveHours ?? 0)} hrs)`
-                      : c.liveGrossCents == null ? `paid ${fmt(c.savedGrossCents)}, no longer in the records`
-                      : `paid ${fmt(c.savedGrossCents)} for ${fmtHours(c.savedHours ?? 0)} hrs, records now say ${fmt(c.liveGrossCents)} for ${fmtHours(c.liveHours ?? 0)} hrs`}
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-1 text-xs text-amber-700">Pay any difference in the next period, or reopen and close this one again.</p>
+              <p className="mt-0.5 text-lg font-semibold tabular-nums text-gray-900">{t.value}</p>
             </div>
-          )}
+          ))}
+          <button
+            type="button"
+            onClick={() => setAttentionOnly((v) => !v)}
+            disabled={attentionCount === 0}
+            className={`rounded-lg border px-4 py-3 text-left shadow-sm ${attentionOnly ? "border-amber-400 bg-amber-50" : "border-gray-200 bg-white"} ${attentionCount === 0 ? "cursor-default" : "hover:border-amber-300"}`}
+          >
+            <p className="text-xs text-gray-500">Needs a look</p>
+            <p className={`mt-0.5 text-lg font-semibold tabular-nums ${attentionCount ? "text-amber-700" : "text-gray-900"}`}>{attentionCount}</p>
+            {attentionCount > 0 && <p className="text-[11px] text-gray-400">{attentionOnly ? "Showing only these, click to show all" : "Click to show only these"}</p>}
+          </button>
         </div>
-      ) : periodHasEnded && data.rows.length > 0 ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm">
-          <p className="text-gray-600">Once this period is paid, close it so these numbers are saved and can&apos;t change later.</p>
-          <Button size="xs" type="button"
-            onClick={closePeriod}
-            disabled={closing}>
-            {closing ? "Closing..." : "Close period as paid"}
-          </Button>
-        </div>
-      ) : null)}
+      )}
 
       {/* Table */}
       <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-left text-sm">
-            <thead className="border-b border-gray-300 bg-gray-200 text-xs font-semibold uppercase text-gray-700">
+          <table className="w-full min-w-[720px] text-left text-sm">
+            <thead className="border-b border-gray-200 bg-gray-50 text-xs font-semibold uppercase text-gray-500">
               <tr>
-                <th className="px-4 py-3">Employee</th>
-                <th className="px-4 py-3 text-right">Reg Hrs</th>
-                <th className="px-4 py-3 text-right">OT Hrs</th>
-                <th className="px-4 py-3 text-right">Total Hrs</th>
+                <th className="px-4 py-3">Name</th>
+                <th className="px-4 py-3 text-right">Hours</th>
                 <th className="px-4 py-3 text-right">Rate</th>
-                <th className="px-4 py-3 text-right">Gross Pay</th>
-                <th className="px-4 py-3">Projects</th>
+                <th className="px-4 py-3 text-right">Gross pay</th>
+                <th className="px-4 py-3 text-right">
+                  <span className="inline-flex items-center gap-1">
+                    Employer cost
+                    <InfoTip text="Employer payroll tax plus the company's share of health insurance. Hover a number for the split." />
+                  </span>
+                </th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">Loading…</td>
+                  <td colSpan={5} className="px-4 py-8 text-center text-gray-400">Loading…</td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-red-500">{error}</td>
+                  <td colSpan={5} className="px-4 py-8 text-center text-red-500">{error}</td>
                 </tr>
-              ) : filteredRows.length === 0 ? (
+              ) : shownRows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">No labor entries for this pay period.</td>
+                  <td colSpan={5} className="px-4 py-8 text-center text-gray-500">No pay for this period{search || payFilter !== "all" || attentionOnly ? " matches these filters" : ""}.</td>
                 </tr>
               ) : (
-                filteredRows.map((row, i) => (
-                  <tr key={`${row.isContractor ? "c" : "e"}-${row.employeeId ?? row.name}`} className={`${i % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100`}>
-                    <td className="px-4 py-3 font-medium text-gray-900">
-                      <div className="flex items-center gap-2">
-                        {row.isContractor && (
-                          <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">Contractor</span>
-                        )}
-                        {row.employeeId ? (
-                          <Link href={`/erp/employees/${row.employeeId}`} className="hover:text-pink-600 hover:underline">
-                            {row.name}
-                          </Link>
+                shownRows.map((row) => {
+                  const key = `${row.isContractor ? "c" : "e"}-${row.employeeId ?? row.contractorId ?? row.name}`;
+                  const open = openRows.has(key);
+                  const warnings = rowWarnings(row);
+                  const companyCents = (row.employerTax?.totalCents ?? 0) + (row.healthCents ?? 0);
+                  const profileHref = row.employeeId ? `/erp/employees/${row.employeeId}` : row.contractorId ? `/erp/contractors/${row.contractorId}` : null;
+                  return (
+                    <Fragment key={key}>
+                      <tr className={`border-b border-gray-100 ${open ? "bg-gray-50" : "hover:bg-gray-50"}`}>
+                        <td className="px-4 py-3">
+                          <div className="flex items-start gap-2">
+                            <button
+                              type="button"
+                              onClick={() => toggleRow(key)}
+                              className="mt-0.5 text-gray-400 hover:text-gray-700"
+                              aria-label={open ? "Hide details" : "Show details"}
+                              aria-expanded={open}
+                            >
+                              <svg viewBox="0 0 20 20" fill="currentColor" className={`h-4 w-4 transition-transform ${open ? "rotate-90" : ""}`}>
+                                <path fillRule="evenodd" d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
+                              </svg>
+                            </button>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                {profileHref ? (
+                                  <Link href={profileHref} className="font-medium text-gray-900 hover:text-pink-600 hover:underline">{row.name}</Link>
+                                ) : (
+                                  <span className="font-medium text-gray-500">{row.name}</span>
+                                )}
+                                {row.isContractor && <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">Contractor</span>}
+                              </div>
+                              {warnings.map((w) =>
+                                w.href ? (
+                                  <Link key={w.text} href={w.href} className={`block text-[11px] font-medium hover:underline ${w.tone === "red" ? "text-red-600" : "text-amber-700"}`}>{w.text}</Link>
+                                ) : (
+                                  <p key={w.text} className={`text-[11px] font-medium ${w.tone === "red" ? "text-red-600" : "text-amber-700"}`}>{w.text}</p>
+                                ),
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        {row.isContractor ? (
+                          <td colSpan={2} className="px-4 py-3 text-right text-xs text-gray-400">
+                            Flat pay, {row.contractorLines?.length ?? 0} line{row.contractorLines?.length === 1 ? "" : "s"}
+                          </td>
                         ) : (
-                          <span className={row.isContractor ? "text-gray-900" : "text-gray-500"}>{row.name}</span>
+                          <>
+                            <td className="px-4 py-3 text-right tabular-nums text-gray-900">
+                              {fmtHours(row.totalHours)}
+                              {row.otHours > 0 && <div className="text-[11px] text-amber-600">incl. {fmtHours(row.otHours)} OT</div>}
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums text-gray-700">
+                              {row.payType === "SALARY" ? <span className="text-xs text-gray-400">Salary</span> : `${fmt(row.hourlyRateCents)}/hr`}
+                              {row.mixedRates && <div className="text-[10px] text-gray-400">average</div>}
+                            </td>
+                          </>
                         )}
-                      </div>
-                      {row.noJanitorialSchedule ? (
-                        <Link href="/erp/schedule?calendar=janitorial" className="mt-0.5 block text-[11px] font-medium text-red-600 hover:underline">
-                          No janitorial schedule set, no janitorial hours paid
-                        </Link>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-gray-700">
-                      {row.isContractor ? <span className="text-gray-400">-</span> : fmtHours(row.regHours)}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {row.isContractor ? (
-                        <span className="text-gray-400">-</span>
-                      ) : row.otHours > 0 ? (
-                        <span className="font-medium text-amber-600">{fmtHours(row.otHours)}</span>
-                      ) : (
-                        <span className="text-gray-400">-</span>
+                        <td className="px-4 py-3 text-right tabular-nums font-semibold text-gray-900">
+                          {fmt(row.grossPayCents + row.commissionCents)}
+                          {row.commissionCents > 0 && <div className="text-[11px] font-normal text-gray-500">incl. {fmt(row.commissionCents)} commission</div>}
+                          {row.unpaidTimeOffCents ? (
+                            <div className="text-[11px] font-normal text-amber-700">{fmt(row.unpaidTimeOffCents)} off, unpaid time off</div>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums text-gray-700">
+                          {companyCents > 0 ? (
+                            <span
+                              className="cursor-help"
+                              title={[
+                                row.employerTax ? `Tax ${fmt(row.employerTax.totalCents)} (Social Security ${fmt(row.employerTax.socialSecurityCents)}, Medicare ${fmt(row.employerTax.medicareCents)}, FUTA ${fmt(row.employerTax.futaCents)}, PA SUI ${fmt(row.employerTax.paSuiCents)})` : null,
+                                row.healthCents ? `Health ${fmt(row.healthCents)}` : null,
+                              ].filter(Boolean).join("\n")}
+                            >
+                              {fmt(companyCents)}
+                            </span>
+                          ) : (
+                            <span className="text-gray-300">-</span>
+                          )}
+                        </td>
+                      </tr>
+                      {open && (
+                        <tr className="border-b border-gray-200 bg-gray-50">
+                          <td colSpan={5} className="px-4 pb-4 pt-1">
+                            <PayrollRowDetails row={row} start={start} end={end} onEditManual={openEdit} onRemoveManual={removeManualHours} />
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums font-medium text-gray-900">
-                      {row.isContractor ? <span className="text-gray-400">-</span> : fmtHours(row.totalHours)}
-                      {row.hasJanitorialHours && row.employeeId ? (
-                        <div>
-                          <Link
-                            href={`/erp/janitorial/hours?employee=${row.employeeId}&start=${toISO(start)}&end=${toISO(end)}`}
-                            className="text-[11px] font-normal text-pink-600 hover:underline"
-                          >
-                            See janitorial shifts
-                          </Link>
-                        </div>
-                      ) : null}
-                      {row.manualEntries?.length ? (
-                        <details className="text-left">
-                          <summary className="cursor-pointer text-right text-[11px] font-normal text-pink-600 hover:underline">
-                            {fmtHours(row.manualEntries.reduce((s, e) => s + e.hours, 0))} manual hrs
-                          </summary>
-                          <ul className="mt-1 space-y-0.5 text-[11px] font-normal text-gray-500">
-                            {groupManualEntries(row.manualEntries).map((g) => (
-                              <li key={g.batchId ?? g.id} className="flex items-center justify-end gap-2">
-                                <span className="truncate">{g.label}{g.note ? `, ${g.note}` : ""}</span>
-                                {g.repeatId ? (
-                                  <span className="text-gray-400" title={repeatLabel(g.repeatEveryDays)} aria-label={repeatLabel(g.repeatEveryDays)}>&#x21bb;</span>
-                                ) : null}
-                                <span className="tabular-nums">{fmtHours(g.hours)}h{g.days > 1 ? ` over ${g.days} days` : ""}</span>
-                                <button type="button" onClick={() => openEdit(g, row.name)} className="text-gray-400 hover:text-pink-600" aria-label="Edit these hours">
-                                  Edit
-                                </button>
-                                <button type="button" onClick={() => removeManualHours(g, row.name)} className="text-gray-400 hover:text-red-600" aria-label="Remove these hours">
-                                  Remove
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        </details>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-gray-700">
-                      {row.isContractor ? (
-                        <span className="text-xs text-gray-400">Flat fee</span>
-                      ) : (
-                        <>
-                          {`${fmt(row.hourlyRateCents)}/hr`}
-                          {row.mixedRates ? <div className="text-[10px] text-gray-400">avg, rates vary by job</div> : null}
-                        </>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums font-semibold text-gray-900">
-                      {fmt(row.grossPayCents)}
-                      {row.unpaidTimeOffCents ? (
-                        <div className="text-[10px] font-medium text-amber-700">
-                          {fmt(row.unpaidTimeOffCents)} off for {row.unpaidTimeOffDays} unpaid day{row.unpaidTimeOffDays === 1 ? "" : "s"} off
-                        </div>
-                      ) : null}
-                      {row.missingRateHours ? (
-                        <div className="text-[10px] font-medium text-red-600">
-                          {fmtHours(Math.round(row.missingRateHours * 100) / 100)} hrs logged with no rate, not included
-                        </div>
-                      ) : null}
-                      {row.commissionCents > 0 ? (
-                        <>
-                          {" + "}
-                          {fmt(row.commissionCents)} commission
-                          <details className="mt-0.5 text-left">
-                            <summary className="cursor-pointer text-[10px] font-medium text-blue-600 hover:underline">
-                              breakdown
-                            </summary>
-                            <ul className="mt-1 space-y-0.5 text-[10px] font-normal text-gray-500">
-                              {row.commissionBreakdown.map((b, idx) => (
-                                <li key={idx} className="flex justify-between gap-2">
-                                  <span className="truncate">{b.label}</span>
-                                  <span className="tabular-nums">{fmt(b.amountCents)}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </details>
-                        </>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-500">{row.projects}</td>
-                  </tr>
-                ))
+                    </Fragment>
+                  );
+                })
               )}
             </tbody>
-            {filteredRows.length > 0 && (
-              <tfoot className="border-t-2 border-gray-300 bg-gray-100 text-xs font-semibold text-gray-700">
+            {shownRows.length > 0 && (
+              <tfoot className="border-t border-gray-300 bg-gray-50 text-xs font-semibold text-gray-700">
                 <tr>
-                  <td className="px-4 py-3" colSpan={1}>Totals</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{fmtHours(filteredRows.reduce((s, r) => s + r.regHours, 0))}</td>
-                  <td className="px-4 py-3 text-right tabular-nums text-amber-600">{fmtHours(filteredRows.reduce((s, r) => s + r.otHours, 0)) || "-"}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{fmtHours(totalHours)}</td>
-                  <td className="px-4 py-3" />
+                  <td className="px-4 py-3">Totals</td>
                   <td className="px-4 py-3 text-right tabular-nums">
-                    {fmt(totalGross)}
-                    {totalCommission > 0 ? ` + ${fmt(totalCommission)} commission` : ""}
+                    {fmtHours(shownRows.reduce((s, r) => s + r.totalHours, 0))}
+                    {shownRows.some((r) => r.otHours > 0) && (
+                      <div className="text-[11px] font-normal text-amber-600">incl. {fmtHours(shownRows.reduce((s, r) => s + r.otHours, 0))} OT</div>
+                    )}
                   </td>
                   <td className="px-4 py-3" />
+                  <td className="px-4 py-3 text-right tabular-nums">{fmt(shownRows.reduce((s, r) => s + r.grossPayCents + r.commissionCents, 0))}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{fmt(shownRows.reduce((s, r) => s + (r.employerTax?.totalCents ?? 0) + (r.healthCents ?? 0), 0))}</td>
                 </tr>
               </tfoot>
             )}
           </table>
         </div>
       </section>
+    </div>
+  );
+}
+
+/** The expanded part of a payroll row: what the pay is made of, with links to where it came from. */
+function PayrollRowDetails({
+  row,
+  start,
+  end,
+  onEditManual,
+  onRemoveManual,
+}: {
+  row: PayrollRow;
+  start: Date;
+  end: Date;
+  onEditManual: (g: ManualGroup, name: string) => void;
+  onRemoveManual: (g: ManualGroup, name: string) => void;
+}) {
+  const head = "text-[11px] font-semibold uppercase tracking-wide text-gray-400";
+  if (row.isContractor) {
+    const dupes = duplicateLineIds(row.contractorLines ?? []);
+    return (
+      <div className="ml-6 space-y-1.5">
+        <p className={head}>Pay lines</p>
+        <table className="w-full text-xs">
+          <tbody>
+            {(row.contractorLines ?? []).map((l) => (
+              <tr key={l.id} className={dupes.has(l.id) ? "bg-amber-50" : ""}>
+                <td className="w-24 py-1 pr-3 tabular-nums text-gray-500">{l.date ? formatDate(new Date(`${l.date}T00:00:00Z`)) : "-"}</td>
+                <td className="py-1 pr-3">
+                  {l.projectId ? (
+                    <Link href={`/erp/projects/${l.projectId}?tab=Labor`} className="text-gray-800 hover:text-pink-600 hover:underline">{l.title}</Link>
+                  ) : (
+                    <span className="text-gray-800">{l.title}</span>
+                  )}
+                  {l.fromSchedule && <span className="ml-1.5 rounded bg-gray-100 px-1 py-0.5 text-[10px] text-gray-500">from calendar</span>}
+                  {dupes.has(l.id) && <span className="ml-1.5 text-[10px] font-medium text-amber-700">same job, day and role as another line</span>}
+                </td>
+                <td className="py-1 pr-3 text-gray-500">{l.role ?? ""}</td>
+                <td className="py-1 text-right tabular-nums text-gray-800">{fmt(l.amountCents)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+  const projects = row.projects ? row.projects.split(", ").filter(Boolean) : [];
+  return (
+    <div className="ml-6 grid gap-4 text-xs sm:grid-cols-2 lg:grid-cols-3">
+      {projects.length > 0 && (
+        <div>
+          <p className={head}>Projects</p>
+          <ul className="mt-1 space-y-0.5 text-gray-700">
+            {projects.map((p) => <li key={p}>{p}</li>)}
+          </ul>
+        </div>
+      )}
+      {(row.hasJanitorialHours || row.manualEntries?.length) ? (
+        <div>
+          <p className={head}>Hours from</p>
+          {row.hasJanitorialHours && row.employeeId ? (
+            <Link href={`/erp/janitorial/hours?employee=${row.employeeId}&start=${toISO(start)}&end=${toISO(end)}`} className="mt-1 block text-pink-600 hover:underline">
+              Janitorial shifts
+            </Link>
+          ) : null}
+          {row.manualEntries?.length ? (
+            <ul className="mt-1 space-y-0.5 text-gray-600">
+              {groupManualEntries(row.manualEntries).map((g) => (
+                <li key={g.batchId ?? g.id} className="flex items-center gap-2">
+                  <span className="truncate">Added by hand: {g.label}{g.note ? `, ${g.note}` : ""}</span>
+                  {g.repeatId ? <span className="text-gray-400" title={repeatLabel(g.repeatEveryDays)} aria-label={repeatLabel(g.repeatEveryDays)}>&#x21bb;</span> : null}
+                  <span className="tabular-nums">{fmtHours(g.hours)}h{g.days > 1 ? ` over ${g.days} days` : ""}</span>
+                  <button type="button" onClick={() => onEditManual(g, row.name)} className="text-gray-400 hover:text-pink-600">Edit</button>
+                  <button type="button" onClick={() => onRemoveManual(g, row.name)} className="text-gray-400 hover:text-red-600">Remove</button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+      {row.commissionCents > 0 && (
+        <div>
+          <p className={head}>Commission</p>
+          <ul className="mt-1 space-y-0.5 text-gray-600">
+            {row.commissionBreakdown.map((b, i) => (
+              <li key={i} className="flex justify-between gap-3">
+                <span className="truncate">{b.label}</span>
+                <span className="tabular-nums">{fmt(b.amountCents)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {projects.length === 0 && !row.hasJanitorialHours && !row.manualEntries?.length && row.commissionCents === 0 && (
+        <p className="text-gray-400">{row.payType === "SALARY" ? "Salary for the period." : "No more detail for this period."}</p>
+      )}
     </div>
   );
 }

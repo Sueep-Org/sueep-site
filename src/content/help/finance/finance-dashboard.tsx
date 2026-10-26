@@ -11,7 +11,7 @@ export function FinanceDashboard() {
       </P>
       <Callout type="info">
         It&apos;s a management view to spot trends, not an accounting report. Expenses that aren&apos;t in the ERP, like rent,
-        insurance, software, vehicles, or taxes, aren&apos;t included, so the bookkeeping P&amp;L is still the official number.
+        software, vehicles, or business taxes, aren&apos;t included, so the bookkeeping P&amp;L is still the official number.
         Data starts August 2026, when the ERP came into full use. Hover any rounded number to see the exact amount.
       </Callout>
 
@@ -102,6 +102,15 @@ export function FinanceDashboard() {
           days of its term (a $12,000 yearly policy is about $1,000 a month). An audit bill or refund counts in full on its
           date. A cancelled policy stops on its cancel date. Earlier terms are kept when a policy renews, so past months
           don&apos;t change. Active policies with no premium are listed under the <strong>!</strong> icon.
+        </LI>
+        <LI>
+          <strong>Payroll taxes</strong>: what Sueep pays on top of employees&apos; pay (Social Security, Medicare, federal
+          and PA unemployment), worked out the same way as the Employer Tax column on Payroll and spread over each pay
+          period&apos;s days. Contractors and offshore workers have none. Rates are under Payroll, gear icon, Employer tax rates.
+        </LI>
+        <LI>
+          <strong>Health insurance</strong>: Sueep&apos;s share of each person&apos;s health plan premium, spread over the
+          days of each month. Set under Payroll, gear icon, Health insurance.
         </LI>
         <LI>Not included: BD caller bid bonuses and any expense not tracked in the ERP.</LI>
       </UL>

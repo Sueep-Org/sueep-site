@@ -15,6 +15,8 @@ import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { CHANGE_ORDER_ESTIMATE_DAY_HOURS, getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
 import { ChangeOrderLaborEstimator } from "../[id]/ChangeOrderLaborEstimator";
+import { UnitNameInput } from "@/app/erp/components/UnitNameInput";
+import { unitNameKey } from "@/lib/erp/unitNames";
 
 const input = inputClass.md;
 const label = labelClass.default;
@@ -824,7 +826,7 @@ export function NewProjectForm({
     [buildingName, selectedBuilding]
   );
   const existingBuildingUnitNumbers = useMemo(
-    () => new Set((selectedBuilding?.existingUnitNumbers ?? []).map((n) => n.trim().toLowerCase())),
+    () => new Set((selectedBuilding?.existingUnitNumbers ?? []).map(unitNameKey)),
     [selectedBuilding]
   );
   const [confirmedDuplicateUnitIds, setConfirmedDuplicateUnitIds] = useState<Set<string>>(new Set());
@@ -832,10 +834,11 @@ export function NewProjectForm({
   /** True if this unit's identifier already exists on the selected building,
    * or collides with another unit being added in this same submission. */
   function isDuplicateUnitNumber(unitId: string, value: string): boolean {
-    const trimmed = value.trim().toLowerCase();
-    if (!trimmed) return false;
-    if (existingBuildingUnitNumbers.has(trimmed)) return true;
-    return unitScopes.some((u) => u.id !== unitId && u.unitNumber.trim().toLowerCase() === trimmed);
+    // Same unit written differently counts too (see unitNames.ts)
+    const key = unitNameKey(value);
+    if (!key) return false;
+    if (existingBuildingUnitNumbers.has(key)) return true;
+    return unitScopes.some((u) => u.id !== unitId && unitNameKey(u.unitNumber) === key);
   }
   const addressOptions = useMemo(() => {
     return Array.from(
@@ -1631,11 +1634,13 @@ export function NewProjectForm({
                       <label className={label} htmlFor={`unit-${unit.id}`}>
                         {unit.isCommonArea ? "Title" : "Unit number"}
                       </label>
-                      <input
+                      <UnitNameInput
                         id={`unit-${unit.id}`}
                         className={input}
+                        buildingId={null}
+                        knownNames={selectedBuilding?.existingUnitNumbers ?? []}
                         value={unit.unitNumber}
-                        onChange={(e) => updateUnitScope(unit.id, { unitNumber: e.target.value })}
+                        onChange={(v) => updateUnitScope(unit.id, { unitNumber: v })}
                         placeholder={unit.isCommonArea ? "e.g. Lobby, Hallway" : `Unit ${index + 1}`}
                       />
                       {isDuplicateUnitNumber(unit.id, unit.unitNumber) && !confirmedDuplicateUnitIds.has(unit.id) ? (

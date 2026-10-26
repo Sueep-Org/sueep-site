@@ -1,13 +1,12 @@
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import type { ErpRole } from "../erpSession";
-import { canApproveInvoices, canSeePayroll } from "../erpAuth";
+import { canApproveInvoices } from "../erpAuth";
 import type { JobTabRow } from "@/app/erp/(shell)/_dashboard/JobTabs";
 import type { CardSection, DashboardCardData } from "@/app/erp/(shell)/_dashboard/DashboardCard";
 import { normalizeBillingStatus } from "./billingStatus";
 import { todayEasternKey, utcDateKey } from "./dates";
 import { centsToDollars, centsToDollarsCompact } from "./money";
-import { DEFAULT_PAYROLL_ANCHOR, TWO_WEEKS_MS, payPeriodForDay } from "./payPeriods";
 import { computeProjectActualsWithChangeOrders, isQualifyingChangeOrder } from "./projectMargin";
 import { loadLienWatch } from "./lienWatch";
 import { loadCutoffStatus } from "./billingCutoffs";
@@ -237,46 +236,6 @@ function readyToBillSection(items: BillItem[], todayKey: string): CardSection {
   };
 }
 
-// ── Payroll lock ───────────────────────────────────────────────────────────
-
-type PayrollPeriodState = { label: string; startKey: string; endKey: string; locked: boolean; ended: boolean };
-
-const loadPayrollPeriods = cache(async (todayKey: string): Promise<PayrollPeriodState[]> => {
-  const anchor = (await prisma.appSetting.findUnique({ where: { key: "payrollAnchor" } }))?.value ?? DEFAULT_PAYROLL_ANCHOR;
-  const current = payPeriodForDay(todayKey, anchor);
-  const previous = { start: new Date(current.start.getTime() - TWO_WEEKS_MS), end: new Date(current.start.getTime() - 1) };
-  // The close is saved under the period's first day; allow a day either way
-  // for how that day was turned into a timestamp.
-  const closes = await prisma.payrollPeriodClose.findMany({
-    where: { periodStart: { gte: new Date(previous.start.getTime() - DAY_MS), lte: new Date(current.start.getTime() + DAY_MS) } },
-    select: { periodStart: true },
-  });
-  const isLocked = (start: Date) => closes.some((c) => Math.abs(c.periodStart.getTime() - start.getTime()) <= DAY_MS);
-  return [
-    { label: "Last period", startKey: utcDateKey(previous.start), endKey: utcDateKey(previous.end), locked: isLocked(previous.start), ended: true },
-    { label: "This period", startKey: utcDateKey(current.start), endKey: utcDateKey(current.end), locked: isLocked(current.start), ended: false },
-  ];
-});
-
-function payrollSection(periods: PayrollPeriodState[]): CardSection {
-  const unlocked = periods.filter((p) => p.ended && !p.locked).length;
-  return {
-    key: "payroll",
-    label: "Payroll",
-    alertCount: unlocked,
-    rows: periods.map((p) => ({
-      id: p.startKey,
-      href: "/erp/payroll",
-      title: p.label,
-      note: `${shortDate(p.startKey)} - ${shortDate(p.endKey)}`,
-      value: p.locked ? "Locked" : p.ended ? "Not locked" : "In progress",
-      negative: p.ended && !p.locked,
-    })),
-    empty: "No pay periods.",
-    href: "/erp/payroll",
-  };
-}
-
 // ── Ready to send (auto-drafted invoices) ────────────────────────────────
 
 type WaitingDraft = { id: string; title: string; note: string; cents: number };
@@ -381,11 +340,9 @@ const loadLienRows = cache(async (todayKey: string): Promise<{ rows: JobTabRow[]
 
 export async function loadNeedsAction(role: ErpRole): Promise<DashboardCardData> {
   const todayKey = todayEasternKey();
-  const showPayroll = canSeePayroll(role);
-  const [overdue, ready, periods, liens, drafts, cutoffs] = await Promise.all([
+  const [overdue, ready, liens, drafts, cutoffs] = await Promise.all([
     loadOverdueInvoices(todayKey),
     loadReadyToBill(todayKey),
-    showPayroll ? loadPayrollPeriods(todayKey) : Promise.resolve(null),
     loadLienRows(todayKey),
     canApproveInvoices(role) ? loadWaitingDrafts() : Promise.resolve(null),
     billingCutoffSection(todayKey),
@@ -395,23 +352,21 @@ export async function loadNeedsAction(role: ErpRole): Promise<DashboardCardData>
     overdueSection(overdue),
     readyToBillSection(ready, todayKey),
     cutoffs,
-    ...(periods ? [payrollSection(periods)] : []),
     { key: "liens", label: "Liens", alertCount: liens.urgent, rows: liens.rows, empty: `No lien steps due in the next ${LIEN_WINDOW_DAYS} days.`, href: "/erp/billing" },
   ];
   return { alertCount: sections.reduce((s, sec) => s + (sec.alertCount ?? 0), 0), sections };
 }
 
-/** Red number on the Money tab: overdue invoices + last pay period not locked + liens needing a step now + drafts waiting (approvers). */
+/** Red number on the Money tab: overdue invoices + liens needing a step now + drafts waiting (approvers). */
 export async function countNeedsActionAlerts(role: ErpRole): Promise<number> {
   const todayKey = todayEasternKey();
-  const [overdue, periods, liens, drafts, cutoffs] = await Promise.all([
+  const [overdue, liens, drafts, cutoffs] = await Promise.all([
     loadOverdueInvoices(todayKey),
-    canSeePayroll(role) ? loadPayrollPeriods(todayKey) : Promise.resolve([]),
     loadLienRows(todayKey),
     canApproveInvoices(role) ? loadWaitingDrafts() : Promise.resolve([]),
     billingCutoffSection(todayKey),
   ]);
-  return overdue.length + periods.filter((p) => p.ended && !p.locked).length + liens.urgent + drafts.length + (cutoffs.alertCount ?? 0);
+  return overdue.length + liens.urgent + drafts.length + (cutoffs.alertCount ?? 0);
 }
 
 // ── Checks card: losing money ──────────────────────────────────────────────

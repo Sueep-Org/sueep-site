@@ -317,21 +317,12 @@ export async function loadManagementItems(
       const lastDay = keyToDate(utcDateKey(p.end));
       if (within(lastDay)) periods.push({ start: p.start, end: lastDay });
     }
-    const closed = periods.length
-      ? new Set(
-          (await prisma.payrollPeriodClose.findMany({ where: { periodStart: { in: periods.map((p) => p.start) } }, select: { periodStart: true } })).map(
-            (c) => c.periodStart.getTime()
-          )
-        )
-      : new Set<number>();
     for (const p of periods) {
-      const isClosed = closed.has(p.start.getTime());
       add("PAYROLL", {
         key: `payroll:${utcDateKey(p.start)}`,
         title: "Pay period ends",
-        detail: `${formatItemDates(utcDateKey(p.start), utcDateKey(p.end))}${isClosed ? ", payroll closed" : ""}`,
+        detail: formatItemDates(utcDateKey(p.start), utcDateKey(p.end)),
         href: "/erp/payroll",
-        done: isClosed,
         ...oneDay(p.end),
       });
     }

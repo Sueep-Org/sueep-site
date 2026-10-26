@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { centsToDollars } from "@/lib/erp/money";
+import { InfoTip } from "@/app/erp/components/ui";
+import type { EmployerTaxRates } from "@/lib/erp/employerTax";
 import {
   ROLE_SUGGESTIONS,
   calculatePricing,
@@ -83,8 +85,10 @@ function OverrideInput({ cents, onChange, ariaLabel }: { cents: number | null; o
   );
 }
 
-export function PricingCalculator({ value, onChange }: { value: ContractPricing; onChange: (next: ContractPricing) => void }) {
-  const result = calculatePricing(value);
+export function PricingCalculator({
+  value, onChange, taxRates,
+}: { value: ContractPricing; onChange: (next: ContractPricing) => void; taxRates: EmployerTaxRates }) {
+  const result = calculatePricing(value, taxRates);
   const [overridingLine, setOverridingLine] = useState<Set<string>>(() => new Set(value.lines.filter((l) => l.monthlyOverrideCents != null).map((l) => l.id)));
   const [overridingTotal, setOverridingTotal] = useState(value.totalOverrideCents != null);
 
@@ -203,10 +207,6 @@ export function PricingCalculator({ value, onChange }: { value: ContractPricing;
         <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <label className="flex items-center gap-2 text-gray-700">
-              Payroll add-on (W2 + health)
-              <NumInput value={value.burdenPct} onChange={(n) => onChange({ ...value, burdenPct: n })} suffix="%" className="w-16" ariaLabel="Payroll add-on percent" />
-            </label>
-            <label className="flex items-center gap-2 text-gray-700">
               Sales tax
               <NumInput value={value.salesTaxPct} onChange={(n) => onChange({ ...value, salesTaxPct: n })} suffix="%" className="w-16" ariaLabel="Sales tax percent" />
             </label>
@@ -296,9 +296,18 @@ export function PricingCalculator({ value, onChange }: { value: ContractPricing;
             </thead>
             <tbody>
               <SummaryRow label="Price" cents={result.monthlyPriceCents} strong />
-              <SummaryRow label={`Payroll (incl. ${value.burdenPct}% add-on)`} cents={-result.payrollCents} />
+              <SummaryRow label="Payroll" cents={-result.payrollCents} />
               {value.overtime && <SummaryRow label="Overtime" cents={-result.overtimeCents} />}
               {value.holidays && <SummaryRow label="Paid holidays" cents={-result.holidaysCents} />}
+              <SummaryRow
+                label={
+                  <span className="inline-flex items-center gap-1">
+                    Employer payroll taxes
+                    <InfoTip text="Social Security and Medicare on all pay, plus federal and PA unemployment on each worker's first $7,000 and $10,000 a year, worked out over a full year and shown per month. Same rates as Payroll. No health cost: cleaning staff aren't on the company plan." />
+                  </span>
+                }
+                cents={-result.employerTaxCents}
+              />
               <SummaryRow label={`Sales tax (${value.salesTaxPct}%)`} cents={-result.salesTaxCents} />
               <tr className="border-t border-gray-100">
                 <td className="pt-2 font-semibold text-gray-900">
@@ -320,7 +329,7 @@ export function PricingCalculator({ value, onChange }: { value: ContractPricing;
   );
 }
 
-function SummaryRow({ label, cents, strong = false }: { label: string; cents: number; strong?: boolean }) {
+function SummaryRow({ label, cents, strong = false }: { label: React.ReactNode; cents: number; strong?: boolean }) {
   const fmt = (c: number) => (c < 0 ? `(${centsToDollars(-c)})` : centsToDollars(c));
   return (
     <tr className={strong ? "font-semibold text-gray-900" : "text-gray-700"}>

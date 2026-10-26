@@ -425,13 +425,11 @@ function periodLabel(p: { start: Date; end: Date }): string {
 function PaidDateModal({
   target,
   payrollAnchor,
-  closedPeriodStarts,
   onClose,
   onSave,
 }: {
   target: PaidTarget | null;
   payrollAnchor: string;
-  closedPeriodStarts: string[];
   onClose: () => void;
   onSave: (paidOn: string | null) => void;
 }) {
@@ -451,7 +449,6 @@ function PaidDateModal({
   const validDay = /^\d{4}-\d{2}-\d{2}$/.test(day);
   const chosenPeriod = validDay ? payPeriodForDay(day, payrollAnchor) : null;
   const chosenStart = chosenPeriod ? chosenPeriod.start.toISOString().slice(0, 10) : null;
-  const isClosed = chosenStart != null && closedPeriodStarts.includes(chosenStart);
   const inThis = chosenStart === thisPeriod.start.toISOString().slice(0, 10);
   const inLast = chosenStart === lastPeriod.start.toISOString().slice(0, 10);
 
@@ -500,12 +497,6 @@ function PaidDateModal({
           {chosenPeriod ? (
             <p className="text-xs text-gray-600">
               Goes on payroll for <span className="font-semibold">{periodLabel(chosenPeriod)}</span>.
-            </p>
-          ) : null}
-          {isClosed ? (
-            <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              That pay period is already closed. Its saved payroll won&apos;t change, but this commission will be listed
-              there as a change since it was closed. It will not be added to the upcoming payroll.
             </p>
           ) : null}
           <div className="flex items-center justify-between gap-2">
@@ -817,13 +808,11 @@ export function CommissionByRep({
   selectedYear,
   reps,
   payrollAnchor,
-  closedPeriodStarts,
 }: {
   years: number[];
   selectedYear: number;
   reps: RepGroup[];
   payrollAnchor: string;
-  closedPeriodStarts: string[];
 }) {
   const [dealsByOwner, setDealsByOwner] = useState<Record<string, CommissionDealRow[]>>(() =>
     Object.fromEntries(reps.map((g) => [g.ownerId ?? "unassigned", g.deals]))
@@ -943,7 +932,6 @@ export function CommissionByRep({
       <PaidDateModal
         target={paidTarget}
         payrollAnchor={payrollAnchor}
-        closedPeriodStarts={closedPeriodStarts}
         onClose={() => setPaidTarget(null)}
         onSave={(paidOn) => {
           const t = paidTarget;

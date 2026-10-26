@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
 import { TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
 import { syncProjectBillingFromRequest } from "@/lib/sovSync";
+import { matchUnitName } from "@/lib/erp/unitNames";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -79,7 +80,15 @@ export async function PATCH(req: Request, ctx: Ctx) {
     }
   }
 
-  if (body.unitNumber !== undefined) data.unitNumber = String(body.unitNumber || "").trim() || null;
+  if (body.unitNumber !== undefined) {
+    const typed = String(body.unitNumber || "").trim() || null;
+    // A unit the building already has keeps its spelling (see unitNames.ts)
+    const buildingId = (data.buildingId as string | undefined) ?? existing.buildingId;
+    const others = typed
+      ? await prisma.turnoverRequest.findMany({ where: { buildingId, id: { not: id }, unitNumber: { not: null } }, select: { unitNumber: true } })
+      : [];
+    data.unitNumber = typed ? matchUnitName(typed, others.map((r) => r.unitNumber!)) : null;
+  }
   if (body.bedrooms !== undefined) data.bedrooms = parseIntValue(body.bedrooms) ?? null;
   if (body.bathrooms !== undefined) data.bathrooms = parseIntValue(body.bathrooms) ?? null;
   if (body.isPartialTurn !== undefined) data.isPartialTurn = Boolean(body.isPartialTurn);

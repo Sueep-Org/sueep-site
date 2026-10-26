@@ -38,7 +38,7 @@ export function JanitorialContracts() {
           contract&apos;s <strong>Pricing</strong> tab) works like the proposal spreadsheets:
           <UL>
             <LI>Add a line per role (Cleaner, Porter, Foreman...) with people, hours per week each, bill rate, and pay rate.</LI>
-            <LI>Monthly price = people × hours × bill rate × 52 ÷ 12. Payroll uses the pay rate plus the payroll add-on (19% for W2 + health by default).</LI>
+            <LI>Monthly price = people × hours × bill rate × 52 ÷ 12. Payroll uses the pay rate. Employer payroll taxes are worked out per worker over a full year with the same rates as Payroll (Social Security and Medicare on all pay, unemployment only on each worker&apos;s first $7,000 and $10,000), then shown per month. Cleaning staff aren&apos;t on the health plan, so there&apos;s no health cost.</LI>
             <LI>Turn on <strong>overtime</strong> (extra half-time) or <strong>paid holidays</strong> to include those costs.</LI>
             <LI>Sales tax (6% by default) is taken from the monthly price. The summary shows payroll, tax, profit, and margin as you type.</LI>
             <LI><strong>Override</strong> any line or the total to quote a round number; <strong>Use calculated</strong> goes back.</LI>
