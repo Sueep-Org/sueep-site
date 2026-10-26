@@ -455,7 +455,13 @@ export async function PATCH(req: Request, ctx: Ctx) {
 export async function DELETE(_req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
   try {
-    await prisma.project.delete({ where: { id } });
+    const project = await prisma.project.delete({ where: { id }, select: { turnoverRequestId: true } });
+    // A unit project's turn goes with it, unless another project still uses
+    // that turn. Left behind, it shows on the building as a second turn of
+    // the unit and gets picked up by invoice matching.
+    if (project.turnoverRequestId) {
+      await prisma.turnoverRequest.deleteMany({ where: { id: project.turnoverRequestId, projects: { none: {} } } });
+    }
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "Not found" }, { status: 404 });

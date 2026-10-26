@@ -64,7 +64,7 @@ export function ProjectDeleteButton({ projectId, jobTitle }: { projectId: string
         </div>
 
         <p className="mt-3 text-sm text-gray-600">
-          This will permanently delete the project and <strong>all associated data</strong> - labor entries, materials, change orders, contracts, checklists, and work order records. This cannot be undone.
+          This will permanently delete the project and <strong>all associated data</strong> - labor entries, materials, change orders, contracts, checklists, work order records, and the unit turn on the building for a turnover project. This cannot be undone.
         </p>
 
         <p className="mt-4 text-xs font-medium text-gray-700">
