@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { contractedTurnoverScope, turnoverScopeLabel } from "@/lib/erp/turnoverScope";
 import { JANITORIAL_BILLING_SEGMENTS as JANITORIAL_SEGMENTS, normalizeBillingStatus } from "@/lib/erp/billingStatus";
+import { loadProjectBillingPreferences, type BillingPreference } from "@/lib/erp/invoiceDestination";
 
 const turnoverRequestSelect = {
   id: true,
@@ -77,6 +78,7 @@ function buildUnitRow(project: ProjectForUnitRow) {
     scope,
     changeOrders: [] as CORow[],
     invoices: [] as InvoiceRow[],
+    billing: null as BillingPreference | null,
   };
 }
 
@@ -323,6 +325,10 @@ export async function GET(req: Request) {
       });
     }
   }
+
+  // How each client wants to be billed (Procore, email...), after overrides.
+  const billingByProject = await loadProjectBillingPreferences(Array.from(unitByProjectId.keys()));
+  for (const [projectId, unit] of unitByProjectId) unit.billing = billingByProject.get(projectId) ?? null;
 
   const rows = Array.from(buildingMap.values());
   return NextResponse.json({ start: startParam ?? "", end: endParam ?? "", rows });

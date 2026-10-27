@@ -4,8 +4,6 @@ import { getErpAuth, canSeeFinancials, canSeePayroll } from "@/lib/erpAuth";
 import { DEFAULT_PAYROLL_ANCHOR } from "@/lib/erp/payPeriods";
 import { loadCommissionRows } from "@/lib/erp/commissionRows";
 import { CommissionByRep, type RepGroup } from "../commission/CommissionByRep";
-import { BidsView, type BidRow } from "../commission/BidsView";
-import { BidCommissionView } from "../commission/BidCommissionView";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { PayrollView } from "./PayrollView";
 import { OffshorePayrollView } from "./OffshorePayrollView";
@@ -19,15 +17,11 @@ export default async function PayrollPage({ searchParams }: PageProps) {
   const auth = await getErpAuth();
   if (!auth || !canSeeFinancials(auth.role)) redirect("/erp");
 
-  const [{ deals: allRows, recurring: recurringRowsAll, bidBonuses: bidBonusRows }, employees, reimbursements, salesBidEntries, anchorSetting] = await Promise.all([
+  const [{ deals: allRows, recurring: recurringRowsAll }, employees, reimbursements, anchorSetting] = await Promise.all([
     loadCommissionRows(),
     prisma.employee.findMany({ select: { id: true, firstName: true, lastName: true, status: true } }),
     prisma.reimbursement.findMany({
       orderBy: { date: "desc" },
-      include: { employee: { select: { id: true, firstName: true, lastName: true } } },
-    }),
-    prisma.salesBidEntry.findMany({
-      orderBy: { createdAt: "desc" },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } },
     }),
     prisma.appSetting.findUnique({ where: { key: "payrollAnchor" } }),
@@ -36,23 +30,6 @@ export default async function PayrollPage({ searchParams }: PageProps) {
   // For the commission Paid date picker: which pay period a date lands in,
   // and whether that period's payroll was already closed.
   const payrollAnchor = anchorSetting?.value ?? DEFAULT_PAYROLL_ANCHOR;
-
-  // The manual bid-pipeline log — a separate comp track from deal/CO/recurring
-  // commission, shown as its own flat page ("Bids") rather than nested
-  // per-rep, and not scoped to the Commission tab's selected year.
-  const bidRows: BidRow[] = salesBidEntries.map((entry) => ({
-    id: entry.id,
-    employeeId: entry.employeeId,
-    employeeName: `${entry.employee.firstName} ${entry.employee.lastName}`.trim(),
-    date: entry.date ? entry.date.toISOString() : null,
-    projectStartDate: entry.projectStartDate ? entry.projectStartDate.toISOString() : null,
-    company: entry.company,
-    deal: entry.deal,
-    description: entry.description,
-    drawings: entry.drawings as "YES" | "NO" | "ASKED" | null,
-    payoutCents: entry.payoutCents,
-    sent: entry.sent,
-  }));
 
   const availableYears = [
     ...new Set([...allRows.map((r) => r.year), ...recurringRowsAll.map((r) => r.year)]),
@@ -139,40 +116,20 @@ export default async function PayrollPage({ searchParams }: PageProps) {
             : []),
           {
             label: "Commission",
-            children: [
-              {
-                label: "Sales",
-                // key={selectedYear} forces a full remount on year-tab switches —
-                // CommissionByRep's paid-toggle state (dealsByOwner/recurringByOwner)
-                // is only initialized once from the `reps` prop, so without a fresh
-                // mount it kept showing the first-loaded year's rows even after
-                // navigating to a different year.
-                content: (
-                  <CommissionByRep
-                    key={selectedYear}
-                    years={availableYears}
-                    selectedYear={selectedYear}
-                    reps={repGroups}
-                    payrollAnchor={payrollAnchor}
-                  />
-                ),
-              },
-              {
-                label: "Bids",
-                content: (
-                  <div className="space-y-6">
-                    <section className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
-                      <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Bid Commission</h2>
-                      <BidCommissionView rows={bidBonusRows} />
-                    </section>
-                    <section className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
-                      <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Bids</h2>
-                      <BidsView employees={activeEmployeeOptions} rows={bidRows} />
-                    </section>
-                  </div>
-                ),
-              },
-            ],
+            // key={selectedYear} forces a full remount on year-tab switches,
+            // CommissionByRep's paid-toggle state (dealsByOwner/recurringByOwner)
+            // is only initialized once from the `reps` prop, so without a fresh
+            // mount it kept showing the first-loaded year's rows even after
+            // navigating to a different year.
+            content: (
+              <CommissionByRep
+                key={selectedYear}
+                years={availableYears}
+                selectedYear={selectedYear}
+                reps={repGroups}
+                payrollAnchor={payrollAnchor}
+              />
+            ),
           },
           {
             label: "Reimbursements",

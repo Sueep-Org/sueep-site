@@ -54,7 +54,14 @@ export function BillingOverview() {
         <Step n={3} title="Janitorial tab">
           Lists completed janitorial turnover units in range, grouped under their building, with
           bed/bath, completion date, and contract amount. Billing status works the same
-          click-to-flip way as Post-Construction.
+          click-to-flip way as Post-Construction. Liens on unit turns are tracked per building,
+          since a lien is filed against the property. Each unpaid turn has its own clock from the
+          day it was completed, and the building shows the earliest one still open. Buildings with a
+          late invoice or a lien step coming up are listed in the <strong>Lien deadlines</strong> box
+          above the table (two at first, then <strong>Show all</strong>) and get a warning mark by
+          the building name. The state is read from the building&apos;s address. Set up the rest on
+          the building&apos;s <strong>Liens</strong> tab, which works like a post-construction job&apos;s and
+          lists each unpaid turn.
           <ImgPlaceholder label="Janitorial billing tab" />
         </Step>
 
@@ -75,6 +82,13 @@ export function BillingOverview() {
           search and filters) with a running total row.
         </Step>
 
+        <Callout>
+          Every tab has a <strong>Billed via</strong> column after the invoices: how the client wants
+          invoices sent (Procore, Coupa, email...). It comes from the client company, unless the
+          building or job overrides it. Click it to open the portal when one is saved.{" "}
+          <strong>Not set</strong> links to the company so you can fill it in.
+        </Callout>
+
         <Step n={6} title="Filtering the table">
           Below the dates, the filter menu
           narrows what the date range or search loaded. Pick one
@@ -88,7 +102,7 @@ export function BillingOverview() {
               <strong>Invoice not linked</strong>.
             </LI>
             <LI>
-              Janitorial: <strong>Overdue invoice</strong>, <strong>HubSpot mismatch</strong>{" "}
+              Janitorial: <strong>Overdue invoice</strong>, <strong>Lien</strong>, <strong>HubSpot mismatch</strong>{" "}
               (HubSpot&apos;s invoice status disagrees with the billing status here), and{" "}
               <strong>No invoice</strong>.
             </LI>
@@ -96,6 +110,10 @@ export function BillingOverview() {
               Recurring: <strong>Overdue invoice</strong> and <strong>No invoice</strong>.
             </LI>
           </UL>
+          <strong>Since completion</strong> shows only work finished <strong>30</strong> (30 to 59),{" "}
+          <strong>60</strong> (60 to 89) or <strong>90+</strong> days ago. Janitorial months count
+          from the last day of the month. Picking one turns on <strong>All time</strong> so older
+          work is loaded. Pair it with <strong>Billed</strong> to see what is still waiting on payment.
         </Step>
 
         <Step n={7} title="When a HubSpot invoice is on the wrong line">

@@ -37,7 +37,7 @@ export async function GET(req: Request) {
   const ownerName = `${owner.firstName ?? ""} ${owner.lastName ?? ""}`.trim() || ownerEmail;
 
   const employees = await prisma.employee.findMany({
-    where: { status: "ACTIVE" },
+    where: { status: "ACTIVE", commissionEligible: true },
     select: { id: true, email: true, firstName: true, lastName: true },
   });
 

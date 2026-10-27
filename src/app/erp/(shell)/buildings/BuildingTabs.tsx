@@ -48,6 +48,8 @@ type Props = {
   propertyManagers?: BuildingPropertyManager[] | null;
   /** Client & billing section, for roles that can see companies */
   companySection?: ReactNode;
+  /** Liens tab for the building's unit turns, financial roles only */
+  liensSection?: ReactNode;
 };
 
 export function BuildingTabs({
@@ -71,6 +73,7 @@ export function BuildingTabs({
   currentUserId,
   propertyManagers = null,
   companySection = null,
+  liensSection,
 }: Props) {
   const allTabs = [
     {
@@ -160,6 +163,7 @@ export function BuildingTabs({
           },
         ]
       : []),
+    ...(liensSection ? [{ label: "Liens", content: liensSection }] : []),
     {
       label: "Janitorial Contract",
       content: (

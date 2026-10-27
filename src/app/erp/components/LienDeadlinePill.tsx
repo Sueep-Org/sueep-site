@@ -34,6 +34,7 @@ export function lienDetailText(row: LienWatchRow): string {
   if (row.completedKey) parts.push(`Completed ${formatLienDay(row.completedKey)}.`);
   if (row.unpaidCents > 0) parts.push(`${money(row.unpaidCents)} unpaid.`);
   if (row.stateSource === "SITE_ADDRESS") parts.push(`${row.state} read from the site address.`);
+  if (row.stateSource === "BUILDING_ADDRESS") parts.push(`${row.state} read from the building address.`);
   if (row.stateSource === "TITLE") parts.push(`${row.state} read from the job title.`);
   if (row.decision?.value === "PURSUING") parts.push("Marked as pursuing.");
   if (d.roleAssumed) parts.push("Who hired us isn't set, so the stricter rule is used.");
@@ -52,7 +53,7 @@ export function LienWarningIcon({ row, className = "" }: { row: LienWatchRow | u
   const label = lienPillLabel(row.deadline, row.readiness);
   return (
     <Link
-      href={`/erp/projects/${row.projectId}?tab=Liens`}
+      href={row.liensHref}
       title={`${label}. ${lienDetailText(row)}`}
       aria-label={label}
       className={`inline-flex align-middle ${urgent ? "text-red-600" : "text-amber-500"} hover:opacity-70 ${className}`}
@@ -72,7 +73,7 @@ export function LienWarningIcon({ row, className = "" }: { row: LienWatchRow | u
 export function LienDeadlinePill({ row, className = "" }: { row: LienWatchRow | undefined; className?: string }) {
   if (!row) return null;
   // State and who hired us live on the Liens tab; the completion date lives in Project Setup.
-  const href = row.missing === "NO_END_DATE" ? `/erp/projects/${row.projectId}` : `/erp/projects/${row.projectId}?tab=Liens`;
+  const href = row.missing === "NO_END_DATE" ? row.setupHref : row.liensHref;
   if (row.decision && lienDecisionCloses(row.decision.value)) {
     const filed = row.decision.value === "FILED";
     return (

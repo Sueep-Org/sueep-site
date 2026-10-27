@@ -10,7 +10,8 @@ import { prisma } from "@/lib/prisma";
 import { PM_LEVEL_ROLES } from "@/lib/erpRoles";
 import { buildLienAlertEmail, sendEmail } from "@/lib/email";
 import { LIEN_STAGE_RANK, formatLienDay, lienDecisionCloses, lienPillLabel, type LienStage } from "./lienDeadline";
-import { loadLienWatch, type LienWatchRow } from "./lienWatch";
+import type { LienWatchRow } from "./lienWatch";
+import { loadAllLienWatch } from "./lienWatchBuildings";
 
 /** The stages worth an email. Past due alone isn't: it's on the Billing page. */
 const ALERT_STAGES: LienStage[] = ["DECIDE_NOW", "NOTICE_DUE"];
@@ -31,7 +32,7 @@ function money(cents: number): string {
 }
 
 export async function sendLienAlerts(): Promise<{ sent: number; jobs: number }> {
-  const due = lienAlertsDue(await loadLienWatch());
+  const due = lienAlertsDue(await loadAllLienWatch());
   if (!due.length) return { sent: 0, jobs: 0 };
 
   const recipients = await prisma.erpUser.findMany({ where: { role: { in: [...PM_LEVEL_ROLES] } }, select: { email: true } });
@@ -49,7 +50,7 @@ export async function sendLienAlerts(): Promise<{ sent: number; jobs: number }> 
         jobTitle: r.jobTitle,
         headline: lienPillLabel(d, r.readiness!),
         detail: detail.join(" "),
-        url: `${appUrl}/erp/projects/${r.projectId}?tab=Liens`,
+        url: `${appUrl}${r.liensHref}`,
       };
     }),
   });
@@ -60,7 +61,9 @@ export async function sendLienAlerts(): Promise<{ sent: number; jobs: number }> 
   // Remember the stage whether or not the email is switched on, so turning
   // it on later doesn't send a backlog of stale alerts.
   for (const r of due) {
-    await prisma.project.update({ where: { id: r.projectId }, data: { lienAlertedStage: r.readiness!.stage } });
+    const data = { lienAlertedStage: r.readiness!.stage };
+    if (r.projectId) await prisma.project.update({ where: { id: r.projectId }, data });
+    else if (r.buildingId) await prisma.building.update({ where: { id: r.buildingId }, data });
   }
   return { sent: delivered, jobs: due.length };
 }

@@ -150,13 +150,16 @@ export function matchEmployeeByHubspotOwner(
  * Priority: explicit override > HubSpot owner email match > HubSpot owner
  * name match > whoever manually created the project (set at creation time
  * for projects made directly in the ERP, rather than synced from HubSpot) >
- * blank (only employees with an ERP login are eligible at any step).
+ * blank. Only commission-eligible employees count at any step: an override
+ * naming someone else means nobody earns it, rather than falling through.
  */
 export function resolveCommissionEmployeeId(
   project: CommissionProject,
   eligibleEmployees: CommissionEligibleEmployee[]
 ): string | null {
-  if (project.commissionEmployeeId) return project.commissionEmployeeId;
+  if (project.commissionEmployeeId) {
+    return eligibleEmployees.some((e) => e.id === project.commissionEmployeeId) ? project.commissionEmployeeId : null;
+  }
 
   const byOwner = matchEmployeeByHubspotOwner(project.hubspotOwnerEmail, project.hubspotOwnerName, eligibleEmployees);
   if (byOwner) return byOwner.id;

@@ -7,9 +7,9 @@ export function CompensationOverview() {
       <P>
         The Compensation page (<strong>ERP → Compensation</strong>) is where pay is managed:
         hourly/salary/janitorial-contract payroll, offshore fixed-rate payroll, sales commission,
-        bid bonuses, and reimbursements. It has four top-level tabs: <strong>Payroll</strong>,{" "}
-        <strong>Offshore Payroll</strong>, <strong>Commission</strong> (with Sales and Bids
-        sub-tabs), and <strong>Reimbursements</strong>.
+        and reimbursements. It has four top-level tabs: <strong>Payroll</strong>,{" "}
+        <strong>Offshore Payroll</strong>, <strong>Commission</strong>, and{" "}
+        <strong>Reimbursements</strong>.
       </P>
       <Callout type="warning">
         Sales can access this page, but only sees the <strong>Commission</strong> and{" "}
@@ -85,9 +85,11 @@ export function CompensationOverview() {
           </Callout>
         </Step>
 
-        <Step n={3} title="Commission → Sales">
+        <Step n={3} title="Commission tab">
           Shows every rep&apos;s commission on closed deals, change orders, and recurring
-          janitorial contracts for a selected year, grouped into a tab per rep.
+          janitorial contracts for a selected year, grouped into a tab per rep. Only people ticked{" "}
+          <strong>Eligible for commission</strong> on their employee profile (salary employees) earn
+          it. A project, building or contract assigned to anyone else earns no commission.
           <Img src="/help/compensation/compensation_4.png" alt="Commission Sales tab" />
           <UL>
             <LI>
@@ -173,50 +175,7 @@ export function CompensationOverview() {
           </Table>
         </Step>
 
-        <Step n={4} title="Commission → Bids">
-          Tracks the bid pipeline and the weekly bonus it earns, in two sections: <strong>Bid
-          Commission</strong> (the bonus payouts) and <strong>Bids</strong> (the underlying log).
-          <Img src="/help/compensation/compensation_5.png" alt="Commission Bids tab" />
-          <UL>
-            <LI>
-              In the <strong>Bids</strong> section, click the <strong>+</strong> button to log a
-              new bid: employee, date, project start date, company, deal, description, drawings
-              status, and payout. New bids start as <strong>Not sent</strong>.
-            </LI>
-            <LI>
-              Once a bid is actually submitted, toggle it to <strong>Sent</strong> on that row.
-              This is what makes it count toward that week&apos;s bonus. Nothing is entered
-              manually into the bonus table itself.
-            </LI>
-            <LI>
-              The <strong>Bid Commission</strong> section aggregates each employee&apos;s verified
-              (sent) bids per week and shows the bonus tier they hit. Toggle{" "}
-              <strong>Paid / Not paid</strong> once a bonus has been paid out.
-            </LI>
-          </UL>
-          <Callout type="warning">
-            If the Bid Commission table looks empty, it&apos;s because no bids have been marked
-            Sent yet for that week. Mark them Sent on the Bids table below it.
-          </Callout>
-          <P>Weekly bonus tiers, based on verified (sent) bids that week:</P>
-          <Table>
-            <THead>
-              <tr>
-                <TH>Verified bids / week</TH>
-                <TH>Bonus</TH>
-              </tr>
-            </THead>
-            <tbody>
-              <tr><TD>40+</TD><TD>$1,000</TD></tr>
-              <tr><TD>30–39</TD><TD>$600</TD></tr>
-              <tr><TD>20–29</TD><TD>$300</TD></tr>
-              <tr><TD>10–19</TD><TD>$100</TD></tr>
-              <tr><TD>Under 10</TD><TD>$0</TD></tr>
-            </tbody>
-          </Table>
-        </Step>
-
-        <Step n={5} title="Reimbursements tab">
+        <Step n={4} title="Reimbursements tab">
           A simple log of one-off reimbursements owed to employees.
           <Img src="/help/compensation/compensation_6.png" alt="Reimbursements tab" />
           <UL>

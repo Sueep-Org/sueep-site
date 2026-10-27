@@ -118,7 +118,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const canSeeCommission = auth ? canSeeFinancials(auth.role) : false;
   const canSeeCois = auth ? canManageInsurance(auth.role) : false;
   const cfg = parseHubSpotPipelineStageMap();
-  const [project, laborEmployees, contractors, changeOrders, materialEntries, checklistItems, workOrderRecord, sov, safetyChecks, erpSupervisorUsers, qualityChecks, erpUsers, currentErpUser] = await Promise.all([
+  const [project, laborEmployees, contractors, changeOrders, materialEntries, checklistItems, workOrderRecord, sov, safetyChecks, erpSupervisorUsers, qualityChecks, currentErpUser] = await Promise.all([
     prisma.project.findUnique({
       where: { id },
       include: {
@@ -174,7 +174,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     }),
     prisma.employee.findMany({
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-      select: { id: true, firstName: true, lastName: true, hourlyPayCents: true, role: true, status: true, email: true },
+      select: { id: true, firstName: true, lastName: true, hourlyPayCents: true, role: true, status: true, email: true, commissionEligible: true },
     }),
     prisma.contractor.findMany({
       orderBy: { name: "asc" },
@@ -237,7 +237,6 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         sovItems: { select: { id: true, description: true } },
       },
     }),
-    prisma.erpUser.findMany({ select: { email: true } }),
     // auth.uid is the Firebase UID (from the session token), not the ErpUser.id — resolve the actual row.
     auth?.uid ? prisma.erpUser.findUnique({ where: { firebaseUid: auth.uid }, select: { id: true } }) : Promise.resolve(null),
   ]);
@@ -320,12 +319,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       : Promise.resolve(null),
   ]);
 
-  // Commission owner must be someone with an ERP login — most Employee rows
-  // are crew (painters/cleaners) with no ErpUser account at all.
-  const erpUserEmails = new Set(erpUsers.map((u) => u.email.toLowerCase()));
-  const commissionEligibleEmployees = laborEmployees.filter(
-    (e) => e.email && erpUserEmails.has(e.email.toLowerCase())
-  );
+  // Commission owner must be someone ticked Eligible for commission on their profile.
+  const commissionEligibleEmployees = laborEmployees.filter((e) => e.commissionEligible);
 
   // What the editor's "Auto" option resolves to absent an explicit override
   // — same resolver the Employee "Commission" tab uses, so the two always agree.
@@ -1043,7 +1038,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       ),
     });
   }
-  // Liens only apply to construction work, so the tab is post-construction only.
+  // Liens only apply to construction work, so the tab is post-construction
+  // only. Unit turns are liened per building, on the building's Liens tab.
   if (isPostConstruction && !project.turnoverRequest) {
     allTabs.push({
       label: "Liens",

@@ -8,7 +8,7 @@ import { normalizeBillingStatus } from "./billingStatus";
 import { todayEasternKey, utcDateKey } from "./dates";
 import { centsToDollars, centsToDollarsCompact } from "./money";
 import { computeProjectActualsWithChangeOrders, isQualifyingChangeOrder } from "./projectMargin";
-import { loadLienWatch } from "./lienWatch";
+import { loadAllLienWatch } from "./lienWatchBuildings";
 import { loadCutoffStatus } from "./billingCutoffs";
 import { lienDecisionCloses, lienPillLabel, type LienStage } from "./lienDeadline";
 
@@ -46,7 +46,7 @@ function addDaysKey(key: string, days: number): string {
 // ── Overdue invoices ───────────────────────────────────────────────────────
 
 export type OpenInvoice = { id: string; number: string | null; title: string; href: string; dueKey: string | null; daysLate: number; balanceCents: number };
-type OverdueInvoice = OpenInvoice & { dueKey: string };
+export type OverdueInvoice = OpenInvoice & { dueKey: string };
 
 const AGE_BUCKETS: { label: string; min: number }[] = [
   { label: "90+ days late", min: 91 },
@@ -104,11 +104,11 @@ export const loadOpenInvoices = cache(async (todayKey: string): Promise<OpenInvo
 });
 
 /** Open invoices past their due date, the same test as the Billing page's invoice chips. */
-async function loadOverdueInvoices(todayKey: string): Promise<OverdueInvoice[]> {
+export async function loadOverdueInvoices(todayKey: string): Promise<OverdueInvoice[]> {
   return (await loadOpenInvoices(todayKey)).filter((i): i is OverdueInvoice => !!i.dueKey && i.daysLate > 0);
 }
 
-function overdueSection(invoices: OverdueInvoice[]): CardSection {
+export function overdueSection(invoices: OverdueInvoice[]): CardSection {
   const totals = new Map<string, number>();
   for (const i of invoices) totals.set(bucketOf(i.daysLate), (totals.get(bucketOf(i.daysLate)) ?? 0) + i.balanceCents);
   const total = invoices.reduce((s, i) => s + i.balanceCents, 0);
@@ -313,7 +313,7 @@ async function billingCutoffSection(todayKey: string): Promise<CardSection> {
 // ── Liens ──────────────────────────────────────────────────────────────────
 
 const loadLienRows = cache(async (todayKey: string): Promise<{ rows: JobTabRow[]; urgent: number }> => {
-  const watch = await loadLienWatch();
+  const watch = await loadAllLienWatch();
   const horizon = addDaysKey(todayKey, LIEN_WINDOW_DAYS);
   const due = watch
     .filter((r) => r.deadline && r.readiness && !lienDecisionCloses(r.decision?.value) && r.readiness.stage !== "TOO_LATE")
@@ -326,8 +326,8 @@ const loadLienRows = cache(async (todayKey: string): Promise<{ rows: JobTabRow[]
   return {
     urgent: due.filter((r) => URGENT_LIEN_STAGES.includes(r.readiness!.stage)).length,
     rows: due.map((r) => ({
-      id: r.projectId,
-      href: `/erp/projects/${r.projectId}`,
+      id: r.key,
+      href: r.liensHref,
       title: r.jobTitle,
       note: `${centsToDollarsCompact(r.unpaidCents)} unpaid · file by ${shortDate(r.deadline!.deadlineKey)}`,
       value: lienPillLabel(r.deadline!, r.readiness!),

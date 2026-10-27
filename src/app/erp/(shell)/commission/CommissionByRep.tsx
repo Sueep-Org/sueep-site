@@ -579,6 +579,11 @@ function CombinedRowTr({
           {marginPct == null || tier == null ? "-" : `${marginPct.toFixed(0)}% → ${(tier.baseRate * 100).toFixed(0)}%`}
         </td>
         <td className="px-3 py-2 text-right tabular-nums font-medium text-gray-900">{centsToDollars(d.commissionCents)}</td>
+        {showPaid && (
+          <td className="px-3 py-2">
+            <PaidBadge paidAt={d.paidAt} disabled={savingId === d.projectId} onClick={() => onTogglePaid(d)} />
+          </td>
+        )}
         <td className="px-3 py-2">
           <InvoiceCell
             invoices={d.invoices}
@@ -586,11 +591,6 @@ function CombinedRowTr({
             linkHref={d.isUnitTurn && d.buildingId ? `/erp/buildings/${d.buildingId}${INVOICES_TAB}` : `/erp/projects/${d.projectId}${INVOICES_TAB}`}
           />
         </td>
-        {showPaid && (
-          <td className="px-3 py-2">
-            <PaidBadge paidAt={d.paidAt} disabled={savingId === d.projectId} onClick={() => onTogglePaid(d)} />
-          </td>
-        )}
       </tr>
     );
   }
@@ -610,6 +610,11 @@ function CombinedRowTr({
       <td className="px-3 py-2 text-right tabular-nums text-gray-400">-</td>
       <td className="px-3 py-2 text-right tabular-nums text-gray-500">{recurringTierLabel(r.monthIndex)}</td>
       <td className="px-3 py-2 text-right tabular-nums font-medium text-gray-900">{centsToDollars(r.commissionCents)}</td>
+      {showPaid && (
+        <td className="px-3 py-2">
+          <PaidBadge paidAt={r.paidAt} disabled={savingRecurringId === r.periodId} onClick={() => onToggleRecurringPaid(r)} />
+        </td>
+      )}
       <td className="px-3 py-2">
         <InvoiceCell
           invoices={r.invoices}
@@ -617,11 +622,6 @@ function CombinedRowTr({
           linkHref={`/erp/buildings/${r.buildingId}${INVOICES_TAB}`}
         />
       </td>
-      {showPaid && (
-        <td className="px-3 py-2">
-          <PaidBadge paidAt={r.paidAt} disabled={savingRecurringId === r.periodId} onClick={() => onToggleRecurringPaid(r)} />
-        </td>
-      )}
     </tr>
   );
 }
@@ -689,13 +689,13 @@ function RepPanel({
             <th className="px-3 py-2 text-right">Margin</th>
             <th className="px-3 py-2 text-right">Rate</th>
             <th className="px-3 py-2 text-right">Commission</th>
+            {showPaid && <th className="px-3 py-2 text-left">Paid</th>}
             <th className="min-w-[12rem] px-3 py-2 text-left">
               <span className="flex items-center gap-1">
                 Invoice
                 <InfoTip align="right" text="HubSpot invoices linked to this row. An amber tag means part of it has no invoice linked. Click it to link one on the Invoices & Quotes tab." />
               </span>
             </th>
-            {showPaid && <th className="px-3 py-2 text-left">Paid</th>}
           </tr>
         </thead>
         <tbody>

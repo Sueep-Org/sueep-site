@@ -796,17 +796,12 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
   for (const m of months.values()) {
     m.salaryInJobsCents = (fixedPayInJobsByMonth.get(m.key) ?? 0) - m.offshoreInJobsCents;
   }
-  // Commission paid: payouts (deals and contract months) plus weekly bid
-  // bonuses, on the day each was marked paid. The Commission section lists
-  // the same items by person.
+  // Commission paid: payouts (deals and contract months), on the day each
+  // was marked paid. The Commission section lists the same items by person.
   const commissionPaid: CommissionItem[] = [
     ...commissionPayouts.map((c) => ({
       personId: c.employeeId, personName: `${c.employee.firstName} ${c.employee.lastName}`.trim(),
       cents: c.amountCents, dayKey: todayEasternKey(c.paidAt), paid: true,
-    })),
-    ...commissionRows.bidBonuses.filter((b) => b.paidAt && b.bonusCents > 0).map((b) => ({
-      personId: b.employeeId, personName: b.employeeName,
-      cents: b.bonusCents, dayKey: todayEasternKey(new Date(b.paidAt!)), paid: true,
     })),
   ];
   for (const c of commissionPaid) {
@@ -814,8 +809,8 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
     if (key) monthOf(key).commissionCents += c.cents;
   }
   // Commission earned, on the day it became due (a deal once it and its
-  // change orders are paid, a contract month once it's paid, a bid bonus
-  // for its week), whether or not it's been paid out yet.
+  // change orders are paid, a contract month once it's paid), whether or
+  // not it's been paid out yet.
   const commissionEarned: CommissionItem[] = [
     ...commissionRows.deals.filter((d) => d.commissionCents > 0).map((d) => ({
       personId: d.ownerId, personName: d.ownerName, cents: d.commissionCents,
@@ -824,10 +819,6 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
     ...commissionRows.recurring.filter((r) => r.commissionCents > 0).map((r) => ({
       personId: r.ownerId, personName: r.ownerName, cents: r.commissionCents,
       dayKey: r.periodStart.slice(0, 10), paid: r.paidAt != null,
-    })),
-    ...commissionRows.bidBonuses.filter((b) => b.bonusCents > 0).map((b) => ({
-      personId: b.employeeId, personName: b.employeeName, cents: b.bonusCents,
-      dayKey: b.weekStart.slice(0, 10), paid: b.paidAt != null,
     })),
   ];
   // Hourly work added by hand on Payroll (not on any job), on its work day.

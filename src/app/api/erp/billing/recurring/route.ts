@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { periodTotalCents } from "@/lib/erp/recurringContracts";
+import { loadBuildingBillingPreferences } from "@/lib/erp/invoiceDestination";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -92,6 +93,8 @@ export async function GET(req: Request) {
     });
   }
 
-  const rows = Array.from(buildingMap.values());
+  // How each client wants to be billed (Procore, email...), after building overrides.
+  const billingByBuilding = await loadBuildingBillingPreferences([...new Set(Array.from(buildingMap.values()).map((b) => b.buildingId))]);
+  const rows = Array.from(buildingMap.values()).map((b) => ({ ...b, billing: billingByBuilding.get(b.buildingId) ?? null }));
   return NextResponse.json({ start: startParam ?? "", end: endParam ?? "", rows });
 }

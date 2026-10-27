@@ -299,6 +299,7 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
                 offshoreMonthlyRateCents: canSeePay ? employee.offshoreMonthlyRateCents : null,
                 isJanitorialContract: employee.isJanitorialContract,
                 onAdpPayroll: employee.onAdpPayroll,
+                commissionEligible: employee.commissionEligible,
               }}
               janitorialSchedule={janitorialPatterns.map((p) => ({
                 id: p.id,

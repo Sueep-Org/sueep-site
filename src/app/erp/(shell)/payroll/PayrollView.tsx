@@ -781,35 +781,6 @@ export function PayrollView({ employees = [] }: { employees?: EmployeeOption[] }
       <EmployerTaxRatesModal open={taxRatesOpen} onClose={() => setTaxRatesOpen(false)} onSaved={() => setReloadKey((k) => k + 1)} />
       <HealthInsuranceModal open={healthOpen} onClose={() => setHealthOpen(false)} onSaved={() => setReloadKey((k) => k + 1)} employees={employees} />
 
-      {/* Summary */}
-      {data && filteredRows.length > 0 && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {[
-            { label: "People paid", value: String(filteredRows.length) },
-            { label: "Gross pay", value: fmt(totalGross + totalCommission), hint: totalCommission > 0 ? `Includes ${fmt(totalCommission)} commission` : undefined },
-            { label: "Company cost", value: fmt(totalGross + totalCommission + totalEmployerTax + totalHealth), hint: "Gross pay plus employer tax and health insurance" },
-          ].map((t) => (
-            <div key={t.label} className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
-              <p className="flex items-center gap-1 text-xs text-gray-500">
-                {t.label}
-                {t.hint && <InfoTip text={t.hint} />}
-              </p>
-              <p className="mt-0.5 text-lg font-semibold tabular-nums text-gray-900">{t.value}</p>
-            </div>
-          ))}
-          <button
-            type="button"
-            onClick={() => setAttentionOnly((v) => !v)}
-            disabled={attentionCount === 0}
-            className={`rounded-lg border px-4 py-3 text-left shadow-sm ${attentionOnly ? "border-amber-400 bg-amber-50" : "border-gray-200 bg-white"} ${attentionCount === 0 ? "cursor-default" : "hover:border-amber-300"}`}
-          >
-            <p className="text-xs text-gray-500">Needs a look</p>
-            <p className={`mt-0.5 text-lg font-semibold tabular-nums ${attentionCount ? "text-amber-700" : "text-gray-900"}`}>{attentionCount}</p>
-            {attentionCount > 0 && <p className="text-[11px] text-gray-400">{attentionOnly ? "Showing only these, click to show all" : "Click to show only these"}</p>}
-          </button>
-        </div>
-      )}
-
       {/* Table */}
       <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
@@ -953,6 +924,35 @@ export function PayrollView({ employees = [] }: { employees?: EmployeeOption[] }
           </table>
         </div>
       </section>
+
+      {/* Summary */}
+      {data && filteredRows.length > 0 && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            { label: "People paid", value: String(filteredRows.length) },
+            { label: "Gross pay", value: fmt(totalGross + totalCommission), hint: totalCommission > 0 ? `Includes ${fmt(totalCommission)} commission` : undefined },
+            { label: "Company cost", value: fmt(totalGross + totalCommission + totalEmployerTax + totalHealth), hint: "Gross pay plus employer tax and health insurance" },
+          ].map((t) => (
+            <div key={t.label} className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
+              <p className="flex items-center gap-1 text-xs text-gray-500">
+                {t.label}
+                {t.hint && <InfoTip text={t.hint} />}
+              </p>
+              <p className="mt-0.5 text-lg font-semibold tabular-nums text-gray-900">{t.value}</p>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setAttentionOnly((v) => !v)}
+            disabled={attentionCount === 0}
+            className={`rounded-lg border px-4 py-3 text-left shadow-sm ${attentionOnly ? "border-amber-400 bg-amber-50" : "border-gray-200 bg-white"} ${attentionCount === 0 ? "cursor-default" : "hover:border-amber-300"}`}
+          >
+            <p className="text-xs text-gray-500">Needs a look</p>
+            <p className={`mt-0.5 text-lg font-semibold tabular-nums ${attentionCount ? "text-amber-700" : "text-gray-900"}`}>{attentionCount}</p>
+            {attentionCount > 0 && <p className="text-[11px] text-gray-400">{attentionOnly ? "Showing only these, click to show all" : "Click to show only these"}</p>}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

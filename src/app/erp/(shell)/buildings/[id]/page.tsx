@@ -8,6 +8,7 @@ import { loadBuildingInvoiceDestination } from "@/lib/erp/invoiceDestination";
 import { utcDateKey } from "@/lib/erp/dates";
 import { BuildingCompanySection } from "./BuildingCompanySection";
 import { BuildingTabs } from "../BuildingTabs";
+import { LienEditor } from "@/app/erp/components/LienEditor";
 import { ProjectsBackLink } from "@/app/erp/components/ProjectsBackLink";
 import type { BuildingUnit } from "./BuildingUnitsSection";
 
@@ -40,7 +41,7 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
     }),
     prisma.employee.findMany({
       where: { status: "ACTIVE" },
-      select: { id: true, firstName: true, lastName: true, hourlyPayCents: true, role: true, status: true },
+      select: { id: true, firstName: true, lastName: true, hourlyPayCents: true, role: true, status: true, commissionEligible: true },
       orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
     }),
     prisma.project.findMany({
@@ -163,13 +164,32 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
         }}
         initialPackage={building.pricingPackage}
         initialCoPackage={building.coPricingPackage}
-        employees={employees.map((e) => ({ id: e.id, name: `${e.firstName} ${e.lastName}`.trim() }))}
+        // The salesperson picker: only people eligible for commission.
+        employees={employees.filter((e) => e.commissionEligible).map((e) => ({ id: e.id, name: `${e.firstName} ${e.lastName}`.trim() }))}
         laborEmployees={employees}
         canLogHours={auth ? canAddLaborLogs(auth.role) : false}
         canSeeInvoices={auth ? canSeeFinancials(auth.role) : false}
         commissionEmployeeId={building.commissionEmployeeId}
         initialNotes={building.notes.map((n) => ({ ...n, createdAt: n.createdAt.toISOString() }))}
         currentUserId={currentErpUser?.id ?? null}
+        liensSection={
+          auth && canSeeFinancials(auth.role) ? (
+            <LienEditor
+              target={{ kind: "building", id: building.id }}
+              lienState={building.lienState}
+              lienRole={building.lienRole}
+              lienResidential={building.lienResidential}
+              lienNoticeSentOnIso={building.lienNoticeSentOn ? building.lienNoticeSentOn.toISOString() : null}
+              lienDecision={building.lienDecision}
+              lienDecisionNote={building.lienDecisionNote}
+              lienNoticeTracking={building.lienNoticeTracking}
+              lienOwnerName={building.lienOwnerName}
+              lienOwnerAddress={building.lienOwnerAddress}
+              lienGcName={building.lienGcName}
+              lienGcAddress={building.lienGcAddress}
+            />
+          ) : null
+        }
         companySection={
           showCompanies && destination ? (
             <BuildingCompanySection
