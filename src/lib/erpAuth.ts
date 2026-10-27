@@ -101,6 +101,11 @@ export function canEditCompanies(role: ErpRole): boolean {
   return role === "ADMIN" || role === "BUSINESS_MANAGER";
 }
 
+/** QuickBooks page: upload QuickBooks reports (later, the API connection). */
+export function canManageQuickBooks(role: ErpRole): boolean {
+  return role === "ADMIN" || role === "BUSINESS_MANAGER";
+}
+
 /** Ready to send: review, edit, approve and discard auto-drafted invoices. */
 export function canApproveInvoices(role: ErpRole): boolean {
   return role === "ADMIN" || role === "BUSINESS_MANAGER";

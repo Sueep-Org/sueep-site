@@ -17,7 +17,7 @@ export default function PrivacyPage() {
       <header className="border-b border-gray-200 bg-gray-50">
         <div className="max-w-3xl mx-auto px-5 py-10 md:py-14">
           <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Privacy Policy</h1>
-          <p className="mt-3 text-gray-600">Last updated: June 25, 2026</p>
+          <p className="mt-3 text-gray-600">Last updated: October 27, 2026</p>
         </div>
       </header>
 
@@ -212,6 +212,29 @@ export default function PrivacyPage() {
           </p>
         </section>
 
+        {/* Sueep ERP and Connected Accounts */}
+        <section>
+          <h2 className="text-xl font-semibold text-gray-900">Sueep ERP and Connected Accounts</h2>
+          <p className="mt-3">
+            Sueep runs its operations on internal business software, the Sueep ERP (app.sueep.com), used by Sueep
+            employees and people Sueep invites. It holds the information needed to run jobs, billing and payroll, such as
+            client and project details, invoices, schedules and employee records.
+          </p>
+          <p className="mt-3">
+            When an authorized Sueep administrator connects the Sueep ERP to Sueep&apos;s own Intuit QuickBooks Online
+            company, the Sueep ERP reads financial information from it, including reports, customers, invoices, payments
+            and expenses, so it can show that information to Sueep staff. This connection is read-only and does not change
+            anything in QuickBooks. The access keys for the connection are stored encrypted, and the connection can be
+            removed at any time from the Sueep ERP or from QuickBooks. Information received from QuickBooks is used only
+            for Sueep&apos;s internal operations. It is not sold, and it is not shared with anyone outside Sueep except
+            the service providers that host the Sueep ERP. It is kept only as long as it is needed for those purposes.
+          </p>
+          <p className="mt-3">
+            Use of the Sueep ERP is also covered by our{" "}
+            <Link href="/terms" className="text-[#E73C6E] font-medium hover:underline">Terms of Use</Link>.
+          </p>
+        </section>
+
         {/* Data Security */}
         <section>
           <h2 className="text-xl font-semibold text-gray-900">Data Security</h2>
@@ -296,6 +319,7 @@ export default function PrivacyPage() {
           <p>© {new Date().getFullYear()} Sueep LLC. All rights reserved.</p>
           <div className="flex gap-4">
             <Link href="/privacy" className="hover:text-white">Privacy</Link>
+            <Link href="/terms" className="hover:text-white">Terms</Link>
             <Link href="/#contact" className="hover:text-white">Contact</Link>
           </div>
         </div>

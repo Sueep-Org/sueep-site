@@ -552,6 +552,12 @@ const billingGroupItems: NavItem[] = [
     roles: ["ADMIN", "BUSINESS_MANAGER"],
     icon: DocumentIcon,
   },
+  {
+    href: "/erp/quickbooks",
+    label: "QuickBooks",
+    roles: ["ADMIN", "BUSINESS_MANAGER"],
+    icon: DocumentIcon,
+  },
 ];
 
 /** Paying people and staying insured. Finance section, next to Billing. */
