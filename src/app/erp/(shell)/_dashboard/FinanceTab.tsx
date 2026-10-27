@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import Link from "next/link";
 import { FinanceDateRange } from "./FinanceDateRange";
+import { todayEasternKey } from "@/lib/erp/dates";
 import { JobTabs, type JobTabRow } from "./JobTabs";
 import {
   computeFinanceSummary,
@@ -273,8 +274,8 @@ function CommissionCard({ earned, paid, owedAll, periodLabel }: { earned: Commis
   const rows = [...people.values()].sort((a, b) => b.owed - a.owed || b.earned - a.earned);
   const sum = (list: CommissionItem[]) => list.reduce((s, i) => s + i.cents, 0);
   const totals = [
-    { label: "Earned (these dates)", cents: sum(earned), hint: `Commission that became due in ${periodLabel}: a deal once it and its change orders are paid, a janitorial month once it's paid, a bid bonus for its week` },
-    { label: "Paid (these dates)", cents: sum(paid), hint: `Commission and bid bonuses marked paid in ${periodLabel} (the Commission line in Where the money went)` },
+    { label: "Earned (these dates)", cents: sum(earned), hint: `Commission that became due in ${periodLabel}: a deal once it and its change orders are paid, a janitorial month once it's paid` },
+    { label: "Paid (these dates)", cents: sum(paid), hint: `Commission marked paid in ${periodLabel} (the Commission line in Where the money went)` },
     { label: "Owed (all time)", cents: sum(owedAll), hint: "Earned but not marked paid yet, from any date, so it can be more than Earned" },
   ];
   const cell = "py-2 text-right tabular-nums";
@@ -442,8 +443,10 @@ const SUMMARY_SECONDS = 300;
 /** The whole Finance tab calculation is the slow part, so the same view is reused for 5 minutes. */
 const cachedFinanceSummary = unstable_cache(computeFinanceSummary, ["finance-tab-summary-v1"], { revalidate: SUMMARY_SECONDS });
 
-export async function FinanceTab({ period, by }: { period: string | undefined; by: string | undefined }) {
+export async function FinanceTab({ period: periodParam, by }: { period: string | undefined; by: string | undefined }) {
   const anchor: FinanceAnchor = by === "paid" ? "paid" : "completed";
+  // Nothing picked opens on the current month (Eastern, like the summary's own month).
+  const period = periodParam || todayEasternKey().slice(0, 7);
   // A single month ("YYYY-MM") can be any month, even before the data start;
   // the month before it is computed too, for the comparison.
   const pickedMonth = period && /^\d{4}-(0[1-9]|1[0-2])$/.test(period) ? period : null;

@@ -269,6 +269,25 @@ model Building {
   commissionEmployeeId String?
   commissionEmployee   Employee? @relation("BuildingCommissionOwner", fields: [commissionEmployeeId], references: [id], onDelete: SetNull)
 
+  /// Lien on this building's unpaid unit turns, one per building since a
+  /// lien is filed against the property (see src/lib/erp/lienWatchBuildings.ts).
+  /// Same meaning as the Project lien fields. State falls back to the address.
+  lienState          String?
+  lienRole           String?
+  lienResidential    Boolean   @default(false)
+  lienNoticeSentOn   DateTime?
+  lienNoticeTracking String?
+  lienOwnerName      String?
+  lienOwnerAddress   String?
+  lienGcName         String?
+  lienGcAddress      String?
+  lienSteps          Json?
+  lienDecision       String?
+  lienDecisionNote   String?
+  lienDecisionAt     DateTime?
+  lienDecisionBy     String?
+  lienAlertedStage   String?
+
   /// HubSpot Deal covering ALL turnover invoicing for this building (one
   /// deal per building, not per unit) — used to route a paid invoice's line
   /// items back to the right building's units for billing-status automation.
@@ -1685,6 +1704,11 @@ model Employee {
   /// their pay (see lib/erp/employerTax.ts). Every employee is, except
   /// offshore workers; untick it for anyone paid another way.
   onAdpPayroll Boolean @default(true)
+
+  /// Can earn sales commission (ticked on salary profiles). Commission rows,
+  /// salesperson pickers and the HubSpot owner match only use these people;
+  /// a project, building or contract assigned to anyone else earns nothing.
+  commissionEligible Boolean @default(false)
 
   defaultProject  String?
   /// ACTIVE | INACTIVE

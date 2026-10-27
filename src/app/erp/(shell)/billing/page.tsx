@@ -7,6 +7,8 @@ import { UnitInvoiceChips, expectedBillingStatus, type UnitInvoiceChip } from "@
 import { Button, InfoTip } from "@/app/erp/components/ui";
 import { LienDeadlinePill, LienWarningIcon, lienDetailText } from "@/app/erp/components/LienDeadlinePill";
 import type { LienWatchRow } from "@/lib/erp/lienWatch";
+import type { BillingPreference } from "@/lib/erp/invoiceDestination";
+import { BILLING_METHOD_LABELS } from "@/lib/erp/clientCompanies";
 import { LIEN_STAGE_RANK, lienDecisionCloses } from "@/lib/erp/lienDeadline";
 import { normalizeBillingStatus } from "@/lib/erp/billingStatus";
 
@@ -46,6 +48,59 @@ function hasOverdueInvoice(invoices: UnitInvoiceChip[] | undefined): boolean {
   return (invoices ?? []).some((i) => i.status === "open" && !!i.dueDate && new Date(i.dueDate).getTime() < Date.now());
 }
 
+/** Days since the work was finished: 30-59, 60-89 or 90+. Each row lands in one range. */
+type AgeFilter = "ALL" | "30" | "60" | "90";
+const AGE_OPTIONS: Array<{ value: AgeFilter; label: string }> = [
+  { value: "ALL", label: "Any" },
+  { value: "30", label: "30 days past" },
+  { value: "60", label: "60 days past" },
+  { value: "90", label: "90+ days past" },
+];
+
+function ageOk(completedIso: string | null | undefined, age: AgeFilter): boolean {
+  if (age === "ALL") return true;
+  if (!completedIso) return false;
+  const days = Math.round((Date.parse(todayISO()) - Date.parse(completedIso.slice(0, 10))) / 86_400_000);
+  if (age === "30") return days >= 30 && days < 60;
+  if (age === "60") return days >= 60 && days < 90;
+  return days >= 90;
+}
+
+/** A janitorial month counts as finished on its last day. */
+function monthEndISO(periodStart: string): string {
+  const d = new Date(periodStart);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
+}
+
+/** How the client wants to be billed (Procore, email...), after building and project overrides. */
+function BillingPrefCell({ pref }: { pref: BillingPreference | null | undefined }) {
+  if (!pref) return null;
+  if (!pref.method) {
+    return pref.companyId ? (
+      <Link href={`/erp/companies/${pref.companyId}`} title={`Set it on ${pref.companyName}`} className="text-xs text-gray-400 hover:text-pink-600 hover:underline">
+        Not set
+      </Link>
+    ) : (
+      <span className="text-xs text-gray-400" title="No client company linked">-</span>
+    );
+  }
+  const label = BILLING_METHOD_LABELS[pref.method];
+  const from =
+    pref.source === "project" ? "Set on this job" : pref.source === "building" ? `Set on ${pref.sourceName}` : `From ${pref.sourceName}`;
+  const pill = "inline-block whitespace-nowrap rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-700";
+  return pref.portalUrl ? (
+    <a href={pref.portalUrl} target="_blank" rel="noopener noreferrer" title={`${from}. Opens the portal.`} className={`${pill} hover:bg-pink-50 hover:text-pink-600`}>
+      {label} ↗
+    </a>
+  ) : (
+    <span title={from} className={pill}>
+      {label}
+    </span>
+  );
+}
+
+const BILLING_PREF_INFO = "How the client wants invoices sent (Procore, email, portal). From the client company, unless the building or job overrides it. Not set links to the company to fill it in.";
+
 /** Search and date range, owned by the page and shared by every tab's toolbar. */
 type BillingControls = {
   searchInput: string;
@@ -81,10 +136,14 @@ function BillingFilters<F extends string>({
   flagOptions = [],
   flags = [],
   onFlags,
+  age,
+  onAge,
   children,
 }: {
   status: StatusFilter;
   onStatus: (s: StatusFilter) => void;
+  age: AgeFilter;
+  onAge: (a: AgeFilter) => void;
   flagOptions?: Array<{ value: F; label: string }>;
   flags?: F[];
   onFlags?: (next: F[]) => void;
@@ -94,8 +153,9 @@ function BillingFilters<F extends string>({
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const radioName = useId();
+  const ageRadioName = useId();
   const c = useContext(BillingControlsContext)!;
-  const filtersActive = status !== "ALL" || flags.length > 0 || !c.datesDefault;
+  const filtersActive = status !== "ALL" || age !== "ALL" || flags.length > 0 || !c.datesDefault;
 
   useEffect(() => {
     if (!open) return;
@@ -173,6 +233,30 @@ function BillingFilters<F extends string>({
               ))}
             </div>
 
+            <div className="my-3 border-t border-gray-100" />
+
+            <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+              Since completion
+              <InfoTip align="right" text="Days since the work was finished: 30-59, 60-89 or 90 and more. Janitorial months count from the last day of the month. Picking one turns on All time, so older work is loaded." />
+            </p>
+            <div className="mt-1.5 space-y-1">
+              {AGE_OPTIONS.map((opt) => (
+                <label key={opt.value} className="flex items-center gap-2 text-xs text-gray-700">
+                  <input
+                    type="radio"
+                    name={ageRadioName}
+                    checked={age === opt.value}
+                    onChange={() => {
+                      onAge(opt.value);
+                      if (opt.value !== "ALL" && !c.allTime && !c.searching) c.setAllTime(true);
+                    }}
+                    className="h-3.5 w-3.5 border-gray-300 text-pink-600 focus:ring-pink-400"
+                  />
+                  {opt.label}
+                </label>
+              ))}
+            </div>
+
             {flagOptions.length > 0 ? (
               <>
                 <div className="my-3 border-t border-gray-100" />
@@ -202,7 +286,7 @@ function BillingFilters<F extends string>({
             {filtersActive ? (
               <button
                 type="button"
-                onClick={() => { onStatus("ALL"); onFlags?.([]); c.resetDates(); }}
+                onClick={() => { onStatus("ALL"); onAge("ALL"); onFlags?.([]); c.resetDates(); }}
                 className="mt-3 w-full rounded border border-gray-200 py-1 text-[11px] font-medium text-gray-500 hover:bg-gray-50"
               >
                 Clear filters
@@ -246,6 +330,7 @@ type SOVItemRow = {
   description: string;
   scheduledValueCents: number;
   billingStatus: string;
+  completedAt: string;
   /** HubSpot invoices linked to this SOV item */
   invoices: UnitInvoiceChip[];
 };
@@ -269,10 +354,13 @@ type PostConProjectRow = {
   // The project's flat contract, shown as its own line when it has no SOV
   // lines here (alone, or next to its change orders). Null otherwise.
   contractValueCents: number | null;
+  /** When the flat contract line's work ended. Set with contractValueCents. */
+  completedAt: string | null;
   items: SOVItemRow[];
   changeOrders: CORow[];
   /** Set when the project's current COI is expired or expiring */
   coiWarning: { label: string; expired: boolean; holderName: string } | null;
+  billing: BillingPreference | null;
 };
 
 /** Pill next to a project name when its COI needs replacing before billing. */
@@ -388,9 +476,25 @@ const POST_CON_FLAGS: Array<{ value: PostConFlag; label: string }> = [
   { value: "UNLINKED", label: "Invoice not linked" },
 ];
 
+/** Lien deadlines for every unpaid job of one kind, not just the ones in
+ * this date range, since the deadline keeps running after a job leaves the month. */
+function useLienRows(kind: LienWatchRow["kind"]): LienWatchRow[] {
+  const [rows, setRows] = useState<LienWatchRow[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/erp/billing/lien-deadlines")
+      .then((r) => r.json())
+      .then((d: { rows?: LienWatchRow[] }) => { if (!cancelled) setRows((d.rows ?? []).filter((r) => r.kind === kind)); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [kind]);
+  return rows;
+}
+
 /** Unpaid jobs where a lien is on the table (an invoice is late, or a step is due), whatever date range is showing. */
-function LienWatchStrip({ rows }: { rows: LienWatchRow[] }) {
+function LienWatchStrip({ rows, info, limit }: { rows: LienWatchRow[]; info: string; /** Rows shown before "Show all" */ limit?: number }) {
   const [showMissing, setShowMissing] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const due = rows
     .filter(lienNeedsLook)
     .sort(
@@ -404,32 +508,40 @@ function LienWatchStrip({ rows }: { rows: LienWatchRow[] }) {
     <section className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Lien deadlines</h3>
-        <InfoTip text="Unpaid post-construction jobs with a late invoice or a lien step coming up, from any month. Past due means a lien is possible. Decide means it's time to choose whether to file. The clock starts on the project's completion date. General deadlines only, check with an attorney." />
+        <InfoTip text={info} />
         {missing.length > 0 && (
           <button type="button" onClick={() => setShowMissing((v) => !v)} className="text-xs text-gray-500 hover:text-pink-600 hover:underline">
-            {missing.length} unpaid job{missing.length !== 1 ? "s" : ""} need{missing.length === 1 ? "s" : ""} lien info
+            {missing.length} {rows[0]?.kind === "BUILDING" ? "building" : "unpaid job"}{missing.length !== 1 ? "s" : ""} need{missing.length === 1 ? "s" : ""} lien info
           </button>
         )}
       </div>
       {due.length > 0 && (
         <ul className="mt-2 flex flex-col gap-1.5">
-          {due.map((r) => (
-            <li key={r.projectId} className="flex flex-wrap items-center gap-2 text-sm">
-              <Link href={`/erp/projects/${r.projectId}?tab=Liens`} className="font-medium text-gray-900 hover:text-pink-600 hover:underline">
+          {(limit && !showAll ? due.slice(0, limit) : due).map((r) => (
+            <li key={r.key} className="flex flex-wrap items-center gap-2 text-sm">
+              <Link href={r.liensHref} className="font-medium text-gray-900 hover:text-pink-600 hover:underline">
                 {r.jobTitle}
               </Link>
               <LienDeadlinePill row={r} />
+              {r.kind === "BUILDING" ? (
+                <span className="text-xs text-gray-500">{r.units.length} unpaid turn{r.units.length !== 1 ? "s" : ""}</span>
+              ) : null}
               {r.readiness?.canFileNow ? <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">Ready to file</span> : null}
               <span className="text-xs text-gray-500">{lienDetailText(r)}</span>
             </li>
           ))}
         </ul>
       )}
+      {limit && due.length > limit && (
+        <button type="button" onClick={() => setShowAll((v) => !v)} className="mt-1.5 text-xs font-medium text-pink-600 hover:underline">
+          {showAll ? "Show less" : `Show all ${due.length}`}
+        </button>
+      )}
       {showMissing && (
         <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
           {missing.map((r) => (
-            <li key={r.projectId} className="text-xs">
-              <Link href={`/erp/projects/${r.projectId}?tab=Liens`} className="text-gray-700 hover:text-pink-600 hover:underline">
+            <li key={r.key} className="text-xs">
+              <Link href={r.liensHref} className="text-gray-700 hover:text-pink-600 hover:underline">
                 {r.jobTitle}
               </Link>
             </li>
@@ -473,23 +585,14 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
   }, [projectIdsKey]);
   const hsFor = (projectId: string) => (hsByProject === null ? ("loading" as const) : hsByProject[projectId]);
 
-  // Lien deadlines for every unpaid job, not just the ones in this date
-  // range, since the deadline keeps running after a job leaves the month.
-  const [lienRows, setLienRows] = useState<LienWatchRow[]>([]);
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/erp/billing/lien-deadlines")
-      .then((r) => r.json())
-      .then((d: { rows?: LienWatchRow[] }) => { if (!cancelled) setLienRows(d.rows ?? []); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
+  const lienRows = useLienRows("POST_CON");
   const lienByProject: Record<string, LienWatchRow> = Object.fromEntries(lienRows.map((r) => [r.projectId, r]));
 
   const [status, setStatus] = useState<StatusFilter>("ALL");
   const [flags, setFlags] = useState<PostConFlag[]>([]);
-  const filtering = status !== "ALL" || flags.length > 0;
-  // Status and Overdue are checked per line, the rest per project.
+  const [age, setAge] = useState<AgeFilter>("ALL");
+  const filtering = status !== "ALL" || age !== "ALL" || flags.length > 0;
+  // Status, Overdue and days since completion are checked per line, the rest per project.
   const shownRows: PostConProjectRow[] = (data?.rows ?? []).flatMap((p) => {
     if (!filtering) return [p];
     const hs = hsByProject?.[p.projectId];
@@ -497,15 +600,17 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
     if (flags.includes("LIEN") && !lienNeedsLook(lienByProject[p.projectId])) return [];
     if (flags.includes("COI") && !p.coiWarning) return [];
     if (flags.includes("UNLINKED") && !(hsOk && hsOk.unlinkedCount > 0)) return [];
-    const lineOk = (lineStatus: string, invoices: UnitInvoiceChip[] | undefined) =>
-      (status === "ALL" || normalizeBillingStatus(lineStatus) === status) && (!flags.includes("OVERDUE") || hasOverdueInvoice(invoices));
+    const lineOk = (lineStatus: string, invoices: UnitInvoiceChip[] | undefined, completedAt: string | null) =>
+      (status === "ALL" || normalizeBillingStatus(lineStatus) === status) &&
+      (!flags.includes("OVERDUE") || hasOverdueInvoice(invoices)) &&
+      ageOk(completedAt, age);
     if (p.items.length === 0 && (p.changeOrders ?? []).length === 0) {
-      return lineOk(p.projectBillingStatus ?? "NOT_BILLED", hsOk?.invoices) ? [p] : [];
+      return lineOk(p.projectBillingStatus ?? "NOT_BILLED", hsOk?.invoices, p.completedAt) ? [p] : [];
     }
-    const items = p.items.filter((i) => lineOk(i.billingStatus, i.invoices));
-    const changeOrders = (p.changeOrders ?? []).filter((c) => lineOk(c.billingStatus, c.invoices));
+    const items = p.items.filter((i) => lineOk(i.billingStatus, i.invoices, i.completedAt));
+    const changeOrders = (p.changeOrders ?? []).filter((c) => lineOk(c.billingStatus, c.invoices, c.completedAt));
     // The flat contract line beside change orders has no invoices of its own.
-    const contractValueCents = p.contractValueCents != null && lineOk(p.projectBillingStatus ?? "NOT_BILLED", undefined) ? p.contractValueCents : null;
+    const contractValueCents = p.contractValueCents != null && lineOk(p.projectBillingStatus ?? "NOT_BILLED", undefined, p.completedAt) ? p.contractValueCents : null;
     return items.length + changeOrders.length > 0 || contractValueCents != null ? [{ ...p, items, changeOrders, contractValueCents }] : [];
   });
 
@@ -606,7 +711,7 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
 
   return (
     <div className="space-y-4">
-      <BillingFilters status={status} onStatus={setStatus} flagOptions={POST_CON_FLAGS} flags={flags} onFlags={setFlags}>
+      <BillingFilters status={status} onStatus={setStatus} age={age} onAge={setAge} flagOptions={POST_CON_FLAGS} flags={flags} onFlags={setFlags}>
         <Button size="xs" className="flex items-center gap-2" type="button"
           onClick={downloadCsv}
           disabled={shownRows.length === 0}>
@@ -618,7 +723,10 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
         </Button>
       </BillingFilters>
 
-      <LienWatchStrip rows={lienRows} />
+      <LienWatchStrip
+        rows={lienRows}
+        info="Unpaid post-construction jobs with a late invoice or a lien step coming up, from any month. Past due means a lien is possible. Decide means it's time to choose whether to file. The clock starts on the project's completion date. General deadlines only, check with an attorney."
+      />
 
       <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
@@ -637,6 +745,12 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
                 </th>
                 <th className="px-4 py-3">
                   <span className="flex items-center gap-1">
+                    Billed via
+                    <InfoTip align="right" text={BILLING_PREF_INFO} />
+                  </span>
+                </th>
+                <th className="px-4 py-3">
+                  <span className="flex items-center gap-1">
                     Lien
                     <InfoTip align="right" text="Where an unpaid job stands on filing a lien, and the days left. A warning mark beside the project name means it needs a look: amber when an invoice is late, red from the day to decide onward. Set it up on the project's Liens tab." />
                   </span>
@@ -645,13 +759,13 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">Loading…</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">Loading…</td></tr>
               ) : error ? (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-red-500">{error}</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-red-500">{error}</td></tr>
               ) : !data || data.rows.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500">{search.trim() ? `No results for "${search.trim()}".` : "No completed SOV items in this date range."}</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500">{search.trim() ? `No results for "${search.trim()}".` : "No completed SOV items in this date range."}</td></tr>
               ) : shownRows.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500">Nothing matches these filters.</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500">Nothing matches these filters.</td></tr>
               ) : (
                 shownRows.map((project) => {
                   const lineRows = [
@@ -690,6 +804,9 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
                         </td>
                         <td className="px-4 py-3">
                           <PostConInvoiceCell hs={hsFor(project.projectId)} />
+                        </td>
+                        <td className="px-4 py-3">
+                          <BillingPrefCell pref={project.billing} />
                         </td>
                         <td className="whitespace-nowrap px-4 py-3">
                           <LienDeadlinePill row={lienByProject[project.projectId]} />
@@ -766,6 +883,9 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
                           {idx === 0 && <PostConProjectFlags hs={hsFor(project.projectId)} projectId={project.projectId} />}
                         </span>
                       </td>
+                      <td className="px-4 py-3">
+                        {idx === 0 && <BillingPrefCell pref={project.billing} />}
+                      </td>
                       <td className="whitespace-nowrap px-4 py-3">
                         {idx === 0 && <LienDeadlinePill row={lienByProject[project.projectId]} />}
                       </td>
@@ -784,7 +904,7 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
                     {" "}across {shownRows.length} project{shownRows.length !== 1 ? "s" : ""}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">{fmt(totalCents)}</td>
-                  <td className="px-4 py-3" colSpan={3} />
+                  <td className="px-4 py-3" colSpan={4} />
                 </tr>
               </tfoot>
             )}
@@ -820,14 +940,16 @@ type JanUnitRow = {
   scope: string;
   changeOrders: JanCORow[];
   invoices: UnitInvoiceChip[];
+  billing: BillingPreference | null;
   /** Set by the filters when only this unit's change orders match: the unit
    * stays to carry them but its own row, amount and CSV line are left out. */
   contextOnly?: boolean;
 };
 
-type JanFlag = "OVERDUE" | "MISMATCH" | "NO_INVOICE";
+type JanFlag = "OVERDUE" | "LIEN" | "MISMATCH" | "NO_INVOICE";
 const JAN_FLAGS: Array<{ value: JanFlag; label: string }> = [
   { value: "OVERDUE", label: "Overdue invoice" },
+  { value: "LIEN", label: "Lien" },
   { value: "MISMATCH", label: "HubSpot mismatch" },
   { value: "NO_INVOICE", label: "No invoice" },
 ];
@@ -902,24 +1024,31 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
   }, [start, end, search]);
 
   const [status, setStatus] = useState<StatusFilter>("ALL");
+  const lienRows = useLienRows("BUILDING");
+  const lienByBuilding: Record<string, LienWatchRow> = Object.fromEntries(lienRows.map((r) => [r.buildingId, r]));
+
   const [flags, setFlags] = useState<JanFlag[]>([]);
-  const filtering = status !== "ALL" || flags.length > 0;
-  // Units and their change orders are each checked on their own.
-  const rowOk = (rowStatus: string, invoices: UnitInvoiceChip[] | undefined) => {
+  const [age, setAge] = useState<AgeFilter>("ALL");
+  const filtering = status !== "ALL" || age !== "ALL" || flags.length > 0;
+  // Units and their change orders are each checked on their own. Lien is
+  // per building, so it keeps or drops the whole building.
+  const rowOk = (rowStatus: string, invoices: UnitInvoiceChip[] | undefined, completedAt: string) => {
     const list = invoices ?? [];
     const expected = expectedBillingStatus(list);
     return (
       (status === "ALL" || normalizeBillingStatus(rowStatus) === status) &&
       (!flags.includes("OVERDUE") || hasOverdueInvoice(list)) &&
       (!flags.includes("MISMATCH") || (expected !== null && expected !== rowStatus)) &&
-      (!flags.includes("NO_INVOICE") || list.length === 0)
+      (!flags.includes("NO_INVOICE") || list.length === 0) &&
+      ageOk(completedAt, age)
     );
   };
   const shownRows: JanBuildingRow[] = (data?.rows ?? []).flatMap((b) => {
     if (!filtering) return [b];
+    if (flags.includes("LIEN") && !lienNeedsLook(lienByBuilding[b.buildingId])) return [];
     const units = b.units.flatMap((u) => {
-      const changeOrders = (u.changeOrders ?? []).filter((c) => rowOk(c.billingStatus, c.invoices));
-      const unitOk = rowOk(u.billingStatus, u.invoices);
+      const changeOrders = (u.changeOrders ?? []).filter((c) => rowOk(c.billingStatus, c.invoices, c.completedAt));
+      const unitOk = rowOk(u.billingStatus, u.invoices, u.completedAt);
       return unitOk || changeOrders.length > 0 ? [{ ...u, changeOrders, contextOnly: !unitOk }] : [];
     });
     return units.length > 0 ? [{ ...b, units }] : [];
@@ -1007,7 +1136,13 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
 
   return (
     <div className="space-y-4">
-      <BillingFilters status={status} onStatus={setStatus} flagOptions={JAN_FLAGS} flags={flags} onFlags={setFlags}>
+      <LienWatchStrip
+        rows={lienRows}
+        limit={2}
+        info="Buildings with unpaid unit turns and a late invoice or a lien step coming up, from any month. A lien is filed against the building. Each turn has its own clock from the day it was completed, and the building shows the earliest one still open. Past due means a lien is possible. Decide means it's time to choose whether to file. General deadlines only, check with an attorney."
+      />
+
+      <BillingFilters status={status} onStatus={setStatus} age={age} onAge={setAge} flagOptions={JAN_FLAGS} flags={flags} onFlags={setFlags}>
         <Button size="xs" className="flex items-center gap-2" type="button"
           onClick={downloadCsv}
           disabled={shownRows.length === 0}>
@@ -1036,17 +1171,23 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
                     <InfoTip align="right" text="Synced hourly from HubSpot. A ! means HubSpot's invoice status doesn't match the billing status here. Search also finds invoice numbers." />
                   </span>
                 </th>
+                <th className="px-4 py-3">
+                  <span className="flex items-center gap-1">
+                    Billed via
+                    <InfoTip align="right" text={BILLING_PREF_INFO} />
+                  </span>
+                </th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">Loading…</td></tr>
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">Loading…</td></tr>
               ) : error ? (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-red-500">{error}</td></tr>
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-red-500">{error}</td></tr>
               ) : !data || data.rows.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500">{search.trim() ? `No results for "${search.trim()}".` : "No completed units in this date range."}</td></tr>
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-500">{search.trim() ? `No results for "${search.trim()}".` : "No completed units in this date range."}</td></tr>
               ) : shownRows.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500">Nothing matches these filters.</td></tr>
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-500">Nothing matches these filters.</td></tr>
               ) : (
                 shownRows.map((building) => {
                   const buildingRows = building.units.flatMap((unit) => [
@@ -1059,7 +1200,14 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
                       className={`border-t border-gray-100 hover:bg-gray-50 ${row.type === "co" ? "bg-blue-50/30" : ""}`}
                     >
                       <td className="px-4 py-3 font-medium text-gray-900">
-                        {idx === 0 ? building.buildingName : <span className="text-gray-300 select-none">↳</span>}
+                        {idx === 0 ? (
+                          <>
+                            {building.buildingName}
+                            <LienWarningIcon row={lienByBuilding[building.buildingId]} className="ml-1.5" />
+                          </>
+                        ) : (
+                          <span className="text-gray-300 select-none">↳</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-gray-700">
                         {row.type === "unit" ? (
@@ -1113,6 +1261,9 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
                       <td className="px-4 py-3">
                         {row.type === "unit" ? <JanInvoiceCell unit={row.unit} /> : <UnitInvoiceChips invoices={row.co.invoices ?? []} compact />}
                       </td>
+                      <td className="px-4 py-3">
+                        {row.type === "unit" && <BillingPrefCell pref={row.unit.billing} />}
+                      </td>
                     </tr>
                   ));
                 })
@@ -1127,7 +1278,7 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
                     {" "}across {shownRows.length} building{shownRows.length !== 1 ? "s" : ""}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">{fmt(totalCents)}</td>
-                  <td className="px-4 py-3" colSpan={2} />
+                  <td className="px-4 py-3" colSpan={3} />
                 </tr>
               </tfoot>
             )}
@@ -1182,6 +1333,7 @@ type RecurringBuildingRow = {
   buildingId: string;
   buildingName: string;
   periods: RecurringPeriodRow[];
+  billing: BillingPreference | null;
 };
 
 type RecurringResponse = {
@@ -1231,13 +1383,15 @@ function RecurringTab({ start, end, search }: { start: string; end: string; sear
 
   const [status, setStatus] = useState<StatusFilter>("ALL");
   const [flags, setFlags] = useState<RecurringFlag[]>([]);
+  const [age, setAge] = useState<AgeFilter>("ALL");
   const shownRows: RecurringBuildingRow[] = (data?.rows ?? []).flatMap((b) => {
-    if (status === "ALL" && flags.length === 0) return [b];
+    if (status === "ALL" && age === "ALL" && flags.length === 0) return [b];
     const periods = b.periods.filter(
       (p) =>
         (status === "ALL" || normalizeBillingStatus(p.billingStatus) === status) &&
         (!flags.includes("OVERDUE") || hasOverdueInvoice(p.invoices)) &&
-        (!flags.includes("NO_INVOICE") || (p.invoices ?? []).length === 0),
+        (!flags.includes("NO_INVOICE") || (p.invoices ?? []).length === 0) &&
+        ageOk(monthEndISO(p.periodStart), age),
     );
     return periods.length > 0 ? [{ ...b, periods }] : [];
   });
@@ -1285,7 +1439,7 @@ function RecurringTab({ start, end, search }: { start: string; end: string; sear
 
   return (
     <div className="space-y-4">
-      <BillingFilters status={status} onStatus={setStatus} flagOptions={RECURRING_FLAGS} flags={flags} onFlags={setFlags}>
+      <BillingFilters status={status} onStatus={setStatus} age={age} onAge={setAge} flagOptions={RECURRING_FLAGS} flags={flags} onFlags={setFlags}>
         <Button size="xs" className="flex items-center gap-2" type="button"
           onClick={downloadCsv}
           disabled={shownRows.length === 0}>
@@ -1312,17 +1466,23 @@ function RecurringTab({ start, end, search }: { start: string; end: string; sear
                     <InfoTip align="right" text="Linked by hand on the building's Invoices & Quotes tab. Search also finds invoice numbers." />
                   </span>
                 </th>
+                <th className="px-4 py-3">
+                  <span className="flex items-center gap-1">
+                    Billed via
+                    <InfoTip align="right" text={BILLING_PREF_INFO} />
+                  </span>
+                </th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">Loading…</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">Loading…</td></tr>
               ) : error ? (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-red-500">{error}</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-red-500">{error}</td></tr>
               ) : !data || data.rows.length === 0 ? (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-500">{search.trim() ? `No results for "${search.trim()}".` : "No recurring contract periods in this date range."}</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500">{search.trim() ? `No results for "${search.trim()}".` : "No recurring contract periods in this date range."}</td></tr>
               ) : shownRows.length === 0 ? (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-500">Nothing matches these filters.</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500">Nothing matches these filters.</td></tr>
               ) : (
                 shownRows.map((building) =>
                   building.periods.map((period, idx) => (
@@ -1367,6 +1527,9 @@ function RecurringTab({ start, end, search }: { start: string; end: string; sear
                           </Link>
                         )}
                       </td>
+                      <td className="px-4 py-3">
+                        {idx === 0 && <BillingPrefCell pref={building.billing} />}
+                      </td>
                     </tr>
                   ))
                 )
@@ -1379,7 +1542,7 @@ function RecurringTab({ start, end, search }: { start: string; end: string; sear
                     Total - {allPeriods.length} month{allPeriods.length !== 1 ? "s" : ""} across {shownRows.length} building{shownRows.length !== 1 ? "s" : ""}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">{fmt(totalCents)}</td>
-                  <td className="px-4 py-3" colSpan={2} />
+                  <td className="px-4 py-3" colSpan={3} />
                 </tr>
               </tfoot>
             )}

@@ -101,7 +101,7 @@ export async function loadMyCommission(email: string): Promise<DashboardCardData
     return { sections: [{ key: "summary", label: "Summary", rows: [], empty: "Your login isn't linked to an employee record, so there's no commission to show. Ask an admin to match the emails." }] };
   }
 
-  const { deals, recurring, bidBonuses } = await loadCommissionRows();
+  const { deals, recurring } = await loadCommissionRows();
   const items: CommissionItem[] = [
     ...deals.filter((d) => d.ownerId === me.id).map((d) => ({
       id: `deal-${d.projectId}`, title: d.jobTitle, note: "Deal", dayKey: d.completedAt.slice(0, 10),
@@ -110,10 +110,6 @@ export async function loadMyCommission(email: string): Promise<DashboardCardData
     ...recurring.filter((r) => r.ownerId === me.id).map((r) => ({
       id: `month-${r.periodId}`, title: r.buildingName, note: `Contract month ${r.monthIndex + 1}`, dayKey: r.periodStart.slice(0, 10),
       cents: r.commissionCents, paid: !!r.paidAt, href: `/erp/janitorial/contracts/${r.contractId}`,
-    })),
-    ...bidBonuses.filter((b) => b.employeeId === me.id).map((b) => ({
-      id: `bids-${b.weekStart}`, title: `Bid bonus, ${b.verifiedBids} bids`, note: "Bid bonus", dayKey: b.weekStart.slice(0, 10),
-      cents: b.bonusCents, paid: !!b.paidAt, href: commissionHref(b.weekStart.slice(0, 4)),
     })),
   ].filter((i) => i.cents > 0);
 

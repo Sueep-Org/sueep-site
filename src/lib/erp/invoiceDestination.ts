@@ -153,3 +153,71 @@ export async function loadBuildingInvoiceDestination(buildingId: string): Promis
     companyVia: b.managedByCompany ? "building" : null,
   });
 }
+
+/** The billing method shown on the Billing page, with where it came from. */
+export type BillingPreference = {
+  method: BillingMethod | null;
+  portalUrl: string | null;
+  source: DestinationSource | null;
+  sourceName: string | null;
+  /** The client company, to link to when nothing is set yet */
+  companyId: string | null;
+  companyName: string | null;
+};
+
+function toPreference(d: InvoiceDestination): BillingPreference {
+  return {
+    method: d.method.value,
+    portalUrl: d.portalUrl.value,
+    source: d.method.source,
+    sourceName: d.method.sourceName,
+    companyId: d.company?.id ?? null,
+    companyName: d.company?.name ?? null,
+  };
+}
+
+/** loadProjectInvoiceDestination for many projects in one query, method only. */
+export async function loadProjectBillingPreferences(projectIds: string[]): Promise<Map<string, BillingPreference>> {
+  if (projectIds.length === 0) return new Map();
+  const projects = await prisma.project.findMany({
+    where: { id: { in: projectIds } },
+    select: {
+      id: true,
+      jobTitle: true,
+      ...overrideSelect,
+      clientCompany: { select: companySelect },
+      building: { select: { name: true, ...overrideSelect, managedByCompany: { select: companySelect } } },
+    },
+  });
+  return new Map(
+    projects.map((p) => {
+      const company = p.clientCompany ?? p.building?.managedByCompany ?? null;
+      const d = resolveInvoiceDestination({
+        project: { name: p.jobTitle, override: overrideFromColumns(p) },
+        building: p.building ? { name: p.building.name, override: overrideFromColumns(p.building) } : null,
+        company,
+        companyVia: p.clientCompany ? "project" : company ? "building" : null,
+      });
+      return [p.id, toPreference(d)];
+    }),
+  );
+}
+
+/** loadBuildingInvoiceDestination for many buildings in one query, method only. */
+export async function loadBuildingBillingPreferences(buildingIds: string[]): Promise<Map<string, BillingPreference>> {
+  if (buildingIds.length === 0) return new Map();
+  const buildings = await prisma.building.findMany({
+    where: { id: { in: buildingIds } },
+    select: { id: true, name: true, ...overrideSelect, managedByCompany: { select: companySelect } },
+  });
+  return new Map(
+    buildings.map((b) => {
+      const d = resolveInvoiceDestination({
+        building: { name: b.name, override: overrideFromColumns(b) },
+        company: b.managedByCompany,
+        companyVia: b.managedByCompany ? "building" : null,
+      });
+      return [b.id, toPreference(d)];
+    }),
+  );
+}

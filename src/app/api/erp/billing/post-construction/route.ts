@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { normalizeBillingStatus } from "@/lib/erp/billingStatus";
 import { coiWarningLabel, projectCoiStatus } from "@/lib/erp/projectCois";
+import { loadProjectBillingPreferences } from "@/lib/erp/invoiceDestination";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -125,7 +126,7 @@ export async function GET(req: Request) {
         viewUrl: r.viewUrl,
       }));
 
-  type SOVItemRow = { id: string; description: string; scheduledValueCents: number; billingStatus: string; invoices: InvoiceChip[] };
+  type SOVItemRow = { id: string; description: string; scheduledValueCents: number; billingStatus: string; completedAt: string; invoices: InvoiceChip[] };
   type CORow = { id: string; projectId: string; title: string; contractValueCents: number; billingStatus: string; completedAt: string; invoices: InvoiceChip[] };
 
   type ProjectRow = {
@@ -135,6 +136,8 @@ export async function GET(req: Request) {
     // The project's flat contract, shown as its own line when it has no SOV
     // lines here (alone, or next to its change orders). Null otherwise.
     contractValueCents: number | null;
+    /** When the flat contract line's work ended (project end date). Set with contractValueCents. */
+    completedAt: string | null;
     items: SOVItemRow[];
     changeOrders: CORow[];
   };
@@ -149,6 +152,7 @@ export async function GET(req: Request) {
         jobTitle: project.jobTitle,
         projectBillingStatus: normalizeBillingStatus(project.billingStatus),
         contractValueCents: null,
+        completedAt: null,
         items: [],
         changeOrders: [],
       });
@@ -158,6 +162,7 @@ export async function GET(req: Request) {
       description: item.description,
       scheduledValueCents: item.scheduledValueCents,
       billingStatus: item.billingStatus,
+      completedAt: (item.completedAt ?? item.updatedAt).toISOString(),
       invoices: invoicesFor("sovItemId", item.id),
     });
   }
@@ -170,6 +175,7 @@ export async function GET(req: Request) {
         jobTitle: project.jobTitle,
         projectBillingStatus: normalizeBillingStatus(project.billingStatus),
         contractValueCents: null,
+        completedAt: null,
         items: [],
         changeOrders: [],
       });
@@ -205,7 +211,7 @@ export async function GET(req: Request) {
             ],
           }),
     },
-    select: { id: true, jobTitle: true, billingStatus: true, contractValueCents: true, sov: { select: { _count: { select: { items: true } } } } },
+    select: { id: true, jobTitle: true, billingStatus: true, contractValueCents: true, projectEndDate: true, updatedAt: true, sov: { select: { _count: { select: { items: true } } } } },
   });
 
   for (const project of wholeProjects) {
@@ -216,6 +222,7 @@ export async function GET(req: Request) {
       // lines is billed line by line, so it gets no contract line.
       if (existing.items.length === 0 && (project.sov?._count.items ?? 0) === 0) {
         existing.contractValueCents = project.contractValueCents;
+        existing.completedAt = (project.projectEndDate ?? project.updatedAt).toISOString();
       }
       continue;
     }
@@ -224,6 +231,7 @@ export async function GET(req: Request) {
       jobTitle: project.jobTitle,
       projectBillingStatus: normalizeBillingStatus(project.billingStatus),
       contractValueCents: project.contractValueCents,
+      completedAt: (project.projectEndDate ?? project.updatedAt).toISOString(),
       items: [],
       changeOrders: [],
     });
@@ -237,13 +245,19 @@ export async function GET(req: Request) {
   });
   const coisByProject = new Map<string, typeof projectCois>();
   for (const c of projectCois) coisByProject.set(c.projectId, [...(coisByProject.get(c.projectId) ?? []), c]);
+  // How each client wants to be billed (Procore, email...), after overrides.
+  const billingByProject = await loadProjectBillingPreferences([...projectMap.keys()]);
 
   const rows = Array.from(projectMap.values())
     .sort((a, b) => a.jobTitle.localeCompare(b.jobTitle))
     .map((row) => {
       const status = projectCoiStatus(coisByProject.get(row.projectId) ?? []);
       const label = coiWarningLabel(status);
-      return { ...row, coiWarning: label && status ? { label, expired: status.status === "EXPIRED", holderName: status.holderName } : null };
+      return {
+        ...row,
+        coiWarning: label && status ? { label, expired: status.status === "EXPIRED", holderName: status.holderName } : null,
+        billing: billingByProject.get(row.projectId) ?? null,
+      };
     });
 
   return NextResponse.json({ start: startParam ?? "", end: endParam ?? "", rows });

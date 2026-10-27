@@ -1,6 +1,6 @@
 import { readFile } from "fs/promises";
 import path from "path";
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, PDFFont, PDFTextField, StandardFonts, TextAlignment, layoutMultilineText, rgb } from "pdf-lib";
 
 // The fillable source contract lives here — a real PDF form (AcroForm
 // fields), not generated from scratch. Field names below must match its
@@ -87,6 +87,91 @@ async function makeTextSanitizer() {
   };
 }
 
+// The template's multiline boxes are fixed size (scope_description fits
+// about 3 lines at 10pt), but requesters often paste a whole email. Shrink
+// the font down to MIN_FONT_SIZE first; if it still doesn't fit, the box
+// shows what fits plus a pointer, and the full text goes on an added page.
+const FIELD_FONT_SIZE = 10;
+const MIN_FONT_SIZE = 7;
+const CONTINUED_NOTE = "(continued on next page)";
+const OVERFLOW_HEADINGS: Record<string, string> = {
+  scope_description: "Scope of Work / Comments (full text)",
+  purchase_terms: "Purchase Terms (full text)",
+};
+
+function layoutField(textField: PDFTextField, text: string, font: PDFFont, fontSize: number) {
+  // Same bounds pdf-lib's own appearance generator uses (1pt padding plus
+  // the border), so "fits" here means it fits in the rendered box.
+  const rect = textField.acroField.getWidgets()[0].getRectangle();
+  const inset = 2;
+  const bounds = { x: inset, y: inset, width: rect.width - inset * 2, height: rect.height - inset * 2 };
+  const layout = layoutMultilineText(text, { alignment: TextAlignment.Left, fontSize, font, bounds });
+  const maxLines = Math.max(1, Math.floor(bounds.height / layout.lineHeight));
+  return { lines: layout.lines.map((l) => l.text), maxLines };
+}
+
+/** Returns true if the text fit in the box, false if it needs an overflow page. */
+function fitMultilineField(textField: PDFTextField, text: string, font: PDFFont): boolean {
+  for (let size = FIELD_FONT_SIZE; size >= MIN_FONT_SIZE; size -= 0.5) {
+    const { lines, maxLines } = layoutField(textField, text, font, size);
+    if (lines.length <= maxLines) {
+      textField.setFontSize(size);
+      textField.setText(text);
+      return true;
+    }
+  }
+  const { lines, maxLines } = layoutField(textField, text, font, FIELD_FONT_SIZE);
+  const preview = lines.slice(0, Math.max(0, maxLines - 1));
+  while (preview.length > 0 && preview[preview.length - 1].trim() === "") preview.pop();
+  textField.setFontSize(FIELD_FONT_SIZE);
+  textField.setText([...preview, CONTINUED_NOTE].join("\n"));
+  return false;
+}
+
+async function addOverflowPages(pdfDoc: PDFDocument, sections: { heading: string; text: string }[]) {
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const [firstPage] = pdfDoc.getPages();
+  const { width: pageWidth, height: pageHeight } = firstPage.getSize();
+  const margin = 54;
+  const textWidth = pageWidth - margin * 2;
+  const fontSize = 10;
+  const lineHeight = 14;
+  const dark = rgb(0.15, 0.18, 0.23);
+  const pink = rgb(0.91, 0.12, 0.39);
+
+  // Inserted right after page 1 so the scope reads in order before the
+  // signature page.
+  let pageIndex = 1;
+  let page = pdfDoc.insertPage(pageIndex, [pageWidth, pageHeight]);
+  let y = pageHeight - margin;
+  const newPage = () => {
+    pageIndex += 1;
+    page = pdfDoc.insertPage(pageIndex, [pageWidth, pageHeight]);
+    y = pageHeight - margin;
+  };
+
+  for (const section of sections) {
+    if (y < margin + 60) newPage();
+    page.drawText(section.heading, { x: margin, y: y - 14, size: 14, font: bold, color: dark });
+    y -= 22;
+    page.drawLine({ start: { x: margin, y }, end: { x: pageWidth - margin, y }, thickness: 1.5, color: pink });
+    y -= 20;
+    const { lines } = layoutMultilineText(section.text, {
+      alignment: TextAlignment.Left,
+      fontSize,
+      font,
+      bounds: { x: 0, y: 0, width: textWidth, height: Number.MAX_SAFE_INTEGER },
+    });
+    for (const line of lines) {
+      if (y < margin) newPage();
+      page.drawText(line.text, { x: margin, y, size: fontSize, font, color: dark });
+      y -= lineHeight;
+    }
+    y -= 24;
+  }
+}
+
 // The template's "signature", "signature_date" and "printed_name" fields are
 // deliberately never touched here, they're filled in later once the
 // requester actually signs (see embedChangeOrderSignature below).
@@ -102,6 +187,8 @@ export async function fillChangeOrderContractPdf(fields: ChangeOrderContractFiel
   const pdfDoc = await PDFDocument.load(templateBytes);
   const form = pdfDoc.getForm();
   const sanitize = await makeTextSanitizer();
+  const fieldFont = form.getDefaultFont();
+  const overflow: { heading: string; text: string }[] = [];
 
   for (const [key, fieldName] of Object.entries(FIELD_MAP) as [keyof ChangeOrderContractFields, string][]) {
     const value = fields[key];
@@ -112,9 +199,18 @@ export async function fillChangeOrderContractPdf(fields: ChangeOrderContractFiel
     // descriptions especially) can run longer, so drop the cap rather than
     // silently truncating or throwing.
     textField.setMaxLength(undefined);
-    textField.setText(sanitize(value, textField.isMultiline()));
+    const text = sanitize(value, textField.isMultiline());
+    if (textField.isMultiline()) {
+      if (!fitMultilineField(textField, text, fieldFont)) {
+        overflow.push({ heading: OVERFLOW_HEADINGS[fieldName] ?? fieldName, text });
+      }
+    } else {
+      textField.setText(text);
+    }
     textField.enableReadOnly();
   }
+
+  if (overflow.length > 0) await addOverflowPages(pdfDoc, overflow);
 
   return pdfDoc.save();
 }

@@ -5,6 +5,7 @@ import { loadWins } from "./dashboardWins";
 import { countRenewalAlerts, loadContractRenewals, loadMyCommission } from "./dashboardSales";
 import { countNeedsActionAlerts, loadChecks, loadNeedsAction } from "./dashboardMoney";
 import { loadCashForecast } from "./dashboardCashForecast";
+import { countOverdueInvoiceAlerts, loadOverdueInvoicesCard } from "./dashboardOverdue";
 import { countBidsDueAlerts, countPriceCheckAlerts, loadBidsDue, loadPipelineWeek, loadPriceCheck, loadSalesBids } from "./dashboardBids";
 import { countRedJobs, loadJobStatusBoard } from "./dashboardJobs";
 import { countCrewConflicts, loadCrewConflicts, loadWaitingOnOthers } from "./dashboardJobsWaiting";
@@ -39,6 +40,7 @@ export const CARD_LOADERS: Record<string, CardLoader> = {
   "needs-action": { load: (ctx) => loadNeedsAction(ctx.role), alertCount: (ctx) => countNeedsActionAlerts(ctx.role) },
   "cash-forecast": { load: async (ctx) => ({ sections: [], forecast: await loadCashForecast(ctx.role) }) },
   checks: { load: loadChecks },
+  "overdue-invoices": { load: loadOverdueInvoicesCard, alertCount: countOverdueInvoiceAlerts },
   "job-status-board": { load: loadJobStatusBoard, alertCount: countRedJobs },
   "waiting-on-others": { load: loadWaitingOnOthers },
   "crew-conflicts": { load: loadCrewConflicts, alertCount: countCrewConflicts },

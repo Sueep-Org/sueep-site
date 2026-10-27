@@ -13,7 +13,7 @@ import type { ErpRole } from "../erpSession";
  * - A tab with no visible cards for someone isn't shown to them.
  */
 
-export const CARD_TABS = ["queue", "accuracy", "wins", "sales", "jobs", "money"] as const;
+export const CARD_TABS = ["queue", "accuracy", "wins", "sales", "jobs", "money", "overdue"] as const;
 export type CardTab = (typeof CARD_TABS)[number];
 
 export const CARD_TAB_LABELS: Record<CardTab, string> = {
@@ -23,6 +23,7 @@ export const CARD_TAB_LABELS: Record<CardTab, string> = {
   sales: "Sales",
   jobs: "Jobs",
   money: "Money",
+  overdue: "Overdue",
 };
 
 export const MAX_CARDS_PER_TAB = 3;
@@ -117,7 +118,7 @@ export const DASHBOARD_CARDS: readonly DashboardCardDef[] = [
     title: "My commission",
     tab: "sales",
     roles: ["SALES"],
-    info: "Your deals, janitorial contract months and bid bonuses, the same numbers as the Commission tab on Payroll. Counted by the date each one became commissionable.",
+    info: "Your deals and janitorial contract months, the same numbers as the Commission tab on Payroll. Counted by the date each one became commissionable.",
   },
   {
     id: "pipeline-week",
@@ -177,6 +178,15 @@ export const DASHBOARD_CARDS: readonly DashboardCardDef[] = [
     tab: "money",
     roles: ["PROJECT_MANAGER", "BUSINESS_MANAGER", "ADMIN"],
     info: "Next 8 weeks. In: open invoices by due date (overdue in week 1), work ready to bill and janitorial months paid after the payment terms. Out: payroll at its recent rate on each payday, commission owed, and subcontractors, materials, reimbursements and insurance at their recent rate. An estimate, not a bank balance.",
+    wide: true,
+  },
+  // Overdue (Business Manager, Admin)
+  {
+    id: "overdue-invoices",
+    title: "Overdue invoices",
+    tab: "overdue",
+    roles: ["BUSINESS_MANAGER", "ADMIN"],
+    info: "Open HubSpot invoices with a balance. HubSpot overdue: past the due date in HubSpot. 30, 60 and 90+ days past: counted from when the work was finished (the last line on the invoice, or the end of the month for janitorial). Each invoice shows once per tab.",
     wide: true,
   },
 ];

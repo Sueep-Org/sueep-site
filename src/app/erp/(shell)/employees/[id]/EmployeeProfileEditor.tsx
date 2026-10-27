@@ -70,6 +70,7 @@ type Props = {
     offshoreMonthlyRateCents: number | null;
     isJanitorialContract: boolean;
     onAdpPayroll: boolean;
+    commissionEligible: boolean;
   };
 };
 
@@ -122,6 +123,8 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, payHistory
       isJanitorialContract: payMode === "JANITORIAL",
       onAdpPayroll: payMode !== "OFFSHORE" && fd.get("onAdpPayroll") === "on",
     };
+    // Only salary people can be ticked; moving someone off salary unticks it.
+    if (canSeePay) payload.commissionEligible = payMode === "SALARY" && fd.get("commissionEligible") === "on";
     // payType/hourlyPay/annualSalary are only sent for Hourly/Salary/
     // Janitorial. For Offshore they're left out of the payload entirely so
     // the PATCH endpoint (which skips any field not present in the body)
@@ -308,6 +311,13 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, payHistory
               <input type="checkbox" name="onAdpPayroll" defaultChecked={initial.onAdpPayroll} className="h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500" />
               Paid through ADP (W2)
               <InfoTip text="Turn on for people on the ADP payroll. Employer payroll taxes (Social Security, Medicare, unemployment) are added to their pay as company cost." />
+            </label>
+          )}
+          {canSeePay && payMode === "SALARY" && (
+            <label className="sm:col-span-2 flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" name="commissionEligible" defaultChecked={initial.commissionEligible} className="h-4 w-4 rounded border-gray-300 text-pink-600 focus:ring-pink-500" />
+              Eligible for commission
+              <InfoTip text="Only people ticked here earn sales commission. They're the only ones offered as salesperson on projects, buildings and janitorial contracts, and the only ones matched from a HubSpot deal owner. Work assigned to anyone else earns no commission." />
             </label>
           )}
           {canSeePay && payMode === "SALARY" && (

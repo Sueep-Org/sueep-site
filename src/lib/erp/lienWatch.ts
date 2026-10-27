@@ -2,7 +2,8 @@
  * Post-construction jobs with finished work that hasn't been paid, and how
  * long is left to file a lien on each. Lien rights run out on a fixed date
  * whether or not anyone is looking at that month's billing, so this isn't
- * limited to a date range.
+ * limited to a date range. Janitorial unit turns are liened per building,
+ * see lienWatchBuildings.ts; both kinds share LienWatchRow.
  */
 
 import { prisma } from "@/lib/prisma";
@@ -12,8 +13,22 @@ import { todayEasternKey, utcDateKey } from "./dates";
 import { detectLienState, lienDeadline, lienReadiness, parseLienDecision, parseLienManualSteps, parseLienRole, parseLienState, type LienDeadline, type LienDecision, type LienReadiness } from "./lienDeadline";
 
 export type LienWatchRow = {
-  projectId: string;
+  /** POST_CON = one post-construction job. BUILDING = a building's unpaid unit turns. */
+  kind: "POST_CON" | "BUILDING";
+  /** Unique across both kinds */
+  key: string;
+  /** Post-construction jobs only */
+  projectId: string | null;
+  /** Buildings only */
+  buildingId: string | null;
+  /** The job title, or the building name */
   jobTitle: string;
+  /** Where the lien is set up (the Liens tab) */
+  liensHref: string;
+  /** Where the completion date is fixed when it's missing */
+  setupHref: string;
+  /** Buildings only: each unpaid turn, oldest first */
+  units: LienWatchUnit[];
   /** Finished work that isn't marked paid yet, billed or not */
   unpaidCents: number;
   state: string | null;
@@ -21,7 +36,7 @@ export type LienWatchRow = {
    * Where the state came from: SET = picked on the project, SITE_ADDRESS =
    * read from the work order's site address, TITLE = read from the job title.
    */
-  stateSource: "SET" | "SITE_ADDRESS" | "TITLE" | null;
+  stateSource: "SET" | "SITE_ADDRESS" | "BUILDING_ADDRESS" | "TITLE" | null;
   role: string | null;
   residential: boolean;
   /**
@@ -43,6 +58,16 @@ export type LienWatchRow = {
    * clock is running. NO_END_DATE = marked complete without an End date.
    */
   missing: "STATE" | "NOT_COMPLETE" | "NO_END_DATE" | null;
+};
+
+/** One unpaid unit turn under a building's lien. */
+export type LienWatchUnit = {
+  projectId: string;
+  unitNumber: string | null;
+  unpaidCents: number;
+  completedKey: string | null;
+  /** This turn's own last day to file, null until it's complete */
+  deadlineKey: string | null;
 };
 
 /**
@@ -149,8 +174,14 @@ export async function loadLienWatch(opts: { projectId?: string } = {}): Promise<
         })
       : null;
     return {
+      kind: "POST_CON" as const,
+      key: `project:${p.id}`,
       projectId: p.id,
+      buildingId: null,
       jobTitle: p.jobTitle,
+      liensHref: `/erp/projects/${p.id}?tab=Liens`,
+      setupHref: `/erp/projects/${p.id}`,
+      units: [],
       unpaidCents,
       state,
       stateSource,

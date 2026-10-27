@@ -8,7 +8,6 @@
 import { prisma } from "@/lib/prisma";
 import { computeProjectActualsWithChangeOrders } from "@/lib/erp/projectMargin";
 import { computeCommissionCentsByDeal, computeRecurringCommissionCents, resolveCommissionEmployeeId } from "@/lib/erp/commission";
-import { bidBonusCentsForCount, mondayOf, type BidBonusRow } from "@/lib/erp/bidBonus";
 import { isPaidStatus } from "@/lib/erp/billingStatus";
 import type { CommissionDealRow, RecurringCommissionRow } from "@/app/erp/(shell)/commission/CommissionByRep";
 import type { UnitInvoiceChip } from "@/app/erp/components/UnitInvoiceChips";
@@ -61,9 +60,8 @@ function invoiceChips(rows: InvoiceLinkRow[]): UnitInvoiceChip[] {
 export async function loadCommissionRows(): Promise<{
   deals: CommissionDeal[];
   recurring: CommissionRecurring[];
-  bidBonuses: BidBonusRow[];
 }> {
-  const [projects, employees, erpUsers, recurringPeriods, bidBonusEntries, salesBidEntries] = await Promise.all([
+  const [projects, employees, recurringPeriods] = await Promise.all([
     prisma.project.findMany({
       // Commission eligibility (is this project's own billing paid, AND is
       // every one of its change orders done and paid too) is decided in
@@ -122,8 +120,7 @@ export async function loadCommissionRows(): Promise<{
         },
       },
     }),
-    prisma.employee.findMany({ select: { id: true, email: true, firstName: true, lastName: true, status: true } }),
-    prisma.erpUser.findMany({ select: { email: true } }),
+    prisma.employee.findMany({ where: { commissionEligible: true }, select: { id: true, email: true, firstName: true, lastName: true, status: true } }),
     prisma.recurringContractPeriod.findMany({
       include: {
         recurringContract: {
@@ -132,12 +129,10 @@ export async function loadCommissionRows(): Promise<{
         hubspotInvoices: true,
       },
     }),
-    prisma.bidBonusEntry.findMany({ orderBy: { weekStart: "desc" } }),
-    prisma.salesBidEntry.findMany({ select: { employeeId: true, sent: true, date: true } }),
   ]);
 
-  const erpUserEmails = new Set(erpUsers.map((u) => u.email.toLowerCase()));
-  const eligibleEmployees = employees.filter((e) => e.email && erpUserEmails.has(e.email.toLowerCase()));
+  // Only people ticked Eligible for commission on their profile.
+  const eligibleEmployees = employees;
   const employeeById = new Map(eligibleEmployees.map((e) => [e.id, e]));
   const nameOf = (id: string | null) => {
     const e = id ? employeeById.get(id) : null;
@@ -226,6 +221,8 @@ export async function loadCommissionRows(): Promise<{
     .map((period) => {
       if (!period.amountCents) return null;
       if (period.billingStatus !== "PAID") return null;
+      const assigned = period.recurringContract.commissionEmployeeId;
+      const ownerId = assigned && employeeById.has(assigned) ? assigned : null;
       const monthIndex =
         (period.periodStart.getUTCFullYear() - period.recurringContract.startDate.getUTCFullYear()) * 12 +
         (period.periodStart.getUTCMonth() - period.recurringContract.startDate.getUTCMonth());
@@ -237,14 +234,14 @@ export async function loadCommissionRows(): Promise<{
         periodStart: period.periodStart.toISOString(),
         monthlyRateCents: period.amountCents,
         monthIndex,
-        // No salesperson means nobody earns commission on it (e.g. a contract
-        // the owner sold himself), the same as a one-time deal with no owner
-        // in computeCommissionCentsByDeal.
-        commissionCents: period.recurringContract.commissionEmployeeId ? computeRecurringCommissionCents(period.amountCents, monthIndex) : 0,
+        // No eligible salesperson means nobody earns commission on it (e.g.
+        // a contract the owner sold himself), the same as a one-time deal
+        // with no owner in computeCommissionCentsByDeal.
+        commissionCents: ownerId ? computeRecurringCommissionCents(period.amountCents, monthIndex) : 0,
         paidAt: period.commissionPaidAt ? period.commissionPaidAt.toISOString() : null,
         invoices: invoiceChips(period.hubspotInvoices),
-        ownerId: period.recurringContract.commissionEmployeeId,
-        ownerName: nameOf(period.recurringContract.commissionEmployeeId),
+        ownerId,
+        ownerName: nameOf(ownerId),
         year: period.periodStart.getUTCFullYear(),
       };
     })
@@ -349,38 +346,5 @@ export async function loadCommissionRows(): Promise<{
     };
   });
 
-  // Weekly verified-bid bonus ("Bid Commission") is derived from the Bids
-  // log, not manually entered: count each employee's sent bids per week
-  // (bucketed by the bid's own date, not the week it was later marked sent)
-  // and look up the tier. Bids with no date can't be bucketed into a week,
-  // so they don't count. Paid status is the only thing actually stored
-  // (BidBonusEntry), keyed by (employeeId, weekStart) — union in any paid
-  // weeks that currently have zero sent bids so a paid record never
-  // silently disappears if its bids are later unmarked or deleted.
-  const sentBidCountByKey = new Map<string, number>();
-  const employeeNameById = new Map(employees.map((e) => [e.id, `${e.firstName} ${e.lastName}`.trim()]));
-  for (const entry of salesBidEntries) {
-    if (!entry.sent || !entry.date) continue;
-    const key = `${entry.employeeId}::${mondayOf(entry.date)}`;
-    sentBidCountByKey.set(key, (sentBidCountByKey.get(key) ?? 0) + 1);
-  }
-  const paidAtByKey = new Map(
-    bidBonusEntries.map((e) => [`${e.employeeId}::${mondayOf(e.weekStart)}`, e.paidAt])
-  );
-  const bidBonusRowKeys = new Set([...sentBidCountByKey.keys(), ...paidAtByKey.keys()]);
-  const bidBonuses: BidBonusRow[] = [...bidBonusRowKeys].map((key) => {
-    const [employeeId, weekStartDate] = key.split("::");
-    const verifiedBids = sentBidCountByKey.get(key) ?? 0;
-    const paidAt = paidAtByKey.get(key) ?? null;
-    return {
-      employeeId,
-      employeeName: employeeNameById.get(employeeId) ?? "Unknown",
-      weekStart: new Date(`${weekStartDate}T00:00:00Z`).toISOString(),
-      verifiedBids,
-      bonusCents: bidBonusCentsForCount(verifiedBids),
-      paidAt: paidAt ? paidAt.toISOString() : null,
-    };
-  });
-
-  return { deals, recurring, bidBonuses };
+  return { deals, recurring };
 }

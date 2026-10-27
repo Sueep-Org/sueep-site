@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getErpAuth, canViewSsn } from "@/lib/erpAuth";
+import { getErpAuth, canViewSsn, canEditPayInfo } from "@/lib/erpAuth";
 import { recordPayChange, samePay, type PayValues } from "@/lib/erp/payRates";
 import { todayEasternKey } from "@/lib/erp/dates";
 import { parseLang } from "@/lib/erp/language";
@@ -135,6 +135,10 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
   if (body.isJanitorialContract !== undefined) data.isJanitorialContract = Boolean(body.isJanitorialContract);
   if (body.onAdpPayroll !== undefined) data.onAdpPayroll = Boolean(body.onAdpPayroll);
+  if (body.commissionEligible !== undefined) {
+    if (!auth || !canEditPayInfo(auth.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    data.commissionEligible = Boolean(body.commissionEligible);
+  }
   if (body.bankAccountType !== undefined) data.bankAccountType = body.bankAccountType ? String(body.bankAccountType).trim() : null;
   if (body.bankAccountNumber !== undefined) data.bankAccountNumber = body.bankAccountNumber ? String(body.bankAccountNumber).trim() : null;
   if (body.bankRoutingNumber !== undefined) data.bankRoutingNumber = body.bankRoutingNumber ? String(body.bankRoutingNumber).trim() : null;

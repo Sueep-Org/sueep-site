@@ -22,8 +22,9 @@ export default async function NewJanitorialContractPage() {
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),
+    // Salesperson picker: only people eligible for commission.
     prisma.employee.findMany({
-      where: { status: "ACTIVE" },
+      where: { status: "ACTIVE", commissionEligible: true },
       orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
       select: { id: true, firstName: true, lastName: true },
     }),

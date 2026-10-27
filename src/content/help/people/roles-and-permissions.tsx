@@ -58,6 +58,10 @@ export function RolesAndPermissions() {
           the dashboard&apos;s <strong>Money</strong> tab under Needs action.
         </LI>
         <LI>Change the payment terms the dashboard&apos;s cash forecast uses (with Admins).</LI>
+        <LI>
+          See the dashboard&apos;s <strong>Overdue</strong> tab (with Admins): open invoices past their HubSpot due date, and
+          open invoices 30, 60 and 90+ days after the work was finished.
+        </LI>
       </UL>
       <P>Some things stay with Project Managers, since they&apos;re about running crews:</P>
       <UL>
