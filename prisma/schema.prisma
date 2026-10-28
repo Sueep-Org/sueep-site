@@ -4484,3 +4484,100 @@ model HealthCoverage {
 
   @@index([employeeId])
 }
+
+/// One QuickBooks report brought into the ERP: uploaded as a CSV export for
+/// now, filled by the API sync later (QUICKBOOKS_PLAN.md Phase U / Phase 1).
+model QboImport {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  /// PNL | AR_AGING
+  kind       String
+  /// UPLOAD | SYNC
+  source     String  @default("UPLOAD")
+  fileName   String?
+  importedBy String?
+  /// P&L only: the report's dates ("YYYY-MM-DD") and CASH | ACCRUAL
+  periodFrom String?
+  periodTo   String?
+  basis      String?
+  /// A/R only: "YYYY-MM-DD"
+  asOf       String?
+  rowCount   Int
+
+  pnlLines QboPnlLine[]
+  arRows   QboArRow[]
+
+  @@index([kind, createdAt])
+}
+
+/// One QuickBooks P&L account for one month. A newer import covering the
+/// same month replaces that month's rows.
+model QboPnlLine {
+  id       String    @id @default(cuid())
+  importId String
+  import   QboImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  /// "YYYY-MM"
+  month       String
+  account     String
+  /// The group it sits under in QuickBooks ("Insurance" for "Van Insurance"), "" at the top level
+  parent      String @default("")
+  /// INCOME | COGS | EXPENSE | OTHER_INCOME | OTHER_EXPENSE
+  section     String
+  /// The account's own amount, not including the accounts under it
+  amountCents Int
+
+  @@unique([month, section, parent, account])
+  @@index([importId])
+}
+
+/// One customer's balance on a QuickBooks A/R Aging Summary. A newer import
+/// for the same "as of" date replaces that date's rows; other dates are kept.
+model QboArRow {
+  id       String    @id @default(cuid())
+  importId String
+  import   QboImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  /// "YYYY-MM-DD"
+  asOf            String
+  customer        String
+  /// The parent customer for a sub-customer, "" otherwise
+  parent          String @default("")
+  currentCents    Int
+  days1to30Cents  Int
+  days31to60Cents Int
+  days61to90Cents Int
+  over90Cents     Int
+  totalCents      Int
+
+  @@unique([asOf, parent, customer])
+  @@index([importId])
+}
+
+/// The ERP's connection to Sueep's QuickBooks Online company, one row per
+/// environment (local dev's sandbox and the live site's production share
+/// this database). Tokens are encrypted with secretBox.ts. QUICKBOOKS_PLAN.md Phase 1.
+model QboConnection {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// sandbox | production, from QBO_ENVIRONMENT when it was connected
+  environment      String
+  /// QuickBooks company id
+  realmId          String
+  companyName      String?
+  accessTokenEnc   String
+  refreshTokenEnc  String
+  accessExpiresAt  DateTime
+  refreshExpiresAt DateTime
+  /// CONNECTED | NEEDS_RECONNECT
+  status           String   @default("CONNECTED")
+  /// The last auth or API error, shown to Admins
+  lastError        String?
+  lastErrorAt      DateTime?
+  connectedBy      String?
+  connectedAt      DateTime @default(now())
+  lastSyncAt       DateTime?
+}

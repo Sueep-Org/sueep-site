@@ -5,6 +5,10 @@
       "schedule": "0 6 * * *"
     },
     {
+      "path": "/api/cron/quickbooks-sync",
+      "schedule": "30 9 * * *"
+    },
+    {
       "path": "/api/cron/hubspot-invoice-sync",
       "schedule": "*/15 * * * *"
     },
