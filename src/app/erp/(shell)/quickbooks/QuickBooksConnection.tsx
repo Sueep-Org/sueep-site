@@ -112,7 +112,7 @@ export function QuickBooksConnection({
   const connectLabel = connection ? "Reconnect QuickBooks" : "Connect QuickBooks";
 
   return (
-    <section className={`space-y-3 rounded-lg border p-4 shadow-sm ${needsReconnect ? "border-amber-300 bg-amber-50" : "border-gray-200 bg-white"}`}>
+    <section className={`space-y-2 rounded-lg border px-4 py-3 shadow-sm ${needsReconnect ? "border-amber-300 bg-amber-50" : "border-gray-200 bg-white"}`}>
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-sm font-semibold text-gray-900">Connection</h2>
         <InfoTip text="Read-only. Every night the ERP reads the Profit and Loss (by month, cash basis, from January last year) and today's A/R Aging from QuickBooks. It never changes anything there. A sandbox connection only previews, so test data never replaces real numbers. Only an Admin can connect or disconnect." wide />
@@ -129,14 +129,12 @@ export function QuickBooksConnection({
       </div>
 
       {connection ? (
-        <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
-          <div><dt className="inline text-gray-500">Company: </dt><dd className="inline text-gray-900">{connection.companyName ?? "Not read yet"}</dd></div>
-          <div><dt className="inline text-gray-500">Connected: </dt><dd className="inline text-gray-900">{when(connection.connectedAt)}{connection.connectedBy ? ` by ${connection.connectedBy.split("@")[0]}` : ""}</dd></div>
-          <div><dt className="inline text-gray-500">Last sync: </dt><dd className="inline text-gray-900">{connection.lastSyncAt ? when(connection.lastSyncAt) : "Not yet"}</dd></div>
-          {connection.lastError ? <div className="sm:col-span-2"><dt className="inline text-gray-500">Last problem: </dt><dd className="inline text-amber-800">{connection.lastError}</dd></div> : null}
-        </dl>
+        <p className="text-sm text-gray-600">
+          {connection.companyName ?? "Company name not read yet"} · {connection.lastSyncAt ? `synced ${when(connection.lastSyncAt)}` : "not synced yet"}
+          {connection.lastError ? <span className="block text-amber-800">Last problem: {connection.lastError}</span> : null}
+        </p>
       ) : (
-        <p className="text-sm text-gray-600">Not connected yet. Until it is, upload the reports below.</p>
+        <p className="text-sm text-gray-600">Not connected. Until it is, reports can be uploaded below.</p>
       )}
 
       {!configured ? <p className="text-sm text-amber-800">The QuickBooks app keys aren&apos;t set on this server yet.</p> : null}

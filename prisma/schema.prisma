@@ -4491,7 +4491,7 @@ model QboImport {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
 
-  /// PNL | AR_AGING
+  /// PNL | AR_AGING | OPEN_ITEMS | PNL_DETAIL | INVOICES
   kind       String
   /// UPLOAD | SYNC
   source     String  @default("UPLOAD")
@@ -4505,8 +4505,12 @@ model QboImport {
   asOf       String?
   rowCount   Int
 
-  pnlLines QboPnlLine[]
-  arRows   QboArRow[]
+  pnlLines  QboPnlLine[]
+  arRows    QboArRow[]
+  openItems QboOpenItem[]
+  pnlTxns   QboPnlTxn[]
+  invoices  QboInvoice[]
+  payments  QboPayment[]
 
   @@index([kind, createdAt])
 }
@@ -4580,4 +4584,98 @@ model QboConnection {
   connectedBy      String?
   connectedAt      DateTime @default(now())
   lastSyncAt       DateTime?
+}
+
+/// What's still open in QuickBooks, from the latest sync: unpaid invoices,
+/// payments not applied to an invoice, and unused credit memos. Each sync
+/// replaces the whole list. Used by the QuickBooks check page.
+model QboOpenItem {
+  id       String    @id @default(cuid())
+  importId String
+  import   QboImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  /// INVOICE | PAYMENT | CREDIT_MEMO
+  kind        String
+  qboId       String
+  /// Invoice or credit memo number ("INV-1310"), payment reference number
+  docNumber   String?
+  customer    String
+  /// "YYYY-MM-DD"
+  txnDate     String?
+  dueDate     String?
+  totalCents  Int
+  /// Invoice balance, unapplied payment amount, or remaining credit
+  openCents   Int
+
+  @@unique([kind, qboId])
+  @@index([docNumber])
+  @@index([importId])
+}
+
+/// One transaction behind a QuickBooks P&L account (the detailed P&L, cash
+/// basis), for finished-month drill-downs on the QuickBooks check page. A
+/// newer sync replaces the months it covers.
+model QboPnlTxn {
+  id       String    @id @default(cuid())
+  importId String
+  import   QboImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  /// "YYYY-MM" and "YYYY-MM-DD"
+  month       String
+  date        String
+  /// INCOME | COGS | EXPENSE | OTHER_INCOME | OTHER_EXPENSE
+  section     String
+  account     String
+  parent      String  @default("")
+  /// Invoice, Sales Receipt, Deposit, Expense, Check, Journal Entry...
+  txnType     String
+  txnId       String?
+  /// Invoice number for an invoice ("INV-1310"), check or reference number otherwise
+  docNum      String?
+  /// Customer or vendor
+  name        String?
+  memo        String?
+  amountCents Int
+
+  @@index([month, section])
+  @@index([docNum])
+  @@index([importId])
+}
+
+/// QuickBooks invoices (paid or not) from January last year, for matching
+/// against the ERP's HubSpot invoices. Each sync replaces the list.
+model QboInvoice {
+  id       String    @id @default(cuid())
+  importId String
+  import   QboImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  qboId        String  @unique
+  docNumber    String?
+  customer     String
+  txnDate      String?
+  dueDate      String?
+  totalCents   Int
+  balanceCents Int
+
+  @@index([docNumber])
+  @@index([importId])
+}
+
+/// QuickBooks customer payments from January last year, with the invoices
+/// each one was applied to. Each sync replaces the list.
+model QboPayment {
+  id       String    @id @default(cuid())
+  importId String
+  import   QboImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  qboId          String  @unique
+  txnDate        String?
+  customer       String
+  refNum         String?
+  totalCents     Int
+  unappliedCents Int
+  /// [{ invoiceQboId, amountCents }]
+  links          Json    @default("[]")
+
+  @@index([importId])
 }
