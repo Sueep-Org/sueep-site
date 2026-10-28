@@ -122,3 +122,83 @@ export function arFromReport(report: QboReport, asOf: string): ArParse | { error
   walk(report.Rows?.Row ?? [], "");
   return { asOf, rows, fileTotalCents, rowsTotalCents: rows.reduce((s, r) => s + r.totalCents, 0) };
 }
+
+export type PnlTxn = {
+  month: string;
+  date: string;
+  section: PnlSection;
+  account: string;
+  parent: string;
+  txnType: string;
+  txnId: string | null;
+  docNum: string | null;
+  name: string | null;
+  memo: string | null;
+  amountCents: number;
+};
+
+/** The headers that open a P&L section in the detail report (the rest are accounts). */
+const DETAIL_SECTIONS: Record<string, PnlSection> = {
+  income: "INCOME",
+  "cost of goods sold": "COGS",
+  expenses: "EXPENSE",
+  "other income": "OTHER_INCOME",
+  "other expense": "OTHER_EXPENSE",
+  "other expenses": "OTHER_EXPENSE",
+};
+/** Wrappers around the sections, neither section nor account. */
+const DETAIL_WRAPPERS = /^(ordinary income\/expenses?|other income\/expenses?)$/i;
+
+/**
+ * Every transaction behind each P&L account (the ProfitAndLossDetail
+ * report). On cash basis an invoice's income shows on the day it was paid,
+ * with the invoice number in Num, so ERP invoices can be matched one by one.
+ */
+export function pnlTxnsFromDetail(report: QboReport): PnlTxn[] | { error: string } {
+  const cols = report.Columns?.Column ?? [];
+  const at = (key: string) => cols.findIndex((c) => meta(c, "ColKey") === key);
+  const iDate = at("tx_date");
+  const iType = at("txn_type");
+  const iNum = at("doc_num");
+  const iName = at("name");
+  const iMemo = at("memo");
+  const iAmount = at("subt_nat_amount");
+  if (iDate < 0 || iType < 0 || iAmount < 0) return { error: "The QuickBooks detail report didn't have the usual columns." };
+
+  const out: PnlTxn[] = [];
+  const text = (cells: Cell[], i: number) => (i >= 0 ? cells[i]?.value?.trim() || null : null);
+  const walk = (rows: Row[], section: PnlSection | null, account: string, parent: string) => {
+    for (const r of rows) {
+      if (r.Header?.ColData) {
+        const name = r.Header.ColData[0]?.value?.trim() ?? "";
+        const lower = name.toLowerCase();
+        if (DETAIL_WRAPPERS.test(name)) walk(r.Rows?.Row ?? [], null, "", "");
+        // Only a header outside any section opens one: an account can share a section's name ("Cost of Goods Sold").
+        else if (!section && lower in DETAIL_SECTIONS) walk(r.Rows?.Row ?? [], DETAIL_SECTIONS[lower], "", "");
+        else walk(r.Rows?.Row ?? [], section, name, account);
+      } else if (!r.ColData && r.Rows?.Row) {
+        // An unnamed group: an account's own transactions sit in one when it also has sub-accounts.
+        walk(r.Rows.Row, section, account, parent);
+      } else if (r.ColData && section && account) {
+        const date = text(r.ColData, iDate);
+        const amount = parseAmountCents(r.ColData[iAmount]?.value);
+        if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date) || amount == null || amount === 0) continue;
+        out.push({
+          month: date.slice(0, 7),
+          date,
+          section,
+          account,
+          parent,
+          txnType: text(r.ColData, iType) ?? "",
+          txnId: r.ColData[iType]?.id ?? null,
+          docNum: text(r.ColData, iNum),
+          name: text(r.ColData, iName),
+          memo: text(r.ColData, iMemo),
+          amountCents: amount,
+        });
+      }
+    }
+  };
+  walk(report.Rows?.Row ?? [], null, "", "");
+  return out;
+}

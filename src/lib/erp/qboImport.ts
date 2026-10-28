@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { ArParse, PnlParse } from "./qboCsv";
+import type { PnlTxn } from "./qboReports";
 
 /**
  * Saves a QuickBooks report into the ERP's tables, from a CSV upload or the
@@ -59,6 +60,60 @@ export async function saveArImport(parsed: ArParse, meta: Meta) {
       );
     }
     await tx.qboArRow.createMany({ data: [...merged.values()].map((r) => ({ ...r, asOf: parsed.asOf, importId: imp.id })) });
+    return imp;
+  });
+}
+
+export type OpenItem = {
+  kind: "INVOICE" | "PAYMENT" | "CREDIT_MEMO";
+  qboId: string;
+  docNumber: string | null;
+  customer: string;
+  txnDate: string | null;
+  dueDate: string | null;
+  totalCents: number;
+  openCents: number;
+};
+
+/** Replaces the list of what's open in QuickBooks with the latest read. */
+export async function saveOpenItems(items: OpenItem[], meta: Meta) {
+  return prisma.$transaction(async (tx) => {
+    const imp = await tx.qboImport.create({ data: { kind: "OPEN_ITEMS", ...meta, rowCount: items.length } });
+    await tx.qboOpenItem.deleteMany({});
+    await tx.qboOpenItem.createMany({ data: items.map((i) => ({ ...i, importId: imp.id })) });
+    return imp;
+  });
+}
+
+/** Replaces the detailed P&L transactions for the months given. */
+export async function savePnlTxns(txns: PnlTxn[], months: string[], meta: Meta) {
+  return prisma.$transaction(async (tx) => {
+    const imp = await tx.qboImport.create({ data: { kind: "PNL_DETAIL", ...meta, rowCount: txns.length } });
+    await tx.qboPnlTxn.deleteMany({ where: { month: { in: months } } });
+    await tx.qboPnlTxn.createMany({ data: txns.map((t) => ({ ...t, importId: imp.id })) });
+    return imp;
+  });
+}
+
+export type QboInvoiceRow = { qboId: string; docNumber: string | null; customer: string; txnDate: string | null; dueDate: string | null; totalCents: number; balanceCents: number };
+export type QboPaymentRow = {
+  qboId: string;
+  txnDate: string | null;
+  customer: string;
+  refNum: string | null;
+  totalCents: number;
+  unappliedCents: number;
+  links: { invoiceQboId: string; amountCents: number }[];
+};
+
+/** Replaces the lists of QuickBooks invoices and payments. */
+export async function saveInvoicesAndPayments(invoices: QboInvoiceRow[], payments: QboPaymentRow[], meta: Meta) {
+  return prisma.$transaction(async (tx) => {
+    const imp = await tx.qboImport.create({ data: { kind: "INVOICES", ...meta, rowCount: invoices.length + payments.length } });
+    await tx.qboInvoice.deleteMany({});
+    await tx.qboPayment.deleteMany({});
+    await tx.qboInvoice.createMany({ data: invoices.map((i) => ({ ...i, importId: imp.id })) });
+    await tx.qboPayment.createMany({ data: payments.map((p) => ({ ...p, importId: imp.id })) });
     return imp;
   });
 }

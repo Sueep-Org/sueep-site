@@ -441,7 +441,7 @@ function futureRows(jobs: FutureJob[], todayKey: string): JobTabRow[] {
 const SUMMARY_SECONDS = 300;
 
 /** The whole Finance tab calculation is the slow part, so the same view is reused for 5 minutes. */
-const cachedFinanceSummary = unstable_cache(computeFinanceSummary, ["finance-tab-summary-v1"], { revalidate: SUMMARY_SECONDS });
+const cachedFinanceSummary = unstable_cache(computeFinanceSummary, ["finance-tab-summary-v2"], { revalidate: SUMMARY_SECONDS });
 
 export async function FinanceTab({ period: periodParam, by }: { period: string | undefined; by: string | undefined }) {
   const anchor: FinanceAnchor = by === "paid" ? "paid" : "completed";
@@ -545,6 +545,15 @@ export async function FinanceTab({ period: periodParam, by }: { period: string |
     { label: "Done, not billed", cents: total.notBilledCents, color: "#a9cdf5", hint: "Finished, not invoiced yet" },
   ];
   const costs = costBreakdown(total).filter((c) => c.cents !== 0);
+  // QuickBooks costs (rent, software...) only count for months QuickBooks is done for, so a
+  // month still in progress is the ERP's estimate.
+  const bookedThrough = summary.qboBookedThrough ? `${monthName(summary.qboBookedThrough, "long")} ${summary.qboBookedThrough.slice(0, 4)}` : null;
+  const estimateNote =
+    total.qboMonthsInView > total.qboMonthsBooked
+      ? total.qboMonthsBooked === 0
+        ? "Estimate: QuickBooks isn't done for these dates yet, so rent, software and other overhead from QuickBooks aren't in these numbers."
+        : `Part estimate: ${total.qboMonthsInView - total.qboMonthsBooked} of ${total.qboMonthsInView} months aren't done in QuickBooks yet, so their overhead from QuickBooks isn't counted.`
+      : null;
 
   /** Whether a day ("YYYY-MM-DD") is inside the dates being viewed. */
   const dataStartDay = `${FINANCE_DATA_START}-01`;
@@ -645,6 +654,7 @@ export async function FinanceTab({ period: periodParam, by }: { period: string |
           negative={total.netProfitCents < 0}
         />
       </div>
+      {estimateNote && <p className="-mt-2 px-1 text-xs text-amber-700">{estimateNote}</p>}
       {isPaidView && (
         <p className="-mt-2 px-1 text-xs text-gray-400">
           Paid view: revenue only counts work that&apos;s been paid, but salaries and other overhead count in full, so net profit runs low until customers pay.
@@ -719,7 +729,10 @@ export async function FinanceTab({ period: periodParam, by }: { period: string |
         </div>
 
         <div className={cardCls}>
-          <h3 className={cardTitleCls}>Where the money went</h3>
+          <div className="flex items-center justify-between gap-2">
+            <h3 className={cardTitleCls}>Where the money went</h3>
+            <Link href="/erp/overhead" className="text-xs font-medium text-pink-600 hover:underline">Overhead details</Link>
+          </div>
           {costs.length === 0 ? (
             <p className="pt-3 text-sm text-gray-400">No costs in {periodLabel}.</p>
           ) : (
@@ -736,6 +749,7 @@ export async function FinanceTab({ period: periodParam, by }: { period: string |
               </li>
             </ul>
           )}
+          {bookedThrough && total.qboOverheadCents > 0 && <p className="mt-3 text-xs text-gray-400">Includes QuickBooks costs through {bookedThrough}.</p>}
         </div>
       </div>
 
