@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { getErpAuth, canManageQuickBooks } from "@/lib/erpAuth";
 import { parseArAging, parseProfitAndLoss } from "@/lib/erp/qboCsv";
+import { saveArImport, savePnlImport } from "@/lib/erp/qboImport";
 
 export const runtime = "nodejs";
 
@@ -33,23 +33,7 @@ export async function POST(req: Request) {
     const parsed = parseProfitAndLoss(text);
     if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
     if (!save) return NextResponse.json({ kind: "PNL", parsed });
-    const saved = await prisma.$transaction(async (tx) => {
-      const imp = await tx.qboImport.create({
-        data: {
-          kind: "PNL",
-          fileName,
-          importedBy: auth.email ?? null,
-          periodFrom: parsed.periodFrom,
-          periodTo: parsed.periodTo,
-          basis: parsed.basis,
-          rowCount: parsed.lines.length,
-        },
-      });
-      // A newer report for the same month replaces it (an unfinished month gets filled in later).
-      await tx.qboPnlLine.deleteMany({ where: { month: { in: parsed.months } } });
-      await tx.qboPnlLine.createMany({ data: parsed.lines.map((l) => ({ ...l, importId: imp.id })) });
-      return imp;
-    });
+    const saved = await savePnlImport(parsed, { source: "UPLOAD", fileName, importedBy: auth.email ?? null });
     return NextResponse.json({ ok: true, importId: saved.id });
   }
 
@@ -57,14 +41,7 @@ export async function POST(req: Request) {
     const parsed = parseArAging(text);
     if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
     if (!save) return NextResponse.json({ kind: "AR_AGING", parsed });
-    const saved = await prisma.$transaction(async (tx) => {
-      const imp = await tx.qboImport.create({
-        data: { kind: "AR_AGING", fileName, importedBy: auth.email ?? null, asOf: parsed.asOf, rowCount: parsed.rows.length },
-      });
-      await tx.qboArRow.deleteMany({ where: { asOf: parsed.asOf } });
-      await tx.qboArRow.createMany({ data: parsed.rows.map((r) => ({ ...r, asOf: parsed.asOf, importId: imp.id })) });
-      return imp;
-    });
+    const saved = await saveArImport(parsed, { source: "UPLOAD", fileName, importedBy: auth.email ?? null });
     return NextResponse.json({ ok: true, importId: saved.id });
   }
 

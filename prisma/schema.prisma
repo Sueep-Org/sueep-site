@@ -4554,3 +4554,30 @@ model QboArRow {
   @@unique([asOf, parent, customer])
   @@index([importId])
 }
+
+/// The ERP's connection to Sueep's QuickBooks Online company, one row per
+/// environment (local dev's sandbox and the live site's production share
+/// this database). Tokens are encrypted with secretBox.ts. QUICKBOOKS_PLAN.md Phase 1.
+model QboConnection {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// sandbox | production, from QBO_ENVIRONMENT when it was connected
+  environment      String
+  /// QuickBooks company id
+  realmId          String
+  companyName      String?
+  accessTokenEnc   String
+  refreshTokenEnc  String
+  accessExpiresAt  DateTime
+  refreshExpiresAt DateTime
+  /// CONNECTED | NEEDS_RECONNECT
+  status           String   @default("CONNECTED")
+  /// The last auth or API error, shown to Admins
+  lastError        String?
+  lastErrorAt      DateTime?
+  connectedBy      String?
+  connectedAt      DateTime @default(now())
+  lastSyncAt       DateTime?
+}

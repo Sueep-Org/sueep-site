@@ -1,21 +1,25 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
-import { getErpAuth, canManageQuickBooks } from "@/lib/erpAuth";
+import { getErpAuth, canManageQuickBooks, canConnectQuickBooks } from "@/lib/erpAuth";
+import { isQboConfigured, loadQboConnection } from "@/lib/erp/qboClient";
 import { InfoTip } from "@/app/erp/components/ui";
 import { QuickBooksUpload, type ImportRow } from "./QuickBooksUpload";
+import { QuickBooksConnection } from "./QuickBooksConnection";
 
 export const metadata: Metadata = { title: "QuickBooks" };
 export const dynamic = "force-dynamic";
 
-export default async function QuickBooksPage() {
+export default async function QuickBooksPage({ searchParams }: { searchParams: Promise<{ qbo?: string; detail?: string }> }) {
   const auth = await getErpAuth();
   if (!auth || !canManageQuickBooks(auth.role)) redirect("/erp");
+  const { qbo, detail } = await searchParams;
 
-  const [imports, months, latestAr] = await Promise.all([
+  const [imports, months, latestAr, connection] = await Promise.all([
     prisma.qboImport.findMany({ orderBy: { createdAt: "desc" }, take: 12 }),
     prisma.qboPnlLine.findMany({ distinct: ["month"], select: { month: true }, orderBy: { month: "asc" } }),
     prisma.qboArRow.findFirst({ orderBy: { asOf: "desc" }, select: { asOf: true } }),
+    loadQboConnection(),
   ]);
   // Each row holds only its own balance (a parent customer's row doesn't include its sub-customers), so the sum is the report total.
   const arTotal = latestAr ? await prisma.qboArRow.aggregate({ where: { asOf: latestAr.asOf }, _sum: { totalCents: true } }) : null;
@@ -38,8 +42,27 @@ export default async function QuickBooksPage() {
     <div className="space-y-6">
       <h1 className="flex items-center gap-1 text-2xl font-semibold text-gray-900">
         QuickBooks
-        <InfoTip text="QuickBooks reports brought into the ERP, for the Finance dashboard and the money owed check. Upload the exports here once a month until QuickBooks is connected directly. Nothing here changes QuickBooks." />
+        <InfoTip text="QuickBooks reports brought into the ERP, for the Finance dashboard and the money owed check. Connect QuickBooks, or upload the exports here once a month until it is. Nothing here changes QuickBooks." />
       </h1>
+      <QuickBooksConnection
+        configured={isQboConfigured()}
+        canConnect={canConnectQuickBooks(auth.role)}
+        result={qbo ?? null}
+        detail={detail ?? null}
+        connection={
+          connection
+            ? {
+                status: connection.status === "NEEDS_RECONNECT" ? "NEEDS_RECONNECT" : "CONNECTED",
+                environment: connection.environment,
+                companyName: connection.companyName,
+                connectedBy: connection.connectedBy,
+                connectedAt: connection.connectedAt.toISOString(),
+                lastError: connection.lastError,
+                lastSyncAt: connection.lastSyncAt?.toISOString() ?? null,
+              }
+            : null
+        }
+      />
       <QuickBooksUpload
         imports={rows}
         pnlMonths={months.map((m) => m.month)}
