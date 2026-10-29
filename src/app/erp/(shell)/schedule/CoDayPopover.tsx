@@ -14,9 +14,11 @@ import {
   type ScheduleCoWorkerAssignment,
 } from "@/lib/erp/schedule";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
-import { useConfirm } from "@/app/erp/components/ui";
+import { InfoTip, useConfirm } from "@/app/erp/components/ui";
 import { useInsuranceCheck } from "@/app/erp/components/useInsuranceCheck";
 import { useFloatingMenu } from "@/app/erp/components/useFloatingMenu";
+import { centsToDollars } from "@/lib/erp/money";
+import { addDaysKey, daysBetween } from "@/lib/erp/managementCalendar";
 import { AnswerMark, CoverageAnswer, answerUid, type Answers } from "./AnswerMark";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -46,6 +48,8 @@ export function CoDayPopover({
   dateKey,
   parentProjectTitle,
   assignment,
+  coDays,
+  canSetSubPay = false,
   workersForDay,
   supervisors,
   projectManagers,
@@ -62,6 +66,10 @@ export function CoDayPopover({
   dateKey: string;
   parentProjectTitle: string | undefined;
   assignment: ScheduleCoDayAssignment | undefined;
+  /** All of this CO's planned days, to find the visit a day belongs to (see subPay.ts). */
+  coDays: ScheduleCoDayAssignment[];
+  /** Roles that see prices get the contractor pay box. */
+  canSetSubPay?: boolean;
   workersForDay: ScheduleCoWorkerAssignment[];
   supervisors: Person[];
   projectManagers: Person[];
@@ -149,6 +157,30 @@ export function CoDayPopover({
   const [removing, setRemoving] = useState(false);
   const [error, setError] = useState("");
 
+  // Contractor pay for this visit: the days in a row this sub runs on the CO, paid once (see subPay.ts).
+  function visitKeys(contractorId: string): string[] {
+    const has = (d: string) => coDays.some((a) => a.dateKey === d && a.supervisorContractorId === contractorId);
+    let first = dateKey;
+    let last = dateKey;
+    while (has(addDaysKey(first, -1))) first = addDaysKey(first, -1);
+    while (has(addDaysKey(last, 1))) last = addDaysKey(last, 1);
+    return Array.from({ length: daysBetween(first, last) + 1 }, (_, i) => addDaysKey(first, i));
+  }
+  function savedPayCents(contractorId: string): number | null {
+    if (!contractorId) return null;
+    return visitKeys(contractorId).map((d) => co.subPayByDay[`${contractorId}:${d}`]).find((v) => v != null) ?? null;
+  }
+  /** Pay from the CO's Contractors tab covering this visit. Shown, not editable, so it isn't paid twice. */
+  function paySetElsewhere(contractorId: string): number | null {
+    if (!contractorId || savedPayCents(contractorId) != null) return null;
+    const keys = visitKeys(contractorId);
+    return (co.subPayTabLines[contractorId] ?? []).find((l) => keys.some((d) => d >= l.from && d <= l.to))?.cents ?? null;
+  }
+  const centsToInput = (c: number | null) => (c == null ? "" : (c / 100).toFixed(2).replace(/\.00$/, ""));
+  const [subPay, setSubPay] = useState(() => centsToInput(savedPayCents(assignment?.supervisorContractorId ?? "")));
+  const showSubPay = canSetSubPay && !!supervisorContractorId;
+  const tabPay = showSubPay ? paySetElsewhere(supervisorContractorId) : null;
+
   const [workerType, setWorkerType] = useState<"employee" | "contractor">("employee");
   const [workerQuery, setWorkerQuery] = useState("");
   const [workerId, setWorkerId] = useState("");
@@ -175,6 +207,13 @@ export function CoDayPopover({
       setError("End time must be after start time");
       return;
     }
+    const sendPay = showSubPay && tabPay == null;
+    const payCents = subPay.trim() ? Math.round(Number(subPay.replace(/[$,\s]/g, "")) * 100) : null;
+    if (sendPay && payCents != null && (!Number.isFinite(payCents) || payCents < 0)) {
+      setError("Contractor pay needs to be a dollar amount");
+      return;
+    }
+    const payChanged = sendPay && payCents !== savedPayCents(supervisorContractorId);
     if (!(await checkInsurance(supervisorContractorId, assignment?.supervisorContractorId))) return;
     setSaving(true);
     try {
@@ -191,10 +230,13 @@ export function CoDayPopover({
           endTime: endTime || undefined,
           comment: comment.trim() || undefined,
           internalNote: internalNote.trim(),
+          ...(sendPay ? { subPayCents: payCents } : {}),
         }),
       });
-      const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
+      const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string; subPay?: string | null };
       if (!res.ok || !data.id) throw new Error(data.error || "Failed to save");
+      // The visit's other days, and pay entered in the Contractors tab meanwhile, come from the server.
+      if (payChanged || data.subPay === "set-elsewhere") router.refresh();
       onAssignmentSaved({
         id: data.id,
         changeOrderId: co.id,
@@ -389,7 +431,10 @@ export function CoDayPopover({
                 />
                 <SearchableSelect
                   value={supervisorContractorId}
-                  onChange={setSupervisorContractorId}
+                  onChange={(v) => {
+                    setSupervisorContractorId(v);
+                    setSubPay(centsToInput(savedPayCents(v)));
+                  }}
                   options={contractors.map((c) => ({ value: c.id, label: c.displayName }))}
                   placeholder="Search…"
                   allLabel="Contractor (if no supervisor)"
@@ -412,6 +457,36 @@ export function CoDayPopover({
                   className="w-full rounded border border-gray-300 bg-white px-1.5 py-1 text-xs text-gray-900"
                 />
               </div>
+              {tabPay != null ? (
+                <div className="mt-1.5 flex items-center gap-1 text-[10px] text-gray-500">
+                  Contractor pay {centsToDollars(tabPay)}, set in the change order&apos;s Contractors tab
+                  <InfoTip text="Change it there. The calendar doesn't add its own pay on top, so the contractor isn't paid twice." />
+                </div>
+              ) : showSubPay ? (
+                <div className="mt-1.5">
+                  <div className="flex items-center gap-1 text-[9px] text-gray-400">
+                    Contractor pay (this visit)
+                    <InfoTip text="Their pay for this visit (the days in a row they run this change order), not per day. Shows on their invites for those days and saves as their cost on the change order, paid on the visit's last day. Leave blank to keep pay off the invite." />
+                  </div>
+                  <div className="mt-0.5 flex items-center gap-1.5">
+                    <div className="relative w-28">
+                      <span className="pointer-events-none absolute left-1.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">$</span>
+                      <input
+                        inputMode="decimal"
+                        value={subPay}
+                        onChange={(e) => setSubPay(e.target.value)}
+                        placeholder="0"
+                        className="w-full rounded border border-gray-300 bg-white py-1 pl-4 pr-1.5 text-xs text-gray-800 focus:border-pink-400 focus:outline-none"
+                      />
+                    </div>
+                    {co.contractValueCents ? (
+                      <span className="text-[10px] text-gray-500">CO price {centsToDollars(co.contractValueCents)}</span>
+                    ) : (
+                      <span className="text-[10px] text-gray-400">No price on this change order</span>
+                    )}
+                  </div>
+                </div>
+              ) : null}
               <textarea
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}

@@ -189,6 +189,12 @@ export type ScheduleChangeOrder = {
    * mirroring ScheduleProject.supervisorUserId — drives the "needs a
    * supervisor" warning the same way. */
   supervisorUserId: string | null;
+  /** CO price, shown next to the day card's pay box. Null for roles that can't see financials. */
+  contractValueCents: number | null;
+  /** Same as ScheduleProject.subPayByDay, for the CO's own days. */
+  subPayByDay: Record<string, number>;
+  /** Same as ScheduleProject.subPayTabLines, from the CO's Contractors tab. */
+  subPayTabLines: Record<string, { from: string; to: string; cents: number }[]>;
 };
 
 // A CO sitting in BILLING is functionally done — the work itself finished,

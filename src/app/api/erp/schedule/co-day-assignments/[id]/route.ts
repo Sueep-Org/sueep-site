@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { dayKey } from "@/lib/erp/schedule";
 import { notifyChangeOrderCrew, sendDayInvite, sendSubLeadInvite } from "@/lib/erp/scheduleInvites";
+import { syncCoScheduleSubPay } from "@/lib/erp/subPay";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -50,6 +51,8 @@ export async function DELETE(_req: Request, ctx: Ctx) {
     prisma.changeOrderDayAssignment.delete({ where: { id } }),
     prisma.changeOrderWorkerDayAssignment.deleteMany({ where: { changeOrderId: existing.changeOrderId, date: existing.date } }),
   ]);
+  // A visit with no days left loses its pay; one that got shorter is paid on its new last day.
+  await syncCoScheduleSubPay(existing.changeOrderId);
 
   // Send a cancellation for the invite sent when this assignment was
   // created, reusing the same UID so calendar apps remove the right event.

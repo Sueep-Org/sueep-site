@@ -1126,6 +1126,7 @@ export function SchedulePlanner({
           endTime: existingAssignment.endTime || undefined,
           comment: existingAssignment.comment || undefined,
           internalNote: existingAssignment.internalNote ?? "",
+          moveFromId: assignmentId,
         }),
       });
       const dayData = (await dayRes.json().catch(() => ({}))) as { id?: string; error?: string };
@@ -1172,6 +1173,8 @@ export function SchedulePlanner({
         ...prev.filter((w) => !(w.dateKey === fromK && w.changeOrderId === changeOrderId)),
         ...newWorkers,
       ]);
+      // The moved day's visit pay comes from the server, so the card doesn't show it blank.
+      if (existingAssignment.supervisorContractorId) router.refresh();
       return { ok: true };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : "Failed to save" };
@@ -1665,6 +1668,8 @@ export function SchedulePlanner({
         dateKey={k}
         parentProjectTitle={parentProject?.jobTitle}
         assignment={assignment}
+        coDays={coDayAssignments.filter((a) => a.changeOrderId === co.id)}
+        canSetSubPay={canSetSubPay}
         workersForDay={workersForDay}
         supervisors={supervisors}
         projectManagers={projectManagers}

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { dayKey } from "@/lib/erp/schedule";
 import { appUrl, notifyChangeOrderCrew, sendDayInvite, sendSubLeadInvite } from "@/lib/erp/scheduleInvites";
+import { joinCoSubPayVisit, saveCoSubPay, subPayFromBody, syncCoScheduleSubPay } from "@/lib/erp/subPay";
+import { canSeeFinancials, getErpAuth } from "@/lib/erpAuth";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -36,6 +38,14 @@ export async function POST(req: Request) {
   // Staff-only note, never sent in invites. Left as is when not sent, so
   // callers that only move or copy a day don't wipe it.
   const internalNote = "internalNote" in body ? (typeof body.internalNote === "string" && body.internalNote.trim() ? body.internalNote.trim() : null) : undefined;
+  // The sub's pay for this visit (see subPay.ts); only roles that see prices can set it
+  const subPayCents = subPayFromBody(body);
+  // A drag sends the day it's moving from, so the moved day keeps that visit's pay
+  const moveFromId = typeof body.moveFromId === "string" && body.moveFromId ? body.moveFromId : null;
+  if (subPayCents !== undefined) {
+    const auth = await getErpAuth();
+    if (!auth || !canSeeFinancials(auth.role)) return NextResponse.json({ error: "Not allowed to set contractor pay" }, { status: 403 });
+  }
   if (!changeOrderId) return NextResponse.json({ error: "changeOrderId is required" }, { status: 400 });
   if (!dateRaw) return NextResponse.json({ error: "date is required" }, { status: 400 });
   const date = new Date(`${dateRaw}T00:00:00.000Z`);
@@ -108,6 +118,19 @@ export async function POST(req: Request) {
       )[0]
     : await writeAssignment;
 
+  // Before any invite goes out, so the sub's invite shows the visit's pay.
+  let subPay: "saved" | "set-elsewhere" | null = null;
+  if (supervisorContractorId) {
+    if (subPayCents !== undefined) subPay = await saveCoSubPay(changeOrderId, supervisorContractorId, subPayCents, [date]);
+    else {
+      const movedFromLineId = moveFromId
+        ? ((await prisma.changeOrderDayAssignment.findFirst({ where: { id: moveFromId, changeOrderId }, select: { subPayAssignmentId: true } }))?.subPayAssignmentId ?? null)
+        : null;
+      await joinCoSubPayVisit(changeOrderId, supervisorContractorId, [date], movedFromLineId);
+    }
+  }
+  await syncCoScheduleSubPay(changeOrderId);
+
   const title = `${changeOrder.title} (${changeOrder.project.jobTitle})`;
   const url = appUrl() ? `${appUrl()}/erp/projects/${changeOrder.projectId}/change-orders/${changeOrderId}` : undefined;
 
@@ -146,5 +169,5 @@ export async function POST(req: Request) {
     url,
   });
 
-  return NextResponse.json(assignment, { status: 201 });
+  return NextResponse.json({ ...assignment, subPay }, { status: 201 });
 }
