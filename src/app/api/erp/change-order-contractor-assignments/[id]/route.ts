@@ -49,6 +49,22 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.notes !== undefined) data.notes = String(body.notes || "").trim() || null;
   if (body.costCents !== undefined) data.costCents = body.costCents != null && body.costCents !== "" ? Math.round(Number(body.costCents)) : null;
 
+  // Same rule as a project's calendar pay line (contractor-assignments/[id]):
+  // a new contractor or new dates make it a line of its own, so the calendar
+  // never undoes the edit.
+  if (existing.setOnSchedule) {
+    const sameDay = (a: Date | null, b: unknown) => (a?.getTime() ?? null) === ((b as Date | null | undefined)?.getTime() ?? null);
+    const moved =
+      ("contractorId" in data && data.contractorId !== existing.contractorId) ||
+      ("startDate" in data && !sameDay(existing.startDate, data.startDate)) ||
+      ("endDate" in data && !sameDay(existing.endDate, data.endDate)) ||
+      ("assignedDate" in data && !sameDay(existing.assignedDate, data.assignedDate));
+    if (moved) {
+      data.setOnSchedule = false;
+      await prisma.changeOrderDayAssignment.updateMany({ where: { subPayAssignmentId: id }, data: { subPayAssignmentId: null } });
+    }
+  }
+
   try {
     const assignment = await prisma.changeOrderContractorAssignment.update({ where: { id }, data: data as object });
     return NextResponse.json(assignment);

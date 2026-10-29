@@ -179,6 +179,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
         endDate: true,
         requestedDate: true,
         supervisorUserId: true,
+        contractValueCents: true,
       },
     }),
     prisma.projectChangeOrderLaborer.findMany({ select: { changeOrderId: true, workDate: true, name: true, hours: true } }),
@@ -240,6 +241,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
         endTime: true,
         comment: true,
         internalNote: true,
+        subPayAssignment: { select: { contractorId: true, costCents: true } },
       },
     }),
     prisma.changeOrderWorkerDayAssignment.findMany({
@@ -255,7 +257,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
       select: { projectId: true, contractorId: true, assignedDate: true, startDate: true, endDate: true, costCents: true, setOnSchedule: true },
     }),
     prisma.changeOrderContractorAssignment.findMany({
-      select: { changeOrderId: true, contractorId: true, assignedDate: true, startDate: true, endDate: true },
+      select: { changeOrderId: true, contractorId: true, assignedDate: true, startDate: true, endDate: true, costCents: true, setOnSchedule: true },
     }),
     prisma.scheduleDayRemoval.findMany({ orderBy: { createdAt: "asc" } }),
     // Notes a property manager typed on their turnover request, shown on the unit's chip and card.
@@ -528,6 +530,25 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     changeOrdersByProject.set(co.projectId, list);
   }
 
+  // The same visit pay and Contractors tab pay as projects get below, for a CO's own days.
+  const coSubPayByCo = new Map<string, Record<string, number>>();
+  const coSubPayTabLinesByCo = new Map<string, Record<string, { from: string; to: string; cents: number }[]>>();
+  if (showSovPrices) {
+    for (const a of coDayAssignmentRows) {
+      const line = a.subPayAssignment;
+      if (!line || line.costCents == null || line.contractorId !== a.supervisorContractorId) continue;
+      coSubPayByCo.set(a.changeOrderId, { ...coSubPayByCo.get(a.changeOrderId), [`${line.contractorId}:${dayKey(a.date)}`]: line.costCents });
+    }
+    for (const ca of coContractorAssignmentRows) {
+      if (ca.costCents == null || ca.setOnSchedule) continue;
+      const from = ca.startDate ?? ca.assignedDate ?? ca.endDate;
+      if (!from) continue;
+      const prev = coSubPayTabLinesByCo.get(ca.changeOrderId) ?? {};
+      const span = { from: dayKey(from), to: dayKey(ca.endDate ?? from), cents: ca.costCents };
+      coSubPayTabLinesByCo.set(ca.changeOrderId, { ...prev, [ca.contractorId]: [...(prev[ca.contractorId] ?? []), span] });
+    }
+  }
+
   const changeOrders: ScheduleChangeOrder[] = changeOrderRows
     .map((co) => {
       const days = workDayKeysByChangeOrder.get(co.id) ?? new Set<string>();
@@ -554,6 +575,9 @@ export default async function SchedulePage({ searchParams }: PageProps) {
         scheduledDateKey,
         scheduledEndDateKey: scheduledEndDateKey !== scheduledDateKey ? scheduledEndDateKey : null,
         supervisorUserId: co.supervisorUserId,
+        contractValueCents: showSovPrices ? co.contractValueCents : null,
+        subPayByDay: coSubPayByCo.get(co.id) ?? {},
+        subPayTabLines: coSubPayTabLinesByCo.get(co.id) ?? {},
       };
     })
     .filter((co) => co.workDayKeys.length > 0);

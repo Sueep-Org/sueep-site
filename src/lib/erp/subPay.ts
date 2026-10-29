@@ -1,6 +1,6 @@
 /**
- * A sub's pay on a turnover or post-con job, typed on the schedule's day
- * card. Pay is flat per visit: the days saved together, plus any days in a
+ * A sub's pay on a turnover, post-con or change order day, typed on the
+ * schedule's day card. Pay is flat per visit: the days saved together, plus any days in a
  * row with the same sub on the job. A 3-day visit at $100 pays $100.
  *
  * Each visit's pay is one ContractorAssignment (setOnSchedule) that its days
@@ -39,6 +39,11 @@ async function visitDays(projectId: string, contractorId: string, dates: Date[])
     select: { id: true, date: true, subPayAssignmentId: true },
     orderBy: { date: "asc" },
   });
+  return visitOf(days, dates);
+}
+
+/** Of the sub's days (sorted by date), the ones in a row with these dates. */
+function visitOf(days: Day[], dates: Date[]): Day[] {
   const inVisit = new Set(dates.map(dayKey));
   for (let grew = true; grew; ) {
     grew = false;
@@ -55,24 +60,23 @@ async function visitDays(projectId: string, contractorId: string, dates: Date[])
   return days.filter((d) => inVisit.has(dayKey(d.date)));
 }
 
+/** Where clause for a contractor line whose dates cover one of these days. */
+function coversAnyDay(days: Date[]) {
+  return days.map((d) => ({
+    OR: [
+      { startDate: { lte: d }, endDate: { gte: d } },
+      { startDate: d, endDate: null },
+      { startDate: null, endDate: d },
+      { startDate: null, endDate: null, assignedDate: d },
+    ],
+  }));
+}
+
 /** A Contractors tab line for this sub whose dates cover one of these days. */
 async function tabLineCovering(projectId: string, contractorId: string, days: Date[]) {
   if (days.length === 0) return null;
   return prisma.contractorAssignment.findFirst({
-    where: {
-      projectId,
-      contractorId,
-      setOnSchedule: false,
-      costCents: { not: null },
-      OR: days.map((d) => ({
-        OR: [
-          { startDate: { lte: d }, endDate: { gte: d } },
-          { startDate: d, endDate: null },
-          { startDate: null, endDate: d },
-          { startDate: null, endDate: null, assignedDate: d },
-        ],
-      })),
-    },
+    where: { projectId, contractorId, setOnSchedule: false, costCents: { not: null }, OR: coversAnyDay(days) },
     orderBy: { createdAt: "desc" },
     select: { id: true, costCents: true, startDate: true, endDate: true, assignedDate: true },
   });
@@ -167,6 +171,110 @@ export async function subPayForDay(dayId: string, contractorId: string): Promise
     return { cents: line.costCents, from: new Date(Math.min(...dates)), to: new Date(Math.max(...dates)) };
   }
   const tab = await tabLineCovering(day.projectId, contractorId, [day.date]);
+  if (!tab?.costCents) return null;
+  const from = tab.startDate ?? tab.assignedDate ?? tab.endDate ?? day.date;
+  return { cents: tab.costCents, from, to: tab.endDate ?? from };
+}
+
+// ── Change orders ─────────────────────────────────────────────────────────
+// The same rules for a change order's own calendar days
+// (ChangeOrderDayAssignment), with the pay saved as the CO's contractor line
+// (ChangeOrderContractorAssignment), which payroll and the CO's cost read.
+
+async function coVisitDays(changeOrderId: string, contractorId: string, dates: Date[]): Promise<Day[]> {
+  const days = await prisma.changeOrderDayAssignment.findMany({
+    where: { changeOrderId, supervisorContractorId: contractorId },
+    select: { id: true, date: true, subPayAssignmentId: true },
+    orderBy: { date: "asc" },
+  });
+  return visitOf(days, dates);
+}
+
+/** A line from the change order's Contractors tab for this sub covering one of these days. */
+async function coTabLineCovering(changeOrderId: string, contractorId: string, days: Date[]) {
+  if (days.length === 0) return null;
+  return prisma.changeOrderContractorAssignment.findFirst({
+    where: { changeOrderId, contractorId, setOnSchedule: false, costCents: { not: null }, OR: coversAnyDay(days) },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, costCents: true, startDate: true, endDate: true, assignedDate: true },
+  });
+}
+
+/** saveSubPay for a change order day. */
+export async function saveCoSubPay(changeOrderId: string, contractorId: string, costCents: number | null, dates: Date[]): Promise<"saved" | "set-elsewhere"> {
+  const days = await coVisitDays(changeOrderId, contractorId, dates);
+  if (days.length === 0) return "saved";
+  const linked = await prisma.changeOrderContractorAssignment.findMany({
+    where: { id: { in: days.flatMap((d) => d.subPayAssignmentId ?? []) }, contractorId, setOnSchedule: true },
+    select: { id: true },
+  });
+  const lastDay = days[days.length - 1]!.date;
+  if (linked.length > 0) {
+    const [keep, ...rest] = linked.map((l) => l.id);
+    if (costCents == null) {
+      await prisma.changeOrderContractorAssignment.deleteMany({ where: { id: { in: [keep!, ...rest] } } });
+      return "saved";
+    }
+    await prisma.$transaction([
+      prisma.changeOrderContractorAssignment.update({ where: { id: keep }, data: { costCents, endDate: lastDay } }),
+      prisma.changeOrderDayAssignment.updateMany({ where: { id: { in: days.map((d) => d.id) } }, data: { subPayAssignmentId: keep } }),
+      prisma.changeOrderContractorAssignment.deleteMany({ where: { id: { in: rest } } }),
+    ]);
+    return "saved";
+  }
+  if (await coTabLineCovering(changeOrderId, contractorId, days.map((d) => d.date))) return "set-elsewhere";
+  if (costCents == null) return "saved";
+  const line = await prisma.changeOrderContractorAssignment.create({
+    data: { changeOrderId, contractorId, costCents, endDate: lastDay, role: "Sub", notes: "Pay set on the schedule", setOnSchedule: true },
+    select: { id: true },
+  });
+  await prisma.changeOrderDayAssignment.updateMany({ where: { id: { in: days.map((d) => d.id) } }, data: { subPayAssignmentId: line.id } });
+  return "saved";
+}
+
+/** joinSubPayVisit for a change order day. */
+export async function joinCoSubPayVisit(changeOrderId: string, contractorId: string, dates: Date[], movedFromLineId: string | null): Promise<void> {
+  const days = await coVisitDays(changeOrderId, contractorId, dates);
+  if (days.some((d) => dates.some((x) => x.getTime() === d.date.getTime()) && d.subPayAssignmentId)) return;
+  const lineId = movedFromLineId ?? days.find((d) => d.subPayAssignmentId)?.subPayAssignmentId ?? null;
+  if (!lineId) return;
+  const line = await prisma.changeOrderContractorAssignment.findFirst({ where: { id: lineId, contractorId, setOnSchedule: true }, select: { id: true } });
+  if (!line) return;
+  await prisma.changeOrderDayAssignment.updateMany({ where: { id: { in: days.map((d) => d.id) }, subPayAssignmentId: null }, data: { subPayAssignmentId: line.id } });
+}
+
+/** syncScheduleSubPay for a change order's calendar days. */
+export async function syncCoScheduleSubPay(changeOrderId: string): Promise<void> {
+  const lines = await prisma.changeOrderContractorAssignment.findMany({
+    where: { changeOrderId, setOnSchedule: true },
+    select: { id: true, contractorId: true, endDate: true, subPayDays: { select: { id: true, date: true, supervisorContractorId: true } } },
+  });
+  for (const line of lines) {
+    const stray = line.subPayDays.filter((d) => d.supervisorContractorId !== line.contractorId);
+    if (stray.length > 0) await prisma.changeOrderDayAssignment.updateMany({ where: { id: { in: stray.map((d) => d.id) } }, data: { subPayAssignmentId: null } });
+    const days = line.subPayDays.filter((d) => d.supervisorContractorId === line.contractorId);
+    if (days.length === 0) {
+      await prisma.changeOrderContractorAssignment.delete({ where: { id: line.id } });
+      continue;
+    }
+    const last = days.reduce((m, d) => (d.date > m ? d.date : m), days[0]!.date);
+    if (line.endDate?.getTime() !== last.getTime()) await prisma.changeOrderContractorAssignment.update({ where: { id: line.id }, data: { endDate: last } });
+  }
+}
+
+/** subPayForDay for a change order day. */
+export async function coSubPayForDay(dayId: string, contractorId: string): Promise<{ cents: number; from: Date; to: Date } | null> {
+  const day = await prisma.changeOrderDayAssignment.findUnique({
+    where: { id: dayId },
+    select: { changeOrderId: true, date: true, subPayAssignment: { select: { contractorId: true, costCents: true, subPayDays: { select: { date: true } } } } },
+  });
+  if (!day) return null;
+  const line = day.subPayAssignment;
+  if (line && line.contractorId === contractorId && line.costCents != null) {
+    const dates = line.subPayDays.map((d) => d.date.getTime());
+    return { cents: line.costCents, from: new Date(Math.min(...dates)), to: new Date(Math.max(...dates)) };
+  }
+  const tab = await coTabLineCovering(day.changeOrderId, contractorId, [day.date]);
   if (!tab?.costCents) return null;
   const from = tab.startDate ?? tab.assignedDate ?? tab.endDate ?? day.date;
   return { cents: tab.costCents, from, to: tab.endDate ?? from };

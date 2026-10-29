@@ -6,7 +6,7 @@ import { buildDayAssignmentInvite } from "@/lib/calendarInvite";
 import { dayKey } from "@/lib/erp/schedule";
 import { todayEasternKey } from "@/lib/erp/dates";
 import { centsToDollars } from "@/lib/erp/money";
-import { subPayForDay } from "@/lib/erp/subPay";
+import { coSubPayForDay, subPayForDay } from "@/lib/erp/subPay";
 import { hasCalendarSubPay } from "@/lib/erp/projectSegments";
 import { turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
 import { cancelConfirmation, markInviteSent, parseInviteUid, prepareConfirmation, responseButtonsHtml, responseUrl } from "@/lib/erp/scheduleConfirmations";
@@ -610,7 +610,10 @@ async function subPayHtml(projectId: string | null | undefined, dayId: string, c
   if (!projectId) return undefined;
   const p = await prisma.project.findUnique({ where: { id: projectId }, select: { segment: true } });
   if (!p || !hasCalendarSubPay(p.segment)) return undefined;
-  const pay = await subPayForDay(dayId, contractorId);
+  return payHtml(await subPayForDay(dayId, contractorId), lang);
+}
+
+function payHtml(pay: { cents: number; from: Date; to: Date } | null, lang: Lang): string | undefined {
   if (!pay) return undefined;
   const fmt = (d: Date) => d.toLocaleDateString(lang === "es" ? "es-US" : "en-US", { month: "short", day: "numeric", timeZone: "UTC" });
   if (pay.from.getTime() === pay.to.getTime()) return `<p><strong>${tr(lang, { en: "Pay", es: "Pago" })}:</strong> ${centsToDollars(pay.cents)}</p>`;
@@ -640,7 +643,12 @@ export async function sendSubLeadInvite(params: {
           .then((a) => a?.projectId ?? null)
           .catch(() => null)
       : null;
-  const extraHtml = await subPayHtml(projectId, params.assignmentId, params.contractorId, contact.lang).catch(() => undefined);
+  const extraHtml = await (params.kind === "co-day"
+    ? params.cancelled
+      ? Promise.resolve(undefined)
+      : coSubPayForDay(params.assignmentId, params.contractorId).then((pay) => payHtml(pay, contact.lang))
+    : subPayHtml(projectId, params.assignmentId, params.contractorId, contact.lang)
+  ).catch(() => undefined);
   const coRequest = await isTurnoverProject(projectId).catch(() => false);
   await sendDayInvite({
     uid: `${params.kind}-assignment-${params.assignmentId}-sub-${params.contractorId}@sueep.com`,

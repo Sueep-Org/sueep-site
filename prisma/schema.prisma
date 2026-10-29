@@ -1130,11 +1130,16 @@ model ChangeOrderDayAssignment {
   /// confirmed (see ProjectDayAssignment.requesterNotifiedFor)
   requesterNotifiedFor String?
 
+  /// The visit pay this day belongs to, see ProjectDayAssignment.subPayAssignmentId
+  subPayAssignmentId String?
+  subPayAssignment   ChangeOrderContractorAssignment? @relation("CoDaySubPay", fields: [subPayAssignmentId], references: [id], onDelete: SetNull)
+
   @@unique([changeOrderId, date])
   @@index([date])
   @@index([supervisorUserId])
   @@index([projectManagerUserId])
   @@index([supervisorContractorId])
+  @@index([subPayAssignmentId])
 }
 
 /// A worker planned to be on a change order's work on a future day, before
@@ -1184,6 +1189,10 @@ model ChangeOrderContractorAssignment {
   endDate      DateTime?
   notes        String?
   costCents    Int?
+
+  /// Pay typed on the schedule's CO day card, see ContractorAssignment.setOnSchedule
+  setOnSchedule Boolean @default(false)
+  subPayDays    ChangeOrderDayAssignment[] @relation("CoDaySubPay")
 
   @@index([changeOrderId])
   @@index([contractorId])
