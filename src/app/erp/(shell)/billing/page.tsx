@@ -4,13 +4,14 @@ import { createContext, useContext, useState, useEffect, useRef, useId } from "r
 import Link from "next/link";
 import { formatUnitDisplay } from "@/lib/erp/unitDisplay";
 import { UnitInvoiceChips, expectedBillingStatus, type UnitInvoiceChip } from "@/app/erp/components/UnitInvoiceChips";
-import { Button, InfoTip } from "@/app/erp/components/ui";
+import { Button, InfoTip, useConfirm } from "@/app/erp/components/ui";
 import { LienDeadlinePill, LienWarningIcon, lienDetailText } from "@/app/erp/components/LienDeadlinePill";
 import type { LienWatchRow } from "@/lib/erp/lienWatch";
 import type { BillingPreference } from "@/lib/erp/invoiceDestination";
 import { BILLING_METHOD_LABELS } from "@/lib/erp/clientCompanies";
 import { LIEN_STAGE_RANK, lienDecisionCloses } from "@/lib/erp/lienDeadline";
 import { normalizeBillingStatus } from "@/lib/erp/billingStatus";
+import type { NotCompletedRow } from "@/app/api/erp/billing/not-completed/route";
 
 // ── Shared ────────────────────────────────────────────────────────────────────
 
@@ -547,6 +548,89 @@ function LienWatchStrip({ rows, info, limit }: { rows: LienWatchRow[]; info: str
             </li>
           ))}
         </ul>
+      )}
+    </section>
+  );
+}
+
+function shortDate(key: string): string {
+  return new Date(`${key}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+
+/** Jobs whose scheduled day has passed but aren't marked complete, so they're missing from the list below. */
+function NotCompletedAlert({ rows, onCompleted }: { rows: NotCompletedRow[]; onCompleted: (row: NotCompletedRow) => void }) {
+  const confirm = useConfirm();
+  const [open, setOpen] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  if (rows.length === 0) return null;
+  const LIMIT = 8;
+
+  async function markComplete(r: NotCompletedRow) {
+    if (!(await confirm({ message: `Mark "${r.title}" complete with an end date of ${shortDate(r.lastDayKey)}?`, danger: false, confirmLabel: "Mark complete" }))) return;
+    setSavingId(r.id);
+    setError("");
+    try {
+      // Same requests as the schedule card's Mark complete buttons.
+      const res = await fetch(r.kind === "co" ? `/api/erp/projects/${r.projectId}/change-orders/${r.id}` : `/api/erp/projects/${r.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(r.kind === "co" ? { status: "COMPLETED", endDate: r.lastDayKey } : { status: "COMPLETE", projectEndDate: r.lastDayKey }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(data.error || "Failed to mark complete");
+      onCompleted(r);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to mark complete");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
+  return (
+    <section className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span aria-hidden className="text-sm font-bold text-amber-600">⚠</span>
+        <button type="button" onClick={() => setOpen((v) => !v)} className="text-sm font-medium text-amber-900 hover:underline">
+          {rows.length} job{rows.length !== 1 ? "s" : ""} past {rows.length !== 1 ? "their" : "its"} scheduled day, not marked complete
+        </button>
+        <InfoTip text="These jobs and change orders had their last scheduled day pass, but nobody marked them complete, so they don't show up below to bill. Mark complete uses the last scheduled day as the end date." />
+      </div>
+      {open && (
+        <>
+          <ul className="mt-2 flex flex-col gap-1.5">
+            {(showAll ? rows : rows.slice(0, LIMIT)).map((r) => (
+              <li key={`${r.kind}:${r.id}`} className="flex flex-wrap items-center gap-2 text-sm">
+                <Link
+                  href={r.kind === "co" ? `/erp/projects/${r.projectId}/change-orders/${r.id}` : `/erp/projects/${r.id}`}
+                  className="font-medium text-gray-900 hover:text-pink-600 hover:underline"
+                >
+                  {r.title}
+                </Link>
+                {r.kind === "co" ? <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">CO</span> : null}
+                {r.projectTitle ? <span className="text-xs text-gray-500">{r.projectTitle}</span> : null}
+                <span className="text-xs text-amber-800">
+                  {shortDate(r.lastDayKey)}, {r.daysAgo} day{r.daysAgo !== 1 ? "s" : ""} ago
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void markComplete(r)}
+                  disabled={savingId === r.id}
+                  className="rounded border border-emerald-600 px-2 py-0.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                >
+                  {savingId === r.id ? "Saving…" : "Mark complete"}
+                </button>
+              </li>
+            ))}
+          </ul>
+          {rows.length > LIMIT && (
+            <button type="button" onClick={() => setShowAll((v) => !v)} className="mt-1.5 text-xs font-medium text-pink-600 hover:underline">
+              {showAll ? "Show less" : `Show all ${rows.length}`}
+            </button>
+          )}
+          {error ? <p className="mt-1.5 text-xs text-red-600">{error}</p> : null}
+        </>
       )}
     </section>
   );
@@ -1608,6 +1692,26 @@ export default function BillingPage() {
     resetDates: () => { setAllTime(false); setStart(monthStartISO()); setEnd(todayISO()); },
   };
 
+  // Jobs past their scheduled day that aren't marked complete, per tab.
+  const [notCompleted, setNotCompleted] = useState<Record<"janitorial" | "postConstruction", NotCompletedRow[]> | null>(null);
+  // Bumped after one is marked complete, so the tab reloads with it in the list.
+  const [tabReload, setTabReload] = useState(0);
+  useEffect(() => {
+    fetch("/api/erp/billing/not-completed")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setNotCompleted(d))
+      .catch(() => {});
+  }, []);
+  function handleCompleted(row: NotCompletedRow) {
+    setNotCompleted((prev) =>
+      prev && {
+        janitorial: prev.janitorial.filter((r) => !(r.kind === row.kind && r.id === row.id)),
+        postConstruction: prev.postConstruction.filter((r) => !(r.kind === row.kind && r.id === row.id)),
+      },
+    );
+    setTabReload((n) => n + 1);
+  }
+
   const TABS: { id: Tab; label: string }[] = [
     { id: "post-construction", label: "Post-Construction" },
     { id: "janitorial", label: "Janitorial" },
@@ -1641,9 +1745,12 @@ export default function BillingPage() {
         </div>
       </div>
 
+      {tab === "post-construction" && notCompleted && <NotCompletedAlert rows={notCompleted.postConstruction} onCompleted={handleCompleted} />}
+      {tab === "janitorial" && notCompleted && <NotCompletedAlert rows={notCompleted.janitorial} onCompleted={handleCompleted} />}
+
       {/* Tab content */}
-      {tab === "post-construction" && <PostConstructionTab start={rangeStart} end={rangeEnd} search={search} />}
-      {tab === "janitorial" && <JanitorialTab start={rangeStart} end={rangeEnd} search={search} />}
+      {tab === "post-construction" && <PostConstructionTab key={tabReload} start={rangeStart} end={rangeEnd} search={search} />}
+      {tab === "janitorial" && <JanitorialTab key={tabReload} start={rangeStart} end={rangeEnd} search={search} />}
       {tab === "recurring" && <RecurringTab start={rangeStart} end={rangeEnd} search={search} />}
     </div>
     </BillingControlsContext.Provider>

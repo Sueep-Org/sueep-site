@@ -8,7 +8,8 @@ import { PROJECT_SEGMENT_OPTIONS } from "@/lib/erp/projectSegments";
 // It's only still selectable on existing real-estate projects' own setup editor.
 const CREATABLE_SEGMENT_OPTIONS = PROJECT_SEGMENT_OPTIONS.filter((opt) => opt.value !== "REAL_ESTATE");
 import { SERVICE_TYPE_OPTIONS } from "@/lib/erp/serviceTypes";
-import { getTurnoverPricingPackage, TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
+import { getTurnoverPricingPackage, TURNOVER_UNIT_LAYOUTS, type TurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
+import { BuildingPricingPackageEditor } from "@/app/erp/(shell)/buildings/BuildingPricingPackageEditor";
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
 import { parseBuildingNameFromDealName, parseAddressFromDealName } from "@/lib/hubspot/dealNaming";
 import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
@@ -260,6 +261,8 @@ interface NewProjectFormProps {
   lockedSueepPm?: { name: string; email: string };
   /** Hide the "Add new building / address" options — only allow existing buildings */
   disableNewBuilding?: boolean;
+  /** Show the price table for a new building, so its units are priced right from the start */
+  canEditPricing?: boolean;
   /** Arbitrary extra fields merged into the submission payload */
   payloadExtra?: Record<string, unknown>;
 }
@@ -603,6 +606,7 @@ export function NewProjectForm({
   submitLabel = "Create project",
   lockedSueepPm,
   disableNewBuilding = false,
+  canEditPricing = false,
   payloadExtra,
 }: NewProjectFormProps) {
   const router = useRouter();
@@ -660,6 +664,7 @@ export function NewProjectForm({
   const [scheduleBuildingsError, setScheduleBuildingsError] = useState("");
   const [buildingProjectId, setBuildingProjectId] = useState("");
   const [isAddingBuilding, setIsAddingBuilding] = useState(false);
+  const [newBuildingPricing, setNewBuildingPricing] = useState<TurnoverPricingPackage | null>(null);
   const [isAddingAddress, setIsAddingAddress] = useState(false);
 
   const requestType = "TURNOVER";
@@ -822,8 +827,8 @@ export function NewProjectForm({
   const normalizedBathrooms = bathroomsToNumber(unitScopes[0]?.bathrooms ?? "1");
   const selectedBuilding = useMemo(() => buildings.find((b) => b.id === buildingProjectId) ?? null, [buildings, buildingProjectId]);
   const pricingPackage = useMemo(
-    () => getTurnoverPricingPackage(buildingName, selectedBuilding?.pricingPackage),
-    [buildingName, selectedBuilding]
+    () => getTurnoverPricingPackage(buildingName, isAddingBuilding ? newBuildingPricing : selectedBuilding?.pricingPackage),
+    [buildingName, selectedBuilding, isAddingBuilding, newBuildingPricing]
   );
   const existingBuildingUnitNumbers = useMemo(
     () => new Set((selectedBuilding?.existingUnitNumbers ?? []).map(unitNameKey)),
@@ -1180,6 +1185,7 @@ export function NewProjectForm({
       buildingName: buildingName.trim() || undefined,
       buildingAddress: buildingAddress.trim() || undefined,
       buildingHubspotDealId: isAddingBuilding ? selectedDealId || undefined : undefined,
+      buildingPricingPackage: isAddingBuilding && canEditPricing ? newBuildingPricing ?? undefined : undefined,
       pmName: pmName.trim() || undefined,
       pmEmail: pmEmail.trim() || undefined,
       pmPhone: pmPhone.trim() || undefined,
@@ -1570,6 +1576,14 @@ export function NewProjectForm({
                 ) : null}
               </div>
             </div>
+            {isAddingBuilding && canEditPricing ? (
+              <BuildingPricingPackageEditor
+                buildingName=""
+                initialPackage={null}
+                canEdit
+                onChange={setNewBuildingPricing}
+              />
+            ) : null}
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="min-w-0">
                 <label className={label} htmlFor="pmName">

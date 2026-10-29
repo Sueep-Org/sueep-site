@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { NewProjectForm } from "./NewProjectForm";
-import { getErpAuth } from "@/lib/erpAuth";
+import { canEditPricing, getErpAuth } from "@/lib/erpAuth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -102,6 +102,7 @@ export default async function NewProjectPage() {
         janitorialPipelineId={cfg?.janitorial.pipelineId || null}
         allProjects={allProjects}
         employees={employees}
+        canEditPricing={auth ? canEditPricing(auth.role) : false}
       />
     </div>
   );

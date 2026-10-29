@@ -148,7 +148,8 @@ async function resolveBuilding(body: Record<string, unknown>) {
       pmEmail: stringValue(body.pmEmail) || null,
       pmPhone: stringValue(body.pmPhone) || null,
       hubspotDealId: stringValue(body.buildingHubspotDealId) || null,
-      pricingPackage: pricingPackageFromPayload(body, null),
+      // Prices set on the New Project form's new-building step, else standard
+      pricingPackage: pricingPackageFromPayload(body, body.buildingPricingPackage ?? null),
     },
   });
 }
