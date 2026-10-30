@@ -11,6 +11,7 @@ import {
 } from "@/lib/changeOrderLaborRates";
 import { generateChangeOrderContractPdf } from "@/lib/contracts/buildChangeOrderContractPdf";
 import { embedChangeOrderSignature } from "@/lib/contracts/fillChangeOrderPdf";
+import { isNextDayStart, withNextDayUpcharge } from "@/lib/nextDayUpcharge";
 
 export const runtime = "nodejs";
 
@@ -150,13 +151,15 @@ export async function POST(req: Request) {
       ? new Date(`${body.coEstimatedEndDate}T00:00:00Z`)
       : null;
     const priced = hasCustomChangeOrderLaborRate(project.laborRateCard) && (cleanerCount > 0 || supervisorCount > 0);
+    // Same rule as the price shown on the form and the contract they signed
+    const nextDayUpcharge = isNextDayStart(body.coEstimatedStartDate);
     if (priced) {
       const rates = getChangeOrderLaborRates(project.laborRateCard);
       const estimate = computeChangeOrderLaborEstimate(
         { cleanerCount, supervisorCount, hours: CHANGE_ORDER_ESTIMATE_DAY_HOURS },
         rates,
       );
-      quotedPriceCents = estimate.totalCents;
+      quotedPriceCents = withNextDayUpcharge(estimate.totalCents, nextDayUpcharge);
     }
     const co = await prisma.projectChangeOrder.create({
       data: {
@@ -175,6 +178,7 @@ export async function POST(req: Request) {
         noCrewRequired: body.coNoCrewRequired === true,
         estHours: priced ? CHANGE_ORDER_ESTIMATE_DAY_HOURS : null,
         contractValueCents: quotedPriceCents,
+        nextDayUpcharge,
       },
       select: { id: true },
     });

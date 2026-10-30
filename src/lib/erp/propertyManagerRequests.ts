@@ -21,6 +21,7 @@ import { getTurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
 import { todayEasternKey } from "./dates";
 import type { LinkedManager } from "./propertyManagerAccess";
 import { REQUEST_LAYOUTS, estimateRequestCents, requestLayoutLabel, requestWorkLabels } from "./propertyManagerRequestShared";
+import { isNextDayStart } from "@/lib/nextDayUpcharge";
 
 /** Stops a forwarded or misused link from flooding the queue. */
 const MAX_OPEN_REQUESTS = 50;
@@ -115,9 +116,11 @@ export async function createPropertyManagerRequests(
     if (moveOutDate && moveInDate && moveInDate < moveOutDate) return { error: `${name}: move-in can't be before move-out` };
     if (moveInDate && moveInDate < unitStart) return { error: `${name}: move-in is before the start date. Pick an earlier start.` };
 
+    const nextDayUpcharge = isNextDayStart(unitStart.toISOString());
     units.push({
       unitNumber,
       requestedStartDate: unitStart,
+      nextDayUpcharge,
       bedrooms: layout.bedrooms,
       bathrooms: layout.bathrooms,
       ...work,
@@ -126,7 +129,7 @@ export async function createPropertyManagerRequests(
       unitWalked,
       moveOutDate,
       moveInDate,
-      estimateCents: estimateRequestCents(pricingPackage, layout.bedrooms, layout.bathrooms, work),
+      estimateCents: estimateRequestCents(pricingPackage, layout.bedrooms, layout.bathrooms, work, false, nextDayUpcharge),
     });
   }
 
@@ -286,6 +289,7 @@ export async function createWebsiteRequest(body: Record<string, unknown>, ip: st
   if (duplicate) return { error: `There's already a request waiting for unit ${unitNumber}. Sueep will be in touch about it.` };
 
   const pricingPackage = getTurnoverPricingPackage(building.name, building.pricingPackage);
+  const nextDayUpcharge = isNextDayStart(body.startDate as string);
   const unitQuality = typeof body.unitQuality === "string" && UNIT_QUALITIES.includes(body.unitQuality) ? body.unitQuality : null;
 
   const request = await prisma.propertyManagerRequest.create({
@@ -309,7 +313,8 @@ export async function createWebsiteRequest(body: Record<string, unknown>, ip: st
       requestedStartDate,
       requestedEndDate,
       notes: text(body.notes, 2000),
-      estimateCents: estimateRequestCents(pricingPackage, bedrooms, bathrooms, work, isCommonArea),
+      nextDayUpcharge,
+      estimateCents: estimateRequestCents(pricingPackage, bedrooms, bathrooms, work, isCommonArea, nextDayUpcharge),
     },
   });
   await emailStaffAboutRequests([request], building.name);
@@ -413,6 +418,7 @@ export async function confirmPropertyManagerRequest(
           carpetCleaning: request.carpetCleaning,
           otherWork: request.otherWork,
           otherDescription: request.otherDescription,
+          nextDayUpcharge: request.nextDayUpcharge,
         },
       ],
     });

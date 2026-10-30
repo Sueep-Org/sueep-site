@@ -146,6 +146,55 @@ export function CoDayPopover({
     }
   }
 
+  // A day that's only on the calendar because it's the CO's own start/end
+  // date has no planned-day row to remove, so taking it off means clearing
+  // that date. The calendar falls back to requestedDate when startDate is
+  // empty, so the start day clears both, plus endDate when it's the same day
+  // (scheduledEndDateKey is null then).
+  const dateRole: "start" | "end" | null =
+    dateKey === co.scheduledDateKey ? "start" : dateKey === co.scheduledEndDateKey ? "end" : null;
+  const canTakeOffDay = dateRole !== null && !assignment && !hasLoggedLabor && !coIsComplete(co.status);
+  const [takingOff, setTakingOff] = useState(false);
+  const [takeOffError, setTakeOffError] = useState("");
+
+  async function handleTakeOffDay() {
+    if (
+      !(await confirm({
+        title: "Take off this day?",
+        message:
+          dateRole === "end"
+            ? `Clears the end date of "${co.title}". You can set a new one on the change order.`
+            : `Clears the start date of "${co.title}" so it's off the schedule. You can set a new one on the change order.`,
+        confirmLabel: "Take off",
+      }))
+    )
+      return;
+    setTakingOff(true);
+    setTakeOffError("");
+    try {
+      const body =
+        dateRole === "end"
+          ? { endDate: null }
+          : { startDate: null, requestedDate: null, ...(co.scheduledEndDateKey ? {} : { endDate: null }) };
+      const res = await fetch(`/api/erp/projects/${co.projectId}/change-orders/${co.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setTakeOffError(data.error || "Couldn't take it off this day");
+        return;
+      }
+      onClose();
+      router.refresh();
+    } catch {
+      setTakeOffError("Couldn't take it off this day");
+    } finally {
+      setTakingOff(false);
+    }
+  }
+
   const [supervisorUserId, setSupervisorUserId] = useState(assignment?.supervisorUserId ?? "");
   const [projectManagerUserId, setProjectManagerUserId] = useState(assignment?.projectManagerUserId ?? "");
   const [supervisorContractorId, setSupervisorContractorId] = useState(assignment?.supervisorContractorId ?? "");
@@ -640,6 +689,7 @@ export function CoDayPopover({
         )}
 
         {completeError ? <p className="mt-2.5 text-[10px] text-red-500">{completeError}</p> : null}
+        {takeOffError ? <p className="mt-2.5 text-[10px] text-red-500">{takeOffError}</p> : null}
 
         <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-gray-100 pt-2.5">
           <Link
@@ -656,6 +706,16 @@ export function CoDayPopover({
               className="rounded border border-emerald-600 px-2 py-1 text-[10px] font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
             >
               {completing ? "Saving…" : "Mark complete"}
+            </button>
+          ) : null}
+          {canTakeOffDay ? (
+            <button
+              type="button"
+              onClick={() => void handleTakeOffDay()}
+              disabled={takingOff}
+              className="rounded border border-gray-300 px-2 py-1 text-[10px] font-medium text-gray-600 hover:border-red-300 hover:text-red-600 disabled:opacity-50"
+            >
+              {takingOff ? "Removing…" : "Take off this day"}
             </button>
           ) : null}
         </div>

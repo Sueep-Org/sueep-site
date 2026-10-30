@@ -8,12 +8,15 @@ import { PROJECT_SEGMENT_OPTIONS } from "@/lib/erp/projectSegments";
 // It's only still selectable on existing real-estate projects' own setup editor.
 const CREATABLE_SEGMENT_OPTIONS = PROJECT_SEGMENT_OPTIONS.filter((opt) => opt.value !== "REAL_ESTATE");
 import { SERVICE_TYPE_OPTIONS } from "@/lib/erp/serviceTypes";
-import { getTurnoverPricingPackage, TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
+import { getTurnoverPricingPackage, TURNOVER_UNIT_LAYOUTS, type TurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
+import { BuildingPricingPackageEditor } from "@/app/erp/(shell)/buildings/BuildingPricingPackageEditor";
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
 import { parseBuildingNameFromDealName, parseAddressFromDealName } from "@/lib/hubspot/dealNaming";
 import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { CHANGE_ORDER_ESTIMATE_DAY_HOURS, getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
+import { NEXT_DAY_UPCHARGE_LABEL, nextDayUpchargeCents } from "@/lib/nextDayUpcharge";
+import { inputToCents } from "@/lib/erp/money";
 import { ChangeOrderLaborEstimator } from "../[id]/ChangeOrderLaborEstimator";
 import { UnitNameInput } from "@/app/erp/components/UnitNameInput";
 import { unitNameKey } from "@/lib/erp/unitNames";
@@ -260,6 +263,8 @@ interface NewProjectFormProps {
   lockedSueepPm?: { name: string; email: string };
   /** Hide the "Add new building / address" options — only allow existing buildings */
   disableNewBuilding?: boolean;
+  /** Show the price table for a new building, so its units are priced right from the start */
+  canEditPricing?: boolean;
   /** Arbitrary extra fields merged into the submission payload */
   payloadExtra?: Record<string, unknown>;
 }
@@ -603,6 +608,7 @@ export function NewProjectForm({
   submitLabel = "Create project",
   lockedSueepPm,
   disableNewBuilding = false,
+  canEditPricing = false,
   payloadExtra,
 }: NewProjectFormProps) {
   const router = useRouter();
@@ -626,6 +632,9 @@ export function NewProjectForm({
   const [coNoCrewRequired, setCoNoCrewRequired] = useState(false);
   const [coContractValue, setCoContractValue] = useState("");
   const [coEstLabor, setCoEstLabor] = useState("");
+  // Next day upcharge, added on top of the price (see nextDayUpcharge.ts). One for a change order, one for all the units.
+  const [coNextDayUpcharge, setCoNextDayUpcharge] = useState(false);
+  const [nextDayUpcharge, setNextDayUpcharge] = useState(false);
   const coLaborRates = coProjectId
     ? getChangeOrderLaborRates(allProjects.find((p) => p.id === coProjectId)?.laborRateCard)
     : null;
@@ -660,6 +669,7 @@ export function NewProjectForm({
   const [scheduleBuildingsError, setScheduleBuildingsError] = useState("");
   const [buildingProjectId, setBuildingProjectId] = useState("");
   const [isAddingBuilding, setIsAddingBuilding] = useState(false);
+  const [newBuildingPricing, setNewBuildingPricing] = useState<TurnoverPricingPackage | null>(null);
   const [isAddingAddress, setIsAddingAddress] = useState(false);
 
   const requestType = "TURNOVER";
@@ -822,8 +832,8 @@ export function NewProjectForm({
   const normalizedBathrooms = bathroomsToNumber(unitScopes[0]?.bathrooms ?? "1");
   const selectedBuilding = useMemo(() => buildings.find((b) => b.id === buildingProjectId) ?? null, [buildings, buildingProjectId]);
   const pricingPackage = useMemo(
-    () => getTurnoverPricingPackage(buildingName, selectedBuilding?.pricingPackage),
-    [buildingName, selectedBuilding]
+    () => getTurnoverPricingPackage(buildingName, isAddingBuilding ? newBuildingPricing : selectedBuilding?.pricingPackage),
+    [buildingName, selectedBuilding, isAddingBuilding, newBuildingPricing]
   );
   const existingBuildingUnitNumbers = useMemo(
     () => new Set((selectedBuilding?.existingUnitNumbers ?? []).map(unitNameKey)),
@@ -1010,6 +1020,7 @@ export function NewProjectForm({
           materialsAdditional: unit.materialsAdditional,
           ceilingPaint: false,
           compounding: unit.compounding ? 1 : 0,
+          nextDayUpcharge,
         });
         lines.push(...unitPricing.breakdown);
         unitTotal += unitPricing.priceCents;
@@ -1044,7 +1055,7 @@ export function NewProjectForm({
       perUnit,
       unitCount,
     };
-  }, [unitScopes, unitCount, buildingName, pricingPackage]);
+  }, [unitScopes, unitCount, buildingName, pricingPackage, nextDayUpcharge]);
 
   async function onSubmitChangeOrder(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -1070,6 +1081,7 @@ export function NewProjectForm({
           estHours: String(CHANGE_ORDER_ESTIMATE_DAY_HOURS),
           contractValue: coContractValue.trim() || undefined,
           estLabor: coEstLabor.trim() || undefined,
+          nextDayUpcharge: coNextDayUpcharge,
         }),
       });
       const data = (await res.json()) as { id?: string; error?: string };
@@ -1180,6 +1192,7 @@ export function NewProjectForm({
       buildingName: buildingName.trim() || undefined,
       buildingAddress: buildingAddress.trim() || undefined,
       buildingHubspotDealId: isAddingBuilding ? selectedDealId || undefined : undefined,
+      buildingPricingPackage: isAddingBuilding && canEditPricing ? newBuildingPricing ?? undefined : undefined,
       pmName: pmName.trim() || undefined,
       pmEmail: pmEmail.trim() || undefined,
       pmPhone: pmPhone.trim() || undefined,
@@ -1194,6 +1207,7 @@ export function NewProjectForm({
       bedrooms: normalizedBeds || undefined,
       bathrooms: normalizedBathrooms,
       unitScopes,
+      ...(isTurnover ? { nextDayUpcharge } : {}),
       geotrackingEnabled,
       geotrackingLocation: geotrackingEnabled ? geotrackingLocation || undefined : undefined,
       geofenceRadiusFeet: geotrackingEnabled ? geofenceRadiusFeet || undefined : undefined,
@@ -1317,6 +1331,16 @@ export function NewProjectForm({
           onEstLaborChange={setCoEstLabor}
           disabled={loading}
         />
+
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" checked={coNextDayUpcharge} onChange={(e) => setCoNextDayUpcharge(e.target.checked)} disabled={loading} />
+          {NEXT_DAY_UPCHARGE_LABEL}
+          {coNextDayUpcharge && (inputToCents(coContractValue) ?? 0) > 0 ? (
+            <span className="text-xs text-gray-500">
+              adds {formatUsd(nextDayUpchargeCents(inputToCents(coContractValue)!))}, total {formatUsd(inputToCents(coContractValue)! + nextDayUpchargeCents(inputToCents(coContractValue)!))}
+            </span>
+          ) : null}
+        </label>
 
         {notifiableEmployees.length > 0 && (
           <div>
@@ -1570,6 +1594,14 @@ export function NewProjectForm({
                 ) : null}
               </div>
             </div>
+            {isAddingBuilding && canEditPricing ? (
+              <BuildingPricingPackageEditor
+                buildingName=""
+                initialPackage={null}
+                canEdit
+                onChange={setNewBuildingPricing}
+              />
+            ) : null}
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="min-w-0">
                 <label className={label} htmlFor="pmName">
@@ -2012,6 +2044,10 @@ export function NewProjectForm({
                       </a>
                     )}
                   </div>
+                  <label className="mt-2 flex items-center gap-2 text-sm text-gray-700">
+                    <input type="checkbox" checked={nextDayUpcharge} onChange={(e) => setNextDayUpcharge(e.target.checked)} />
+                    {NEXT_DAY_UPCHARGE_LABEL}
+                  </label>
                   <div className="mt-3 border-t border-gray-200 pt-3">
                     <p className="text-xs font-semibold uppercase text-gray-500">Price details</p>
                     {packagePricing.perUnit.length === 0 ? (

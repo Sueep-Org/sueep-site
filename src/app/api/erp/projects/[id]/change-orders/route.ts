@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { inputToCents } from "@/lib/erp/money";
+import { withNextDayUpcharge } from "@/lib/nextDayUpcharge";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -56,7 +57,10 @@ export async function POST(req: Request, ctx: Ctx) {
     : [];
 
   const estimatedCostCents = inputToCents(body.estimatedCost) ?? null;
-  const contractValueCents = inputToCents(body.contractValue) ?? null;
+  // The office's Next day upcharge box adds it on top of the price typed (see nextDayUpcharge.ts)
+  const nextDayUpcharge = body.nextDayUpcharge === true;
+  const typedContractValueCents = inputToCents(body.contractValue) ?? null;
+  const contractValueCents = typedContractValueCents == null ? null : withNextDayUpcharge(typedContractValueCents, nextDayUpcharge);
   const estLaborCents = inputToCents(body.estLabor) ?? null;
   const estMaterialCents = inputToCents(body.estMaterial) ?? null;
 
@@ -94,6 +98,7 @@ export async function POST(req: Request, ctx: Ctx) {
         estLaborers: estLaborers == null ? undefined : Math.round(estLaborers),
         estSupervisors: estSupervisors == null ? undefined : Math.round(estSupervisors),
         noCrewRequired,
+        nextDayUpcharge,
         estimatedDays: estimatedDays == null ? undefined : Math.round(estimatedDays),
         reason: body.reason != null ? String(body.reason).trim() || null : null,
         resolutionNotes: body.resolutionNotes != null ? String(body.resolutionNotes).trim() || null : null,

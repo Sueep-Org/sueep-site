@@ -99,6 +99,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.touchUpPaint !== undefined) data.touchUpPaint = parseIntValue(body.touchUpPaint) ?? 0;
   if (body.fullClean !== undefined) data.fullClean = Boolean(body.fullClean);
   if (body.carpetCleaning !== undefined) data.carpetCleaning = Boolean(body.carpetCleaning);
+  if (body.nextDayUpcharge !== undefined) data.nextDayUpcharge = Boolean(body.nextDayUpcharge);
   if (body.materialsAdditional !== undefined) data.materialsAdditional = Boolean(body.materialsAdditional);
   if (body.ceilingPaint !== undefined) data.ceilingPaint = Boolean(body.ceilingPaint);
   if (body.compounding !== undefined) data.compounding = parseIntValue(body.compounding) ?? 0;
@@ -182,6 +183,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     isPartialTurn: effectiveIsPartialTurn,
     partialTurnLayout: effectivePartialTurnLayout,
     selectedCustomLineItemIds: effectiveSelectedCustomLineItemIds,
+    nextDayUpcharge: data.nextDayUpcharge !== undefined ? Boolean(data.nextDayUpcharge) : existing.nextDayUpcharge,
   };
 
   const pricing = computeTurnoverPricing(pricingInput);

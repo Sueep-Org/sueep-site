@@ -4,7 +4,7 @@ import { normalizeProjectSegment, PROJECT_SEGMENTS } from "@/lib/erp/projectSegm
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { createProjectFromPayload } from "@/lib/erp/createProject";
 import { notifyJanitorialTurnoverCreated } from "@/lib/erp/notifyJanitorialTurnover";
-import { getErpAuth } from "@/lib/erpAuth";
+import { canEditPricing, getErpAuth } from "@/lib/erpAuth";
 
 const STATUSES = ["ACTIVE", "ON_HOLD", "COMPLETE", "ARCHIVED"] as const;
 
@@ -59,6 +59,11 @@ export async function POST(req: Request) {
   const creator = auth?.email
     ? await prisma.employee.findFirst({ where: { email: { equals: auth.email, mode: "insensitive" } }, select: { id: true } })
     : null;
+
+  // A new building's prices follow the same rule as the building pricing page
+  if (body.buildingPricingPackage !== undefined && !(auth && canEditPricing(auth.role))) {
+    delete body.buildingPricingPackage;
+  }
 
   // A supervisor may only add a janitorial unit to a building that already
   // exists, specifying scope of work — never any other project type, and

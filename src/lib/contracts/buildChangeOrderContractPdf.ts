@@ -6,6 +6,7 @@ import {
   hasCustomChangeOrderLaborRate,
   CHANGE_ORDER_ESTIMATE_DAY_HOURS,
 } from "@/lib/changeOrderLaborRates";
+import { NEXT_DAY_UPCHARGE_PERCENT, isNextDayStart, nextDayUpchargeCents, withNextDayUpcharge } from "@/lib/nextDayUpcharge";
 import { fillChangeOrderContractPdf } from "@/lib/contracts/fillChangeOrderPdf";
 
 const DEFAULT_PURCHASE_TERMS =
@@ -67,6 +68,13 @@ export async function generateChangeOrderContractPdf(
     rates,
   );
 
+  // Work starting today or tomorrow gets the next day upcharge, same as the form showed
+  const nextDay = isNextDayStart(input.coEstimatedStartDate);
+  const totalCents = withNextDayUpcharge(estimate.totalCents, nextDay);
+  const scopeDescription = [input.coDescription ?? "", nextDay ? `Total includes a ${NEXT_DAY_UPCHARGE_PERCENT}% next day upcharge (${formatAmount(nextDayUpchargeCents(estimate.totalCents))}).` : ""]
+    .filter(Boolean)
+    .join("\n\n");
+
   const today = new Date();
   const expires = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000);
 
@@ -82,7 +90,7 @@ export async function generateChangeOrderContractPdf(
       dateCreated: formatDate(today),
       dateExpires: formatDate(expires),
       startDate: input.coEstimatedStartDate,
-      scopeDescription: input.coDescription ?? "",
+      scopeDescription,
       numCleaners: String(cleanerCount),
       numForemen: String(supervisorCount),
       // Every change order priced through this flow is a flat one-day
@@ -93,7 +101,7 @@ export async function generateChangeOrderContractPdf(
       cleanerRate: formatAmount(rates.cleanerHourlyRateCents),
       foremanRate: formatAmount(rates.foremanHourlyRateCents),
       subtotal: formatAmount(estimate.totalCents),
-      total: formatAmount(estimate.totalCents),
+      total: formatAmount(totalCents),
       purchaseTerms: DEFAULT_PURCHASE_TERMS,
     });
     return { ok: true, pdfBytes };

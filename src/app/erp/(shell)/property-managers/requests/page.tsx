@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { NEXT_DAY_UPCHARGE_PERCENT } from "@/lib/nextDayUpcharge";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canManagePropertyManagers } from "@/lib/erpAuth";
@@ -214,6 +215,7 @@ export default async function PropertyManagerRequestsPage({ searchParams }: Page
                     </td>
                     <td className="px-3 py-2 text-xs text-gray-700">
                       {money(r.estimateCents)}
+                      {r.nextDayUpcharge && <div className="text-gray-500">Incl. next day +{NEXT_DAY_UPCHARGE_PERCENT}%</div>}
                       {r.otherWork && <div className="text-amber-700">+ other, not priced</div>}
                     </td>
                     <td className="px-3 py-2 text-xs text-gray-600">

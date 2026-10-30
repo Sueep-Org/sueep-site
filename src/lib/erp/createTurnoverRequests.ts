@@ -34,6 +34,7 @@ type UnitScopePayload = {
   otherWork?: unknown;
   otherDescription?: unknown;
   otherPrice?: unknown;
+  nextDayUpcharge?: unknown;
 };
 
 function stringValue(value: unknown) {
@@ -148,7 +149,8 @@ async function resolveBuilding(body: Record<string, unknown>) {
       pmEmail: stringValue(body.pmEmail) || null,
       pmPhone: stringValue(body.pmPhone) || null,
       hubspotDealId: stringValue(body.buildingHubspotDealId) || null,
-      pricingPackage: pricingPackageFromPayload(body, null),
+      // Prices set on the New Project form's new-building step, else standard
+      pricingPackage: pricingPackageFromPayload(body, body.buildingPricingPackage ?? null),
     },
   });
 }
@@ -196,6 +198,8 @@ export async function createTurnoverRequestsFromPayload(body: Record<string, unk
       const otherWork = Boolean(unit.otherWork);
       const otherDescription = otherWork ? stringValue(unit.otherDescription) : "";
       const otherCents = otherWork ? Math.round((readDollar(unit.otherPrice) ?? 0) * 100) : 0;
+      // Per unit (a property manager request) or for the whole form (the office checkbox)
+      const nextDayUpcharge = Boolean(unit.nextDayUpcharge ?? body.nextDayUpcharge);
       const unitNumber = matchUnitName(stringValue(unit.unitNumber) || (isCommonArea ? "Common Area" : `Unit ${index + 1}`), knownUnitNames);
 
       const pricing = computeTurnoverPricing({
@@ -214,6 +218,7 @@ export async function createTurnoverRequestsFromPayload(body: Record<string, unk
         compounding,
         isPartialTurn,
         partialTurnLayout,
+        nextDayUpcharge,
       });
       const priceCents = (pricing.priceCents || 0) + otherCents || null;
 
@@ -243,6 +248,7 @@ export async function createTurnoverRequestsFromPayload(body: Record<string, unk
           moveOutDate: dateValue(unit.moveOutDate),
           moveInDate: dateValue(unit.moveInDate),
           priceCents,
+          nextDayUpcharge,
           createdBy: stringValue(body.sueepPmEmail) || stringValue(body.pmEmail) || null,
         },
       });

@@ -34,6 +34,11 @@ export function CreatingATurnoverRequest() {
               to create one on the spot (name, address, and PM contact).
             </LI>
             <LI>
+              A new building also shows its price table, filled with standard prices. Change any
+              that are different for this building (for example a $200 1BR clean) before adding
+              units, so the units are priced right from the start.
+            </LI>
+            <LI>
               Add one or more units. Each one needs its own scope of work (bedrooms, bathrooms,
               square footage, condition, full clean/paint, touch-up paint, carpet cleaning, ceiling
               paint, etc.) and a <strong>start date</strong>, which is required for every unit

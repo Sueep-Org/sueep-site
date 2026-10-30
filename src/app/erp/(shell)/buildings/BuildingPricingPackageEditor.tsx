@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   CUSTOM_LINE_ITEMS_ENABLED,
@@ -35,17 +35,20 @@ const CUSTOM_LINE_ITEM_KIND_LABELS: Record<CustomLineItemKind, string> = {
 
 
 type Props = {
-  buildingId: string;
+  /** Omit for a building that doesn't exist yet (New Project form): there is
+   * no Save button and every change goes to onChange instead. */
+  buildingId?: string;
   buildingName: string;
   initialPackage: unknown;
   canEdit: boolean;
+  onChange?: (pricingPackage: TurnoverPricingPackage) => void;
 };
 
 function dollars(value: number | undefined) {
   return String(value ?? 0);
 }
 
-export function BuildingPricingPackageEditor({ buildingId, buildingName, initialPackage, canEdit }: Props) {
+export function BuildingPricingPackageEditor({ buildingId, buildingName, initialPackage, canEdit, onChange }: Props) {
   const router = useRouter();
   const initial = useMemo(
     () => getTurnoverPricingPackage(buildingName, initialPackage),
@@ -125,6 +128,14 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
     });
   }
 
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  useEffect(() => {
+    onChangeRef.current?.(packagePayload());
+    // packagePayload reads exactly these values
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [label, cleaning, painting, touchUpPaint, carpetCleaning, additionalMaterials, ceilingPaint, compounding, customLineItems]);
+
   function addCustomLineItem() {
     setCustomLineItems((current) => [
       ...current,
@@ -168,12 +179,16 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
     <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-gray-900">Pricing package</h2>
-          <p className="mt-1 text-xs text-gray-500">Editable by Admin, Project Manager, or Estimation.</p>
+          <h2 className="text-sm font-semibold text-gray-900">{buildingId ? "Pricing package" : "Prices for this building"}</h2>
+          <p className="mt-1 text-xs text-gray-500">
+            {buildingId ? "Editable by Admin, Project Manager, or Estimation." : "Standard prices are filled in. Change any that are different for this building."}
+          </p>
         </div>
-        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${canEdit ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>
-          {canEdit ? "Editable" : "View only"}
-        </span>
+        {buildingId ? (
+          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${canEdit ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>
+            {canEdit ? "Editable" : "View only"}
+          </span>
+        ) : null}
       </div>
 
       <label className="mt-4 block text-xs font-medium text-gray-600">
@@ -355,11 +370,13 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
       {error ? <p className="mt-3 text-xs text-red-600" role="alert">{error}</p> : null}
       {message ? <p className="mt-3 text-xs text-emerald-700" role="status">{message}</p> : null}
 
-      <Button size="md" className="mt-4" type="button"
-        onClick={savePackage}
-        disabled={!canEdit || loading}>
-        {loading ? "Saving..." : "Save pricing package"}
-      </Button>
+      {buildingId ? (
+        <Button size="md" className="mt-4" type="button"
+          onClick={savePackage}
+          disabled={!canEdit || loading}>
+          {loading ? "Saving..." : "Save pricing package"}
+        </Button>
+      ) : null}
     </section>
   );
 }

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
+import { NEXT_DAY_UPCHARGE_PERCENT, isNextDayStart } from "@/lib/nextDayUpcharge";
 import type { KnownUnit, PmBuilding, PmUnit, PmUnitStatus } from "@/lib/erp/propertyManagerCalendar";
 import {
   REQUEST_LAYOUTS,
@@ -959,8 +960,9 @@ function BookingForm({
     const known = building && d.unitNumber.trim() ? knownUnits[unitKey(building.id, d.unitNumber)] : undefined;
     const layout = d.layoutPicked ? d.layout : (known?.layout ?? d.layout);
     const layoutDef = REQUEST_LAYOUTS.find((l) => l.value === layout);
-    const estimate = building && layoutDef ? estimateRequestCents(building.pricingPackage, layoutDef.bedrooms, layoutDef.bathrooms, d.work) : null;
-    return { known, layout, layoutDef, estimate };
+    const nextDay = isNextDayStart(d.ownStart || start);
+    const estimate = building && layoutDef ? estimateRequestCents(building.pricingPackage, layoutDef.bedrooms, layoutDef.bathrooms, d.work, false, nextDay) : null;
+    return { known, layout, layoutDef, estimate, nextDay };
   }
 
   const rows = drafts.map((d) => ({ d, ...resolved(d) }));
@@ -970,6 +972,7 @@ function BookingForm({
     rows.every((r) => r.d.unitNumber.trim() && r.layoutDef && (hasWork(r.d.work) || (r.d.otherWork && r.d.otherDescription.trim())));
   const total = rows.reduce((n, r) => n + (r.estimate ?? 0), 0);
   const anyOther = rows.some((r) => r.d.otherWork);
+  const anyNextDay = rows.some((r) => r.nextDay);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -1263,6 +1266,11 @@ function BookingForm({
             <p className="mt-1 text-xs text-pink-700/80">
               {!building ? "Pick the building to see an estimate." : `Sueep confirms the final price${anyOther ? " and prices the other work" : ""}.`}
             </p>
+            {building && anyNextDay && (
+              <p className="mt-1 text-xs font-medium text-pink-700">
+                Includes a {NEXT_DAY_UPCHARGE_PERCENT}% next day upcharge for work starting today or tomorrow.
+              </p>
+            )}
           </div>
         </div>
 

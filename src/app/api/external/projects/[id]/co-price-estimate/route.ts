@@ -7,6 +7,7 @@ import {
   hasCustomChangeOrderLaborRate,
   CHANGE_ORDER_ESTIMATE_DAY_HOURS,
 } from "@/lib/changeOrderLaborRates";
+import { isNextDayStart, withNextDayUpcharge } from "@/lib/nextDayUpcharge";
 
 export const runtime = "nodejs";
 
@@ -29,6 +30,8 @@ export async function GET(req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
   const { searchParams } = new URL(req.url);
   const cleanerCount = parseCount(searchParams.get("cleanerCount"));
+  // Work starting today or tomorrow gets the next day upcharge (see nextDayUpcharge.ts)
+  const nextDay = isNextDayStart(searchParams.get("startDate"));
   const supervisorCount = deriveChangeOrderSupervisorCount(cleanerCount);
 
   // Same eligible-segment check as the sibling SOV/search endpoints.
@@ -52,5 +55,5 @@ export async function GET(req: Request, ctx: Ctx) {
     rates,
   );
 
-  return NextResponse.json({ priced: true, totalCents: estimate.totalCents });
+  return NextResponse.json({ priced: true, totalCents: withNextDayUpcharge(estimate.totalCents, nextDay), nextDayUpcharge: nextDay });
 }
