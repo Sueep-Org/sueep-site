@@ -15,6 +15,8 @@ import { parseBuildingNameFromDealName, parseAddressFromDealName } from "@/lib/h
 import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { CHANGE_ORDER_ESTIMATE_DAY_HOURS, getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
+import { NEXT_DAY_UPCHARGE_LABEL, nextDayUpchargeCents } from "@/lib/nextDayUpcharge";
+import { inputToCents } from "@/lib/erp/money";
 import { ChangeOrderLaborEstimator } from "../[id]/ChangeOrderLaborEstimator";
 import { UnitNameInput } from "@/app/erp/components/UnitNameInput";
 import { unitNameKey } from "@/lib/erp/unitNames";
@@ -630,6 +632,9 @@ export function NewProjectForm({
   const [coNoCrewRequired, setCoNoCrewRequired] = useState(false);
   const [coContractValue, setCoContractValue] = useState("");
   const [coEstLabor, setCoEstLabor] = useState("");
+  // Next day upcharge, added on top of the price (see nextDayUpcharge.ts). One for a change order, one for all the units.
+  const [coNextDayUpcharge, setCoNextDayUpcharge] = useState(false);
+  const [nextDayUpcharge, setNextDayUpcharge] = useState(false);
   const coLaborRates = coProjectId
     ? getChangeOrderLaborRates(allProjects.find((p) => p.id === coProjectId)?.laborRateCard)
     : null;
@@ -1015,6 +1020,7 @@ export function NewProjectForm({
           materialsAdditional: unit.materialsAdditional,
           ceilingPaint: false,
           compounding: unit.compounding ? 1 : 0,
+          nextDayUpcharge,
         });
         lines.push(...unitPricing.breakdown);
         unitTotal += unitPricing.priceCents;
@@ -1049,7 +1055,7 @@ export function NewProjectForm({
       perUnit,
       unitCount,
     };
-  }, [unitScopes, unitCount, buildingName, pricingPackage]);
+  }, [unitScopes, unitCount, buildingName, pricingPackage, nextDayUpcharge]);
 
   async function onSubmitChangeOrder(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -1075,6 +1081,7 @@ export function NewProjectForm({
           estHours: String(CHANGE_ORDER_ESTIMATE_DAY_HOURS),
           contractValue: coContractValue.trim() || undefined,
           estLabor: coEstLabor.trim() || undefined,
+          nextDayUpcharge: coNextDayUpcharge,
         }),
       });
       const data = (await res.json()) as { id?: string; error?: string };
@@ -1200,6 +1207,7 @@ export function NewProjectForm({
       bedrooms: normalizedBeds || undefined,
       bathrooms: normalizedBathrooms,
       unitScopes,
+      ...(isTurnover ? { nextDayUpcharge } : {}),
       geotrackingEnabled,
       geotrackingLocation: geotrackingEnabled ? geotrackingLocation || undefined : undefined,
       geofenceRadiusFeet: geotrackingEnabled ? geofenceRadiusFeet || undefined : undefined,
@@ -1323,6 +1331,16 @@ export function NewProjectForm({
           onEstLaborChange={setCoEstLabor}
           disabled={loading}
         />
+
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" checked={coNextDayUpcharge} onChange={(e) => setCoNextDayUpcharge(e.target.checked)} disabled={loading} />
+          {NEXT_DAY_UPCHARGE_LABEL}
+          {coNextDayUpcharge && (inputToCents(coContractValue) ?? 0) > 0 ? (
+            <span className="text-xs text-gray-500">
+              adds {formatUsd(nextDayUpchargeCents(inputToCents(coContractValue)!))}, total {formatUsd(inputToCents(coContractValue)! + nextDayUpchargeCents(inputToCents(coContractValue)!))}
+            </span>
+          ) : null}
+        </label>
 
         {notifiableEmployees.length > 0 && (
           <div>
@@ -2026,6 +2044,10 @@ export function NewProjectForm({
                       </a>
                     )}
                   </div>
+                  <label className="mt-2 flex items-center gap-2 text-sm text-gray-700">
+                    <input type="checkbox" checked={nextDayUpcharge} onChange={(e) => setNextDayUpcharge(e.target.checked)} />
+                    {NEXT_DAY_UPCHARGE_LABEL}
+                  </label>
                   <div className="mt-3 border-t border-gray-200 pt-3">
                     <p className="text-xs font-semibold uppercase text-gray-500">Price details</p>
                     {packagePricing.perUnit.length === 0 ? (

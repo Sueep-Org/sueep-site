@@ -426,6 +426,9 @@ model TurnoverRequest {
   hubspotInvoiceMatches HubSpotInvoiceLineItemMatch[]
   hubspotUnitInvoices   HubSpotUnitInvoice[]
 
+  /// Work starting today or tomorrow costs 25% more (see src/lib/nextDayUpcharge.ts). Already in the price.
+  nextDayUpcharge Boolean @default(false)
+
   @@index([buildingId])
   @@index([status])
   @@index([requestType])
@@ -1074,6 +1077,9 @@ model ProjectChangeOrder {
   coWorkerAssignments   ChangeOrderWorkerDayAssignment[]
 
   hubspotSovInvoices HubSpotSovInvoice[]
+
+  /// Work starting today or tomorrow costs 25% more (see src/lib/nextDayUpcharge.ts). Already in the price.
+  nextDayUpcharge Boolean @default(false)
 
   @@index([projectId, createdAt])
   @@index([status])
@@ -3744,6 +3750,9 @@ model PropertyManagerRequest {
   /// Email of the ERP user who confirmed or declined it
   decidedBy          String?
   decidedAt          DateTime?
+
+  /// Work starting today or tomorrow costs 25% more (see src/lib/nextDayUpcharge.ts). Already in the price.
+  nextDayUpcharge Boolean @default(false)
 
   @@index([buildingId, status])
   @@index([propertyManagerId])

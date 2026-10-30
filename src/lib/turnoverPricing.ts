@@ -10,6 +10,7 @@ import {
   getTurnoverPricingPackage,
   type TurnoverUnitLayout,
 } from "@/lib/turnoverPricingPackages";
+import { NEXT_DAY_UPCHARGE_LABEL, nextDayUpchargeCents } from "@/lib/nextDayUpcharge";
 
 export type TurnoverPricingInput = {
   requestType: "TURNOVER" | "REGULAR";
@@ -37,6 +38,8 @@ export type TurnoverPricingInput = {
    * turnoverPricingPackages.ts. Unlike the flags above, these reference
    * items that only exist on buildings that defined them. */
   selectedCustomLineItemIds?: string[];
+  /** Work starting today or tomorrow, +25% on the whole price (see nextDayUpcharge.ts). */
+  nextDayUpcharge?: boolean;
 };
 
 export type TurnoverPricingResult = {
@@ -137,6 +140,12 @@ export function computeTurnoverPricing(input: TurnoverPricingInput): TurnoverPri
     services.push(item.label);
     priceCents += itemPrice;
     breakdown.push(`${item.label}: ${formatUsd(itemPrice)}`);
+  }
+
+  if (input.nextDayUpcharge && priceCents > 0) {
+    const upcharge = nextDayUpchargeCents(priceCents);
+    priceCents += upcharge;
+    breakdown.push(`${NEXT_DAY_UPCHARGE_LABEL}: ${formatUsd(upcharge)}`);
   }
 
   if (services.length === 0) {

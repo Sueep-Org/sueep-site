@@ -50,13 +50,14 @@ export function requestWorkLabels(work: RequestWork & { otherWork: boolean; othe
   return labels;
 }
 
-/** Same math staff pricing uses. Touch-up is one item and is dropped when the unit gets a full paint. */
+/** Same math staff pricing uses. Touch-up is one item and is dropped when the unit gets a full paint. Next day work gets the upcharge (see nextDayUpcharge.ts). */
 export function estimateRequestCents(
   pricingPackage: TurnoverPricingPackage,
   bedrooms: number,
   bathrooms: number,
   work: RequestWork,
   isCommonArea = false,
+  nextDayUpcharge = false,
 ): number {
   return computeTurnoverPricing({
     requestType: "TURNOVER",
@@ -71,6 +72,7 @@ export function estimateRequestCents(
     materialsAdditional: false,
     ceilingPaint: false,
     compounding: 0,
+    nextDayUpcharge,
   }).priceCents;
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { NEXT_DAY_UPCHARGE_PERCENT, isNextDayStart } from "@/lib/nextDayUpcharge";
 
 const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E73C6E] focus:outline-none focus:ring-1 focus:ring-[#E73C6E]";
@@ -466,6 +467,9 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
                   value={form.startDate}
                   onChange={(e) => patch({ startDate: e.target.value })}
                 />
+                {isNextDayStart(form.startDate) && (
+                  <p className="mt-1 text-xs text-amber-700">Work starting today or tomorrow has a {NEXT_DAY_UPCHARGE_PERCENT}% next day upcharge.</p>
+                )}
               </div>
               <div>
                 <label className={label} htmlFor="pm-end">

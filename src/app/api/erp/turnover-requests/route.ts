@@ -97,6 +97,7 @@ export async function POST(req: Request) {
   const otherCentsRaw = otherWork ? parseIntValue(body.otherCents) : null;
   const otherCents = otherCentsRaw ?? (otherWork && body.otherPrice ? Math.round((Number(String(body.otherPrice).replace(/[$,\s]/g, "")) || 0) * 100) : 0);
   const selectedCustomLineItemIds = parseStringArray(body.selectedCustomLineItemIds);
+  const nextDayUpcharge = body.nextDayUpcharge === true;
   const startDate = parseDate(body.startDate);
   const endDate = parseDate(body.endDate);
   const moveOutDate = parseDate(body.moveOutDate);
@@ -122,6 +123,7 @@ export async function POST(req: Request) {
     isPartialTurn,
     partialTurnLayout,
     selectedCustomLineItemIds,
+    nextDayUpcharge,
   });
   const totalPriceCents = basePricing.priceCents + (otherWork ? otherCents : 0);
 
@@ -154,6 +156,7 @@ export async function POST(req: Request) {
         moveInDate,
         priceCents: totalPriceCents || null,
         approvedPriceCents: null,
+        nextDayUpcharge,
         createdBy: createdBy || null,
       },
     });

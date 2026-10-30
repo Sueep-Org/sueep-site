@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { NEXT_DAY_UPCHARGE_PERCENT, isNextDayStart } from "@/lib/nextDayUpcharge";
 import { centsToDollars } from "@/lib/erp/money";
 import { deriveChangeOrderSupervisorCount } from "@/lib/changeOrderLaborRates";
 import { SignaturePadInput } from "@/components/SignaturePad";
@@ -164,7 +165,7 @@ export function ProjectManagerForm({ onBack }: Props) {
     coPriceDebounce.current = setTimeout(async () => {
       setCoPriceLoading(true);
       try {
-        const params = new URLSearchParams({ cleanerCount: String(cleaners) });
+        const params = new URLSearchParams({ cleanerCount: String(cleaners), startDate: coEstimatedStartDate });
         const res = await fetch(`/api/external/projects/${selectedProject.id}/co-price-estimate?${params}`);
         const data = (await res.json()) as { priced?: boolean; totalCents?: number };
         setCoPriceCents(data.priced && typeof data.totalCents === "number" ? data.totalCents : null);
@@ -175,7 +176,7 @@ export function ProjectManagerForm({ onBack }: Props) {
       }
     }, 300);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [coCleanerCount, selectedProject?.id, selectedProject?.hasCustomLaborRate]);
+  }, [coCleanerCount, coEstimatedStartDate, selectedProject?.id, selectedProject?.hasCustomLaborRate]);
 
   async function loadSovItems(projectId: string) {
     setSovLoading(true);
@@ -618,6 +619,9 @@ export function ProjectManagerForm({ onBack }: Props) {
                       {coPriceLoading ? "Calculating…" : centsToDollars(coPriceCents)}
                     </span>
                   </p>
+                )}
+                {coPriceCents != null && isNextDayStart(coEstimatedStartDate) && (
+                  <p className="mt-1 text-xs text-amber-700">Includes a {NEXT_DAY_UPCHARGE_PERCENT}% next day upcharge for work starting today or tomorrow.</p>
                 )}
                 {coPriceCents != null && (
                   <div className="mt-4 grid gap-3 border-t border-gray-200 pt-4 sm:grid-cols-2">
