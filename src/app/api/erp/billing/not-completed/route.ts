@@ -30,7 +30,9 @@ function latest(dates: (Date | null | undefined)[]): Date | null {
  * Jobs and change orders whose last scheduled day has passed but that
  * aren't marked complete, so they never reach the Billing lists. Last
  * scheduled day = the latest of the end date and the last planned day on the
- * calendar (start date too, for a change order). Split by Billing tab.
+ * calendar (start date too, for a change order). A date that was taken off
+ * the schedule with a reason (grayed-out ScheduleDayRemoval) doesn't count,
+ * since the work didn't happen that day. Split by Billing tab.
  */
 export async function GET() {
   const today = todayEasternAsUtcMidnight();
@@ -38,7 +40,7 @@ export async function GET() {
   const tabFor = (p: { segment: string; hubspotPipelineId: string | null }) =>
     JANITORIAL_BILLING_SEGMENTS.includes(p.segment) && (!postConPipelineId || p.hubspotPipelineId !== postConPipelineId) ? "janitorial" : "postConstruction";
 
-  const [projects, changeOrders] = await Promise.all([
+  const [projects, changeOrders, removals] = await Promise.all([
     prisma.project.findMany({
       where: { status: { not: "COMPLETE" } },
       select: {
@@ -63,17 +65,24 @@ export async function GET() {
         project: { select: { jobTitle: true, segment: true, hubspotPipelineId: true } },
       },
     }),
+    prisma.scheduleDayRemoval.findMany({ select: { projectId: true, changeOrderId: true, date: true } }),
   ]);
+
+  // "project|<id>|day" or "co|<id>|day" for every grayed-out removed day
+  const removed = new Set(
+    removals.map((r) => (r.changeOrderId ? `co|${r.changeOrderId}|${dayKey(r.date)}` : `project|${r.projectId}|${dayKey(r.date)}`)),
+  );
+  const kept = (kind: "project" | "co", id: string, d: Date | null | undefined) => (d && !removed.has(`${kind}|${id}|${dayKey(d)}`) ? d : null);
 
   const out: Record<"janitorial" | "postConstruction", NotCompletedRow[]> = { janitorial: [], postConstruction: [] };
   const daysAgo = (d: Date) => Math.round((today.getTime() - d.getTime()) / 86_400_000);
   for (const p of projects) {
-    const last = latest([p.projectEndDate, p.dayAssignments[0]?.date]);
+    const last = latest([kept("project", p.id, p.projectEndDate), p.dayAssignments[0]?.date]);
     if (!last || last >= today) continue;
     out[tabFor(p)].push({ kind: "project", id: p.id, projectId: p.id, title: p.jobTitle, projectTitle: null, lastDayKey: dayKey(last), daysAgo: daysAgo(last) });
   }
   for (const co of changeOrders) {
-    const last = latest([co.endDate, co.startDate ?? co.requestedDate, co.dayAssignments[0]?.date]);
+    const last = latest([kept("co", co.id, co.endDate), kept("co", co.id, co.startDate ?? co.requestedDate), co.dayAssignments[0]?.date]);
     if (!last || last >= today) continue;
     out[tabFor(co.project)].push({ kind: "co", id: co.id, projectId: co.projectId, title: co.title, projectTitle: co.project.jobTitle, lastDayKey: dayKey(last), daysAgo: daysAgo(last) });
   }
