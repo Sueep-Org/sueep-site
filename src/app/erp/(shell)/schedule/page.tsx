@@ -259,7 +259,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     prisma.changeOrderContractorAssignment.findMany({
       select: { changeOrderId: true, contractorId: true, assignedDate: true, startDate: true, endDate: true, costCents: true, setOnSchedule: true },
     }),
-    prisma.scheduleDayRemoval.findMany({ orderBy: { createdAt: "asc" } }),
+    prisma.scheduleDayRemoval.findMany({ orderBy: { createdAt: "asc" }, include: { changeOrder: { select: { title: true } } } }),
     // Notes a property manager typed on their turnover request, shown on the unit's chip and card.
     prisma.propertyManagerRequest
       .findMany({ where: { projectId: { not: null }, notes: { not: null } }, select: { projectId: true, notes: true } })
@@ -282,6 +282,8 @@ export default async function SchedulePage({ searchParams }: PageProps) {
   const dayRemovals: ScheduleDayRemovalRow[] = dayRemovalRows.map((r) => ({
     id: r.id,
     projectId: r.projectId,
+    changeOrderId: r.changeOrderId,
+    changeOrderTitle: r.changeOrder?.title ?? null,
     dateKey: dayKey(r.date),
     reason: r.reason,
     note: r.note,

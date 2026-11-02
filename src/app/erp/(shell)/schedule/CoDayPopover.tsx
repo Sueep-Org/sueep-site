@@ -20,6 +20,8 @@ import { useFloatingMenu } from "@/app/erp/components/useFloatingMenu";
 import { centsToDollars } from "@/lib/erp/money";
 import { addDaysKey, daysBetween } from "@/lib/erp/managementCalendar";
 import { AnswerMark, CoverageAnswer, answerUid, type Answers } from "./AnswerMark";
+import { RemoveDayModal } from "./RemoveDayModal";
+import type { ScheduleDayRemovalRow, ScheduleRemovalReason } from "@/lib/erp/scheduleRemovals";
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -61,6 +63,7 @@ export function CoDayPopover({
   onAssignmentDeleted,
   onWorkerCreated,
   onWorkerDeleted,
+  onDayRemoved,
 }: {
   co: ScheduleChangeOrder;
   dateKey: string;
@@ -82,6 +85,8 @@ export function CoDayPopover({
   onAssignmentDeleted: (id: string) => void;
   onWorkerCreated: (w: ScheduleCoWorkerAssignment) => void;
   onWorkerDeleted: (id: string) => void;
+  /** A take-off with a real reason, drawn grayed out right away */
+  onDayRemoved: (r: ScheduleDayRemovalRow) => void;
 }) {
   const summary = co.laborByDay[dateKey];
   const router = useRouter();
@@ -146,45 +151,50 @@ export function CoDayPopover({
     }
   }
 
-  // A day that's only on the calendar because it's the CO's own start/end
-  // date has no planned-day row to remove, so taking it off means clearing
-  // that date. The calendar falls back to requestedDate when startDate is
-  // empty, so the start day clears both, plus endDate when it's the same day
-  // (scheduledEndDateKey is null then).
+  // Takes the CO off this day with a reason, same RemoveDayModal a
+  // project's planned chip uses. A planned day's row goes first (that route
+  // cancels invites), then co-day-removals clears the CO's own start/end date
+  // if it's this day and saves the grayed-out removal.
   const dateRole: "start" | "end" | null =
     dateKey === co.scheduledDateKey ? "start" : dateKey === co.scheduledEndDateKey ? "end" : null;
-  const canTakeOffDay = dateRole !== null && !assignment && !hasLoggedLabor && !coIsComplete(co.status);
+  const canTakeOffDay = (dateRole !== null || !!assignment) && !hasLoggedLabor && !coIsComplete(co.status);
+  const [takeOffOpen, setTakeOffOpen] = useState(false);
   const [takingOff, setTakingOff] = useState(false);
   const [takeOffError, setTakeOffError] = useState("");
 
-  async function handleTakeOffDay() {
-    if (
-      !(await confirm({
-        title: "Take off this day?",
-        message:
-          dateRole === "end"
-            ? `Clears the end date of "${co.title}". You can set a new one on the change order.`
-            : `Clears the start date of "${co.title}" so it's off the schedule. You can set a new one on the change order.`,
-        confirmLabel: "Take off",
-      }))
-    )
-      return;
+  async function handleTakeOffDay(reason: ScheduleRemovalReason, note: string) {
+    setTakeOffOpen(false);
     setTakingOff(true);
     setTakeOffError("");
+    const coveredBy = supervisorName ?? pmName ?? contractorName ?? null;
     try {
-      const body =
-        dateRole === "end"
-          ? { endDate: null }
-          : { startDate: null, requestedDate: null, ...(co.scheduledEndDateKey ? {} : { endDate: null }) };
-      const res = await fetch(`/api/erp/projects/${co.projectId}/change-orders/${co.id}`, {
-        method: "PATCH",
+      if (assignment && !(await handleRemoveCoverage())) return;
+      const res = await fetch("/api/erp/schedule/co-day-removals", {
+        method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ changeOrderId: co.id, dateKey, reason, note, coveredBy }),
       });
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        removal?: { id: string; note: string | null; coveredBy: string | null; removedByName: string | null } | null;
+      };
       if (!res.ok) {
         setTakeOffError(data.error || "Couldn't take it off this day");
         return;
+      }
+      if (data.removal) {
+        onDayRemoved({
+          id: data.removal.id,
+          projectId: co.projectId,
+          changeOrderId: co.id,
+          changeOrderTitle: co.title,
+          dateKey,
+          reason,
+          note: data.removal.note,
+          coveredBy: data.removal.coveredBy,
+          removedByName: data.removal.removedByName,
+          removedAt: new Date().toISOString(),
+        });
       }
       onClose();
       router.refresh();
@@ -711,7 +721,7 @@ export function CoDayPopover({
           {canTakeOffDay ? (
             <button
               type="button"
-              onClick={() => void handleTakeOffDay()}
+              onClick={() => setTakeOffOpen(true)}
               disabled={takingOff}
               className="rounded border border-gray-300 px-2 py-1 text-[10px] font-medium text-gray-600 hover:border-red-300 hover:text-red-600 disabled:opacity-50"
             >
@@ -719,6 +729,15 @@ export function CoDayPopover({
             </button>
           ) : null}
         </div>
+      </div>
+      <div onClick={(e) => e.stopPropagation()}>
+        <RemoveDayModal
+          open={takeOffOpen}
+          title={co.title}
+          dateLabel={dayCellLabel(dateKey)}
+          onClose={() => setTakeOffOpen(false)}
+          onRemove={(reason, note) => void handleTakeOffDay(reason, note)}
+        />
       </div>
     </div>,
     document.body,

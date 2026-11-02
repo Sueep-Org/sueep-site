@@ -1075,6 +1075,8 @@ model ProjectChangeOrder {
   /// This CO's own planned crew, same concept as ProjectWorkerDayAssignment
   /// but scoped to the CO directly (see ChangeOrderWorkerDayAssignment).
   coWorkerAssignments   ChangeOrderWorkerDayAssignment[]
+  /// Days this CO was taken off the schedule for a reason (grayed out)
+  scheduleDayRemovals   ScheduleDayRemoval[]
 
   hubspotSovInvoices HubSpotSovInvoice[]
 
@@ -1572,6 +1574,10 @@ model ScheduleDayRemoval {
 
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// Set when the removed day was a change order's (projectId is then the CO's project)
+  changeOrderId String?
+  changeOrder   ProjectChangeOrder? @relation(fields: [changeOrderId], references: [id], onDelete: Cascade)
 
   /// The calendar date that was removed (midnight UTC, same as ProjectDayAssignment.date)
   date DateTime
