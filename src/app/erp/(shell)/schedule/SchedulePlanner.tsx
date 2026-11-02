@@ -1544,6 +1544,31 @@ export function SchedulePlanner({
             {CALENDAR_GROUP_LABEL[calendarSegmentGroup(p.segment)]} · {dayCellLabel(k)}
           </p>
 
+          {/* Notes stay readable after labor is logged or the job is complete;
+              this card replaces the editable one once a day has labor. */}
+          {existingAssignment?.comment || existingAssignment?.internalNote || p.requestNotes ? (
+            <div className="mt-3 space-y-1.5 border-t border-gray-100 pt-2.5 text-[11px]">
+              {existingAssignment?.comment ? (
+                <div>
+                  <label className="block text-[10px] font-medium text-gray-500">Day note</label>
+                  <p className="mt-0.5 whitespace-pre-line text-gray-700">{existingAssignment.comment}</p>
+                </div>
+              ) : null}
+              {existingAssignment?.internalNote ? (
+                <div>
+                  <label className="block text-[10px] font-medium text-amber-700">Internal note</label>
+                  <p className="mt-0.5 whitespace-pre-line text-gray-700">{existingAssignment.internalNote}</p>
+                </div>
+              ) : null}
+              {p.requestNotes ? (
+                <div>
+                  <label className="block text-[10px] font-medium text-gray-500">Property manager notes</label>
+                  <p className="mt-0.5 whitespace-pre-line text-gray-700">{p.requestNotes}</p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           {loggedScopes.length > 0 ? (
             <div className="mt-3 border-t border-gray-100 pt-2.5">
               <label className="block text-[10px] font-medium text-gray-500">Scope worked (from the labor log)</label>
@@ -2378,7 +2403,7 @@ export function SchedulePlanner({
               <div className="mt-0.5">
                 {p.sovItems.length > 0 ? (
                   <>
-                    <SOVMultiCombobox sovItems={p.sovItems} selectedIds={eventSovPicks} onChange={setEventSovPicks} />
+                    <SOVMultiCombobox sovItems={p.sovItems} selectedIds={eventSovPicks} onChange={setEventSovPicks} hideCompleted />
                     <SOVPriceSummary sovItems={p.sovItems} selectedIds={eventSovPicks} />
                   </>
                 ) : (

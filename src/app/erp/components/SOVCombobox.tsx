@@ -42,24 +42,29 @@ export function SOVPriceSummary({ sovItems, selectedIds }: { sovItems: SOVItemOp
 
 /** Multi-select SOV item picker: selected items show as removable chips above
  * a search box; each list row shows a checkbox for "selected here" plus a
- * separate emerald check for "already marked complete" on the SOV item itself. */
+ * separate emerald check for "already marked complete" on the SOV item itself.
+ * hideCompleted drops completed lines from the list (schedule pickers: a
+ * finished line can't be put back on a day); ones already picked stay. */
 export function SOVMultiCombobox({
   sovItems,
   selectedIds,
   onChange,
+  hideCompleted = false,
 }: {
   sovItems: SOVItemOption[];
   selectedIds: string[];
   onChange: (ids: string[]) => void;
+  hideCompleted?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const selectedSet = new Set(selectedIds);
+  const pickable = hideCompleted ? sovItems.filter((s) => !s.completed || selectedSet.has(s.id)) : sovItems;
   const filtered = query.trim()
-    ? sovItems.filter((s) => s.description.toLowerCase().includes(query.toLowerCase()))
-    : sovItems;
+    ? pickable.filter((s) => s.description.toLowerCase().includes(query.toLowerCase()))
+    : pickable;
 
   useEffect(() => {
     function onMouseDown(e: MouseEvent) {
