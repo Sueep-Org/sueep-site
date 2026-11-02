@@ -10,7 +10,10 @@ import { loadBuildingInvoiceDestination, loadProjectInvoiceDestination, type Inv
 import { loadBillableGroups, loadWaitingItemDrafts } from "@/lib/erp/itemInvoiceDrafts";
 import { describePlan, invoiceLinesFor, planDelivery } from "@/lib/erp/invoiceDelivery";
 import { CLAIM_TEXT, DRAFT_LEAD_DAYS, billingDateKey, draftLines, isApproveEnabled, linesTotal, monthLabel } from "@/lib/erp/janitorialInvoiceDrafts";
-import { ReadyToSend, type BillableGroupRow, type ContractSetting, type DeliveryRow, type DraftRow, type MonthRow, type SentRow } from "./ReadyToSend";
+import { ReadyToSend, type BillableGroupRow, type ContractSetting, type DeliveryRow, type DraftRow, type MonthRow, type QboTestRow, type SentRow } from "./ReadyToSend";
+import { withHubSpotId } from "@/lib/erp/invoiceLinkSource";
+import { qboEnvironment } from "@/lib/erp/qboClient";
+import { draftContent, draftsGoToQuickBooks, loadRecentQboTests, loadWaitingQboDrafts, qboInvoiceUrl } from "@/lib/erp/qboInvoiceDrafts";
 
 export const metadata: Metadata = { title: "Ready to send" };
 export const dynamic = "force-dynamic";
@@ -50,7 +53,8 @@ export default async function ReadyToSendPage() {
     recurringContract: { select: { id: true, billingDayOfMonth: true, invoiceLabel: true, buildingId: true, building: { select: { name: true } } } },
   };
 
-  const [drafts, failed, discarded, contracts, approveEnabled, billable, itemDrafts, waitingDeliveries, sentDeliveries] = await Promise.all([
+  const qboEnv = qboEnvironment();
+  const [draftRows0, failed, discarded, contracts, approveEnabled, billable, itemDrafts, waitingDeliveries, sentDeliveries, toQuickBooks, qboDrafts, qboTests] = await Promise.all([
     prisma.hubSpotContractInvoice.findMany({
       where: { draftedByErp: true, status: "draft" },
       select: { hubspotInvoiceId: true, amountCents: true, invoiceDate: true, dueDate: true, period: { select: periodSelect } },
@@ -75,7 +79,12 @@ export default async function ReadyToSendPage() {
     loadWaitingItemDrafts(),
     prisma.invoiceDelivery.findMany({ where: { status: { in: ["NEEDS_UPLOAD", "NEEDS_SENDING"] } }, orderBy: { createdAt: "asc" } }),
     prisma.invoiceDelivery.findMany({ where: { status: { in: ["EMAILED", "DONE"] }, updatedAt: { gte: new Date(Date.now() - 14 * 86_400_000) } }, orderBy: { updatedAt: "desc" }, take: 30 }),
+    draftsGoToQuickBooks(),
+    loadWaitingQboDrafts(),
+    loadRecentQboTests(),
   ]);
+  // Waiting month drafts are HubSpot drafts until the switch to QuickBooks.
+  const drafts = withHubSpotId(draftRows0);
 
   // Where each building's or job's invoices go, keyed "BUILDING:<id>" / "PROJECT:<id>".
   const destinations = new Map<string, InvoiceDestination | null>();
@@ -87,6 +96,7 @@ export default async function ReadyToSendPage() {
   for (const d of drafts) await destinationFor("BUILDING", d.period.recurringContract.buildingId);
   for (const g of billable) await destinationFor(g.type, g.id);
   for (const { draft } of itemDrafts) await destinationFor(draft.groupType, draft.groupId);
+  for (const d of qboDrafts) await destinationFor(d.groupType, d.groupId);
 
   const label = (p: (typeof drafts)[number]["period"]) => p.recurringContract.invoiceLabel?.trim() || p.recurringContract.building.name;
   const monthRow = (p: (typeof drafts)[number]["period"]): MonthRow => ({
@@ -147,6 +157,44 @@ export default async function ReadyToSendPage() {
     });
   }
 
+  // Drafts for QuickBooks (qboInvoiceDrafts.ts). On local dev these are sandbox tests.
+  for (const d of qboDrafts) {
+    const dest = destinations.get(`${d.groupType}:${d.groupId}`) ?? null;
+    const c = draftContent(d, dest?.paymentTermsDays ?? null);
+    draftRows.push({
+      kind: "qbo",
+      rowId: d.id,
+      periodId: d.id,
+      building: d.title,
+      month: c.subtitle,
+      note: dest?.company ? null : `No client company on this ${d.groupType === "PROJECT" ? "job" : "building"}. Set one before approving.`,
+      discardedBy: null,
+      hubspotInvoiceId: null,
+      invoiceDateKey: c.invoiceDateKey,
+      dueDate: c.dueDateKey,
+      lines: c.lines.map(({ name, description, amountCents }) => ({ name, description, amountCents })),
+      amountCents: c.totalCents,
+      charges: [],
+      totalCents: c.totalCents,
+      draftTotalCents: c.totalCents,
+      ...destinationSummary(dest),
+      deliveryPlan:
+        qboEnv === "production"
+          ? `Creates the invoice in QuickBooks and marks the work Billed. ${describePlan(planDelivery(dest))}`
+          : `Test: creates the invoice in the QuickBooks sandbox company and emails only you a copy. Nothing in the ERP is marked billed. Live: ${describePlan(planDelivery(dest))}`,
+      paymentTermsDays: dest?.paymentTermsDays ?? null,
+      testOnly: qboEnv !== "production",
+    });
+  }
+  const qboTestRows: QboTestRow[] = qboTests.map((t) => ({
+    id: t.id,
+    title: t.title,
+    invoiceNumber: t.invoiceNumber,
+    totalCents: t.totalCents,
+    url: t.qboInvoiceId ? qboInvoiceUrl(qboEnv, t.qboInvoiceId) : null,
+    when: (t.approvedAt ?? t.updatedAt).toISOString(),
+  }));
+
   // Portal logins (from Company Info) linked to each client company on Needs sending.
   const companyIds = [...new Set(waitingDeliveries.map((d) => d.clientCompanyId).filter((x): x is string => !!x))];
   const loginLinks = companyIds.length
@@ -154,7 +202,7 @@ export default async function ReadyToSendPage() {
     : [];
   const deliveryRows: DeliveryRow[] = [];
   for (const d of waitingDeliveries) {
-    const { lines } = await invoiceLinesFor(d.hubspotInvoiceId);
+    const { lines } = d.hubspotInvoiceId ? await invoiceLinesFor(d.hubspotInvoiceId) : { lines: (d.lines ?? []) as DeliveryRow["lines"] };
     deliveryRows.push({
       id: d.id,
       status: d.status === "NEEDS_UPLOAD" ? "NEEDS_UPLOAD" : "NEEDS_SENDING",
@@ -167,7 +215,8 @@ export default async function ReadyToSendPage() {
       method: d.method && d.method in BILLING_METHOD_LABELS ? BILLING_METHOD_LABELS[d.method as keyof typeof BILLING_METHOD_LABELS] : null,
       portalUrl: d.portalUrl,
       viewUrl: d.viewUrl,
-      pdfUrl: d.pdfUrl,
+      // QuickBooks PDFs come through the ERP (the QuickBooks one needs a sign-in).
+      pdfUrl: d.qboInvoiceId ? `/api/erp/invoice-deliveries/${d.id}/pdf` : d.pdfUrl,
       link: d.link,
       lines,
       logins: loginLinks.filter((l) => l.companyId === d.clientCompanyId).map((l) => l.login.name),
@@ -187,7 +236,14 @@ export default async function ReadyToSendPage() {
     key: g.key,
     name: g.name,
     type: g.type,
-    hasDeal: !!g.dealId,
+    // QuickBooks drafts need a client company instead of a HubSpot deal.
+    blocker: toQuickBooks
+      ? destinations.get(g.key)?.company
+        ? null
+        : "No client company, so it can't be drafted here"
+      : g.dealId
+        ? null
+        : "No HubSpot deal linked, so it can't be drafted here",
     ...destinationSummary(destinations.get(g.key) ?? null),
     items: g.items.map((i) => ({ key: i.key, kind: i.kind, title: i.title, lineDescription: i.lineDescription, cents: i.cents, doneKey: i.doneKey, href: i.href })),
   }));
@@ -199,7 +255,8 @@ export default async function ReadyToSendPage() {
     autoDraft: c.autoDraftInvoices,
     billingDay: c.billingDayOfMonth,
     monthlyRateCents: c.monthlyRateCents,
-    hasDeal: !!c.building.hubspotDealId,
+    // QuickBooks drafts don't need a deal.
+    hasDeal: toQuickBooks || !!c.building.hubspotDealId,
     nextDraftKey: nextDraftKey(todayKey, c.billingDayOfMonth),
   }));
 
@@ -208,7 +265,7 @@ export default async function ReadyToSendPage() {
       <h1 className="flex items-center gap-1 text-2xl font-semibold text-gray-900">
         Ready to send
         <InfoTip
-          text={`Invoices the ERP drafted in HubSpot: janitorial months ${DRAFT_LEAD_DAYS} days before each billing day, and finished work picked under Ready to bill. Drafts don't go to QuickBooks or the client. Approve opens the invoice in HubSpot, which sends it to QuickBooks, and marks the month Billed.`}
+          text={`Invoices the ERP drafted, in HubSpot or (once switched) for QuickBooks: janitorial months ${DRAFT_LEAD_DAYS} days before each billing day, and finished work picked under Ready to bill. Drafts don't go to QuickBooks or the client. Approve opens the invoice in HubSpot, which sends it to QuickBooks, and marks the month Billed.`}
         />
       </h1>
       <ReadyToSend
@@ -221,6 +278,7 @@ export default async function ReadyToSendPage() {
         contracts={contractRows}
         approveEnabled={approveEnabled}
         isAdmin={auth.role === "ADMIN"}
+        qbo={{ environment: qboEnv, on: toQuickBooks, tests: qboTestRows }}
       />
     </div>
   );

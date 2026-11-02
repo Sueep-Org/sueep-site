@@ -11,6 +11,7 @@ import { computeProjectActualsWithChangeOrders, isQualifyingChangeOrder } from "
 import { loadAllLienWatch } from "./lienWatchBuildings";
 import { loadCutoffStatus } from "./billingCutoffs";
 import { lienDecisionCloses, lienPillLabel, type LienStage } from "./lienDeadline";
+import { invoiceKey, withHubSpotId } from "./invoiceLinkSource";
 
 /**
  * Money tab cards (DASHBOARDS_PLAN.md Phase 4): Needs action (overdue
@@ -60,13 +61,13 @@ function bucketOf(daysLate: number): string {
 }
 
 /**
- * Open HubSpot invoices with a balance, most overdue first. One invoice can
+ * Open invoices (HubSpot's, and QuickBooks' after the switch) with a balance, most overdue first. One invoice can
  * cover many lines, and even show up in more than one link table, so it's
  * counted once, by its own balance. Also feeds the cash forecast.
  */
 export const loadOpenInvoices = cache(async (todayKey: string): Promise<OpenInvoice[]> => {
   const where = { status: "open" };
-  const pick = { hubspotInvoiceId: true, invoiceNumber: true, dueDate: true, balanceDueCents: true, invoiceTotalCents: true, amountCents: true } as const;
+  const pick = { hubspotInvoiceId: true, qboInvoiceId: true, invoiceNumber: true, dueDate: true, balanceDueCents: true, invoiceTotalCents: true, amountCents: true } as const;
   const [units, lines, months] = await Promise.all([
     prisma.hubSpotUnitInvoice.findMany({ where, select: { ...pick, unitNumber: true, building: { select: { id: true, name: true } } } }),
     prisma.hubSpotSovInvoice.findMany({ where, select: { ...pick, project: { select: { id: true, jobTitle: true } } } }),
@@ -75,14 +76,15 @@ export const loadOpenInvoices = cache(async (todayKey: string): Promise<OpenInvo
 
   const byId = new Map<string, OpenInvoice & { lineSum: number; hasBalance: boolean }>();
   const add = (r: (typeof units)[number] | (typeof lines)[number] | (typeof months)[number], title: string, href: string) => {
-    const existing = byId.get(r.hubspotInvoiceId);
+    const key = invoiceKey(r);
+    const existing = byId.get(key);
     if (existing) {
       existing.lineSum += r.amountCents;
       return;
     }
     const dueKey = r.dueDate ? utcDateKey(r.dueDate) : null;
-    byId.set(r.hubspotInvoiceId, {
-      id: r.hubspotInvoiceId,
+    byId.set(key, {
+      id: key,
       number: r.invoiceNumber,
       title,
       href,
@@ -262,7 +264,8 @@ const loadWaitingDrafts = cache(async (): Promise<WaitingDraft[]> => {
       note: `${d.invoiceNumber ? `${d.invoiceNumber}, ` : ""}${d.status === "NEEDS_UPLOAD" ? "needs upload" : "needs sending"}`,
       cents: d.totalCents,
     })),
-    ...months.map((d) => ({
+    // Month drafts are HubSpot drafts until the switch to QuickBooks.
+    ...withHubSpotId(months).map((d) => ({
       id: d.hubspotInvoiceId,
       title: d.period.recurringContract.building.name,
       note: d.period.periodStart.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" }),

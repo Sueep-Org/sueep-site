@@ -117,3 +117,26 @@ export async function saveInvoicesAndPayments(invoices: QboInvoiceRow[], payment
     return imp;
   });
 }
+
+export type QboCustomerRow = {
+  qboId: string;
+  displayName: string;
+  fullyQualifiedName: string;
+  companyName: string | null;
+  parentQboId: string | null;
+  email: string | null;
+  balanceCents: number;
+};
+export type QboItemRow = { qboId: string; name: string; type: string | null; description: string | null };
+
+/** Replaces the customer and product lists (ERP_QBO_INVOICING_PLAN.md Phase 1). */
+export async function saveCustomersAndItems(customers: QboCustomerRow[], items: QboItemRow[], meta: Meta) {
+  return prisma.$transaction(async (tx) => {
+    const imp = await tx.qboImport.create({ data: { kind: "CUSTOMERS", ...meta, rowCount: customers.length + items.length } });
+    await tx.qboCustomer.deleteMany({});
+    await tx.qboItem.deleteMany({});
+    await tx.qboCustomer.createMany({ data: customers.map((c) => ({ ...c, importId: imp.id })) });
+    await tx.qboItem.createMany({ data: items.map((i) => ({ ...i, importId: imp.id })) });
+    return imp;
+  });
+}

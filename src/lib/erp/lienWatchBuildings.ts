@@ -13,6 +13,7 @@ import { isPaidStatus } from "./billingStatus";
 import { todayEasternKey, utcDateKey } from "./dates";
 import { detectLienState, lienDeadline, lienReadiness, parseLienDecision, parseLienManualSteps, parseLienRole, parseLienState } from "./lienDeadline";
 import { loadLienWatch, type LienWatchRow, type LienWatchUnit } from "./lienWatch";
+import { invoiceKey } from "./invoiceLinkSource";
 
 /**
  * Pass a buildingId to get that one building whether or not it has anything
@@ -86,11 +87,11 @@ export async function loadBuildingLienWatch(opts: { buildingId?: string } = {}):
     // Open invoices on these turns (unit table) and their change orders (SOV table).
     prisma.hubSpotUnitInvoice.findMany({
       where: { turnoverRequestId: { in: allTurns.map((t) => t.turnoverRequest!.id) }, status: "open" },
-      select: { buildingId: true, hubspotInvoiceId: true, invoiceNumber: true, dueDate: true },
+      select: { buildingId: true, hubspotInvoiceId: true, qboInvoiceId: true, invoiceNumber: true, dueDate: true },
     }),
     prisma.hubSpotSovInvoice.findMany({
       where: { projectId: { in: allTurns.map((t) => t.id) }, changeOrderId: { not: null }, status: "open" },
-      select: { projectId: true, hubspotInvoiceId: true, invoiceNumber: true, dueDate: true },
+      select: { projectId: true, hubspotInvoiceId: true, qboInvoiceId: true, invoiceNumber: true, dueDate: true },
     }),
   ]);
   const buildingOfTurn = new Map(allTurns.map((t) => [t.id, t.turnoverRequest!.buildingId]));
@@ -128,7 +129,7 @@ export async function loadBuildingLienWatch(opts: { buildingId?: string } = {}):
       ...unitLinks.filter((l) => l.buildingId === b.id),
       ...coLinks.filter((l) => buildingOfTurn.get(l.projectId) === b.id),
     ]
-      .filter((l) => !seen.has(l.hubspotInvoiceId) && !!seen.add(l.hubspotInvoiceId))
+      .filter((l) => !seen.has(invoiceKey(l)) && !!seen.add(invoiceKey(l)))
       .map((l) => ({ number: l.invoiceNumber, dueKey: l.dueDate ? utcDateKey(l.dueDate) : null }));
     const readiness = deadline
       ? lienReadiness(

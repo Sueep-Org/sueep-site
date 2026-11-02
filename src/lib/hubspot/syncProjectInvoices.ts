@@ -3,6 +3,7 @@ import { matchSovItem } from "@/lib/hubspot/billingMatch";
 import { fetchDealInvoices, type DealInvoice } from "@/lib/hubspot/dealDocuments";
 import { invoiceSnapshot } from "@/lib/hubspot/syncUnitInvoices";
 import { applyPaidInvoiceLinks } from "@/lib/hubspot/applyPaidLinks";
+import { HUBSPOT_LINKS, QUICKBOOKS_LINKS } from "@/lib/erp/invoiceLinkSource";
 
 /**
  * Project-side twin of syncUnitInvoices: mirrors every invoice on a
@@ -35,8 +36,9 @@ export async function syncProjectInvoices(
 ): Promise<{ rows: number; unmatchedLines: number }> {
   const invoices = prefetched ?? (await fetchDealInvoices(dealId));
 
+  // HubSpot rows only: invoices the ERP made in QuickBooks are never rebuilt or removed here.
   const manualRows = await prisma.hubSpotSovInvoice.findMany({
-    where: { projectId, manual: true },
+    where: { ...HUBSPOT_LINKS, projectId, manual: true },
     select: { hubspotInvoiceId: true, sovItemId: true, changeOrderId: true },
   });
   // Automatic rows are rebuilt below, so remember which ones existed (a hand
@@ -45,7 +47,7 @@ export async function syncProjectInvoices(
   const autoRows = new Map(
     (
       await prisma.hubSpotSovInvoice.findMany({
-        where: { projectId, manual: false },
+        where: { ...HUBSPOT_LINKS, projectId, manual: false },
         select: { hubspotInvoiceId: true, sovItemId: true, changeOrderId: true, paidAppliedAt: true, billedAppliedAt: true },
       })
     ).map((r) => [
@@ -54,12 +56,18 @@ export async function syncProjectInvoices(
     ]),
   );
   const manualInvoiceIds = new Set(manualRows.map((r) => r.hubspotInvoiceId));
-  // Lines a person already gave to an invoice that is still on the deal.
+  // Lines a person already gave to an invoice that is still on the deal, and
+  // lines already on a QuickBooks invoice from the ERP: the automatic match
+  // doesn't add a HubSpot invoice to either.
   const onDeal = new Set(invoices.map((i) => i.id));
+  const quickBooksRows = await prisma.hubSpotSovInvoice.findMany({
+    where: { ...QUICKBOOKS_LINKS, projectId, status: { not: "voided" } },
+    select: { sovItemId: true, changeOrderId: true },
+  });
   const heldByHand = new Set(
-    manualRows
-      .filter((r) => onDeal.has(r.hubspotInvoiceId))
-      .flatMap((r) => (r.sovItemId ? [`sov:${r.sovItemId}`] : r.changeOrderId ? [`co:${r.changeOrderId}`] : [])),
+    [...manualRows.filter((r) => r.hubspotInvoiceId && onDeal.has(r.hubspotInvoiceId)), ...quickBooksRows].flatMap((r) =>
+      r.sovItemId ? [`sov:${r.sovItemId}`] : r.changeOrderId ? [`co:${r.changeOrderId}`] : [],
+    ),
   );
 
   const [sovItems, changeOrders, aliases, ledger] = await Promise.all([
@@ -133,6 +141,7 @@ export async function syncProjectInvoices(
   await prisma.$transaction([
     prisma.hubSpotSovInvoice.deleteMany({
       where: {
+        ...HUBSPOT_LINKS,
         projectId,
         OR: [{ manual: false }, { manual: true, hubspotInvoiceId: { notIn: invoices.map((i) => i.id) } }],
       },

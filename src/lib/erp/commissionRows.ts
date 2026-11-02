@@ -11,6 +11,7 @@ import { computeCommissionCentsByDeal, computeRecurringCommissionCents, resolveC
 import { isPaidStatus } from "@/lib/erp/billingStatus";
 import type { CommissionDealRow, RecurringCommissionRow } from "@/app/erp/(shell)/commission/CommissionByRep";
 import type { UnitInvoiceChip } from "@/app/erp/components/UnitInvoiceChips";
+import { invoiceKey } from "./invoiceLinkSource";
 
 export type CommissionDeal = CommissionDealRow & { ownerId: string | null; year: number };
 export type CommissionRecurring = RecurringCommissionRow & { ownerId: string | null; ownerName: string | null; year: number };
@@ -24,7 +25,8 @@ const COMMISSION_MIN_YEAR = 2026;
 
 type InvoiceLinkRow = {
   id: string;
-  hubspotInvoiceId: string;
+  hubspotInvoiceId: string | null;
+  qboInvoiceId: string | null;
   invoiceNumber: string | null;
   status: string | null;
   dueDate: Date | null;
@@ -33,18 +35,18 @@ type InvoiceLinkRow = {
   viewUrl: string | null;
 };
 
-/** One chip per HubSpot invoice (an invoice split over several lines of the
+/** One chip per invoice, HubSpot or QuickBooks (an invoice split over several lines of the
  * same row shows once, with the shares added up). Voided invoices are left out. */
 function invoiceChips(rows: InvoiceLinkRow[]): UnitInvoiceChip[] {
   const byInvoice = new Map<string, UnitInvoiceChip>();
   for (const r of rows) {
     if (r.status === "voided") continue;
-    const chip = byInvoice.get(r.hubspotInvoiceId);
+    const chip = byInvoice.get(invoiceKey(r));
     if (chip) {
       chip.amountCents += r.amountCents;
       continue;
     }
-    byInvoice.set(r.hubspotInvoiceId, {
+    byInvoice.set(invoiceKey(r), {
       id: r.id,
       invoiceNumber: r.invoiceNumber,
       status: r.status,

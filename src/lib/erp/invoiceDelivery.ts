@@ -12,6 +12,10 @@
  *   failed): Needs sending, with the reason.
  * Each invoice gets one InvoiceDelivery row; Needs upload and Needs sending
  * stay on Ready to send until someone marks them done or emails again.
+ *
+ * Invoices the ERP made in QuickBooks (ERP_QBO_INVOICING_PLAN.md Phase 4)
+ * go the same way, with QuickBooks' PDF attached. A sandbox (local dev)
+ * Approve only emails the approver a test copy (emailSandboxTest).
  */
 import { prisma } from "@/lib/prisma";
 import { escapeHtml, sendEmail } from "@/lib/email";
@@ -19,6 +23,7 @@ import { DAILY_EMAIL_LIMIT, loadEmailQuota } from "./emailQuota";
 import { centsToDollars } from "./money";
 import { BILLING_METHOD_LABELS, PORTAL_METHODS, type BillingMethod } from "./clientCompanies";
 import { loadBuildingInvoiceDestination, loadProjectInvoiceDestination, type InvoiceDestination } from "./invoiceDestination";
+import { qboGetPdf } from "./qboClient";
 
 export type DeliveryPlan =
   | { kind: "EMAIL"; to: string[]; cc: string[] }
@@ -42,7 +47,9 @@ export function describePlan(p: DeliveryPlan): string {
 }
 
 export type InvoiceForDelivery = {
-  hubspotInvoiceId: string;
+  /** One of these two is set */
+  hubspotInvoiceId: string | null;
+  qboInvoiceId?: string | null;
   number: string | null;
   title: string;
   totalCents: number;
@@ -101,20 +108,32 @@ export function invoiceEmailHtml(inv: InvoiceForDelivery, clientName: string | n
   ].join("");
 }
 
+/** The invoice's PDF: QuickBooks' own for ERP invoices, else HubSpot's. Null if it can't be had. */
+async function invoicePdf(inv: InvoiceForDelivery): Promise<Buffer | null> {
+  if (inv.qboInvoiceId) return qboGetPdf(`/invoice/${encodeURIComponent(inv.qboInvoiceId)}/pdf`).catch(() => null);
+  return fetchPdf(inv.pdfUrl);
+}
+
 /** Emails one invoice if the plan says email; returns null on success or the reason it wasn't sent. */
-async function emailInvoice(inv: InvoiceForDelivery, dest: InvoiceDestination | null, plan: Extract<DeliveryPlan, { kind: "EMAIL" }>, replyTo: string): Promise<string | null> {
+async function emailInvoice(
+  inv: InvoiceForDelivery,
+  dest: InvoiceDestination | null,
+  plan: Extract<DeliveryPlan, { kind: "EMAIL" }>,
+  replyTo: string,
+  test?: { banner: string },
+): Promise<string | null> {
   const quota = await loadEmailQuota();
   if (quota.used + plan.to.length + plan.cc.length > DAILY_EMAIL_LIMIT) return "Daily email limit reached. Email again after it resets.";
-  const pdf = await fetchPdf(inv.pdfUrl);
+  const pdf = await invoicePdf(inv);
   try {
     const status = await sendEmail({
-      type: "INVOICE_TO_CLIENT",
+      type: test ? "INVOICE_PREVIEW" : "INVOICE_TO_CLIENT",
       to: plan.to,
       cc: plan.cc,
       replyTo,
-      subject: `Invoice ${inv.number ?? ""} from Sueep: ${inv.title}`.replace(/\s+/g, " "),
-      html: invoiceEmailHtml(inv, dest?.company?.name ?? null, !!pdf),
-      attachments: pdf ? [{ filename: `Sueep invoice ${inv.number ?? inv.hubspotInvoiceId}.pdf`, content: pdf, mimeType: "application/pdf" }] : undefined,
+      subject: `${test ? "[Sandbox test] " : ""}Invoice ${inv.number ?? ""} from Sueep: ${inv.title}`.replace(/\s+/g, " "),
+      html: (test?.banner ?? "") + invoiceEmailHtml(inv, dest?.company?.name ?? null, !!pdf),
+      attachments: pdf ? [{ filename: `Sueep invoice ${inv.number ?? inv.qboInvoiceId ?? inv.hubspotInvoiceId}.pdf`, content: pdf, mimeType: "application/pdf" }] : undefined,
       link: inv.link,
       sentBy: replyTo,
     });
@@ -162,14 +181,30 @@ export async function deliverApprovedInvoice(inv: InvoiceForDelivery, approverEm
   } else {
     row = { status: "NEEDS_SENDING", reason: plan.reason, sentTo: [], cc: [], emailedAt: null };
   }
+  // QuickBooks invoices keep their lines and due date here; HubSpot ones read them from the link tables.
+  const qbo = inv.qboInvoiceId ? { lines: inv.lines, dueDate: inv.dueDate ? new Date(inv.dueDate) : null } : {};
   await prisma.invoiceDelivery.upsert({
-    where: { hubspotInvoiceId: inv.hubspotInvoiceId },
-    create: { hubspotInvoiceId: inv.hubspotInvoiceId, ...base, ...row },
-    update: { ...base, ...row },
+    where: inv.qboInvoiceId ? { qboInvoiceId: inv.qboInvoiceId } : { hubspotInvoiceId: inv.hubspotInvoiceId! },
+    create: { hubspotInvoiceId: inv.hubspotInvoiceId, qboInvoiceId: inv.qboInvoiceId ?? null, ...qbo, ...base, ...row },
+    update: { ...qbo, ...base, ...row },
   });
   if (row.status === "EMAILED") return `Emailed to ${row.sentTo.join(", ")}.`;
   if (row.status === "NEEDS_UPLOAD") return `On Needs upload (${row.reason}).`;
   return `On Needs sending: ${row.reason}`;
+}
+
+/**
+ * Sandbox Approve: emails only the approver what the client would get, with
+ * the sandbox PDF, and says where the real one would go. No delivery row,
+ * so nothing lands on the live Needs sending list.
+ */
+export async function emailSandboxTest(inv: InvoiceForDelivery, approverEmail: string): Promise<string> {
+  const dest = await loadDestination(inv.destType, inv.destId).catch(() => null);
+  const banner =
+    `<div style="background:#e0f2fe;border:1px solid #7dd3fc;border-radius:6px;padding:10px 12px;margin-bottom:16px;font-size:13px;color:#0c4a6e">` +
+    `<strong>Sandbox test.</strong> Made in the QuickBooks sandbox company and sent only to you. On the live site: ${escapeHtml(describePlan(planDelivery(dest)))}</div>`;
+  const failed = await emailInvoice(inv, dest, { kind: "EMAIL", to: [approverEmail], cc: [] }, approverEmail, { banner });
+  return failed ? `Test email not sent: ${failed}` : `Test copy emailed to you.`;
 }
 
 /** Email again after fixing the address (or the next day, past the limit). */
@@ -182,6 +217,7 @@ export async function emailAgain(deliveryId: string, email: string, lines: Invoi
   if (plan.kind !== "EMAIL") return { error: plan.kind === "UPLOAD" ? "This client uses a portal. Upload it, then Mark done." : `${plan.reason}. Fix it on the company, building or project first.` };
   const inv: InvoiceForDelivery = {
     hubspotInvoiceId: d.hubspotInvoiceId,
+    qboInvoiceId: d.qboInvoiceId,
     number: d.invoiceNumber,
     title: d.title,
     totalCents: d.totalCents,

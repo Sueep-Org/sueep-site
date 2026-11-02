@@ -50,9 +50,14 @@ export default async function QuickBooksPage({ searchParams }: { searchParams: P
         QuickBooks
         <InfoTip text="QuickBooks reports brought into the ERP, for the Finance dashboard and the money owed check. Connect QuickBooks, or upload the exports here once a month until it is. Nothing here changes QuickBooks." />
       </h1>
-        <Link href="/erp/quickbooks/check" className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
-          See details →
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/erp/quickbooks/setup" className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            Invoice setup
+          </Link>
+          <Link href="/erp/quickbooks/check" className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            See details →
+          </Link>
+        </div>
       </div>
       <QuickBooksConnection
         configured={isQboConfigured()}
