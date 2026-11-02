@@ -752,6 +752,8 @@ export function SchedulePlanner({
           {
             id: r.id,
             projectId: assignment.projectId,
+            changeOrderId: null,
+            changeOrderTitle: null,
             dateKey: assignment.dateKey,
             reason,
             note: r.note,
@@ -1687,6 +1689,7 @@ export function SchedulePlanner({
         }}
         onWorkerCreated={(w) => setCoWorkerAssignments((prev) => [...prev.filter((x) => x.id !== w.id), w])}
         onWorkerDeleted={(id) => setCoWorkerAssignments((prev) => prev.filter((w) => w.id !== id))}
+        onDayRemoved={(r) => setDayRemovals((prev) => [...prev, r])}
       />
     );
   }
@@ -2850,8 +2853,9 @@ export function SchedulePlanner({
   // drawing the same day a second time as a "needs supervisor" alert.
   const projectSpanMarkersByDay = useMemo(() => {
     const markers = computeProjectSpanMarkersByDay(projects, dayAssignments, supervisorOverrides, projectSoloCoverage.ownerIds);
-    if (dayRemovals.length === 0) return markers;
-    const removed = new Set(dayRemovals.map((r) => `${r.projectId}|${r.dateKey}`));
+    const projectRemovals = dayRemovals.filter((r) => !r.changeOrderId);
+    if (projectRemovals.length === 0) return markers;
+    const removed = new Set(projectRemovals.map((r) => `${r.projectId}|${r.dateKey}`));
     for (const [k, list] of markers) {
       const kept = list.filter((e) => !removed.has(`${e.project.id}|${k}`));
       if (kept.length === 0) markers.delete(k);
@@ -4309,11 +4313,13 @@ export function SchedulePlanner({
                         ? null
                         : (dayRemovalsByKey.get(k) ?? []).map((r) => {
                             const project = projectById.get(r.projectId);
-                            if (!project || !selectedTypes.has(calendarSegmentGroup(project.segment))) return null;
+                            if (!project) return null;
+                            if (r.changeOrderId ? !selectedTypes.has("CO") : !selectedTypes.has(calendarSegmentGroup(project.segment))) return null;
+                            const removedTitle = r.changeOrderId ? (r.changeOrderTitle ?? CHANGE_ORDER_LABEL) : project.jobTitle;
                             return (
                               <li key={`removed-${r.id}`} className={inMonth ? "group relative" : "relative"}>
                                 <div className="flex items-center gap-1 truncate rounded border border-dashed border-gray-300 bg-gray-100 py-0.5 pl-1.5 pr-4 text-[10px] font-medium text-gray-400">
-                                  <span className="truncate line-through">{project.jobTitle}</span>
+                                  <span className="truncate line-through">{removedTitle}</span>
                                 </div>
                                 <button
                                   type="button"
@@ -4326,7 +4332,8 @@ export function SchedulePlanner({
                                 </button>
                                 {inMonth ? (
                                   <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
-                                    <div className="font-semibold">{project.jobTitle}</div>
+                                    <div className="font-semibold">{removedTitle}</div>
+                                    {r.changeOrderId ? <div className="text-gray-300">{CHANGE_ORDER_LABEL} · Project: {project.jobTitle}</div> : null}
                                     <div className="text-gray-300">Removed: {scheduleRemovalReasonLabel(r.reason)}</div>
                                     {r.note ? <div className="line-clamp-3 text-gray-300">Note: {r.note}</div> : null}
                                     {r.coveredBy ? <div className="text-gray-300">Was covered by: {r.coveredBy}</div> : null}

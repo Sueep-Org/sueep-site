@@ -25,6 +25,9 @@ export function scheduleRemovalReasonLabel(v: string): string {
 export type ScheduleDayRemovalRow = {
   id: string;
   projectId: string;
+  /** Set for a change order's day, drawn with the CO's title */
+  changeOrderId: string | null;
+  changeOrderTitle: string | null;
   dateKey: string;
   reason: string;
   note: string | null;

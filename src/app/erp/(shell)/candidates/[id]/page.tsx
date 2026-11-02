@@ -14,6 +14,7 @@ import { officeStageMeta } from "@/lib/erp/officeHiring";
 import { OfficeCandidateEditor } from "./OfficeCandidateEditor";
 import { ShortlistStar } from "../office/OfficeCandidateControls";
 import { OfferLettersSection } from "./OfferLettersSection";
+import { ResumeSection } from "./ResumeSection";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -204,6 +205,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
                 />
               ),
             },
+            { label: "Resume", content: <ResumeSection candidateId={row.id} /> },
             { label: "Offer", content: <OfferLettersSection candidateId={row.id} /> },
             ...(hired
               ? [
@@ -353,6 +355,7 @@ export default async function CandidateDetailPage({ params }: PageProps) {
             </>
           ),
         },
+        { label: "Resume", content: <ResumeSection candidateId={row.id} /> },
         {
           label: "Pipeline",
           content: (

@@ -255,6 +255,11 @@ export function ScheduleCalendarOverview() {
             to see the reason, the note, who was covering it, and who removed it. Click its own{" "}
             <strong>×</strong> to clear it for good.
           </P>
+          <P>
+            A <strong>change order</strong> chip works the same way from its card: click the chip, then{" "}
+            <strong>Take off this day</strong>. If that day is the change order&apos;s start or end date, the
+            date is cleared too, so set a new one on the change order if it moved.
+          </P>
         </Step>
 
         <Step n={10} title="What supervisors and PMs see">
