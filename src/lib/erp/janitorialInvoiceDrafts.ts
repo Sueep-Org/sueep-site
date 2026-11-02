@@ -12,6 +12,8 @@
  * Never two drafts for one month: a month is skipped once it has any linked
  * invoice, isn't NOT_BILLED, or its draft was discarded. A short claim on
  * the period stops two runs (daily cron and Draft now) racing each other.
+ * With QuickBooks drafts on, the month's draft lives in the ERP instead
+ * (qboInvoiceDrafts.ts) and needs no HubSpot deal.
  */
 import { prisma } from "@/lib/prisma";
 import { todayEasternKey, utcDateKey } from "./dates";
@@ -30,6 +32,7 @@ import {
   setInvoiceDates,
   type DraftLine,
 } from "@/lib/hubspot/invoiceDrafts";
+import { createMonthDraft, draftsGoToQuickBooks, monthHasQboDraft } from "./qboInvoiceDrafts";
 
 export const DRAFT_LEAD_DAYS = 3;
 /** AppSetting key: Approve stays off until an Admin turns it on (first one with the bookkeeper). */
@@ -114,6 +117,10 @@ export async function draftPeriod(periodId: string): Promise<DraftOutcome> {
   if (p.billingStatus !== "NOT_BILLED") return { ...base, result: "skipped", note: `Already ${p.billingStatus.toLowerCase().replace("_", " ")}` };
   if (p.hubspotInvoices.length) return { ...base, result: "skipped", note: "Already has an invoice" };
   if (p.draftDiscardedAt) return { ...base, result: "skipped", note: "Draft was discarded" };
+  if (await draftsGoToQuickBooks()) {
+    if (await monthHasQboDraft(p.id)) return { ...base, result: "skipped", note: "Already has a draft" };
+    return { ...base, ...(await createMonthDraft(p.id)) };
+  }
   const dealId = p.recurringContract.building.hubspotDealId;
   if (!dealId) {
     await prisma.recurringContractPeriod.update({ where: { id: p.id }, data: { draftError: "No HubSpot deal is linked to this building.", draftErrorAt: new Date() } });
@@ -196,10 +203,12 @@ export async function draftDueJanitorialInvoices(onlyContractId?: string): Promi
   return out;
 }
 
+/** The month's waiting HubSpot draft. Drafts are HubSpot invoices until the switch to QuickBooks. */
 async function draftLink(periodId: string) {
   const p = await loadPeriod(periodId);
   const link = p?.hubspotInvoices.find((i) => i.draftedByErp && i.status === "draft");
-  return p && link ? { p, link } : null;
+  const hubspotInvoiceId = link?.hubspotInvoiceId;
+  return p && link && hubspotInvoiceId ? { p, link: { ...link, hubspotInvoiceId } } : null;
 }
 
 /** Pushes the month's current amount and extras onto its draft. */

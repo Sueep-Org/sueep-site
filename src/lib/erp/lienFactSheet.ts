@@ -13,6 +13,7 @@ import { prisma } from "@/lib/prisma";
 import { todayEasternKey, utcDateKey } from "./dates";
 import { LIEN_ROLE_OPTIONS, LIEN_STATE_OPTIONS, formatLienDay } from "./lienDeadline";
 import { loadLienWatch } from "./lienWatch";
+import { invoiceKey } from "./invoiceLinkSource";
 
 export type LienFactSheetInvoice = { id: string; number: string; dateKey: string | null; dueKey: string | null; amountCents: number; hasPdf: boolean };
 
@@ -82,8 +83,8 @@ export async function loadLienFactSheet(
     prisma.hubSpotSovInvoice.findMany({
       where: { projectId, status: "open" },
       orderBy: { invoiceDate: "asc" },
-      distinct: ["hubspotInvoiceId"],
-      select: { hubspotInvoiceId: true, invoiceNumber: true, invoiceDate: true, dueDate: true, balanceDueCents: true, invoiceTotalCents: true, pdfUrl: true },
+      distinct: ["hubspotInvoiceId", "qboInvoiceId"],
+      select: { hubspotInvoiceId: true, qboInvoiceId: true, invoiceNumber: true, invoiceDate: true, dueDate: true, balanceDueCents: true, invoiceTotalCents: true, pdfUrl: true },
     }),
   ]);
   if (!project) return { error: "Project not found" };
@@ -115,7 +116,7 @@ export async function loadLienFactSheet(
     completedKey: row.completedKey,
     amountCents: overrides.amountCents != null && overrides.amountCents > 0 ? overrides.amountCents : row.unpaidCents,
     invoices: invoices.map((i) => ({
-      id: i.hubspotInvoiceId,
+      id: invoiceKey(i),
       number: i.invoiceNumber ?? "Invoice",
       dateKey: i.invoiceDate ? utcDateKey(i.invoiceDate) : null,
       dueKey: i.dueDate ? utcDateKey(i.dueDate) : null,

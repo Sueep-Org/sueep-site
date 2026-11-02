@@ -3,8 +3,9 @@ import { decryptSecret, encryptSecret } from "./secretBox";
 
 /**
  * The ERP's QuickBooks Online connection (QUICKBOOKS_PLAN.md Phase 1):
- * OAuth 2.0 sign-in, token refresh, disconnect, and read requests with
- * retries. Read-only: only GET requests are ever sent to the accounting API.
+ * OAuth 2.0 sign-in, token refresh, disconnect, and requests with retries.
+ * Reads use qboGet. The only write is qboPost, used by Ready to send to
+ * create invoices and customers (ERP_QBO_INVOICING_PLAN.md Phase 3).
  *
  * Env: QBO_CLIENT_ID, QBO_CLIENT_SECRET, QBO_ENVIRONMENT (sandbox |
  * production), QBO_REDIRECT_URI. Tokens are stored encrypted (secretBox.ts).
@@ -234,12 +235,38 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * with a growing wait; anything else fails.
  */
 export async function qboGet<T>(path: string): Promise<T> {
+  return qboRequest<T>("GET", path);
+}
+
+/**
+ * A write to the accounting API, e.g. "/invoice". `requestId` makes it safe to
+ * retry: QuickBooks answers a repeated id with the first result instead of
+ * making a second invoice (its own duplicate check), so a retry after a
+ * timeout never doubles anything.
+ */
+export async function qboPost<T>(path: string, body: unknown, requestId: string): Promise<T> {
+  return qboRequest<T>("POST", path, { body, requestId });
+}
+
+/** An invoice's PDF as QuickBooks prints it, e.g. qboGetPdf("/invoice/145/pdf"). */
+export async function qboGetPdf(path: string): Promise<Buffer> {
+  return qboRequest<Buffer>("GET", path, undefined, true);
+}
+
+async function qboRequest<T>(method: "GET" | "POST", path: string, write?: { body: unknown; requestId: string }, pdf = false): Promise<T> {
   let auth = await accessToken();
   let refreshed = false;
   for (let attempt = 1; ; attempt++) {
     const url = new URL(`${apiBase(auth.environment)}/v3/company/${auth.realmId}${path}`);
     url.searchParams.set("minorversion", MINOR_VERSION);
-    const res = await fetch(url, { headers: { authorization: `Bearer ${auth.token}`, accept: "application/json" }, cache: "no-store" });
+    if (write) url.searchParams.set("requestid", write.requestId);
+    const res = await fetch(url, {
+      method,
+      headers: { authorization: `Bearer ${auth.token}`, accept: pdf ? "application/pdf" : "application/json", ...(write ? { "content-type": "application/json" } : {}) },
+      body: write ? JSON.stringify(write.body) : undefined,
+      cache: "no-store",
+    });
+    if (res.ok && pdf) return Buffer.from(await res.arrayBuffer()) as T;
     if (res.ok) {
       const body = (await res.json()) as T;
       // QuickBooks can answer 200 with a Fault body (a bad report option, for example).

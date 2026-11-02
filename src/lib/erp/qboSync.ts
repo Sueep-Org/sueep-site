@@ -2,14 +2,28 @@ import { prisma } from "@/lib/prisma";
 import { todayEasternKey } from "./dates";
 import { loadQboConnection, qboGet } from "./qboClient";
 import { arFromReport, pnlFromReport, pnlTxnsFromDetail, type QboReport } from "./qboReports";
-import { saveArImport, saveInvoicesAndPayments, saveOpenItems, savePnlImport, savePnlTxns, type OpenItem, type QboInvoiceRow, type QboPaymentRow } from "./qboImport";
+import {
+  saveArImport,
+  saveCustomersAndItems,
+  saveInvoicesAndPayments,
+  saveOpenItems,
+  savePnlImport,
+  savePnlTxns,
+  type OpenItem,
+  type QboCustomerRow,
+  type QboInvoiceRow,
+  type QboItemRow,
+  type QboPaymentRow,
+} from "./qboImport";
 import { FINANCE_DATA_START } from "./financeSummary";
+import { refreshQuickBooksLinks } from "./qboInvoiceLinks";
 
 /**
  * Reads the Profit and Loss (by month, cash basis, from Jan 1 last year to
  * today), today's A/R Aging and what's still open (invoices, unapplied
  * payments, credits) from QuickBooks into the ERP's tables
- * (QUICKBOOKS_PLAN.md Phase 1). Only a production connection saves: local dev
+ * (QUICKBOOKS_PLAN.md Phase 1), plus the customer and product lists for
+ * invoice mapping (ERP_QBO_INVOICING_PLAN.md Phase 1). Only a production connection saves: local dev
  * and the live site share one database, so sandbox data must never replace
  * Sueep's real numbers. A sandbox sync returns what it read without saving.
  */
@@ -31,12 +45,23 @@ type QboTxn = {
   Line?: { Amount?: number; LinkedTxn?: { TxnId?: string; TxnType?: string }[] }[];
 };
 
+type QboCustomerApi = {
+  Id: string;
+  DisplayName?: string;
+  FullyQualifiedName?: string;
+  CompanyName?: string;
+  ParentRef?: { value?: string };
+  PrimaryEmailAddr?: { Address?: string };
+  Balance?: number;
+};
+type QboItemApi = { Id: string; Name?: string; Type?: string; Description?: string };
+
 /** Every row of a QuickBooks query, a page at a time. */
-async function queryAll(entity: string, where: string): Promise<QboTxn[]> {
-  const out: QboTxn[] = [];
+async function queryAll<T = QboTxn>(entity: string, where: string): Promise<T[]> {
+  const out: T[] = [];
   for (let start = 1; ; start += PAGE) {
     const q = `SELECT * FROM ${entity}${where ? ` WHERE ${where}` : ""} STARTPOSITION ${start} MAXRESULTS ${PAGE}`;
-    const res = await qboGet<{ QueryResponse?: Record<string, QboTxn[] | undefined> }>(`/query?query=${encodeURIComponent(q)}`);
+    const res = await qboGet<{ QueryResponse?: Record<string, T[] | undefined> }>(`/query?query=${encodeURIComponent(q)}`);
     const rows = res.QueryResponse?.[entity] ?? [];
     out.push(...rows);
     if (rows.length < PAGE) return out;
@@ -74,6 +99,7 @@ export type QboSyncResult = {
   ar: { asOf: string; customers: number; totalCents: number; totalsMatch: boolean };
   open: { invoices: number; payments: number; credits: number };
   detail: { transactions: number; invoices: number; payments: number; totalsMatch: boolean };
+  lists: { customers: number; items: number };
 };
 
 export async function qboSync(opts: { by: string | null }): Promise<QboSyncResult> {
@@ -125,6 +151,23 @@ export async function qboSync(opts: { by: string | null }): Promise<QboSyncResul
     ),
   }));
 
+  // Active customers and products only (QuickBooks' default), for invoice mapping.
+  const customerRows: QboCustomerRow[] = (await queryAll<QboCustomerApi>("Customer", "")).map((c) => ({
+    qboId: c.Id,
+    displayName: c.DisplayName?.trim() || "(no name)",
+    fullyQualifiedName: c.FullyQualifiedName?.trim() || c.DisplayName?.trim() || "(no name)",
+    companyName: c.CompanyName?.trim() || null,
+    parentQboId: c.ParentRef?.value ?? null,
+    email: c.PrimaryEmailAddr?.Address?.trim() || null,
+    balanceCents: cents(c.Balance),
+  }));
+  const itemRows: QboItemRow[] = (await queryAll<QboItemApi>("Item", "")).map((i) => ({
+    qboId: i.Id,
+    name: i.Name?.trim() || "(no name)",
+    type: i.Type ?? null,
+    description: i.Description?.trim() || null,
+  }));
+
   const totalsMatch = pnl.checks.every((c) => c.fileCents === c.linesCents);
   const arMatch = ar.fileTotalCents == null || ar.fileTotalCents === ar.rowsTotalCents;
   // Don't save a report whose pieces don't add up to its own totals.
@@ -134,6 +177,9 @@ export async function qboSync(opts: { by: string | null }): Promise<QboSyncResul
     await saveArImport(ar, meta);
     await saveOpenItems(openItems, meta);
     await saveInvoicesAndPayments(invoiceRows, paymentRows, meta);
+    await saveCustomersAndItems(customerRows, itemRows, meta);
+    // Invoices the ERP made in QuickBooks take their paid status from what was just saved.
+    await refreshQuickBooksLinks();
     if (detailMatch) await savePnlTxns(detail, [...new Set(pnl.months.filter((m) => m >= FINANCE_DATA_START))], meta);
     await prisma.qboConnection.update({ where: { id: conn.id }, data: { lastSyncAt: new Date() } });
   }
@@ -150,6 +196,7 @@ export async function qboSync(opts: { by: string | null }): Promise<QboSyncResul
     },
     ar: { asOf: ar.asOf, customers: ar.rows.length, totalCents: ar.rowsTotalCents, totalsMatch: arMatch },
     detail: { transactions: detail.length, invoices: invoiceRows.length, payments: paymentRows.length, totalsMatch: detailMatch },
+    lists: { customers: customerRows.length, items: itemRows.length },
     open: {
       invoices: openItems.filter((i) => i.kind === "INVOICE").length,
       payments: openItems.filter((i) => i.kind === "PAYMENT").length,

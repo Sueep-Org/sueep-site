@@ -4,6 +4,7 @@ import { getErpAuth, canSeeFinancials } from "@/lib/erpAuth";
 import { fetchDealDocuments } from "@/lib/hubspot/dealDocuments";
 import { projectContractCents, quoteMatchingContract } from "@/lib/hubspot/projectDocuments";
 import { syncProjectInvoices } from "@/lib/hubspot/syncProjectInvoices";
+import { invoiceKey } from "@/lib/erp/invoiceLinkSource";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -43,6 +44,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       where: { projectId: id },
       select: {
         hubspotInvoiceId: true,
+        qboInvoiceId: true,
         invoiceNumber: true,
         sovItemId: true,
         changeOrderId: true,
@@ -69,7 +71,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const heldBy = new Map<string, Array<{ invoiceId: string; number: string | null }>>();
   for (const r of linkRows) {
     const targetId = r.sovItemId ? `sov:${r.sovItemId}` : r.changeOrderId ? `co:${r.changeOrderId}` : null;
-    if (targetId) heldBy.set(targetId, [...(heldBy.get(targetId) ?? []), { invoiceId: r.hubspotInvoiceId, number: r.invoiceNumber }]);
+    // A QuickBooks invoice holds its lines too, but isn't on the HubSpot deal's list.
+    if (targetId) heldBy.set(targetId, [...(heldBy.get(targetId) ?? []), { invoiceId: invoiceKey(r), number: r.invoiceNumber }]);
+    if (!r.hubspotInvoiceId) continue;
     linksByInvoice.set(r.hubspotInvoiceId, [
       ...(linksByInvoice.get(r.hubspotInvoiceId) ?? []),
       {

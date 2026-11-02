@@ -729,6 +729,7 @@ model RecurringContractPeriod {
   projects        Project[]
   charges         RecurringContractCharge[]
   hubspotInvoices HubSpotContractInvoice[]
+  qboDrafts       QboInvoiceDraft[]
 
   /// Someone discarded this month's auto draft, so it isn't drafted again
   /// unless they ask (lib/erp/janitorialInvoiceDrafts.ts).
@@ -2975,7 +2976,12 @@ model HubSpotUnitInvoice {
   turnoverRequestId String?
   turnoverRequest   TurnoverRequest? @relation(fields: [turnoverRequestId], references: [id], onDelete: SetNull)
 
-  hubspotInvoiceId  String
+  /// HUBSPOT (HubSpot invoice, hubspotInvoiceId set) | QUICKBOOKS (made by
+  /// the ERP in QuickBooks, qboInvoiceId set). ERP_QBO_INVOICING_PLAN.md
+  /// Phase 2. HubSpot syncs only ever touch HUBSPOT rows.
+  source            String    @default("HUBSPOT")
+  hubspotInvoiceId  String?
+  qboInvoiceId      String?
   invoiceNumber     String?
   /// draft | open | paid | voided (HubSpot's hs_invoice_status)
   status            String?
@@ -3002,6 +3008,7 @@ model HubSpotUnitInvoice {
   billedAppliedAt   DateTime?
 
   @@unique([hubspotInvoiceId, unitNumber])
+  @@unique([qboInvoiceId, unitNumber])
   @@index([buildingId, unitNumber])
   @@index([turnoverRequestId])
 }
@@ -3024,7 +3031,12 @@ model HubSpotSovInvoice {
   changeOrderId String?
   changeOrder   ProjectChangeOrder? @relation(fields: [changeOrderId], references: [id], onDelete: Cascade)
 
-  hubspotInvoiceId  String
+  /// HUBSPOT (HubSpot invoice, hubspotInvoiceId set) | QUICKBOOKS (made by
+  /// the ERP in QuickBooks, qboInvoiceId set). ERP_QBO_INVOICING_PLAN.md
+  /// Phase 2. HubSpot syncs only ever touch HUBSPOT rows.
+  source            String    @default("HUBSPOT")
+  hubspotInvoiceId  String?
+  qboInvoiceId      String?
   invoiceNumber     String?
   /// draft | open | paid | voided (HubSpot's hs_invoice_status)
   status            String?
@@ -3051,6 +3063,7 @@ model HubSpotSovInvoice {
 
   @@index([projectId])
   @@index([hubspotInvoiceId])
+  @@index([qboInvoiceId])
   @@index([sovItemId])
   @@index([changeOrderId])
 }
@@ -3069,7 +3082,12 @@ model HubSpotContractInvoice {
   periodId String
   period   RecurringContractPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
 
-  hubspotInvoiceId  String
+  /// HUBSPOT (HubSpot invoice, hubspotInvoiceId set) | QUICKBOOKS (made by
+  /// the ERP in QuickBooks, qboInvoiceId set). ERP_QBO_INVOICING_PLAN.md
+  /// Phase 2. HubSpot syncs only ever touch HUBSPOT rows.
+  source            String    @default("HUBSPOT")
+  hubspotInvoiceId  String?
+  qboInvoiceId      String?
   invoiceNumber     String?
   /// draft | open | paid | voided (HubSpot's hs_invoice_status)
   status            String?
@@ -3095,6 +3113,7 @@ model HubSpotContractInvoice {
   approvedByEmail String?
 
   @@unique([hubspotInvoiceId, periodId])
+  @@unique([qboInvoiceId, periodId])
   @@index([periodId])
 }
 
@@ -3976,6 +3995,13 @@ model ClientCompany {
   propertyManagers  PropertyManager[]
   coiHolders        CoiHolder[]
 
+  /// The QuickBooks customer this company's invoices go under (QboCustomer.qboId),
+  /// for the ERP sending invoices to QuickBooks (ERP_QBO_INVOICING_PLAN.md Phase 1).
+  /// Null with qboConfirmedAt set means a new customer is made at the switch.
+  qboCustomerId       String?
+  qboConfirmedAt      DateTime?
+  qboConfirmedByEmail String?
+
   @@index([archived, name])
 }
 
@@ -4029,6 +4055,51 @@ model ClientCompanyLogin {
   @@index([loginId])
 }
 
+/// An invoice drafted in the ERP for QuickBooks (ERP_QBO_INVOICING_PLAN.md
+/// Phase 3); Approve creates it in QuickBooks. Local dev (sandbox) and the
+/// live site (production) share this database, so each row says which
+/// QuickBooks it is for and each server only sees its own. Approving a
+/// sandbox draft is a test: the invoice is made in the sandbox company and
+/// nothing else in the ERP changes (status TESTED).
+model QboInvoiceDraft {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// sandbox | production
+  environment      String
+  /// MONTH (janitorial month, periodId) | ITEMS (finished work picked on Ready to bill)
+  kind             String
+  periodId         String?
+  period           RecurringContractPeriod? @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  /// BUILDING or PROJECT, and that record's id: whose client company the invoice goes to
+  groupType        String
+  groupId          String
+  /// Building name or job title, for the list
+  title            String
+  /// ITEMS: [{ itemKey, lineKind, name, description, amountCents }]. A MONTH
+  /// draft reads its lines from the month itself, so edits there show up.
+  lines            Json      @default("[]")
+  totalCents       Int
+  /// Set on the draft when the client company has no payment terms
+  dueDate          DateTime?
+  /// DRAFT | APPROVED | TESTED | DISCARDED
+  status           String    @default("DRAFT")
+  createdByEmail   String?
+  approvedAt       DateTime?
+  approvedByEmail  String?
+  discardedAt      DateTime?
+  discardedByEmail String?
+  /// Filled on Approve
+  qboInvoiceId     String?
+  invoiceNumber    String?
+  qboCustomerId    String?
+
+  // Also in the migration: one waiting or approved draft per month and environment (partial unique index).
+  @@index([environment, status])
+  @@index([periodId])
+}
+
 /// A HubSpot draft invoice the ERP made from finished, unbilled items (unit
 /// turns, SOV lines, change orders) picked on Ready to send. One per building
 /// (turnovers) or job (post-construction). The items are linked through the
@@ -4070,8 +4141,14 @@ model InvoiceDelivery {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  hubspotInvoiceId String   @unique
+  /// The invoice: a HubSpot one, or one the ERP made in QuickBooks
+  /// (ERP_QBO_INVOICING_PLAN.md Phase 4). Exactly one is set.
+  hubspotInvoiceId String?  @unique
+  qboInvoiceId     String?  @unique
   invoiceNumber    String?
+  /// QuickBooks invoices only: the lines and due date as emailed, for Email again
+  lines            Json?
+  dueDate          DateTime?
   /// Building name or job title
   title            String
   totalCents       Int
@@ -4515,7 +4592,7 @@ model QboImport {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
 
-  /// PNL | AR_AGING | OPEN_ITEMS | PNL_DETAIL | INVOICES
+  /// PNL | AR_AGING | OPEN_ITEMS | PNL_DETAIL | INVOICES | CUSTOMERS
   kind       String
   /// UPLOAD | SYNC
   source     String  @default("UPLOAD")
@@ -4535,6 +4612,8 @@ model QboImport {
   pnlTxns   QboPnlTxn[]
   invoices  QboInvoice[]
   payments  QboPayment[]
+  customers QboCustomer[]
+  items     QboItem[]
 
   @@index([kind, createdAt])
 }
@@ -4700,6 +4779,44 @@ model QboPayment {
   unappliedCents Int
   /// [{ invoiceQboId, amountCents }]
   links          Json    @default("[]")
+
+  @@index([importId])
+}
+
+/// QuickBooks' active customers and sub-customers, for linking client
+/// companies and naming project sub-customers (ERP_QBO_INVOICING_PLAN.md
+/// Phase 1). Each sync replaces the list.
+model QboCustomer {
+  id       String    @id @default(cuid())
+  importId String
+  import   QboImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  qboId              String  @unique
+  displayName        String
+  /// "Parent:Child" for a sub-customer
+  fullyQualifiedName String
+  companyName        String?
+  /// The parent customer's qboId for a sub-customer, null at the top level
+  parentQboId        String?
+  email              String?
+  balanceCents       Int
+
+  @@index([parentQboId])
+  @@index([importId])
+}
+
+/// QuickBooks' active products and services, for the invoice line mapping
+/// (ERP_QBO_INVOICING_PLAN.md Phase 1). Each sync replaces the list.
+model QboItem {
+  id       String    @id @default(cuid())
+  importId String
+  import   QboImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  qboId       String  @unique
+  name        String
+  /// Service | NonInventory | Inventory | Category | Group
+  type        String?
+  description String?
 
   @@index([importId])
 }

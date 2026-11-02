@@ -1,13 +1,15 @@
 import { prisma } from "@/lib/prisma";
 import { matchUnitNumber, amountReconciles } from "@/lib/hubspot/billingMatch";
 import { fetchDealInvoices, type DealInvoice } from "@/lib/hubspot/dealDocuments";
+import { HUBSPOT_LINKS } from "@/lib/erp/invoiceLinkSource";
 
 /**
  * Mirrors every invoice (any status) on a building's HubSpot deal into
  * HubSpotUnitInvoice, one row per (invoice, unit), so a turn can show its
  * invoice number, status and PDF link.
  *
- * Only ever writes HubSpotUnitInvoice. It reads the paid-invoice sync's
+ * Only ever writes HubSpotUnitInvoice, and only HubSpot rows (invoices the
+ * ERP made in QuickBooks are left alone). It reads the paid-invoice sync's
  * ledger and aliases to agree with its unit matches, but never touches
  * billingStatus or the review queue, so unpaid invoices can't mark anything
  * paid or show up as items to review.
@@ -92,10 +94,10 @@ export async function syncBuildingUnitInvoices(
   // Invoices someone linked by hand, to units, a unit's change orders or a
   // janitorial contract month: only their HubSpot details get refreshed,
   // never what they point at.
-  const coLinkWhere = { manual: true, project: unitChangeOrderProjects(buildingId) };
-  const monthLinkWhere = contractMonthLinks(buildingId);
+  const coLinkWhere = { ...HUBSPOT_LINKS, manual: true, project: unitChangeOrderProjects(buildingId) };
+  const monthLinkWhere = { ...HUBSPOT_LINKS, ...contractMonthLinks(buildingId) };
   const [manualUnitRows, manualCoRows, monthRows] = await Promise.all([
-    prisma.hubSpotUnitInvoice.findMany({ where: { buildingId, manual: true }, select: { hubspotInvoiceId: true }, distinct: ["hubspotInvoiceId"] }),
+    prisma.hubSpotUnitInvoice.findMany({ where: { ...HUBSPOT_LINKS, buildingId, manual: true }, select: { hubspotInvoiceId: true }, distinct: ["hubspotInvoiceId"] }),
     prisma.hubSpotSovInvoice.findMany({ where: coLinkWhere, select: { hubspotInvoiceId: true }, distinct: ["hubspotInvoiceId"] }),
     prisma.hubSpotContractInvoice.findMany({ where: monthLinkWhere, select: { hubspotInvoiceId: true }, distinct: ["hubspotInvoiceId"] }),
   ]);
@@ -178,6 +180,7 @@ export async function syncBuildingUnitInvoices(
   const liveIds = invoices.map((i) => i.id);
   await prisma.hubSpotUnitInvoice.deleteMany({
     where: {
+      ...HUBSPOT_LINKS,
       buildingId,
       OR: [
         { manual: false, id: { notIn: Array.from(keep) } },

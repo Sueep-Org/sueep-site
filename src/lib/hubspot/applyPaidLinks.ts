@@ -6,8 +6,8 @@ import { periodTotalCents } from "@/lib/erp/recurringContracts";
 import { markSovItemPaid, syncSovPercentDone, syncProjectBillingFromSOV, syncProjectBillingFromRequest, setRequestPaidDate } from "@/lib/sovSync";
 
 /**
- * Keeps a line's billing status in step with the HubSpot invoices linked to
- * it: Billed while any of them is open, Paid once all of them are paid.
+ * Keeps a line's billing status in step with the invoices linked to it
+ * (HubSpot's, and QuickBooks' after the switch): Billed while any of them is open, Paid once all of them are paid.
  * Works off the saved links (HubSpotSovInvoice, HubSpotUnitInvoice), so it
  * makes no HubSpot calls and is safe to run any number of times.
  *
@@ -24,7 +24,8 @@ import { markSovItemPaid, syncSovPercentDone, syncProjectBillingFromSOV, syncPro
 
 type Link = {
   id: string;
-  hubspotInvoiceId: string;
+  /** Null for an invoice the ERP made in QuickBooks; the rules are the same */
+  hubspotInvoiceId: string | null;
   status: string | null;
   amountCents: number;
   paidDate: Date | null;
@@ -240,8 +241,9 @@ export async function applyPaidInvoiceLinks(scope: { projectId?: string; buildin
  * doesn't show them as unresolved.
  */
 async function clearCoveredReviewRows(
-  links: Array<{ hubspotInvoiceId: string; sovItemId: string | null; changeOrderId: string | null; amountCents: number }>,
+  links: Array<{ hubspotInvoiceId: string | null; sovItemId: string | null; changeOrderId: string | null; amountCents: number }>,
 ): Promise<number> {
+  // The match record is HubSpot's line items, so QuickBooks rows (no HubSpot id) are skipped.
   const byInvoice = groupBy(links, (l) => l.hubspotInvoiceId);
   const pending = await prisma.hubSpotInvoiceLineItemMatch.findMany({
     where: { hubspotInvoiceId: { in: [...byInvoice.keys()] }, projectId: { not: null } },

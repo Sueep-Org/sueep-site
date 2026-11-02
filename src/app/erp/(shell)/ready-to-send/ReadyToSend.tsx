@@ -9,10 +9,13 @@ import type { DraftLine } from "@/lib/hubspot/invoiceDrafts";
 export type MonthRow = { periodId: string; building: string; month: string; note: string | null; discardedBy: string | null };
 
 export type DraftRow = MonthRow & {
-  /** month: a janitorial month (periodId). items: picked finished work (rowId is the ItemInvoiceDraft id). */
-  kind: "month" | "items";
+  /**
+   * month: a janitorial month (periodId). items: picked finished work (rowId
+   * is the ItemInvoiceDraft id). qbo: a draft for QuickBooks (QboInvoiceDraft id).
+   */
+  kind: "month" | "items" | "qbo";
   rowId: string;
-  hubspotInvoiceId: string;
+  hubspotInvoiceId: string | null;
   invoiceDateKey: string;
   dueDate: string | null;
   lines: DraftLine[];
@@ -29,7 +32,14 @@ export type DraftRow = MonthRow & {
   deliveryPlan: string;
   /** Client company's payment terms. Null means the due date can be set on the draft. */
   paymentTermsDays: number | null;
+  /** A QuickBooks sandbox draft: Approve is a test, so it doesn't need the Approve switch. */
+  testOnly?: boolean;
 };
+
+export type QboTestRow = { id: string; title: string; invoiceNumber: string | null; totalCents: number; url: string | null; when: string };
+
+/** Where new drafts go on this server, and its recent sandbox test invoices. */
+export type QboDraftsInfo = { environment: "sandbox" | "production"; on: boolean; tests: QboTestRow[] };
 
 export type DeliveryRow = {
   id: string;
@@ -59,17 +69,22 @@ export type BillableGroupRow = {
   key: string;
   name: string;
   type: "BUILDING" | "PROJECT";
-  hasDeal: boolean;
+  /** Why it can't be drafted (no HubSpot deal, or no client company for QuickBooks) */
+  blocker: string | null;
   client: string | null;
   method: string | null;
   sendTo: string | null;
   items: BillableItemRow[];
 };
 
-/** API base for a draft row: janitorial months and picked items live in different places. */
+/** API base for a draft row: janitorial months, picked items and QuickBooks drafts live in different places. */
 function draftUrl(d: DraftRow): string {
+  if (d.kind === "qbo") return `/api/erp/qbo-drafts/${d.rowId}`;
   return d.kind === "month" ? `/api/erp/invoice-drafts/${d.rowId}` : `/api/erp/item-drafts/${d.rowId}`;
 }
+
+/** Sandbox test drafts don't need the Approve switch. */
+const canApprove = (d: DraftRow, approveEnabled: boolean) => approveEnabled || !!d.testOnly;
 
 export type ContractSetting = {
   id: string;
@@ -103,6 +118,7 @@ export function ReadyToSend({
   contracts,
   approveEnabled,
   isAdmin,
+  qbo,
 }: {
   drafts: DraftRow[];
   deliveries: DeliveryRow[];
@@ -113,6 +129,7 @@ export function ReadyToSend({
   contracts: ContractSetting[];
   approveEnabled: boolean;
   isAdmin: boolean;
+  qbo: QboDraftsInfo;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -150,9 +167,13 @@ export function ReadyToSend({
 
   async function approve(rows: DraftRow[]) {
     const total = rows.reduce((s, r) => s + r.totalCents, 0);
+    const allQbo = rows.every((r) => r.kind === "qbo");
+    const where = allQbo
+      ? `Creates ${rows.length === 1 ? "the invoice" : "them"} in QuickBooks${qbo.environment === "sandbox" ? " (sandbox test company)" : ""} (${centsToDollars(total)}).`
+      : `Opens ${rows.length === 1 ? "the invoice" : "them"} in HubSpot (${centsToDollars(total)}). HubSpot sends open invoices to QuickBooks. This can't be undone from the ERP.`;
     const ok = await confirm({
       title: rows.length === 1 ? `Approve ${rows[0]!.building}, ${rows[0]!.month}?` : `Approve ${rows.length} invoices?`,
-      message: `Opens ${rows.length === 1 ? "the invoice" : "them"} in HubSpot (${centsToDollars(total)}). HubSpot sends open invoices to QuickBooks. This can't be undone from the ERP. ${rows
+      message: `${where} ${rows
         .map((r) => (rows.length === 1 ? r.deliveryPlan : `${r.building}: ${r.deliveryPlan}`))
         .join(" ")}`,
       confirmLabel: "Approve",
@@ -178,9 +199,11 @@ export function ReadyToSend({
     const ok = await confirm({
       title: `Discard ${r.building}, ${r.month}?`,
       message:
-        r.kind === "month"
-          ? "Deletes the draft in HubSpot. This month won't be drafted again unless you click Draft again below."
-          : "Deletes the draft in HubSpot. Its items go back on Ready to bill.",
+        r.kind === "qbo"
+          ? "Nothing was made in QuickBooks yet. Picked items go back on Ready to bill."
+          : r.kind === "month"
+            ? "Deletes the draft in HubSpot. This month won't be drafted again unless you click Draft again below."
+            : "Deletes the draft in HubSpot. Its items go back on Ready to bill.",
       confirmLabel: "Discard",
       danger: true,
     });
@@ -205,6 +228,13 @@ export function ReadyToSend({
     });
   }
 
+  async function setQboDrafts(on: boolean) {
+    await run("qbo-switch", async () => {
+      const { ok, data } = await call("/api/erp/invoice-drafts/settings", "PUT", { qboDrafts: on });
+      if (!ok) toast(String(data.error ?? "Could not save."));
+    });
+  }
+
   async function setApprove(on: boolean) {
     await run("approve-switch", async () => {
       const { ok, data } = await call("/api/erp/invoice-drafts/settings", "PUT", { approveEnabled: on });
@@ -226,12 +256,29 @@ export function ReadyToSend({
             </Button>
           )}
         </div>
+        {(qbo.on || (isAdmin && qbo.environment === "sandbox")) && (
+          <div className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm ${qbo.on ? "bg-sky-50 text-sky-800" : "bg-gray-100 text-gray-700"}`}>
+            New drafts: {qbo.on ? `QuickBooks${qbo.environment === "sandbox" ? " sandbox" : ""}` : "HubSpot"}
+            <InfoTip
+              text={
+                qbo.environment === "sandbox"
+                  ? "Local dev only. QuickBooks drafts are tests: Approve makes the invoice in the sandbox company and changes nothing else. The live site keeps drafting in HubSpot until the cutover."
+                  : "New drafts are made for QuickBooks. Approve creates the invoice there."
+              }
+            />
+            {isAdmin && qbo.environment === "sandbox" && (
+              <Button size="xs" variant="secondary" disabled={busy !== null} onClick={() => void setQboDrafts(!qbo.on)}>
+                Use {qbo.on ? "HubSpot" : "QuickBooks"}
+              </Button>
+            )}
+          </div>
+        )}
         <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => void draftNow()}>
           {busy === "draft-now" ? "Checking…" : "Draft now"}
         </Button>
         <InfoTip text="Runs the same check as the daily run: drafts any month that's due for contracts with Auto-draft on." />
         {selectedRows.length > 0 && (
-          <Button size="sm" className="ml-auto" disabled={!approveEnabled || busy !== null} onClick={() => void approve(selectedRows)}>
+          <Button size="sm" className="ml-auto" disabled={!selectedRows.every((r) => canApprove(r, approveEnabled)) || busy !== null} onClick={() => void approve(selectedRows)}>
             Approve selected ({selectedRows.length})
           </Button>
         )}
@@ -318,8 +365,8 @@ export function ReadyToSend({
                       Edit
                     </Button>
                   )}
-                  <Button size="sm" disabled={!approveEnabled || busy !== null} onClick={() => void approve([d])} title={approveEnabled ? undefined : "Approve is off"}>
-                    Approve
+                  <Button size="sm" disabled={!canApprove(d, approveEnabled) || busy !== null} onClick={() => void approve([d])} title={canApprove(d, approveEnabled) ? undefined : "Approve is off"}>
+                    {d.testOnly ? "Approve (sandbox test)" : "Approve"}
                   </Button>
                 </div>
               </div>
@@ -389,6 +436,33 @@ export function ReadyToSend({
                 </span>
                 <span className="text-xs tabular-nums text-gray-500">
                   {centsToDollars(r.totalCents)} · {new Date(r.when).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {qbo.tests.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="flex items-center gap-1 text-sm font-semibold text-gray-900">
+            QuickBooks sandbox tests
+            <InfoTip text="Invoices made in the QuickBooks sandbox company from local dev in the last 14 days. Open one to check the customer, products, number and dates." />
+          </h2>
+          <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white text-sm shadow-sm">
+            {qbo.tests.map((t) => (
+              <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2">
+                <span className="text-gray-900">
+                  {t.invoiceNumber ? `${t.invoiceNumber} · ` : ""}
+                  {t.title}
+                  {t.url && (
+                    <a href={t.url} target="_blank" rel="noreferrer" className="ml-2 text-xs text-pink-600 hover:text-pink-700">
+                      Open in QuickBooks
+                    </a>
+                  )}
+                </span>
+                <span className="text-xs tabular-nums text-gray-500">
+                  {centsToDollars(t.totalCents)} · {new Date(t.when).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                 </span>
               </li>
             ))}
@@ -624,16 +698,12 @@ function ReadyToBill({ groups }: { groups: BillableGroupRow[] }) {
             <div key={g.key} className="rounded-lg border border-gray-200 bg-white shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-4 py-2">
                 <label className="flex items-center gap-2 font-medium text-gray-900">
-                  <input type="checkbox" checked={all} disabled={!g.hasDeal} onChange={(e) => toggle(keys, e.target.checked)} />
+                  <input type="checkbox" checked={all} disabled={!!g.blocker} onChange={(e) => toggle(keys, e.target.checked)} />
                   {g.name}
                   <span className="text-xs font-normal text-gray-500">{g.type === "BUILDING" ? "Building" : "Job"}</span>
                 </label>
                 <span className="text-xs text-gray-500">
-                  {g.hasDeal ? (
-                    [g.client ?? "No client company", g.method, g.sendTo].filter(Boolean).join(" · ")
-                  ) : (
-                    <span className="text-red-700">No HubSpot deal linked, so it can&apos;t be drafted here</span>
-                  )}
+                  {g.blocker ? <span className="text-red-700">{g.blocker}</span> : [g.client ?? "No client company", g.method, g.sendTo].filter(Boolean).join(" · ")}
                 </span>
               </div>
               <table className="w-full text-sm">
@@ -641,7 +711,7 @@ function ReadyToBill({ groups }: { groups: BillableGroupRow[] }) {
                   {g.items.map((i) => (
                     <tr key={i.key}>
                       <td className="w-8 px-4 py-1.5">
-                        <input type="checkbox" aria-label={`Bill ${i.title}`} checked={picked.has(i.key)} disabled={!g.hasDeal} onChange={(e) => toggle([i.key], e.target.checked)} />
+                        <input type="checkbox" aria-label={`Bill ${i.title}`} checked={picked.has(i.key)} disabled={!!g.blocker} onChange={(e) => toggle([i.key], e.target.checked)} />
                       </td>
                       <td className="py-1.5 pr-2">
                         <a href={i.href} className="text-gray-900 hover:text-pink-600">

@@ -87,8 +87,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const unit = co.project.turnoverRequest?.unitNumber;
     return `${unit ? unitLabel(unit) : co.project.jobTitle} · CO: ${co.title}`;
   };
+  // Keyed by HubSpot invoice: rows for invoices the ERP made in QuickBooks (no HubSpot id) aren't on the deal.
   const linksByInvoice = new Map<string, InvoiceLink[]>();
   for (const r of unitRows) {
+    if (!r.hubspotInvoiceId) continue;
     linksByInvoice.set(r.hubspotInvoiceId, [
       ...(linksByInvoice.get(r.hubspotInvoiceId) ?? []),
       { targetId: r.turnoverRequestId, label: unitLabel(r.unitNumber), amountCents: r.amountCents, manual: r.manual, linkedByName: r.linkedByName },
@@ -96,6 +98,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   }
   for (const co of changeOrders) {
     for (const r of co.hubspotSovInvoices) {
+      if (!r.hubspotInvoiceId) continue;
       linksByInvoice.set(r.hubspotInvoiceId, [
         ...(linksByInvoice.get(r.hubspotInvoiceId) ?? []),
         { targetId: `co:${co.id}`, label: coLabel(co), amountCents: r.amountCents, manual: r.manual, linkedByName: r.linkedByName },
@@ -105,6 +108,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   for (const m of contractMonths) {
     for (const r of m.hubspotInvoices) {
+      if (!r.hubspotInvoiceId) continue;
       linksByInvoice.set(r.hubspotInvoiceId, [
         ...(linksByInvoice.get(r.hubspotInvoiceId) ?? []),
         { targetId: `month:${m.id}`, label: monthLabel(m), amountCents: r.amountCents, manual: true, linkedByName: r.linkedByName },

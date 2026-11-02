@@ -10,7 +10,8 @@
  * a manual link (HubSpotUnitInvoice / HubSpotSovInvoice), so the syncs leave
  * it alone and the paid sync marks it Paid later. Approve opens the invoice
  * in HubSpot (QuickBooks) and marks the items Billed, same follow-ups as the
- * Billing page.
+ * Billing page. With QuickBooks drafts on (qboInvoiceDrafts.ts), the draft
+ * lives in the ERP instead and needs no HubSpot deal.
  */
 import { prisma } from "@/lib/prisma";
 import { normalizeBillingStatus } from "./billingStatus";
@@ -21,6 +22,7 @@ import { loadBuildingInvoiceDestination, loadProjectInvoiceDestination } from ".
 import { isApproveEnabled } from "./janitorialInvoiceDrafts";
 import { deliverApprovedInvoice, invoiceLinesFor } from "./invoiceDelivery";
 import { syncProjectBillingFromRequest, syncProjectBillingFromSOV, syncSovPercentDone } from "@/lib/sovSync";
+import { createItemsDraft, draftsGoToQuickBooks, itemKeysOnQboDrafts, type QboDraftLine } from "./qboInvoiceDrafts";
 import {
   associateDefault,
   createDraftInvoice,
@@ -129,9 +131,11 @@ export async function loadBillableGroups(only?: Set<string>): Promise<BillableGr
     }),
   ]);
 
+  const onQboDrafts = await itemKeysOnQboDrafts();
   const groups = new Map<string, BillableGroup>();
   const add = (g: Omit<BillableGroup, "items">, item: BillableItem) => {
     if (only && !only.has(item.key)) return;
+    if (onQboDrafts.has(item.key)) return;
     const existing = groups.get(g.key) ?? { ...g, items: [] };
     existing.items.push(item);
     groups.set(g.key, existing);
@@ -199,8 +203,27 @@ export async function draftItems(picks: { key: string; amountCents: number }[], 
   const groups = await loadBillableGroups(new Set(amountByKey.keys()));
   const results: DraftItemsResult[] = [];
   const todayKey = todayEasternKey();
+  const toQuickBooks = await draftsGoToQuickBooks();
 
   for (const g of groups) {
+    if (toQuickBooks) {
+      const dest = g.type === "BUILDING" ? await loadBuildingInvoiceDestination(g.id) : await loadProjectInvoiceDestination(g.id);
+      if (!dest?.company) {
+        results.push({ group: g.name, ok: false, note: `No client company on this ${g.type === "BUILDING" ? "building" : "job"}.` });
+        continue;
+      }
+      const lines: QboDraftLine[] = g.items.map((i) => ({
+        itemKey: i.key,
+        projectId: i.projectId,
+        lineKind: i.kind,
+        name: i.lineName,
+        description: i.lineDescription,
+        amountCents: amountByKey.get(i.key) ?? i.cents,
+      }));
+      await createItemsDraft(g, lines, email);
+      results.push({ group: g.name, ok: true });
+      continue;
+    }
     if (!g.dealId) {
       results.push({ group: g.name, ok: false, note: g.type === "BUILDING" ? "No HubSpot deal is linked to this building." : "No HubSpot deal is linked to this job." });
       continue;
@@ -294,7 +317,32 @@ export async function approveItemDraft(draftId: string, email: string): Promise<
     prisma.itemInvoiceDraft.update({ where: { id: draftId }, data: { status: "APPROVED", approvedAt: new Date(), approvedByEmail: email, invoiceNumber: snap.number } }),
   ]);
 
-  // Mark each item Billed, with the same follow-ups as the Billing page. Never moves a Paid item back.
+  await markItemsBilled(units, sov);
+  const { lines } = await invoiceLinesFor(draft.hubspotInvoiceId);
+  const delivery = await deliverApprovedInvoice(
+    {
+      hubspotInvoiceId: draft.hubspotInvoiceId,
+      number: snap.number,
+      title: draft.title,
+      totalCents: draft.totalCents,
+      dueDate: snap.dueDate,
+      viewUrl: snap.viewUrl,
+      pdfUrl: snap.pdfUrl,
+      lines,
+      destType: draft.groupType === "PROJECT" ? "PROJECT" : "BUILDING",
+      destId: draft.groupId,
+      link: draft.groupType === "PROJECT" ? `/erp/projects/${draft.groupId}` : `/erp/buildings/${draft.groupId}`,
+    },
+    email,
+  );
+  return { ok: true, number: snap.number, delivery };
+}
+
+/** Marks each item Billed, with the same follow-ups as the Billing page. Never moves a Paid item back. */
+export async function markItemsBilled(
+  units: { turnoverRequestId: string | null }[],
+  sov: { projectId: string; sovItemId: string | null; changeOrderId: string | null }[],
+) {
   for (const u of units) {
     if (!u.turnoverRequestId) continue;
     const { count } = await prisma.turnoverRequest.updateMany({ where: { id: u.turnoverRequestId, billingStatus: { notIn: ["BILLED", "PAID"] } }, data: { billingStatus: "BILLED" } });
@@ -317,24 +365,6 @@ export async function approveItemDraft(draftId: string, email: string): Promise<
     await syncSovPercentDone(projectId);
     await syncProjectBillingFromSOV(projectId);
   }
-  const { lines } = await invoiceLinesFor(draft.hubspotInvoiceId);
-  const delivery = await deliverApprovedInvoice(
-    {
-      hubspotInvoiceId: draft.hubspotInvoiceId,
-      number: snap.number,
-      title: draft.title,
-      totalCents: draft.totalCents,
-      dueDate: snap.dueDate,
-      viewUrl: snap.viewUrl,
-      pdfUrl: snap.pdfUrl,
-      lines,
-      destType: draft.groupType === "PROJECT" ? "PROJECT" : "BUILDING",
-      destId: draft.groupId,
-      link: draft.groupType === "PROJECT" ? `/erp/projects/${draft.groupId}` : `/erp/buildings/${draft.groupId}`,
-    },
-    email,
-  );
-  return { ok: true, number: snap.number, delivery };
 }
 
 /** Deletes the draft in HubSpot; its items go back on Ready to bill. */

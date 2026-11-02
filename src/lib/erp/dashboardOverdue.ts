@@ -3,6 +3,7 @@ import type { CardSection, DashboardCardData } from "@/app/erp/(shell)/_dashboar
 import { todayEasternKey, utcDateKey } from "./dates";
 import { centsToDollars, centsToDollarsCompact } from "./money";
 import { loadOpenInvoices, overdueSection, type OpenInvoice, type OverdueInvoice } from "./dashboardMoney";
+import { invoiceKey } from "./invoiceLinkSource";
 
 /**
  * Overdue tab card (Admin and Business Manager): open HubSpot invoices past
@@ -33,7 +34,8 @@ function lastDayOfMonthKey(periodStart: Date): string {
 }
 
 /**
- * When the work on each open invoice was finished, by HubSpot invoice id.
+ * When the work on each open invoice was finished, by invoiceKey (the same
+ * id loadOpenInvoices uses, HubSpot or QuickBooks).
  * An invoice covering several lines counts from the last one finished.
  * Turns use the turn's completed date (else its project's), SOV lines and
  * change orders their completed date (else the project's end date), and
@@ -47,6 +49,7 @@ async function loadCompletionKeys(): Promise<Map<string, string>> {
       where,
       select: {
         hubspotInvoiceId: true,
+        qboInvoiceId: true,
         turnoverRequest: { select: { completedAt: true, projects: { select: { turnoverCompletedAt: true, projectEndDate: true } } } },
       },
     }),
@@ -54,12 +57,13 @@ async function loadCompletionKeys(): Promise<Map<string, string>> {
       where,
       select: {
         hubspotInvoiceId: true,
+        qboInvoiceId: true,
         sovItem: { select: { completedAt: true } },
         changeOrder: { select: { completedAt: true } },
         project: { select: { projectEndDate: true } },
       },
     }),
-    prisma.hubSpotContractInvoice.findMany({ where, select: { hubspotInvoiceId: true, period: { select: { periodStart: true } } } }),
+    prisma.hubSpotContractInvoice.findMany({ where, select: { hubspotInvoiceId: true, qboInvoiceId: true, period: { select: { periodStart: true } } } }),
   ]);
 
   const keys = new Map<string, string>();
@@ -73,20 +77,20 @@ async function loadCompletionKeys(): Promise<Map<string, string>> {
     const tr = u.turnoverRequest;
     if (!tr) continue;
     if (tr.completedAt) {
-      add(u.hubspotInvoiceId, todayEasternKey(tr.completedAt));
+      add(invoiceKey(u), todayEasternKey(tr.completedAt));
       continue;
     }
     for (const p of tr.projects) {
-      if (p.turnoverCompletedAt) add(u.hubspotInvoiceId, todayEasternKey(p.turnoverCompletedAt));
-      else if (p.projectEndDate) add(u.hubspotInvoiceId, utcDateKey(p.projectEndDate));
+      if (p.turnoverCompletedAt) add(invoiceKey(u), todayEasternKey(p.turnoverCompletedAt));
+      else if (p.projectEndDate) add(invoiceKey(u), utcDateKey(p.projectEndDate));
     }
   }
   for (const l of lines) {
     const done = l.sovItem?.completedAt ?? l.changeOrder?.completedAt;
-    if (done) add(l.hubspotInvoiceId, utcDateKey(done));
-    else if (l.project.projectEndDate) add(l.hubspotInvoiceId, utcDateKey(l.project.projectEndDate));
+    if (done) add(invoiceKey(l), utcDateKey(done));
+    else if (l.project.projectEndDate) add(invoiceKey(l), utcDateKey(l.project.projectEndDate));
   }
-  for (const m of months) add(m.hubspotInvoiceId, lastDayOfMonthKey(m.period.periodStart));
+  for (const m of months) add(invoiceKey(m), lastDayOfMonthKey(m.period.periodStart));
   return keys;
 }
 

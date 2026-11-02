@@ -20,6 +20,7 @@ import { loadLostReasonOptions, splitReasons } from "./dealLostReasons";
 import { LOSS_GROUPS, type LossGroup, type LossQuarter } from "./lossGroups";
 import { WORK_SCOPES, WORK_SCOPE_LABELS, dealUrl, outcomeOf, withErpWonAmounts, type Bundle, type Outcome, type RawDeal, type WorkScope } from "./postConDeals";
 import { loadDeals, loadJanitorialDeals } from "./dealEdits";
+import { invoiceKey } from "./invoiceLinkSource";
 
 const DAY_MS = 86_400_000;
 export const STALE_DAYS = 30;
@@ -565,7 +566,7 @@ async function clientRows(
 async function daysToPay(companyId: string): Promise<{ avg: number | null; n: number }> {
   const buildingIds = (await prisma.building.findMany({ where: { managedByCompanyId: companyId }, select: { id: true } })).map((b) => b.id);
   const projectWhere = { OR: [{ clientCompanyId: companyId }, { clientCompanyId: null, buildingId: { in: buildingIds } }] };
-  const pick = { hubspotInvoiceId: true, invoiceDate: true, paidDate: true } as const;
+  const pick = { hubspotInvoiceId: true, qboInvoiceId: true, invoiceDate: true, paidDate: true } as const;
   const paid = { status: "paid", invoiceDate: { not: null }, paidDate: { not: null } };
   const [sov, units, months] = await Promise.all([
     prisma.hubSpotSovInvoice.findMany({ where: { ...paid, project: projectWhere }, select: pick }),
@@ -573,7 +574,7 @@ async function daysToPay(companyId: string): Promise<{ avg: number | null; n: nu
     prisma.hubSpotContractInvoice.findMany({ where: { ...paid, period: { recurringContract: { buildingId: { in: buildingIds } } } }, select: pick }),
   ]);
   const byInvoice = new Map<string, number>();
-  for (const r of [...sov, ...units, ...months]) byInvoice.set(r.hubspotInvoiceId, (r.paidDate!.getTime() - r.invoiceDate!.getTime()) / DAY_MS);
+  for (const r of [...sov, ...units, ...months]) byInvoice.set(invoiceKey(r), (r.paidDate!.getTime() - r.invoiceDate!.getTime()) / DAY_MS);
   const days = [...byInvoice.values()].filter((d) => d >= 0);
   return { avg: days.length ? days.reduce((s, d) => s + d, 0) / days.length : null, n: days.length };
 }

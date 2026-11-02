@@ -13,6 +13,7 @@ import { loadBuildingInvoiceDestination, loadProjectInvoiceDestination, type Inv
 import { billingDateKey, draftLines, linesTotal, monthLabel } from "./janitorialInvoiceDrafts";
 import { describePlan, invoiceEmailHtml, invoiceLinesFor, planDelivery, type InvoiceForDelivery } from "./invoiceDelivery";
 import { setInvoiceDates } from "@/lib/hubspot/invoiceDrafts";
+import { qboDraftForPreview } from "./qboInvoiceDrafts";
 
 export type DraftKind = "month" | "items";
 
@@ -38,7 +39,8 @@ async function loadDraft(kind: DraftKind, rowId: string): Promise<LoadedDraft | 
       },
     });
     const link = p?.hubspotInvoices.find((i) => i.draftedByErp && i.status === "draft");
-    if (!p || !link) return null;
+    // HubSpot drafts only, until the switch to QuickBooks.
+    if (!p || !link || !link.hubspotInvoiceId) return null;
     const label = p.recurringContract.invoiceLabel?.trim() || p.recurringContract.building.name;
     return {
       hubspotInvoiceId: link.hubspotInvoiceId,
@@ -94,13 +96,14 @@ export async function setDraftDueDate(kind: DraftKind, rowId: string, dueKey: st
 }
 
 /** Emails the person asking exactly what the client would get, marked as a preview. Approves nothing. */
-export async function emailDraftPreview(kind: DraftKind, rowId: string, toEmail: string): Promise<{ ok: true } | { error: string }> {
-  const draft = await loadDraft(kind, rowId);
+export async function emailDraftPreview(kind: DraftKind | "qbo", rowId: string, toEmail: string): Promise<{ ok: true } | { error: string }> {
+  // QuickBooks drafts (qboInvoiceDrafts.ts) only need the parts the email uses.
+  const draft = kind === "qbo" ? await qboDraftForPreview(rowId) : await loadDraft(kind, rowId);
   if (!draft) return { error: "This draft isn't waiting anymore." };
   const plan = planDelivery(draft.destination);
   const totalCents = linesTotal(draft.lines);
   const inv: InvoiceForDelivery = {
-    hubspotInvoiceId: draft.hubspotInvoiceId,
+    hubspotInvoiceId: null,
     number: "(number given on Approve)",
     title: draft.title,
     totalCents,

@@ -143,7 +143,8 @@ export async function loadLienWatch(opts: { projectId?: string } = {}): Promise<
   const openLinks = await prisma.hubSpotSovInvoice.findMany({
     where: { projectId: { in: watched.map((p) => p.id) }, status: "open" },
     select: { projectId: true, hubspotInvoiceId: true, invoiceNumber: true, dueDate: true },
-    distinct: ["hubspotInvoiceId"],
+    // One row per invoice, HubSpot or QuickBooks.
+    distinct: ["hubspotInvoiceId", "qboInvoiceId"],
   });
 
   return watched.map((p) => {
