@@ -874,7 +874,7 @@ export function DayAssignmentModal({
                   <div className="mt-1">
                     {selectedProject.sovItems.length > 0 ? (
                       <>
-                        <SOVMultiCombobox sovItems={selectedProject.sovItems} selectedIds={sovPicks} onChange={setSovPicks} />
+                        <SOVMultiCombobox sovItems={selectedProject.sovItems} selectedIds={sovPicks} onChange={setSovPicks} hideCompleted />
                         <SOVPriceSummary sovItems={selectedProject.sovItems} selectedIds={sovPicks} />
                       </>
                     ) : (
