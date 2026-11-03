@@ -9,7 +9,6 @@ import { QuickBooksUpload, type ImportRow } from "./QuickBooksUpload";
 import { QuickBooksConnection } from "./QuickBooksConnection";
 import { QuickBooksStatus } from "./QuickBooksStatus";
 import { loadQboStatus } from "@/lib/erp/qboStatus";
-import { FINANCE_DATA_START } from "@/lib/erp/financeSummary";
 
 export const metadata: Metadata = { title: "QuickBooks" };
 export const dynamic = "force-dynamic";
@@ -78,7 +77,7 @@ export default async function QuickBooksPage({ searchParams }: { searchParams: P
             : null
         }
       />
-      <QuickBooksStatus status={status} firstMonth={FINANCE_DATA_START} />
+      <QuickBooksStatus status={status} />
       {/* Uploading is only for when QuickBooks isn't connected; the nightly sync does it otherwise. */}
       {!connection && (
       <QuickBooksUpload

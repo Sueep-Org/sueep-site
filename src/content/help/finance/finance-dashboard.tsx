@@ -25,7 +25,7 @@ export function FinanceDashboard() {
           Days after today aren&apos;t counted. Dates before August 2026 work but are missing jobs and costs.
         </LI>
         <LI>
-          <strong>Count by Completed</strong> puts work in the month it was finished. <strong>Count by Paid</strong> counts
+          <strong>Show Work done</strong> puts work in the month it was finished. <strong>Show Money in</strong> counts
           only work marked paid, in the month it was marked paid. A job marked paid before paid dates were saved
           (janitorial months before October 2026) uses its completion month instead. Its job costs move with it, so
           margins stay the same. The one exception is a project with a Schedule of Values, whose costs always count on the
@@ -40,13 +40,13 @@ export function FinanceDashboard() {
         <LI>
           A project with a <strong>Schedule of Values</strong> counts line by line instead. Each SOV line counts on the day it
           was marked done, even while the project is still open, so a floor finished in August counts in August. In{" "}
-          <strong>Count by Paid</strong>, a line counts on the day it was marked paid. Lines not done yet count when the
+          <strong>Show Money in</strong>, a line counts on the day it was marked paid. Lines not done yet count when the
           project is Complete, and until then they&apos;re in Future.
         </LI>
         <LI>
           Each SOV line is worth its <strong>share of the contract</strong>: a line that&apos;s 10% of the SOV total counts as
           10% of the contract value, so the lines always add up to the contract. When the SOV total and the contract value
-          are more than $1,000 apart, the project is listed under the <strong>!</strong> icon at the top so someone can fix
+          are more than $1,000 apart, the project is listed under <strong>missing from these numbers</strong> at the top so someone can fix
           whichever one is wrong.
         </LI>
         <LI>
@@ -58,16 +58,19 @@ export function FinanceDashboard() {
           Each change order counts on its own, on the day it was completed, even while its project is still open. So a
           change order finished in August counts in August, with its own costs. One that isn&apos;t done yet counts with its
           project once the project is Complete. It counts at its price (or its estimate if no price is set). Voided and
-          rejected change orders are left out. In <strong>Count by Paid</strong>, a change order counts on the day it was
+          rejected change orders are left out. In <strong>Show Money in</strong>, a change order counts on the day it was
           marked paid (ones paid before October 2026 have no paid date, so they use their completion day).
         </LI>
         <LI>Janitorial contracts count once per billing month: that month&apos;s contract amount plus any extra charges added to it. The month in progress counts by days so far (on the 10th of a 31 day month, 10/31 of the amount), to match its labor, which only counts up to today.</LI>
-        <LI>Completed projects with no contract value or no end date can&apos;t be counted. The <strong>!</strong> icon at the top lists each one by name, along with SOVs that don&apos;t match their contract; click a name to open it and fix what&apos;s missing.</LI>
+        <LI>Completed projects with no contract value or no end date can&apos;t be counted. The amber <strong>missing from these numbers</strong> link at the top lists each one by name, along with SOVs that don&apos;t match their contract; click a name to open it and fix what&apos;s missing.</LI>
         <LI>A year compares against the same months of the year before. Since data starts August 2026, that first appears in August 2027.</LI>
       </UL>
 
       <H2>Costs</H2>
-      <P>Costs are job costs plus overhead. The breakdown under <strong>Where the money went</strong> adds up to the same total.</P>
+      <P>
+        Costs are job costs plus overhead. <strong>Where the money went</strong> adds up to the same total, in four groups:
+        Crew and subs, Office and salaries, Insurance and taxes, and Overhead from QuickBooks. Click a group to see its lines.
+      </P>
       <UL>
         <LI><strong>Job costs</strong> are the same numbers as the Projects table, so a job&apos;s margin here always matches what you see there.</LI>
         <LI>
@@ -101,7 +104,7 @@ export function FinanceDashboard() {
           <strong>Insurance</strong>: each policy&apos;s premium from <strong>Insurance &amp; COIs</strong>, spread evenly over the
           days of its term (a $12,000 yearly policy is about $1,000 a month). An audit bill or refund counts in full on its
           date. A cancelled policy stops on its cancel date. Earlier terms are kept when a policy renews, so past months
-          don&apos;t change. Active policies with no premium are listed under the <strong>!</strong> icon.
+          don&apos;t change. Active policies with no premium are listed under <strong>missing from these numbers</strong> at the top.
         </LI>
         <LI>
           <strong>Payroll taxes</strong>: what Sueep pays on top of employees&apos; pay (Social Security, Medicare, federal
@@ -112,13 +115,31 @@ export function FinanceDashboard() {
           <strong>Health insurance</strong>: Sueep&apos;s share of each person&apos;s health plan premium, spread over the
           days of each month. Set under Payroll, gear icon, Health insurance.
         </LI>
-        <LI>Not included: any expense not tracked in the ERP.</LI>
+        <LI>
+          <strong>Overhead from QuickBooks</strong> (rent, vehicles, office and software, supplies not on jobs, marketing,
+          fees and so on): read from QuickBooks every night. Costs the ERP already counts (payroll, insurance,
+          contractors) are skipped there, so nothing is counted twice.
+        </LI>
+        <LI>
+          <strong>Estimates</strong>: the bookkeeper enters a month&apos;s costs over the following weeks. Until a month&apos;s
+          QuickBooks costs are close to the usual amount (and for the month in progress), its QuickBooks overhead is the
+          average of the last 3 complete months. The page says <strong>Estimate</strong> and the By month chart marks the
+          month with <strong>~</strong>. It switches to the real numbers by itself once they&apos;re entered.
+        </LI>
       </UL>
+
+      <H2>Compare with QuickBooks</H2>
+      <P>
+        <strong>Compare with QuickBooks</strong> (top right) shows each finished month&apos;s money in and costs next to
+        QuickBooks&apos;, with a few plain sentences on why they differ: timing, deposits recorded straight as income, pay
+        landing on payday, or QuickBooks not finished for the month yet. It only explains; nothing there changes either
+        side.
+      </P>
 
       <H2>Net profit</H2>
       <UL>
         <LI>Revenue minus costs. Margin is net profit divided by revenue. Hover Costs to see gross profit (revenue minus job costs only).</LI>
-        <LI>In <strong>Count by Paid</strong> it&apos;s labeled <strong>Net profit (paid work only)</strong>: revenue only counts paid work, but salaries and other overhead count in full, so it runs low until customers pay. Use Completed to judge how profitable the work is.</LI>
+        <LI>In <strong>Show Money in</strong> it&apos;s labeled <strong>Net profit (paid work only)</strong>: revenue only counts paid work, but salaries and other overhead count in full, so it runs low until customers pay. Use Work done to judge how profitable the work is.</LI>
         <LI>Overhead is steady every month but revenue isn&apos;t, so a single month can go negative even when the year is fine.</LI>
       </UL>
 
@@ -148,7 +169,7 @@ export function FinanceDashboard() {
       <UL>
         <LI>Uses the same rules as the Commission tab on the Payroll page, so the two always match.</LI>
         <LI><strong>Earned (these dates)</strong>: commission that became due in the selected dates. A deal is due once it and all its change orders are paid, and a janitorial contract month once that month is paid.</LI>
-        <LI><strong>Paid (these dates)</strong>: commission marked paid in the selected dates. This is the Commission line in Where the money went.</LI>
+        <LI><strong>Paid (these dates)</strong>: commission marked paid in the selected dates. This is the Commission line in Where the money went (under Office and salaries).</LI>
         <LI><strong>Owed (all time)</strong>: everything earned but not marked paid yet, from any date. It doesn&apos;t change with the dates picked, so it can be more than Earned (for example, commission from July still unpaid while viewing August on).</LI>
         <LI>A deal or janitorial contract with no salesperson earns no commission (for example, one the owner sold himself).</LI>
       </UL>

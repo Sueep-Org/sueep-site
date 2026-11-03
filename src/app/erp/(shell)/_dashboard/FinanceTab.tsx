@@ -1,12 +1,16 @@
 import { unstable_cache } from "next/cache";
 import Link from "next/link";
 import { FinanceDateRange } from "./FinanceDateRange";
+import { QuickBooksCompare } from "./QuickBooksCompare";
+import { InfoTip } from "@/app/erp/components/ui";
 import { todayEasternKey } from "@/lib/erp/dates";
 import { JobTabs, type JobTabRow } from "./JobTabs";
 import {
   computeFinanceSummary,
   costBreakdown,
   sumMonths,
+  COST_GROUPS,
+  COST_GROUP_LABELS,
   FINANCE_SEGMENTS,
   FINANCE_SEGMENT_LABELS,
   FINANCE_DATA_START,
@@ -40,6 +44,11 @@ function pct(part: number, whole: number): number | null {
 
 function pctLabel(p: number | null): string {
   return p == null ? "-" : `${p}%`;
+}
+
+/** "A", "A and B", "A, B and C". */
+function listWords(items: string[]): string {
+  return items.length <= 1 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 }
 
 function monthName(key: string, month: "short" | "long" = "short"): string {
@@ -349,7 +358,7 @@ function TrendCard({ rows, isAll }: { rows: Row[]; isAll: boolean }) {
                 <div
                   key={r.key}
                   className="flex h-full min-w-0 flex-1 items-end justify-center gap-0.5"
-                  title={`${r.title}${r.partial ? " (so far)" : ""}\nRevenue ${money(r.month.revenueCents)}\nCosts ${money(costs)}\nNet profit ${money(r.month.netProfitCents)}`}
+                  title={`${r.title}${r.partial ? " (so far)" : ""}\nRevenue ${money(r.month.revenueCents)}\nCosts ${money(costs)}${r.month.qboEstimatedCents ? ` (${money(r.month.qboEstimatedCents)} estimated)` : ""}\nNet profit ${money(r.month.netProfitCents)}`}
                 >
                   <div className="w-full max-w-5 rounded-t" style={{ height: `${(r.month.revenueCents / max) * 100}%`, backgroundColor: REVENUE_COLOR }} />
                   <div className="w-full max-w-5 rounded-t" style={{ height: `${(costs / max) * 100}%`, backgroundColor: COST_COLOR }} />
@@ -360,7 +369,15 @@ function TrendCard({ rows, isAll }: { rows: Row[]; isAll: boolean }) {
           <div className="mt-2 flex gap-2">
             {chrono.map((r) => (
               <div key={r.key} className="min-w-0 flex-1 text-center">
-                <p className="truncate text-xs text-gray-600">{isAll ? r.title : monthName(r.key)}{r.partial ? "*" : ""}</p>
+                <p className="truncate text-xs text-gray-600">
+                  {isAll ? r.title : monthName(r.key)}
+                  {r.partial ? "*" : ""}
+                  {r.month.qboEstimatedCents > 0 && !r.partial && (
+                    <span className="ml-0.5 text-amber-600" title="QuickBooks costs not all entered yet, so part of the overhead is estimated">
+                      ~
+                    </span>
+                  )}
+                </p>
                 <p className={`text-xs tabular-nums ${r.month.netProfitCents < 0 ? "text-red-600" : "text-gray-400"}`} title="Net profit">
                   {short(r.month.netProfitCents)}
                 </p>
@@ -395,7 +412,11 @@ function TrendCard({ rows, isAll }: { rows: Row[]; isAll: boolean }) {
               </tbody>
             </table>
           </details>
-          {chrono.some((r) => r.partial) && <p className="mt-2 text-xs text-gray-400">* so far</p>}
+          {(chrono.some((r) => r.partial) || chrono.some((r) => r.month.qboEstimatedCents > 0 && !r.partial)) && (
+            <p className="mt-2 text-xs text-gray-400">
+              {[chrono.some((r) => r.partial) && "* so far", chrono.some((r) => r.month.qboEstimatedCents > 0 && !r.partial) && "~ QuickBooks costs estimated"].filter(Boolean).join(" · ")}
+            </p>
+          )}
         </>
       )}
     </div>
@@ -545,14 +566,13 @@ export async function FinanceTab({ period: periodParam, by }: { period: string |
     { label: "Done, not billed", cents: total.notBilledCents, color: "#a9cdf5", hint: "Finished, not invoiced yet" },
   ];
   const costs = costBreakdown(total).filter((c) => c.cents !== 0);
-  // QuickBooks costs (rent, software...) only count for months QuickBooks is done for, so a
-  // month still in progress is the ERP's estimate.
+  // Months whose QuickBooks costs (rent, software...) aren't all entered yet use the
+  // average of recent complete months, so say which and how much.
   const bookedThrough = summary.qboBookedThrough ? `${monthName(summary.qboBookedThrough, "long")} ${summary.qboBookedThrough.slice(0, 4)}` : null;
+  const estimatedMonths = rows.filter((r) => r.month.qboEstimatedCents > 0).sort((a, b) => a.key.localeCompare(b.key)).map((r) => (isAll || isRange ? r.title : monthName(r.key, "long")));
   const estimateNote =
-    total.qboMonthsInView > total.qboMonthsBooked
-      ? total.qboMonthsBooked === 0
-        ? "Estimate: QuickBooks isn't done for these dates yet, so rent, software and other overhead from QuickBooks aren't in these numbers."
-        : `Part estimate: ${total.qboMonthsInView - total.qboMonthsBooked} of ${total.qboMonthsInView} months aren't done in QuickBooks yet, so their overhead from QuickBooks isn't counted.`
+    total.qboEstimatedCents > 0
+      ? `Estimate: QuickBooks costs ${estimatedMonths.length && !isRange ? `for ${listWords(estimatedMonths)} ` : ""}aren't all entered yet, so ${short(total.qboEstimatedCents)} of overhead is the average of recent months. It updates by itself as they're entered.`
       : null;
 
   /** Whether a day ("YYYY-MM-DD") is inside the dates being viewed. */
@@ -565,7 +585,7 @@ export async function FinanceTab({ period: periodParam, by }: { period: string |
 
   return (
     <div className="space-y-4">
-      {/* Controls: dates on the left, counting and help on the right */}
+      {/* Controls: dates on the left, what to count and the extras on the right */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Segmented
           active={selected}
@@ -577,43 +597,20 @@ export async function FinanceTab({ period: periodParam, by }: { period: string |
         >
           <FinanceDateRange range={range} label={range ? rangeLabel(range) : null} today={summary.todayKey} byPaid={isPaidView} />
         </Segmented>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-400">Count by</span>
+        <div className="flex items-center gap-2">
           <Segmented
             active={anchor}
             options={[
-              { key: "completed", label: "Completed", href: href(selected, "completed") },
-              { key: "paid", label: "Paid", href: href(selected, "paid") },
+              { key: "completed", label: "Work done", href: href(selected, "completed") },
+              { key: "paid", label: "Money in", href: href(selected, "paid") },
             ]}
           />
-          {gapCount > 0 && (
-            <details className="relative">
-              <summary
-                className="flex h-6 w-6 cursor-pointer list-none items-center justify-center rounded-full bg-amber-50 text-xs font-semibold text-amber-700 hover:bg-amber-100"
-                title={`${gapCount} data gap${gapCount === 1 ? "" : "s"} affect these numbers`}
-              >
-                !
-              </summary>
-              <div className="absolute right-0 z-10 mt-2 max-h-96 w-80 overflow-y-auto rounded-xl border border-gray-200 bg-white p-3 text-xs text-gray-600 shadow-lg">
-                <p className="font-medium text-gray-900">Data gaps affecting these numbers</p>
-                {gapGroups.map((g) => (
-                  <div key={g.title} className="mt-3">
-                    <p className="text-gray-500">{g.title}</p>
-                    <ul className="mt-1 space-y-0.5">
-                      {g.items.map((item) => (
-                        <li key={item.id}>
-                          <Link href={item.href} className="block rounded px-1.5 py-1 hover:bg-gray-50" title={item.label}>
-                            <span className="block truncate text-gray-800">{item.label}</span>
-                            {item.detail && <span className="block text-gray-400">{item.detail}</span>}
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            </details>
-          )}
+          <InfoTip
+            align="right"
+            text="Work done: revenue and job costs in the month the work was finished, best for how profitable the work is. Money in: revenue in the month it was paid, closer to cash in the bank. Overhead counts in full either way, so Money in runs low until customers pay."
+          />
+          <span aria-hidden className="mx-1 h-4 w-px bg-gray-200" />
+          <QuickBooksCompare />
           <Link
             href={HELP_HREF}
             title="How each number is calculated"
@@ -641,11 +638,11 @@ export async function FinanceTab({ period: periodParam, by }: { period: string |
         <Headline
           label="Costs"
           cents={totalCosts}
-          sub={`${short(jobCosts)} jobs, ${short(total.overheadCents)} overhead`}
+          sub={`${short(jobCosts)} jobs, ${short(total.overheadCents)} overhead${total.qboEstimatedCents > 0 ? " (part estimate)" : ""}`}
           title={`${money(totalCosts)}\nJob costs ${money(jobCosts)} (gross profit ${money(total.grossProfitCents)}, ${pctLabel(pct(total.grossProfitCents, total.revenueCents))})\nOverhead ${money(total.overheadCents)}`}
         />
         <Headline
-          label={isPaidView ? "Net profit (paid work only)" : "Net profit"}
+          label={isPaidView ? "Net profit (money in only)" : "Net profit"}
           cents={total.netProfitCents}
           sub={`${pctLabel(pct(total.netProfitCents, total.revenueCents))} margin`}
           title={isPaidView
@@ -654,12 +651,47 @@ export async function FinanceTab({ period: periodParam, by }: { period: string |
           negative={total.netProfitCents < 0}
         />
       </div>
-      {estimateNote && <p className="-mt-2 px-1 text-xs text-amber-700">{estimateNote}</p>}
-      {isPaidView && (
-        <p className="-mt-2 px-1 text-xs text-gray-400">
-          Paid view: revenue only counts work that&apos;s been paid, but salaries and other overhead count in full, so net profit runs low until customers pay.
-          Use Completed for how profitable the work is.
-        </p>
+      {(estimateNote || gapCount > 0) && (
+        <div className="-mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-1">
+          {estimateNote ? (
+            <p className="flex items-center gap-1.5 text-xs text-amber-700" title={estimateNote}>
+              <span aria-hidden>~</span>
+              {short(total.qboEstimatedCents)} of overhead is estimated until QuickBooks is finished
+            </p>
+          ) : (
+            <span />
+          )}
+          {gapCount > 0 && (
+            <details className="relative">
+              <summary
+                className="flex cursor-pointer list-none items-center gap-1.5 text-xs text-amber-800 hover:underline"
+                title="Records with missing info, so these numbers leave them out or count them as $0. Click to see and fix them."
+              >
+                <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                {gapCount} missing from these numbers
+              </summary>
+              <div className="absolute right-0 z-10 mt-2 max-h-96 w-80 overflow-y-auto rounded-xl border border-gray-200 bg-white p-3 text-xs text-gray-600 shadow-lg">
+                <p className="font-medium text-gray-900">Missing from these numbers</p>
+                <p className="mt-0.5 text-gray-400">Click one to open it and fill in what&apos;s missing.</p>
+                {gapGroups.map((g) => (
+                  <div key={g.title} className="mt-3">
+                    <p className="text-gray-500">{g.title}</p>
+                    <ul className="mt-1 space-y-0.5">
+                      {g.items.map((item) => (
+                        <li key={item.id}>
+                          <Link href={item.href} className="block rounded px-1.5 py-1 hover:bg-gray-50" title={item.label}>
+                            <span className="block truncate text-gray-800">{item.label}</span>
+                            {item.detail && <span className="block text-gray-400">{item.detail}</span>}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
       )}
 
       <BillingCard parts={billingParts} future={summary.futureJobs} />
@@ -737,19 +769,50 @@ export async function FinanceTab({ period: periodParam, by }: { period: string |
             <p className="pt-3 text-sm text-gray-400">No costs in {periodLabel}.</p>
           ) : (
             <ul className="mt-3 divide-y divide-gray-50 text-sm">
-              {costs.map((c) => (
-                <li key={c.label} className="flex justify-between gap-3 py-2" title={`${c.hint}: ${money(c.cents)} (${pctLabel(pct(c.cents, total.revenueCents))} of revenue)`}>
-                  <span className="text-gray-700">{c.label}</span>
-                  <span className="tabular-nums text-gray-900">{short(c.cents)}</span>
-                </li>
-              ))}
+              {COST_GROUPS.map((g) => {
+                const lines = costs.filter((c) => c.group === g);
+                if (lines.length === 0) return null;
+                const cents = lines.reduce((sum, c) => sum + c.cents, 0);
+                const estimated = g === "QUICKBOOKS" && total.qboEstimatedCents > 0;
+                return (
+                  <li key={g}>
+                    <details className="group">
+                      <summary
+                        className="flex cursor-pointer list-none justify-between gap-3 py-2"
+                        title={`${COST_GROUP_LABELS[g].hint}: ${money(cents)} (${pctLabel(pct(cents, total.revenueCents))} of revenue)`}
+                      >
+                        <span className="flex items-center gap-1.5 text-gray-700">
+                          <span aria-hidden className="text-[10px] text-gray-400 transition-transform group-open:rotate-90">▶</span>
+                          {COST_GROUP_LABELS[g].label}
+                          {estimated && <span className="text-xs text-amber-600">part estimate</span>}
+                        </span>
+                        <span className="tabular-nums text-gray-900">{short(cents)}</span>
+                      </summary>
+                      <ul className="mb-2 ml-4 space-y-1 text-xs">
+                        {lines.map((c) => (
+                          <li key={c.label} className="flex justify-between gap-3" title={`${c.hint}: ${money(c.cents)} (${pctLabel(pct(c.cents, total.revenueCents))} of revenue)`}>
+                            <span className="text-gray-500">{c.label}</span>
+                            <span className="tabular-nums text-gray-700">{short(c.cents)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  </li>
+                );
+              })}
               <li className="flex justify-between gap-3 pt-2.5 font-semibold text-gray-900" title={money(totalCosts)}>
                 <span>Total</span>
                 <span className="tabular-nums">{short(totalCosts)}</span>
               </li>
             </ul>
           )}
-          {bookedThrough && total.qboOverheadCents > 0 && <p className="mt-3 text-xs text-gray-400">Includes QuickBooks costs through {bookedThrough}.</p>}
+          {total.qboOverheadCents > 0 && (
+            <p className="mt-3 text-xs text-gray-400">
+              {total.qboEstimatedCents > 0
+                ? `QuickBooks costs include ${short(total.qboEstimatedCents)} estimated${bookedThrough ? ` (entered through ${bookedThrough})` : ""}.`
+                : `Includes QuickBooks costs${bookedThrough ? ` through ${bookedThrough}` : ""}.`}
+            </p>
+          )}
         </div>
       </div>
 
