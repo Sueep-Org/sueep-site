@@ -553,6 +553,12 @@ const billingGroupItems: NavItem[] = [
     icon: DocumentIcon,
   },
   {
+    href: "/erp/invoices",
+    label: "Invoices",
+    roles: PM_ADMIN,
+    icon: DocumentIcon,
+  },
+  {
     href: "/erp/quickbooks",
     label: "QuickBooks",
     roles: ["ADMIN", "BUSINESS_MANAGER"],

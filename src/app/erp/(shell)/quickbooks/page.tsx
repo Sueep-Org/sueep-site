@@ -9,7 +9,6 @@ import { QuickBooksUpload, type ImportRow } from "./QuickBooksUpload";
 import { QuickBooksConnection } from "./QuickBooksConnection";
 import { QuickBooksStatus } from "./QuickBooksStatus";
 import { loadQboStatus } from "@/lib/erp/qboStatus";
-import { FINANCE_DATA_START } from "@/lib/erp/financeSummary";
 
 export const metadata: Metadata = { title: "QuickBooks" };
 export const dynamic = "force-dynamic";
@@ -48,14 +47,14 @@ export default async function QuickBooksPage({ searchParams }: { searchParams: P
       <div className="flex flex-wrap items-center justify-between gap-3">
       <h1 className="flex items-center gap-1 text-2xl font-semibold text-gray-900">
         QuickBooks
-        <InfoTip text="QuickBooks reports brought into the ERP, for the Finance dashboard and the money owed check. Connect QuickBooks, or upload the exports here once a month until it is. Nothing here changes QuickBooks." />
+        <InfoTip text="QuickBooks reports brought into the ERP, for the Finance dashboard and the money owed check. Connect QuickBooks, or upload the exports here once a month until it is. The ERP only writes to QuickBooks when an invoice is approved on Ready to send." />
       </h1>
         <div className="flex gap-2">
           <Link href="/erp/quickbooks/setup" className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
             Invoice setup
           </Link>
           <Link href="/erp/quickbooks/check" className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
-            See details →
+            Money owed check
           </Link>
         </div>
       </div>
@@ -78,7 +77,7 @@ export default async function QuickBooksPage({ searchParams }: { searchParams: P
             : null
         }
       />
-      <QuickBooksStatus status={status} firstMonth={FINANCE_DATA_START} />
+      <QuickBooksStatus status={status} />
       {/* Uploading is only for when QuickBooks isn't connected; the nightly sync does it otherwise. */}
       {!connection && (
       <QuickBooksUpload

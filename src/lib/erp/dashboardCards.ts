@@ -170,7 +170,7 @@ export const DASHBOARD_CARDS: readonly DashboardCardDef[] = [
     title: "Checks",
     tab: "money",
     roles: ["PROJECT_MANAGER", "BUSINESS_MANAGER", "ADMIN"],
-    info: "Losing money: open jobs costing more than their price, or more than their estimate (change orders included). Reconciliation: HubSpot invoices not linked to anything in the ERP, and lines marked Billed over 7 days ago with no invoice linked, since Aug 1.",
+    info: "Losing money: open jobs costing more than their price, or more than their estimate (change orders included). Reconciliation: HubSpot invoices dated since Aug 1 that aren't linked to anything in the ERP (link them from the Invoices page), and lines marked Billed over 7 days ago with no invoice linked.",
   },
   {
     id: "cash-forecast",

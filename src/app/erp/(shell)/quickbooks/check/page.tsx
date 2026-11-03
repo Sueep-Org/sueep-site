@@ -104,7 +104,7 @@ function OwedTable({ rows }: { rows: OwedRow[] }) {
                     <summary className="cursor-pointer text-[11px] font-medium text-pink-600">History</summary>
                     <div className="mt-1 grid gap-2 sm:grid-cols-2">
                       <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">ERP / HubSpot</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">ERP</p>
                         <ul className="mt-0.5 space-y-0.5 text-gray-600">{r.history.erp.map((h, i) => <li key={i}>{h}</li>)}</ul>
                       </div>
                       <div>
@@ -174,7 +174,7 @@ function MoneyOwedTab({ data }: { data: MoneyOwedCheck }) {
   return (
     <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Tile label="ERP open invoices" value={money(data.erpOpenCents)} sub="HubSpot invoices in the ERP" />
+        <Tile label="ERP open invoices" value={money(data.erpOpenCents)} sub="Open invoices the ERP knows about" />
         <Tile label="QuickBooks open invoices" value={money(data.qboOpenCents)} sub={gap ? `${gap > 0 ? "+" : ""}${money(gap)} vs the ERP` : "Same as the ERP"} tone={Math.abs(gap) > 10_000 ? "amber" : undefined} />
         <Tile label="Payments and credits not applied" value={money(data.unappliedCents)} sub="In QuickBooks, not on any invoice" tone={data.unappliedCents ? "amber" : undefined} />
         <Tile label="QuickBooks A/R Aging" value={data.aging ? money(data.aging.totalCents) : "-"} sub={data.aging ? `As of ${dayLabel(data.aging.asOf)}` : undefined} />

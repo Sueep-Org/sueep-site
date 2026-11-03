@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, InfoTip, Modal, inputClass, labelClass, useConfirm, useToast } from "@/app/erp/components/ui";
 import { centsToDollars, parseMoneyInput } from "@/lib/erp/money";
@@ -34,6 +34,12 @@ export type DraftRow = MonthRow & {
   paymentTermsDays: number | null;
   /** A QuickBooks sandbox draft: Approve is a test, so it doesn't need the Approve switch. */
   testOnly?: boolean;
+  /** The building, job or contract page */
+  href: string | null;
+  /** Why Approve can't run yet, e.g. no client company */
+  blocked: string | null;
+  /** Janitorial months can change their amount and extras */
+  canEdit: boolean;
 };
 
 export type QboTestRow = { id: string; title: string; invoiceNumber: string | null; totalCents: number; url: string | null; when: string };
@@ -54,14 +60,14 @@ export type DeliveryRow = {
   portalUrl: string | null;
   viewUrl: string | null;
   pdfUrl: string | null;
+  /** QuickBooks invoices: where to open it in QuickBooks */
+  qboUrl: string | null;
   link: string | null;
   lines: { name: string; description: string; amountCents: number }[];
   /** Company Info logins linked to the client company */
   logins: string[];
   approvedAt: string;
 };
-
-export type SentRow = { id: string; title: string; invoiceNumber: string | null; totalCents: number; how: string; when: string };
 
 export type BillableItemRow = { key: string; kind: "TURN" | "SOV" | "CO"; title: string; lineDescription: string; cents: number; doneKey: string; href: string };
 
@@ -83,8 +89,22 @@ function draftUrl(d: DraftRow): string {
   return d.kind === "month" ? `/api/erp/invoice-drafts/${d.rowId}` : `/api/erp/item-drafts/${d.rowId}`;
 }
 
-/** Sandbox test drafts don't need the Approve switch. */
-const canApprove = (d: DraftRow, approveEnabled: boolean) => approveEnabled || !!d.testOnly;
+/** Sandbox test drafts don't need the Approve switch; a draft with a blocker can't be approved. */
+const canApprove = (d: DraftRow, approveEnabled: boolean) => !d.blocked && (approveEnabled || !!d.testOnly);
+
+/** Why a draft's Approve is greyed out, for its hover text. */
+const approveBlockedReason = (d: DraftRow, approveEnabled: boolean) => d.blocked ?? (approveEnabled || d.testOnly ? undefined : "Approve is off");
+
+type Tab = "approve" | "bill" | "sending" | "contracts";
+const TABS: Tab[] = ["approve", "bill", "sending", "contracts"];
+
+/** ?tab=bill&pick=SOV:123 from Project Billing's Bill it link. */
+function urlParams(): { tab: Tab | null; pick: string | null } {
+  if (typeof window === "undefined") return { tab: null, pick: null };
+  const p = new URLSearchParams(window.location.search);
+  const tab = p.get("tab") as Tab | null;
+  return { tab: tab && TABS.includes(tab) ? tab : null, pick: p.get("pick") };
+}
 
 export type ContractSetting = {
   id: string;
@@ -111,7 +131,6 @@ async function call(url: string, method: string, body?: unknown): Promise<{ ok: 
 export function ReadyToSend({
   drafts,
   deliveries,
-  sent,
   billable,
   failed,
   discarded,
@@ -122,7 +141,6 @@ export function ReadyToSend({
 }: {
   drafts: DraftRow[];
   deliveries: DeliveryRow[];
-  sent: SentRow[];
   billable: BillableGroupRow[];
   failed: MonthRow[];
   discarded: MonthRow[];
@@ -137,6 +155,14 @@ export function ReadyToSend({
   const [busy, setBusy] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<DraftRow | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>(deliveries.length ? "sending" : drafts.length || failed.length ? "approve" : "bill");
+  const [pick, setPick] = useState<string | null>(null);
+  useEffect(() => {
+    const { tab: t, pick: p } = urlParams();
+    if (t) setTab(t);
+    if (p) setPick(p);
+  }, []);
 
   async function run(key: string, fn: () => Promise<void>) {
     setBusy(key);
@@ -167,10 +193,16 @@ export function ReadyToSend({
 
   async function approve(rows: DraftRow[]) {
     const total = rows.reduce((s, r) => s + r.totalCents, 0);
-    const allQbo = rows.every((r) => r.kind === "qbo");
-    const where = allQbo
-      ? `Creates ${rows.length === 1 ? "the invoice" : "them"} in QuickBooks${qbo.environment === "sandbox" ? " (sandbox test company)" : ""} (${centsToDollars(total)}).`
-      : `Opens ${rows.length === 1 ? "the invoice" : "them"} in HubSpot (${centsToDollars(total)}). HubSpot sends open invoices to QuickBooks. This can't be undone from the ERP.`;
+    const qboCount = rows.filter((r) => r.kind === "qbo").length;
+    const hubspotCount = rows.length - qboCount;
+    const them = (n: number) => (rows.length === 1 ? "the invoice" : `${n} invoice${n === 1 ? "" : "s"}`);
+    const where = [
+      qboCount ? `Creates ${them(qboCount)} in QuickBooks${qbo.environment === "sandbox" ? " (sandbox test company)" : ""}.` : "",
+      hubspotCount ? `Opens ${them(hubspotCount)} in HubSpot, which sends open invoices to QuickBooks.` : "",
+      `Total ${centsToDollars(total)}.${rows.every((r) => r.testOnly) ? "" : " This can't be undone from the ERP."}`,
+    ]
+      .filter(Boolean)
+      .join(" ");
     const ok = await confirm({
       title: rows.length === 1 ? `Approve ${rows[0]!.building}, ${rows[0]!.month}?` : `Approve ${rows.length} invoices?`,
       message: `${where} ${rows
@@ -190,7 +222,17 @@ export function ReadyToSend({
         }
         done.push(`${String(data.number ?? r.building)}: ${String(data.delivery ?? "")}`);
       }
-      if (done.length) toast(`Approved ${done.join(" ")}`);
+      if (done.length)
+        toast(
+          <>
+            Approved {done.join(" ")}{" "}
+            {!rows.every((r) => r.testOnly) && (
+              <a href="/erp/invoices?filter=unpaid" className="font-medium underline">
+                See it on Invoices
+              </a>
+            )}
+          </>,
+        );
       setSelected(new Set());
     });
   }
@@ -200,7 +242,7 @@ export function ReadyToSend({
       title: `Discard ${r.building}, ${r.month}?`,
       message:
         r.kind === "qbo"
-          ? "Nothing was made in QuickBooks yet. Picked items go back on Ready to bill."
+          ? "Nothing was made in QuickBooks yet. Picked items go back on Ready to bill. A janitorial month goes on Discarded, where Draft again brings it back."
           : r.kind === "month"
             ? "Deletes the draft in HubSpot. This month won't be drafted again unless you click Draft again below."
             : "Deletes the draft in HubSpot. Its items go back on Ready to bill.",
@@ -243,241 +285,292 @@ export function ReadyToSend({
   }
 
   const selectedRows = drafts.filter((d) => selected.has(d.rowId));
+  const destination = qbo.on ? `QuickBooks${qbo.environment === "sandbox" ? " sandbox" : ""}` : "HubSpot";
+  const billableCount = billable.reduce((s, g) => s + g.items.length, 0);
+  const tabs: { key: Tab; label: string; count?: number; alert?: boolean }[] = [
+    { key: "approve", label: "To approve", count: drafts.length, alert: failed.length > 0 },
+    { key: "bill", label: "Ready to bill", count: billableCount },
+    { key: "sending", label: "Needs sending", count: deliveries.length, alert: deliveries.length > 0 },
+    { key: "contracts", label: "Contracts" },
+  ];
+  const statusOk = approveEnabled || (qbo.on && qbo.environment === "sandbox");
+  const settings = [
+    ...(isAdmin && qbo.environment === "sandbox" ? [{ label: `Draft in ${qbo.on ? "HubSpot" : "QuickBooks"} instead`, onClick: () => void setQboDrafts(!qbo.on) }] : []),
+    ...(isAdmin ? [{ label: `Turn Approve ${approveEnabled ? "off" : "on"}`, onClick: () => void setApprove(!approveEnabled) }] : []),
+  ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm ${approveEnabled ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"}`}>
-          Approve is {approveEnabled ? "on" : "off"}
-          <InfoTip text="Off until the first real invoice is approved together with the bookkeeper watching QuickBooks. Only an Admin can switch it." />
-          {isAdmin && (
-            <Button size="xs" variant="secondary" disabled={busy !== null} onClick={() => void setApprove(!approveEnabled)}>
-              Turn {approveEnabled ? "off" : "on"}
-            </Button>
-          )}
-        </div>
-        {(qbo.on || (isAdmin && qbo.environment === "sandbox")) && (
-          <div className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm ${qbo.on ? "bg-sky-50 text-sky-800" : "bg-gray-100 text-gray-700"}`}>
-            New drafts: {qbo.on ? `QuickBooks${qbo.environment === "sandbox" ? " sandbox" : ""}` : "HubSpot"}
-            <InfoTip
-              text={
-                qbo.environment === "sandbox"
-                  ? "Local dev only. QuickBooks drafts are tests: Approve makes the invoice in the sandbox company and changes nothing else. The live site keeps drafting in HubSpot until the cutover."
-                  : "New drafts are made for QuickBooks. Approve creates the invoice there."
-              }
-            />
-            {isAdmin && qbo.environment === "sandbox" && (
-              <Button size="xs" variant="secondary" disabled={busy !== null} onClick={() => void setQboDrafts(!qbo.on)}>
-                Use {qbo.on ? "HubSpot" : "QuickBooks"}
-              </Button>
-            )}
-          </div>
-        )}
-        <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => void draftNow()}>
-          {busy === "draft-now" ? "Checking…" : "Draft now"}
-        </Button>
-        <InfoTip text="Runs the same check as the daily run: drafts any month that's due for contracts with Auto-draft on." />
-        {selectedRows.length > 0 && (
-          <Button size="sm" className="ml-auto" disabled={!selectedRows.every((r) => canApprove(r, approveEnabled)) || busy !== null} onClick={() => void approve(selectedRows)}>
-            Approve selected ({selectedRows.length})
-          </Button>
-        )}
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setTab(t.key)}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${
+              tab === t.key ? "border-gray-900 bg-gray-900 text-white" : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            {t.label}
+            {t.count != null && t.count > 0 && <span className="tabular-nums opacity-70">{t.count}</span>}
+            {t.alert && <span aria-label="Needs attention" className="h-1.5 w-1.5 rounded-full bg-amber-500" />}
+          </button>
+        ))}
+        <span className="ml-auto flex items-center gap-1.5 text-xs text-gray-500">
+          <span className={`h-2 w-2 rounded-full ${statusOk ? "bg-emerald-500" : "bg-amber-500"}`} aria-hidden />
+          {destination} · Approve {approveEnabled ? "on" : "off"}
+          <InfoTip
+            align="right"
+            text={
+              qbo.environment === "sandbox"
+                ? "Local dev. QuickBooks drafts here are tests: Approve makes the invoice in the sandbox company, emails only you a copy, and changes nothing else, even with Approve off. HubSpot drafts follow the Approve switch."
+                : qbo.on
+                  ? "Approve creates the invoice in QuickBooks, marks the work Billed and sends it to the client. Only an Admin can switch Approve on or off."
+                  : "Approve opens the invoice in HubSpot, which sends it to QuickBooks. Approve stays off until the first real invoice is approved with the bookkeeper watching. Only an Admin can switch it."
+            }
+          />
+          {settings.length > 0 && <RowMenu label="Invoice settings" items={settings} disabled={busy !== null} />}
+        </span>
       </div>
 
-      <NeedsSending rows={deliveries} />
+      {tab === "approve" && (
+        <section className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {selectedRows.length > 0 && (
+              <Button size="sm" disabled={!selectedRows.every((r) => canApprove(r, approveEnabled)) || busy !== null} onClick={() => void approve(selectedRows)}>
+                Approve selected ({selectedRows.length})
+              </Button>
+            )}
+            <span className="ml-auto flex items-center gap-1">
+              <Button size="xs" variant="ghost" disabled={busy !== null} onClick={() => void draftNow()}>
+                {busy === "draft-now" ? "Checking…" : "Draft due months now"}
+              </Button>
+              <InfoTip align="right" text="Runs the same check as the daily run: drafts any month that's due for contracts with Auto-draft on." />
+            </span>
+          </div>
 
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-gray-900">Drafts waiting ({drafts.length})</h2>
-        {drafts.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-500">No drafts waiting.</p>
-        ) : (
-          drafts.map((d) => {
-            const stale = d.totalCents !== d.draftTotalCents;
-            return (
-              <div key={d.rowId} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <label className="flex items-start gap-2">
-                    <input
-                      type="checkbox"
-                      className="mt-1"
-                      checked={selected.has(d.rowId)}
-                      onChange={(e) =>
-                        setSelected((s) => {
-                          const next = new Set(s);
-                          if (e.target.checked) next.add(d.rowId);
-                          else next.delete(d.rowId);
-                          return next;
-                        })
-                      }
-                    />
-                    <span>
-                      <span className="block font-medium text-gray-900">
-                        {d.building}, {d.month}
-                      </span>
-                      <span className="block text-xs text-gray-500">
-                        Invoice date {fmtDay(d.invoiceDateKey)} ·{" "}
-                        {d.paymentTermsDays != null ? `Due ${fmtDay(d.dueDate)} (Net ${d.paymentTermsDays})` : <DueDateInput draft={d} />}
-                      </span>
-                    </span>
-                  </label>
-                  <div className="text-right">
-                    <div className="text-lg font-semibold tabular-nums text-gray-900">{centsToDollars(d.totalCents)}</div>
-                    <div className="text-xs text-gray-500">
-                      {d.client ?? "No client company"}
-                      {d.method ? ` · ${d.method}` : ""}
-                      {d.sendTo ? ` · ${d.sendTo}` : ""}
+          {failed.length > 0 && (
+            <details className="rounded-lg border border-amber-200 bg-amber-50 text-sm">
+              <summary className="cursor-pointer px-4 py-2 text-amber-900">
+                {failed.length} month{failed.length === 1 ? "" : "s"} couldn&apos;t be drafted
+              </summary>
+              <ul className="divide-y divide-amber-100 border-t border-amber-200 bg-white">
+                {failed.map((m) => (
+                  <li key={m.periodId} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2">
+                    <div className="min-w-0">
+                      <div className="text-gray-900">
+                        {m.building}, {m.month}
+                      </div>
+                      <div className="text-xs text-red-700">{m.note}</div>
                     </div>
-                  </div>
-                </div>
-                <table className="mt-3 w-full text-sm">
-                  <tbody className="divide-y divide-gray-100">
-                    {d.lines.map((l, i) => (
-                      <tr key={i}>
-                        <td className="py-1 pr-2 text-gray-900">
-                          {l.name}
-                          <span className="ml-2 text-xs text-gray-500">{l.description}</span>
-                        </td>
-                        <td className="py-1 text-right tabular-nums text-gray-900">{centsToDollars(l.amountCents)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <p className="mt-2 text-xs text-gray-600">On Approve: {d.deliveryPlan}</p>
-                {(d.note || stale) && (
-                  <div className="mt-2 space-y-1 text-xs text-amber-800">
-                    {d.note && <p className="rounded bg-amber-50 px-2 py-1">{d.note}</p>}
-                    {stale && (
-                      <p className="rounded bg-amber-50 px-2 py-1">
-                        The draft in HubSpot says {centsToDollars(d.draftTotalCents)}. Approve updates it to {centsToDollars(d.totalCents)} first.
-                      </p>
-                    )}
-                  </div>
-                )}
-                <div className="mt-3 flex flex-wrap justify-end gap-2">
-                  <Button size="sm" variant="ghost" className="text-red-600 hover:text-red-700" disabled={busy !== null} onClick={() => void discard(d)}>
-                    Discard
-                  </Button>
-                  <Button size="sm" variant="ghost" disabled={busy !== null} onClick={() => void preview(d)} title="Sends you the exact client email, without approving">
-                    Email me a preview
-                  </Button>
-                  {d.kind === "month" && (
-                    <Button size="sm" variant="secondary" disabled={busy !== null} onClick={() => setEditing(d)}>
-                      Edit
+                    <Button size="xs" variant="secondary" disabled={busy !== null} onClick={() => void redraft(m)}>
+                      Try again
                     </Button>
-                  )}
-                  <Button size="sm" disabled={!canApprove(d, approveEnabled) || busy !== null} onClick={() => void approve([d])} title={canApprove(d, approveEnabled) ? undefined : "Approve is off"}>
-                    {d.testOnly ? "Approve (sandbox test)" : "Approve"}
-                  </Button>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </section>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
 
-      <ReadyToBill groups={billable} />
+          {drafts.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-500">Nothing to approve.</p>
+          ) : (
+            <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white shadow-sm">
+              {drafts.map((d) => {
+                const stale = d.totalCents !== d.draftTotalCents;
+                const warning = [d.blocked ?? d.note, stale ? `The draft in HubSpot says ${centsToDollars(d.draftTotalCents)}. Approve updates it to ${centsToDollars(d.totalCents)} first.` : null]
+                  .filter(Boolean)
+                  .join(" ");
+                const isOpen = expanded === d.rowId;
+                return (
+                  <li key={d.rowId}>
+                    <div className="flex items-center gap-3 px-4 py-3">
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${d.building}`}
+                        checked={selected.has(d.rowId)}
+                        onChange={(e) =>
+                          setSelected((s) => {
+                            const next = new Set(s);
+                            if (e.target.checked) next.add(d.rowId);
+                            else next.delete(d.rowId);
+                            return next;
+                          })
+                        }
+                      />
+                      <button type="button" onClick={() => setExpanded(isOpen ? null : d.rowId)} className="min-w-0 flex-1 text-left">
+                        <span className="flex items-center gap-1.5 font-medium text-gray-900">
+                          <span className="truncate">{d.building}</span>
+                          <span className="shrink-0 font-normal text-gray-500">· {d.month}</span>
+                          {warning && <span title={warning} aria-label={warning} className="h-2 w-2 shrink-0 rounded-full bg-amber-500" />}
+                        </span>
+                        <span className="block truncate text-xs text-gray-500">
+                          {d.client ?? "No client company"} · Due {fmtDay(d.dueDate)}
+                        </span>
+                      </button>
+                      <span className="text-right font-semibold tabular-nums text-gray-900">{centsToDollars(d.totalCents)}</span>
+                      <Button size="xs" disabled={!canApprove(d, approveEnabled) || busy !== null} onClick={() => void approve([d])} title={approveBlockedReason(d, approveEnabled)}>
+                        {d.testOnly ? "Test approve" : "Approve"}
+                      </Button>
+                      <RowMenu
+                        label={`More for ${d.building}`}
+                        disabled={busy !== null}
+                        items={[
+                          ...(d.href ? [{ label: "Open page", href: d.href }] : []),
+                          { label: "Email me a preview", onClick: () => void preview(d) },
+                          ...(d.canEdit ? [{ label: "Edit amounts", onClick: () => setEditing(d) }] : []),
+                          { label: "Discard", onClick: () => void discard(d), danger: true },
+                        ]}
+                      />
+                    </div>
+                    {isOpen && (
+                      <div className="space-y-2 border-t border-gray-100 bg-gray-50 px-4 py-3 text-sm">
+                        <table className="w-full">
+                          <tbody className="divide-y divide-gray-100">
+                            {d.lines.map((l, i) => (
+                              <tr key={i}>
+                                <td className="py-1 pr-2 text-gray-900">
+                                  {l.name}
+                                  <span className="ml-2 text-xs text-gray-500">{l.description}</span>
+                                </td>
+                                <td className="py-1 text-right tabular-nums text-gray-900">{centsToDollars(l.amountCents)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+                          <span>Invoice date {fmtDay(d.invoiceDateKey)}</span>
+                          {d.paymentTermsDays != null ? <span>Due {fmtDay(d.dueDate)} (Net {d.paymentTermsDays})</span> : <DueDateInput draft={d} />}
+                          {d.method && <span>{d.method}</span>}
+                          {d.sendTo && <span>{d.sendTo}</span>}
+                        </div>
+                        <p className="text-xs text-gray-600">On Approve: {d.deliveryPlan}</p>
+                        {warning && <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">{warning}</p>}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
 
-      {failed.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="flex items-center gap-1 text-sm font-semibold text-gray-900">
-            Couldn&apos;t draft
-            <InfoTip text="Months the ERP tried to draft but HubSpot said no. Fix the reason, then Try again." />
-          </h2>
-          <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white text-sm shadow-sm">
-            {failed.map((m) => (
-              <li key={m.periodId} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2">
-                <div className="min-w-0">
-                  <div className="font-medium text-gray-900">
-                    {m.building}, {m.month}
-                  </div>
-                  <div className="text-xs text-red-700">{m.note}</div>
-                </div>
-                <Button size="xs" variant="secondary" disabled={busy !== null} onClick={() => void redraft(m)}>
-                  Try again
-                </Button>
-              </li>
-            ))}
-          </ul>
+          {qbo.tests.length > 0 && (
+            <details className="text-sm">
+              <summary className="cursor-pointer text-xs text-gray-500 hover:text-gray-700">QuickBooks sandbox tests ({qbo.tests.length})</summary>
+              <ul className="mt-2 divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
+                {qbo.tests.map((t) => (
+                  <li key={t.id} className="flex items-center gap-3 px-4 py-2">
+                    <span className="min-w-0 flex-1 truncate text-gray-900">
+                      {t.invoiceNumber ? `${t.invoiceNumber} · ` : ""}
+                      {t.title}
+                    </span>
+                    <span className="text-xs tabular-nums text-gray-500">
+                      {centsToDollars(t.totalCents)} · {new Date(t.when).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    </span>
+                    {t.url && (
+                      <a href={t.url} target="_blank" rel="noreferrer" className="text-xs text-pink-600 hover:text-pink-700">
+                        Open
+                      </a>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+          {discarded.length > 0 && (
+            <details className="text-sm">
+              <summary className="cursor-pointer text-xs text-gray-500 hover:text-gray-700">Discarded months ({discarded.length})</summary>
+              <ul className="mt-2 divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
+                {discarded.map((m) => (
+                  <li key={m.periodId} className="flex items-center justify-between gap-2 px-4 py-2">
+                    <span className="text-gray-700">
+                      {m.building}, {m.month}
+                      {m.discardedBy && <span className="ml-2 text-xs text-gray-500">by {m.discardedBy}</span>}
+                    </span>
+                    <Button size="xs" variant="secondary" disabled={busy !== null} onClick={() => void redraft(m)}>
+                      Draft again
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
         </section>
       )}
 
-      {discarded.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-sm font-semibold text-gray-900">Discarded</h2>
-          <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white text-sm shadow-sm">
-            {discarded.map((m) => (
-              <li key={m.periodId} className="flex items-center justify-between gap-2 px-4 py-2">
-                <span className="text-gray-700">
-                  {m.building}, {m.month}
-                  {m.discardedBy && <span className="ml-2 text-xs text-gray-500">by {m.discardedBy}</span>}
-                </span>
-                <Button size="xs" variant="secondary" disabled={busy !== null} onClick={() => void redraft(m)}>
-                  Draft again
-                </Button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {tab === "bill" && <ReadyToBill groups={billable} pick={pick} />}
 
-      {sent.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="flex items-center gap-1 text-sm font-semibold text-gray-900">
-            Recently sent
-            <InfoTip text="Invoices emailed or marked done in the last 14 days. Every email is also in the Email Log." />
-          </h2>
-          <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white text-sm shadow-sm">
-            {sent.map((r) => (
-              <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2">
-                <span className="text-gray-900">
-                  {r.invoiceNumber ? `${r.invoiceNumber} · ` : ""}
-                  {r.title}
-                  <span className="ml-2 text-xs text-gray-500">{r.how}</span>
-                </span>
-                <span className="text-xs tabular-nums text-gray-500">
-                  {centsToDollars(r.totalCents)} · {new Date(r.when).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {tab === "sending" && <NeedsSending rows={deliveries} />}
 
-      {qbo.tests.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="flex items-center gap-1 text-sm font-semibold text-gray-900">
-            QuickBooks sandbox tests
-            <InfoTip text="Invoices made in the QuickBooks sandbox company from local dev in the last 14 days. Open one to check the customer, products, number and dates." />
-          </h2>
-          <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white text-sm shadow-sm">
-            {qbo.tests.map((t) => (
-              <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2">
-                <span className="text-gray-900">
-                  {t.invoiceNumber ? `${t.invoiceNumber} · ` : ""}
-                  {t.title}
-                  {t.url && (
-                    <a href={t.url} target="_blank" rel="noreferrer" className="ml-2 text-xs text-pink-600 hover:text-pink-700">
-                      Open in QuickBooks
-                    </a>
-                  )}
-                </span>
-                <span className="text-xs tabular-nums text-gray-500">
-                  {centsToDollars(t.totalCents)} · {new Date(t.when).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <ContractSettings contracts={contracts} />
+      {tab === "contracts" && <ContractSettings contracts={contracts} toQuickBooks={qbo.on} />}
 
       {editing && <EditDraft draft={editing} onClose={() => setEditing(null)} />}
     </div>
   );
 }
 
-function ContractSettings({ contracts }: { contracts: ContractSetting[] }) {
+type MenuItem = { label: string; onClick?: () => void; href?: string; external?: boolean; danger?: boolean };
+
+/** A small "..." menu for a row's less common actions and links. */
+function RowMenu({ label, items, disabled }: { label: string; items: MenuItem[]; disabled?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  if (!items.length) return <span className="w-7" />;
+  const itemCls = (danger?: boolean) => `block w-full px-3 py-1.5 text-left text-sm hover:bg-gray-50 ${danger ? "text-red-600" : "text-gray-700"}`;
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        aria-label={label}
+        aria-expanded={open}
+        disabled={disabled}
+        onClick={() => setOpen((o) => !o)}
+        className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-800 disabled:opacity-50"
+      >
+        <svg viewBox="0 0 16 16" aria-hidden className="h-4 w-4" fill="currentColor">
+          <circle cx="3" cy="8" r="1.5" />
+          <circle cx="8" cy="8" r="1.5" />
+          <circle cx="13" cy="8" r="1.5" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute right-0 z-20 mt-1 w-48 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+          {items.map((i) =>
+            i.href ? (
+              <a key={i.label} href={i.href} target={i.external ? "_blank" : undefined} rel={i.external ? "noreferrer" : undefined} className={itemCls(i.danger)} onClick={() => setOpen(false)}>
+                {i.label}
+              </a>
+            ) : (
+              <button
+                key={i.label}
+                type="button"
+                className={itemCls(i.danger)}
+                onClick={() => {
+                  setOpen(false);
+                  i.onClick?.();
+                }}
+              >
+                {i.label}
+              </button>
+            ),
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ContractSettings({ contracts, toQuickBooks }: { contracts: ContractSetting[]; toQuickBooks: boolean }) {
   const router = useRouter();
   const toast = useToast();
   const [labels, setLabels] = useState<Record<string, string>>(() => Object.fromEntries(contracts.map((c) => [c.id, c.label])));
@@ -492,7 +585,9 @@ function ContractSettings({ contracts }: { contracts: ContractSetting[] }) {
     <section className="space-y-2">
       <h2 className="flex items-center gap-1 text-sm font-semibold text-gray-900">
         Janitorial contracts
-        <InfoTip text="Turn Auto-draft on one contract at a time. Turn it on only once nobody makes that contract's invoice by hand in HubSpot, or the month gets two invoices." />
+        <InfoTip
+          text={`Turn Auto-draft on one contract at a time. Turn it on only once nobody makes that contract's invoice by hand in ${toQuickBooks ? "QuickBooks or HubSpot" : "HubSpot"}, or the month gets two invoices.`}
+        />
       </h2>
       <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
         <table className="w-full min-w-[720px] text-sm">
@@ -567,7 +662,7 @@ function EditDraft({ draft, onClose }: { draft: DraftRow; onClose: () => void })
     }
     setSaving(true);
     setError("");
-    const { ok, data } = await call(`/api/erp/invoice-drafts/${draft.periodId}`, "PUT", { amountCents, charges });
+    const { ok, data } = await call(draftUrl(draft), "PUT", { amountCents, charges });
     setSaving(false);
     if (!ok) return setError(String(data.error ?? "Could not save."));
     onClose();
@@ -579,7 +674,9 @@ function EditDraft({ draft, onClose }: { draft: DraftRow; onClose: () => void })
       <h3 className="text-base font-semibold text-gray-900">
         {draft.building}, {draft.month}
       </h3>
-      <p className="mt-1 text-xs text-gray-500">Saves on the month in the ERP (Billing shows the same) and updates the HubSpot draft.</p>
+      <p className="mt-1 text-xs text-gray-500">
+        Saves on the month in the ERP (Billing shows the same){draft.kind === "month" ? " and updates the HubSpot draft" : ""}.
+      </p>
       <div className="mt-4 space-y-3">
         <label className={labelClass.default}>
           Monthly amount
@@ -632,10 +729,25 @@ function EditDraft({ draft, onClose }: { draft: DraftRow; onClose: () => void })
 
 
 /** Finished, unbilled work with no invoice yet. Tick items and draft: one invoice per building or job. */
-function ReadyToBill({ groups }: { groups: BillableGroupRow[] }) {
+function ReadyToBill({ groups, pick }: { groups: BillableGroupRow[]; /** Item key to tick on arrival, from Project Billing */ pick: string | null }) {
   const router = useRouter();
   const toast = useToast();
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [pickMissing, setPickMissing] = useState(false);
+
+  // Arriving from Bill it: tick that item and bring its group into view.
+  useEffect(() => {
+    if (!pick) return;
+    const group = groups.find((g) => g.items.some((i) => i.key === pick));
+    if (!group || group.blocker) {
+      setPickMissing(true);
+      return;
+    }
+    setPicked(new Set([pick]));
+    document.getElementById(`bill-${group.key}`)?.scrollIntoView({ block: "center" });
+    // Only on arrival; later refreshes keep whatever was ticked by hand.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pick]);
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
@@ -678,10 +790,15 @@ function ReadyToBill({ groups }: { groups: BillableGroupRow[] }) {
   return (
     <section className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="flex items-center gap-1 text-sm font-semibold text-gray-900">
-          Ready to bill ({allItems.length})
-          <InfoTip text="Finished work that isn't billed and has no invoice yet: unit turns, post-construction SOV lines and change orders. Tick what to bill and click Draft invoice. You get one draft per building or job, one line per item. Amounts can be changed first." />
-        </h2>
+        <p className="flex items-center gap-1 text-xs text-gray-500">
+          Finished work with no invoice yet. Tick what to bill.
+          <InfoTip text="Unit turns, post-construction SOV lines and change orders that aren't billed. Click Draft invoice for one draft per building or job, one line per item. Amounts can be changed first." />
+        </p>
+        {pickMissing && (
+          <span className="text-xs text-amber-800" title="It shows here once it's marked complete, has a price, isn't billed, and its building or job has a client company.">
+            That item isn&apos;t ready to bill yet.
+          </span>
+        )}
         {pickedItems.length > 0 && (
           <Button size="sm" className="ml-auto" disabled={busy} onClick={() => void draft()}>
             {busy ? "Drafting…" : `Draft invoice${pickedGroups === 1 ? "" : "s"} (${pickedItems.length} item${pickedItems.length === 1 ? "" : "s"}, ${pickedGroups} invoice${pickedGroups === 1 ? "" : "s"})`}
@@ -695,15 +812,15 @@ function ReadyToBill({ groups }: { groups: BillableGroupRow[] }) {
           const keys = g.items.map((i) => i.key);
           const all = keys.every((k) => picked.has(k));
           return (
-            <div key={g.key} className="rounded-lg border border-gray-200 bg-white shadow-sm">
+            <div key={g.key} id={`bill-${g.key}`} className="scroll-mt-24 rounded-lg border border-gray-200 bg-white shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-4 py-2">
                 <label className="flex items-center gap-2 font-medium text-gray-900">
                   <input type="checkbox" checked={all} disabled={!!g.blocker} onChange={(e) => toggle(keys, e.target.checked)} />
                   {g.name}
                   <span className="text-xs font-normal text-gray-500">{g.type === "BUILDING" ? "Building" : "Job"}</span>
                 </label>
-                <span className="text-xs text-gray-500">
-                  {g.blocker ? <span className="text-red-700">{g.blocker}</span> : [g.client ?? "No client company", g.method, g.sendTo].filter(Boolean).join(" · ")}
+                <span className="text-xs text-gray-500" title={g.blocker ? undefined : [g.method, g.sendTo].filter(Boolean).join(" · ") || undefined}>
+                  {g.blocker ? <span className="text-red-700">{g.blocker}</span> : (g.client ?? "No client company")}
                 </span>
               </div>
               <table className="w-full text-sm">
@@ -748,7 +865,7 @@ function NeedsSending({ rows }: { rows: DeliveryRow[] }) {
   const router = useRouter();
   const toast = useToast();
   const [busy, setBusy] = useState<string | null>(null);
-  if (!rows.length) return null;
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   async function act(r: DeliveryRow, what: "done" | "email-again") {
     setBusy(r.id);
@@ -758,78 +875,80 @@ function NeedsSending({ rows }: { rows: DeliveryRow[] }) {
     router.refresh();
   }
 
+  if (!rows.length) {
+    return <p className="rounded-lg border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-500">Everything approved has reached the client.</p>;
+  }
+
   return (
-    <section className="space-y-3">
-      <h2 className="flex items-center gap-1 text-sm font-semibold text-gray-900">
-        Needs sending ({rows.length})
-        <InfoTip text="Approved invoices that still have to reach the client. Portal clients: upload the PDF with these numbers, then Mark done. Email problems: fix the address on the company, building or project, then Email again." />
-      </h2>
-      {rows.map((r) => (
-        <div key={r.id} className="rounded-lg border border-amber-200 bg-white p-4 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div className="font-medium text-gray-900">
-                {r.invoiceNumber ? `${r.invoiceNumber} · ` : ""}
-                {r.title}
-              </div>
-              <div className="text-xs text-gray-500">
-                {[r.clientName ?? "No client company", r.method].filter(Boolean).join(" · ")}
-              </div>
-              <div className="mt-1 text-xs text-amber-800">{r.reason}</div>
-            </div>
-            <div className="text-right text-lg font-semibold tabular-nums text-gray-900">{centsToDollars(r.totalCents)}</div>
-          </div>
-          <table className="mt-3 w-full text-sm">
-            <tbody className="divide-y divide-gray-100">
-              {r.lines.map((l, i) => (
-                <tr key={i}>
-                  <td className="py-1 pr-2 text-gray-900">
-                    {l.name}
-                    {l.description && <span className="ml-2 text-xs text-gray-500">{l.description}</span>}
-                  </td>
-                  <td className="py-1 text-right tabular-nums text-gray-900">
-                    <button type="button" title="Copy amount" className="hover:text-pink-600" onClick={() => void navigator.clipboard.writeText((l.amountCents / 100).toFixed(2)).then(() => toast("Amount copied."))}>
-                      {centsToDollars(l.amountCents)}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
-            {r.portalUrl && (
-              <a href={r.portalUrl} target="_blank" rel="noreferrer" className="font-medium text-pink-600 hover:underline">
-                Open {r.method ?? "portal"}
-              </a>
-            )}
-            {r.pdfUrl && (
-              <a href={r.pdfUrl} target="_blank" rel="noreferrer" className="font-medium text-pink-600 hover:underline">
-                Invoice PDF
-              </a>
-            )}
-            {r.viewUrl && (
-              <a href={r.viewUrl} target="_blank" rel="noreferrer" className="font-medium text-pink-600 hover:underline">
-                HubSpot invoice
-              </a>
-            )}
-            {r.clientCompanyId && (
-              <a href={`/erp/companies/${r.clientCompanyId}`} className="font-medium text-pink-600 hover:underline">
-                {r.logins.length ? `Login: ${r.logins.join(", ")}` : "Company page"}
-              </a>
-            )}
-            <span className="ml-auto flex gap-2">
-              {r.status === "NEEDS_SENDING" && (
-                <Button size="xs" variant="secondary" disabled={busy !== null} onClick={() => void act(r, "email-again")}>
-                  Email again
+    <section className="space-y-2">
+      <p className="flex items-center gap-1 text-xs text-gray-500">
+        Approved, but not with the client yet. Click one for its lines and links.
+        <InfoTip text="Portal clients: open the portal, upload the PDF with these amounts (click an amount to copy it), then Mark uploaded. Email problems: fix the address on the company, building or project, then Email again from the menu." />
+      </p>
+      <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white shadow-sm">
+        {rows.map((r) => {
+          const isOpen = expanded === r.id;
+          const links: MenuItem[] = [
+            ...(r.portalUrl ? [{ label: `Open ${r.method ?? "portal"}`, href: r.portalUrl, external: true }] : []),
+            ...(r.pdfUrl ? [{ label: "Invoice PDF", href: r.pdfUrl, external: true }] : []),
+            ...(r.qboUrl ? [{ label: "Open in QuickBooks", href: r.qboUrl, external: true }] : []),
+            ...(r.viewUrl ? [{ label: r.qboUrl ? "Client pay link" : "HubSpot invoice", href: r.viewUrl, external: true }] : []),
+            ...(r.clientCompanyId ? [{ label: "Company page", href: `/erp/companies/${r.clientCompanyId}` }] : []),
+          ];
+          return (
+            <li key={r.id}>
+              <div className="flex items-center gap-3 px-4 py-3">
+                <button type="button" onClick={() => setExpanded(isOpen ? null : r.id)} className="min-w-0 flex-1 text-left">
+                  <span className="block truncate font-medium text-gray-900">
+                    {r.invoiceNumber ? `${r.invoiceNumber} · ` : ""}
+                    {r.title}
+                  </span>
+                  <span className="block truncate text-xs text-amber-800">{r.reason}</span>
+                </button>
+                <span className="font-semibold tabular-nums text-gray-900">{centsToDollars(r.totalCents)}</span>
+                <Button size="xs" disabled={busy !== null} onClick={() => void act(r, "done")}>
+                  {r.status === "NEEDS_UPLOAD" ? "Mark uploaded" : "Mark sent"}
                 </Button>
+                <RowMenu
+                  label={`More for ${r.title}`}
+                  disabled={busy !== null}
+                  items={[...(r.status === "NEEDS_SENDING" ? [{ label: "Email again", onClick: () => void act(r, "email-again") }] : []), ...links]}
+                />
+              </div>
+              {isOpen && (
+                <div className="space-y-2 border-t border-gray-100 bg-gray-50 px-4 py-3 text-sm">
+                  <table className="w-full">
+                    <tbody className="divide-y divide-gray-100">
+                      {r.lines.map((l, i) => (
+                        <tr key={i}>
+                          <td className="py-1 pr-2 text-gray-900">
+                            {l.name}
+                            {l.description && <span className="ml-2 text-xs text-gray-500">{l.description}</span>}
+                          </td>
+                          <td className="py-1 text-right tabular-nums text-gray-900">
+                            <button type="button" title="Copy amount" className="hover:text-pink-600" onClick={() => void navigator.clipboard.writeText((l.amountCents / 100).toFixed(2)).then(() => toast("Amount copied."))}>
+                              {centsToDollars(l.amountCents)}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                    <span className="text-gray-600">{[r.clientName ?? "No client company", r.method].filter(Boolean).join(" · ")}</span>
+                    {r.logins.length > 0 && <span className="text-gray-600">Login: {r.logins.join(", ")}</span>}
+                    {links.map((l) => (
+                      <a key={l.label} href={l.href} target={l.external ? "_blank" : undefined} rel={l.external ? "noreferrer" : undefined} className="font-medium text-pink-600 hover:underline">
+                        {l.label}
+                      </a>
+                    ))}
+                  </div>
+                </div>
               )}
-              <Button size="xs" disabled={busy !== null} onClick={() => void act(r, "done")}>
-                {r.status === "NEEDS_UPLOAD" ? "Mark uploaded" : "Mark sent"}
-              </Button>
-            </span>
-          </div>
-        </div>
-      ))}
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }

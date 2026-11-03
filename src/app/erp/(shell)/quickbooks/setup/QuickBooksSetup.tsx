@@ -24,7 +24,7 @@ function groupChip(g: MappingGroup) {
   if (!g.companyId) return <Chip tone="red">No client company</Chip>;
   if (g.existing) return <Chip tone="green">Already in QuickBooks</Chip>;
   if (g.nameTaken) return <Chip tone="amber">Name already used</Chip>;
-  return <Chip tone="gray">New at the switch</Chip>;
+  return <Chip tone="gray">New on first invoice</Chip>;
 }
 
 /** Invoice setup: client companies to QuickBooks customers, jobs to sub-customers, lines to products. */
@@ -32,6 +32,7 @@ export function QuickBooksSetup({ mapping }: { mapping: QboMapping }) {
   const router = useRouter();
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [problemsOnly, setProblemsOnly] = useState(false);
 
   async function patch(body: Record<string, unknown>, key: string) {
     setSaving(key);
@@ -53,6 +54,8 @@ export function QuickBooksSetup({ mapping }: { mapping: QboMapping }) {
   const linesDone = mapping.lines.filter((l) => l.confirmed).length;
   const noCompany = mapping.groups.filter((g) => !g.companyId).length;
   const taken = mapping.groups.filter((g) => g.nameTaken).length;
+  const isProblem = (g: MappingGroup) => !g.companyId || g.nameTaken;
+  const shownGroups = problemsOnly ? mapping.groups.filter(isProblem) : mapping.groups;
 
   return (
     <div className="space-y-6">
@@ -85,7 +88,7 @@ export function QuickBooksSetup({ mapping }: { mapping: QboMapping }) {
       <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
         <h2 className="flex items-center gap-1 border-b border-gray-200 px-4 py-3 text-sm font-semibold text-gray-900">
           Companies
-          <InfoTip text="The QuickBooks customer each company's invoices go under. Suggestions come from the name; Confirm to keep one, or pick another. New customer at the switch means QuickBooks gets a new one with the company's name." />
+          <InfoTip text="The QuickBooks customer each company's invoices go under. Suggestions come from the name; Confirm to keep one, or pick another. New customer on first invoice means QuickBooks gets a new one with the company's name the first time one of its invoices is approved." />
         </h2>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-sm">
@@ -111,7 +114,7 @@ export function QuickBooksSetup({ mapping }: { mapping: QboMapping }) {
                     <OptionCombobox
                       options={customerOptions}
                       value={c.qboCustomerId ?? ""}
-                      allLabel="New customer at the switch"
+                      allLabel="New customer on first invoice"
                       onChange={(v) => patch({ companyId: c.id, qboCustomerId: v || null }, c.id)}
                     />
                   </td>
@@ -199,7 +202,11 @@ export function QuickBooksSetup({ mapping }: { mapping: QboMapping }) {
       <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
         <h2 className="flex items-center gap-1 border-b border-gray-200 px-4 py-3 text-sm font-semibold text-gray-900">
           Jobs and buildings
-          <InfoTip text="The sub-customer each job or building gets under its company. Worked out from the names, nothing to confirm. No client company: set one on the job or building. Name already used: another QuickBooks customer has this name, so rename the job or that customer before the switch." />
+          <InfoTip text="The sub-customer each job or building gets under its company. Worked out from the names, nothing to confirm. No client company: set one on the job or building. Name already used: another QuickBooks customer has this name, so rename the job or that customer before its first invoice." />
+          <label className="ml-auto flex items-center gap-1.5 text-xs font-normal text-gray-600">
+            <input type="checkbox" checked={problemsOnly} onChange={(e) => setProblemsOnly(e.target.checked)} />
+            Only show problems ({noCompany + taken})
+          </label>
         </h2>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-sm">
@@ -212,7 +219,14 @@ export function QuickBooksSetup({ mapping }: { mapping: QboMapping }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {mapping.groups.map((g) => (
+              {shownGroups.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-3 py-6 text-center text-sm text-gray-500">
+                    Nothing to fix.
+                  </td>
+                </tr>
+              )}
+              {shownGroups.map((g) => (
                 <tr key={g.key}>
                   <td className={tdCls}>
                     <Link href={g.href} className="text-gray-900 hover:text-pink-700">

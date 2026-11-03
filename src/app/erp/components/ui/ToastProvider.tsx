@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useRef, useState } from "react";
 
 type ToastVariant = "success" | "error";
-type ToastItem = { id: number; message: string; variant: ToastVariant };
+type ToastItem = { id: number; message: React.ReactNode; variant: ToastVariant };
 
 const VARIANT_CLASSES: Record<ToastVariant, string> = {
   success: "border-green-200 bg-green-50 text-green-800",
@@ -12,7 +12,8 @@ const VARIANT_CLASSES: Record<ToastVariant, string> = {
 
 const DURATION_MS = 5000;
 
-type Notify = (message: string, variant?: ToastVariant) => void;
+/** A message can hold a link, e.g. to the invoice that was just made. */
+type Notify = (message: React.ReactNode, variant?: ToastVariant) => void;
 
 const ToastContext = createContext<Notify | null>(null);
 

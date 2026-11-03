@@ -23,6 +23,7 @@ import { CompensationOverview } from "./compensation/compensation-overview";
 import { QualityChecks } from "./projects/quality-checks";
 import { BillingOverview } from "./billing/billing-overview";
 import { ReadyToSendHelp } from "./billing/ready-to-send";
+import { HowInvoicingWorks } from "./billing/how-invoicing-works";
 import { BuildingsOverview } from "./buildings/buildings-overview";
 import { JanitorialContracts } from "./janitorial/janitorial-contracts";
 import { JanitorialGettingStarted } from "./janitorial/getting-started";
@@ -269,9 +270,18 @@ export const registry: ArticleEntry[] = [
     slug: "billing/ready-to-send",
     title: "Ready to Send (Auto-Drafted Invoices)",
     category: "Billing, Pay & Finance",
-    description: "Draft HubSpot invoices for janitorial months and finished work, then review, approve or discard them.",
-    order: 2,
+    description: "Draft invoices for janitorial months and finished work, approve them into QuickBooks and get them to the client.",
+    order: 3,
     component: ReadyToSendHelp,
+    roles: ["ADMIN", "BUSINESS_MANAGER"],
+  },
+  {
+    slug: "billing/how-invoicing-works",
+    title: "How Invoicing Works",
+    category: "Billing, Pay & Finance",
+    description: "The path from finished work to a paid invoice: what the ERP, QuickBooks and HubSpot each do.",
+    order: 2,
+    component: HowInvoicingWorks,
     roles: ["ADMIN", "BUSINESS_MANAGER"],
   },
   {

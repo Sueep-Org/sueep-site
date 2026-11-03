@@ -49,7 +49,7 @@ import { policyTypeLabel } from "@/lib/erp/insurance";
 import { hiringSourceLabel } from "@/lib/erp/officeHiring";
 import { HEALTH_SHARE_SETTING_KEY, healthCompanyCostForDays, parseHealthSharePct } from "@/lib/erp/healthCost";
 import { employerTaxByDay } from "@/lib/erp/employerTaxRows";
-import { QBO_BOOKED_THROUGH_KEY, QBO_COST_SECTIONS, QBO_GROUPS, QBO_GROUP_LABELS, emptyQboGroups, qboGroupFor, type QboGroupCents } from "@/lib/erp/qboOverhead";
+import { QBO_COST_SECTIONS, QBO_GROUPS, QBO_GROUP_LABELS, emptyQboGroups, qboGroupFor, type QboGroupCents } from "@/lib/erp/qboOverhead";
 
 export type FinanceSegment = "POST_CONSTRUCTION" | "TURNOVERS" | "JANITORIAL_CONTRACTS" | "OTHER";
 
@@ -106,12 +106,15 @@ export type FinanceMonth = {
   hiringAdsCents: number;
   overheadCents: number;
   netProfitCents: number;
-  /** Costs only QuickBooks knows about (rent, vehicles, software...), by group, from months QuickBooks is done for (qboOverhead.ts). Included in overheadCents. */
+  /** Costs only QuickBooks knows about (rent, vehicles, software...), by group (qboOverhead.ts). Included in overheadCents. */
   qboGroups: QboGroupCents;
   qboOverheadCents: number;
-  /** Months in this bucket, and how many of them QuickBooks overhead counts (finished months with QuickBooks data). */
+  /** Months in this bucket, how many have their QuickBooks costs in, and how many use an estimate instead (see qboMonthComplete). */
   qboMonthsInView: number;
   qboMonthsBooked: number;
+  qboMonthsEstimated: number;
+  /** Part of qboOverheadCents that's an estimate (average of recent complete months). */
+  qboEstimatedCents: number;
   /** Work finished this month (always by completion month, whatever the
    * anchor), split by where its billing stands today. */
   paidCents: number;
@@ -120,24 +123,34 @@ export type FinanceMonth = {
   segments: Record<FinanceSegment, SegmentTotals>;
 };
 
-/** Where the month's money went, every cost in one list. Adds up to job
+/** The four groups "Where the money went" folds its lines into, in display order. */
+export const COST_GROUPS = ["CREW", "OFFICE", "INSURANCE_TAXES", "QUICKBOOKS"] as const;
+export type CostGroup = (typeof COST_GROUPS)[number];
+export const COST_GROUP_LABELS: Record<CostGroup, { label: string; hint: string }> = {
+  CREW: { label: "Crew and subs", hint: "Hourly workers, subcontractors, materials and crew expenses" },
+  OFFICE: { label: "Office and salaries", hint: "Salaried staff, offshore staff, commission and job ads" },
+  INSURANCE_TAXES: { label: "Insurance and taxes", hint: "Business insurance, employer payroll taxes and health insurance" },
+  QUICKBOOKS: { label: "Overhead from QuickBooks", hint: "Rent, vehicles, software, supplies and other costs only QuickBooks has" },
+};
+
+/** Where the month's money went, every cost in one list, each in one of the four groups. Adds up to job
  * costs plus overhead. Hourly payroll includes janitorial hours and labor
  * typed on a project with no logs. */
-export function costBreakdown(m: FinanceMonth): { label: string; cents: number; hint: string }[] {
+export function costBreakdown(m: FinanceMonth): { label: string; cents: number; hint: string; group: CostGroup }[] {
   return [
-    { label: "Hourly payroll", cents: m.laborCents - m.contractorCents - m.salaryInJobsCents - m.offshoreInJobsCents + m.manualHourlyCents, hint: "Hourly workers on jobs and janitorial shifts, plus hours added by hand on Payroll, overtime included" },
-    { label: "Salaries", cents: m.salaryCents + m.salaryInJobsCents, hint: "Salaried staff, including their time on jobs" },
-    { label: "Offshore", cents: m.offshoreCents + m.offshoreInJobsCents, hint: "Offshore staff monthly pay" },
-    { label: "Commission", cents: m.commissionCents, hint: "Commission, when marked paid" },
-    { label: "Contractors", cents: m.contractorCents, hint: "Contractor assignments on jobs" },
-    { label: "Materials and travel", cents: m.materialCents, hint: "Material logs and travel typed on projects" },
-    { label: "Reimbursements", cents: m.reimbursementCents, hint: "Expenses, in the month of the expense" },
-    { label: "Insurance", cents: m.insuranceCents, hint: "Policy premiums spread over each term, plus audit bills or refunds on their date" },
-    { label: "Payroll taxes", cents: m.payrollTaxCents, hint: "Employer Social Security, Medicare and unemployment on employees' pay, same as the Payroll page" },
-    { label: "Health insurance", cents: m.healthCents, hint: "Sueep's share of each person's health plan premium" },
-    { label: "Hiring ads", cents: m.hiringAdsCents, hint: "Job ads (LinkedIn, Indeed...) on office openings, in the month posted" },
-    // Overhead only QuickBooks knows about, for months QuickBooks is done for.
-    ...QBO_GROUPS.map((g) => ({ label: QBO_GROUP_LABELS[g].label, cents: m.qboGroups[g], hint: `From QuickBooks: ${QBO_GROUP_LABELS[g].hint}` })),
+    { group: "CREW", label: "Hourly payroll", cents: m.laborCents - m.contractorCents - m.salaryInJobsCents - m.offshoreInJobsCents + m.manualHourlyCents, hint: "Hourly workers on jobs and janitorial shifts, plus hours added by hand on Payroll, overtime included" },
+    { group: "CREW", label: "Contractors", cents: m.contractorCents, hint: "Contractor assignments on jobs" },
+    { group: "CREW", label: "Materials and travel", cents: m.materialCents, hint: "Material logs and travel typed on projects" },
+    { group: "CREW", label: "Reimbursements", cents: m.reimbursementCents, hint: "Expenses, in the month of the expense" },
+    { group: "OFFICE", label: "Salaries", cents: m.salaryCents + m.salaryInJobsCents, hint: "Salaried staff, including their time on jobs" },
+    { group: "OFFICE", label: "Offshore", cents: m.offshoreCents + m.offshoreInJobsCents, hint: "Offshore staff monthly pay" },
+    { group: "OFFICE", label: "Commission", cents: m.commissionCents, hint: "Commission, when marked paid" },
+    { group: "OFFICE", label: "Hiring ads", cents: m.hiringAdsCents, hint: "Job ads (LinkedIn, Indeed...) on office openings, in the month posted" },
+    { group: "INSURANCE_TAXES", label: "Insurance", cents: m.insuranceCents, hint: "Policy premiums spread over each term, plus audit bills or refunds on their date" },
+    { group: "INSURANCE_TAXES", label: "Payroll taxes", cents: m.payrollTaxCents, hint: "Employer Social Security, Medicare and unemployment on employees' pay, same as the Payroll page" },
+    { group: "INSURANCE_TAXES", label: "Health insurance", cents: m.healthCents, hint: "Sueep's share of each person's health plan premium" },
+    // Overhead only QuickBooks knows about (estimated for months it isn't done for).
+    ...QBO_GROUPS.map((g) => ({ group: "QUICKBOOKS" as const, label: QBO_GROUP_LABELS[g].label, cents: m.qboGroups[g], hint: `From QuickBooks: ${QBO_GROUP_LABELS[g].hint}` })),
   ];
 }
 
@@ -184,7 +197,7 @@ const SOV_MISMATCH_CENTS = 100_000;
 
 export type FinanceSummary = {
   months: FinanceMonth[];
-  /** The last month QuickBooks is marked finished for ("YYYY-MM"), null when nobody has set it. */
+  /** The latest month whose QuickBooks costs look complete ("YYYY-MM"), null when none do. */
   qboBookedThrough: string | null;
   jobs: FinanceJob[];
   /** Today, "YYYY-MM-DD" (Eastern). */
@@ -239,7 +252,7 @@ function emptyMonth(key: string): FinanceMonth {
     materialCents: 0, grossProfitCents: 0,
     salaryCents: 0, offshoreCents: 0, manualHourlyCents: 0, commissionCents: 0, reimbursementCents: 0,
     insuranceCents: 0, payrollTaxCents: 0, healthCents: 0, hiringAdsCents: 0, overheadCents: 0, netProfitCents: 0, paidCents: 0, billedCents: 0, notBilledCents: 0, segments: emptySegments(),
-    qboGroups: emptyQboGroups(), qboOverheadCents: 0, qboMonthsInView: 0, qboMonthsBooked: 0,
+    qboGroups: emptyQboGroups(), qboOverheadCents: 0, qboMonthsInView: 0, qboMonthsBooked: 0, qboMonthsEstimated: 0, qboEstimatedCents: 0,
   };
 }
 
@@ -329,6 +342,23 @@ function monthKeysBetween(firstKey: string, lastKey: string): string[] {
 /** First month shown ("YYYY-MM"). The ERP wasn't fully in use until August
  * 2026, so earlier months are missing jobs and costs and would mislead. */
 export const FINANCE_DATA_START = "2026-08";
+
+/** Recent complete months averaged for a month whose QuickBooks costs aren't in yet. */
+const QBO_ESTIMATE_MONTHS = 3;
+
+/**
+ * Whether a finished month's QuickBooks costs look fully entered: at least
+ * 60% of the middle of the up-to-3 months before it. The bookkeeper enters
+ * costs over the following weeks, so a month far below its neighbours is
+ * still being entered. With nothing to compare to, any costs count.
+ */
+export function qboMonthComplete(totalCents: number, previousCents: number[]): boolean {
+  if (totalCents <= 0) return false;
+  const prior = previousCents.filter((c) => c > 0).sort((a, b) => a - b);
+  if (prior.length === 0) return true;
+  const middle = prior[Math.floor(prior.length / 2)]!;
+  return totalCents >= middle * 0.6;
+}
 
 /** Every "YYYY-MM-DD" from `from` to `to`, inclusive. */
 function dayKeysBetween(from: string, to: string): string[] {
@@ -907,21 +937,15 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
   }
 
   // QuickBooks overhead: costs only the books have (rent, vehicles, software,
-  // taxes...), from the P&L uploaded or synced on the QuickBooks page. Only
-  // months QuickBooks is finished for count: up to the "booked through"
-  // month set on the QuickBooks page, or, until someone sets it, every
-  // finished month it has data for. A custom range takes each month's share by days.
-  const qboMonthKeys = [...new Set(bucketDays.flatMap(([, days]) => days.map((d) => d.slice(0, 7))))];
-  const [qboLines, qboDataMonths, bookedSetting] = await Promise.all([
-    prisma.qboPnlLine.findMany({
-      where: { month: { in: qboMonthKeys }, section: { in: [...QBO_COST_SECTIONS] } },
-      select: { month: true, account: true, parent: true, amountCents: true },
-    }),
-    prisma.qboPnlLine.findMany({ where: { month: { in: qboMonthKeys } }, distinct: ["month"], select: { month: true } }),
-    prisma.appSetting.findUnique({ where: { key: QBO_BOOKED_THROUGH_KEY } }),
-  ]);
-  const bookedThrough = bookedSetting?.value && /^\d{4}-\d{2}$/.test(bookedSetting.value) ? bookedSetting.value : null;
-  const booked = new Set(qboDataMonths.map((r) => r.month).filter((k) => k < currentMonthKey && (!bookedThrough || k <= bookedThrough)));
+  // taxes...), from the P&L synced on the QuickBooks page. Nobody has to mark a
+  // month done: a finished month counts once its costs look complete (see
+  // qboMonthComplete). Months that don't yet, and the month in progress, use
+  // the average of the last complete months instead and are marked an estimate.
+  // A custom range takes each month's share by days.
+  const qboLines = await prisma.qboPnlLine.findMany({
+    where: { section: { in: [...QBO_COST_SECTIONS] } },
+    select: { month: true, account: true, parent: true, amountCents: true },
+  });
   const qboByMonth = new Map<string, QboGroupCents>();
   for (const l of qboLines) {
     const group = qboGroupFor(l.account, l.parent);
@@ -930,20 +954,43 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
     g[group] += l.amountCents;
     qboByMonth.set(l.month, g);
   }
+  const qboTotal = (mk: string) => {
+    const g = qboByMonth.get(mk);
+    return g ? QBO_GROUPS.reduce((sum, group) => sum + g[group], 0) : 0;
+  };
+  const qboMonths = [...qboByMonth.keys()].filter((k) => k < currentMonthKey).sort();
+  const complete = new Set(qboMonths.filter((mk, i) => qboMonthComplete(qboTotal(mk), qboMonths.slice(Math.max(0, i - 3), i).map(qboTotal))));
+  const completeList = [...complete].sort();
+  /** Average of the last QBO_ESTIMATE_MONTHS complete months before this one, per group. */
+  const estimateFor = (mk: string): QboGroupCents | null => {
+    const recent = completeList.filter((k) => k < mk).slice(-QBO_ESTIMATE_MONTHS);
+    if (recent.length === 0) return null;
+    const g = emptyQboGroups();
+    for (const k of recent) for (const group of QBO_GROUPS) g[group] += qboByMonth.get(k)![group];
+    for (const group of QBO_GROUPS) g[group] = Math.round(g[group] / recent.length);
+    return g;
+  };
+  const bookedThrough = completeList.at(-1) ?? null;
   for (const [key, days] of bucketDays) {
     const m = monthOf(key);
     const daysByMonth = new Map<string, number>();
     for (const d of days) daysByMonth.set(d.slice(0, 7), (daysByMonth.get(d.slice(0, 7)) ?? 0) + 1);
     m.qboMonthsInView = daysByMonth.size;
     for (const [mk, n] of daysByMonth) {
-      if (!booked.has(mk)) continue;
-      m.qboMonthsBooked += 1;
       const share = n / daysInMonth(mk);
-      const g = qboByMonth.get(mk);
-      if (g) for (const group of QBO_GROUPS) m.qboGroups[group] += Math.round(g[group] * share);
+      const actual = complete.has(mk) ? qboByMonth.get(mk)! : null;
+      const g = actual ?? estimateFor(mk);
+      if (!g) continue;
+      if (actual) m.qboMonthsBooked += 1;
+      else m.qboMonthsEstimated += 1;
+      for (const group of QBO_GROUPS) {
+        const cents = Math.round(g[group] * share);
+        m.qboGroups[group] += cents;
+        if (!actual) m.qboEstimatedCents += cents;
+      }
     }
     // Already counted by the ERP: job ads (Hiring ads) and materials logged on jobs.
-    if (m.qboMonthsBooked > 0) {
+    if (m.qboMonthsBooked + m.qboMonthsEstimated > 0) {
       m.qboGroups.RECRUITING = Math.max(0, m.qboGroups.RECRUITING - m.hiringAdsCents);
       m.qboGroups.SUPPLIES = Math.max(0, m.qboGroups.SUPPLIES - m.materialCents);
     }
@@ -1005,6 +1052,8 @@ export function sumMonths(key: string, list: FinanceMonth[]): FinanceMonth {
     total.qboOverheadCents += m.qboOverheadCents;
     total.qboMonthsInView += m.qboMonthsInView;
     total.qboMonthsBooked += m.qboMonthsBooked;
+    total.qboMonthsEstimated += m.qboMonthsEstimated;
+    total.qboEstimatedCents += m.qboEstimatedCents;
     total.paidCents += m.paidCents;
     total.billedCents += m.billedCents;
     total.notBilledCents += m.notBilledCents;

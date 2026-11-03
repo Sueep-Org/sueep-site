@@ -10,6 +10,12 @@ export function BillingOverview() {
         <strong>Janitorial</strong>, and <strong>Recurring</strong>. Each lists completed work in a
         date range and lets you flip its billing status.
       </P>
+      <P>
+        It&apos;s the first of three steps, shown at the top of each page: <strong>Project Billing</strong> (is the work done
+        and billed?) → <strong>Ready to send</strong> (make and send the invoice) → <strong>Invoices</strong> (is it paid?).
+        For Admins and the Business Manager, <strong>Bill it</strong> on a Not billed line opens Ready to send with it
+        ticked. Invoice numbers on a line open that invoice on the Invoices page (PMs, Business Manager, Admin).
+      </P>
       <ImgPlaceholder label="Project Billing page with tabs and date range" />
 
       <H2>Steps</H2>
@@ -68,7 +74,7 @@ export function BillingOverview() {
         <Step n={4} title="Recurring tab">
           Lists each janitorial contract&apos;s billing months, grouped under their building, one
           row per month. The amount includes any one-off extras added that month. Clicking a month
-          opens the contract. The <strong>HubSpot Invoice</strong> column shows invoices linked to
+          opens the contract. The <strong>Invoice</strong> column shows invoices linked to
           the month from the building&apos;s <strong>Invoices &amp; Quotes</strong> tab, and a
           month is marked <strong>Paid</strong> once its paid invoices add up to its total. See{" "}
           <A href="/erp/help/janitorial/janitorial-contracts">Janitorial Contracts</A> for how
@@ -145,8 +151,8 @@ export function BillingOverview() {
 
       <H2>Auto-drafted invoices</H2>
       <P>
-        For janitorial contracts with Auto-draft on, the ERP drafts the monthly invoice in HubSpot 3 days before the billing
-        day. Admins and the Business Manager review and approve them on{" "}
+        For janitorial contracts with Auto-draft on, the ERP drafts the monthly invoice 3 days before the billing day. Admins
+        and the Business Manager review and approve them on{" "}
         <A href="/erp/help/billing/ready-to-send">Ready to send</A>. Approving marks the month <strong>Billed</strong> here.
         Finished unit turns, SOV lines and change orders can be drafted there too, under <strong>Ready to bill</strong>, for
         clients that don&apos;t have a billing day.
