@@ -44,6 +44,8 @@ function monthStartISO(): string {
 }
 
 type StatusFilter = "ALL" | (typeof BILLING_OPTIONS)[number]["value"];
+/** Billing opens on unbilled work from all time. */
+const DEFAULT_STATUS: StatusFilter = "NOT_BILLED";
 
 /** An open invoice that's past its due date, same test the invoice chip uses. */
 function hasOverdueInvoice(invoices: UnitInvoiceChip[] | undefined): boolean {
@@ -115,9 +117,11 @@ type BillingControls = {
   setEnd: (v: string) => void;
   allTime: boolean;
   setAllTime: (v: boolean) => void;
-  /** Dates are still this month through today, and All time is off. */
+  /** All time is on, the default. */
   datesDefault: boolean;
   resetDates: () => void;
+  /** Opened from a project or contract link, so its billed and paid lines show too. */
+  linkedSearch: boolean;
 };
 const BillingControlsContext = createContext<BillingControls | null>(null);
 
@@ -157,7 +161,7 @@ function BillingFilters<F extends string>({
   const radioName = useId();
   const ageRadioName = useId();
   const c = useContext(BillingControlsContext)!;
-  const filtersActive = status !== "ALL" || age !== "ALL" || flags.length > 0 || !c.datesDefault;
+  const filtersActive = status !== DEFAULT_STATUS || age !== "ALL" || flags.length > 0 || !c.datesDefault;
 
   useEffect(() => {
     if (!open) return;
@@ -288,7 +292,7 @@ function BillingFilters<F extends string>({
             {filtersActive ? (
               <button
                 type="button"
-                onClick={() => { onStatus("ALL"); onAge("ALL"); onFlags?.([]); c.resetDates(); }}
+                onClick={() => { onStatus(DEFAULT_STATUS); onAge("ALL"); onFlags?.([]); c.resetDates(); }}
                 className="mt-3 w-full rounded border border-gray-200 py-1 text-[11px] font-medium text-gray-500 hover:bg-gray-50"
               >
                 Clear filters
@@ -409,6 +413,11 @@ function PostConProjectFlags({ hs, projectId }: { hs: PostConHubSpot | undefined
   );
 }
 
+function completedLabel(iso: string | null | undefined): string {
+  if (!iso) return "-";
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+
 function PostConInvoiceCell({ hs }: { hs: PostConHubSpot | undefined | "loading" }) {
   if (hs === "loading") return <span className="text-xs text-gray-400">Loading...</span>;
   if (!hs) return <span className="text-xs text-gray-400">No deal</span>;
@@ -419,7 +428,7 @@ function PostConInvoiceCell({ hs }: { hs: PostConHubSpot | undefined | "loading"
 
 function buildPostConCsv(rows: PostConProjectRow[], start: string, end: string, hsByProject: Record<string, PostConHubSpot> = {}): string {
   const escape = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
-  const headers = ["Project", "Item", "Type", "Value", "Billing Status", "Invoices"].map(escape).join(",");
+  const headers = ["Project", "Item", "Type", "Completed", "Value", "Billing Status", "Invoices"].map(escape).join(",");
   const dataRows: string[] = [];
   for (const project of rows) {
     const hs = hsByProject[project.projectId];
@@ -429,6 +438,7 @@ function buildPostConCsv(rows: PostConProjectRow[], start: string, end: string, 
         escape(project.jobTitle),
         escape(item.description),
         escape("SOV"),
+        escape(item.completedAt.slice(0, 10)),
         escape((item.scheduledValueCents / 100).toFixed(2)),
         escape(BILLING_OPTIONS.find((o) => o.value === item.billingStatus)?.label ?? item.billingStatus),
         escape((item.invoices ?? []).map((i) => i.invoiceNumber).filter(Boolean).join(" ")),
@@ -439,6 +449,7 @@ function buildPostConCsv(rows: PostConProjectRow[], start: string, end: string, 
         escape(project.jobTitle),
         escape(`CO: ${co.title}`),
         escape("Change Order"),
+        escape(co.completedAt.slice(0, 10)),
         escape((co.contractValueCents / 100).toFixed(2)),
         escape(BILLING_OPTIONS.find((o) => o.value === co.billingStatus)?.label ?? co.billingStatus),
         escape((co.invoices ?? []).map((i) => i.invoiceNumber).filter(Boolean).join(" ")),
@@ -449,6 +460,7 @@ function buildPostConCsv(rows: PostConProjectRow[], start: string, end: string, 
         escape(project.jobTitle),
         escape(""),
         escape("Project Total"),
+        escape(project.completedAt?.slice(0, 10) ?? ""),
         escape((project.contractValueCents / 100).toFixed(2)),
         escape(BILLING_OPTIONS.find((o) => o.value === project.projectBillingStatus)?.label ?? project.projectBillingStatus ?? "Not Billed"),
         // Invoices can't be linked to a flat contract, so the project's own
@@ -460,7 +472,7 @@ function buildPostConCsv(rows: PostConProjectRow[], start: string, end: string, 
   const sovTotal = rows.flatMap((r) => r.items).reduce((s, i) => s + i.scheduledValueCents, 0);
   const coTotal = rows.flatMap((r) => r.changeOrders ?? []).reduce((s, c) => s + c.contractValueCents, 0);
   const wholeProjectTotal = rows.reduce((s, r) => s + (r.contractValueCents ?? 0), 0);
-  dataRows.push([escape("TOTAL"), escape(""), escape(""), escape(((sovTotal + coTotal + wholeProjectTotal) / 100).toFixed(2)), escape(""), escape("")].join(","));
+  dataRows.push([escape("TOTAL"), escape(""), escape(""), escape(""), escape(((sovTotal + coTotal + wholeProjectTotal) / 100).toFixed(2)), escape(""), escape("")].join(","));
   void end;
   return [headers, ...dataRows].join("\r\n");
 }
@@ -681,7 +693,9 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
   const lienRows = useLienRows("POST_CON");
   const lienByProject: Record<string, LienWatchRow> = Object.fromEntries(lienRows.map((r) => [r.projectId, r]));
 
-  const [status, setStatus] = useState<StatusFilter>("ALL");
+  const [status, setStatus] = useState<StatusFilter>(DEFAULT_STATUS);
+  const { linkedSearch } = useContext(BillingControlsContext)!;
+  useEffect(() => { if (linkedSearch) setStatus("ALL"); }, [linkedSearch]);
   const [flags, setFlags] = useState<PostConFlag[]>([]);
   const [age, setAge] = useState<AgeFilter>("ALL");
   const filtering = status !== "ALL" || age !== "ALL" || flags.length > 0;
@@ -823,11 +837,12 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
 
       <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[880px] text-left text-sm">
+          <table className="w-full min-w-[960px] text-left text-sm">
             <thead className="border-b border-gray-300 bg-gray-200 text-xs font-semibold uppercase text-gray-700">
               <tr>
                 <th className="px-3 py-2.5">Project</th>
                 <th className="px-3 py-2.5">Item</th>
+                <th className="w-px whitespace-nowrap px-3 py-2.5">Completed</th>
                 <th className="w-px whitespace-nowrap px-3 py-2.5 text-right">Value</th>
                 <th className="w-px whitespace-nowrap px-3 py-2.5">Status</th>
                 <th className="px-3 py-2.5">
@@ -852,13 +867,13 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">Loading…</td></tr>
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">Loading…</td></tr>
               ) : error ? (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-red-500">{error}</td></tr>
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-red-500">{error}</td></tr>
               ) : !data || data.rows.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500">{search.trim() ? `No results for "${search.trim()}".` : "No completed SOV items in this date range."}</td></tr>
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-500">{search.trim() ? `No results for "${search.trim()}".` : "No completed SOV items in this date range."}</td></tr>
               ) : shownRows.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500">Nothing matches these filters.</td></tr>
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-500">Nothing matches these filters.</td></tr>
               ) : (
                 shownRows.map((project) => {
                   const lineRows = [
@@ -881,6 +896,9 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
                           <LienWarningIcon row={lienByProject[project.projectId]} className="ml-1.5" />
                         </td>
                         <td className="px-3 py-2.5 text-gray-400">-</td>
+                        <td className="whitespace-nowrap px-3 py-2.5 text-gray-500 text-xs tabular-nums">
+                          {completedLabel(project.completedAt)}
+                        </td>
                         <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums font-medium text-gray-900">
                           {fmt(project.contractValueCents)}
                         </td>
@@ -933,6 +951,9 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
                             </Link>
                           </span>
                         )}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-gray-500 text-xs tabular-nums">
+                        {completedLabel(row.type === "sov" ? row.item.completedAt : row.type === "co" ? row.co.completedAt : project.completedAt)}
                       </td>
                       <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums font-medium text-gray-900">
                         {row.type === "sov" ? fmt(row.item.scheduledValueCents) : row.type === "co" ? fmt(row.co.contractValueCents) : fmt(row.valueCents)}
@@ -992,7 +1013,7 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
             {shownRows.length > 0 && (
               <tfoot className="border-t-2 border-gray-300 bg-gray-100 text-xs font-semibold text-gray-700">
                 <tr>
-                  <td className="px-3 py-2.5" colSpan={2}>
+                  <td className="px-3 py-2.5" colSpan={3}>
                     Total - {allItems.length} SOV item{allItems.length !== 1 ? "s" : ""}
                     {allCOs.length > 0 ? ` + ${allCOs.length} change order${allCOs.length !== 1 ? "s" : ""}` : ""}
                     {wholeProjectRows.length > 0 ? ` + ${wholeProjectRows.length} project total${wholeProjectRows.length !== 1 ? "s" : ""}` : ""}
@@ -1118,7 +1139,9 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
     return () => { cancelled = true; };
   }, [start, end, search]);
 
-  const [status, setStatus] = useState<StatusFilter>("ALL");
+  const [status, setStatus] = useState<StatusFilter>(DEFAULT_STATUS);
+  const { linkedSearch } = useContext(BillingControlsContext)!;
+  useEffect(() => { if (linkedSearch) setStatus("ALL"); }, [linkedSearch]);
   const lienRows = useLienRows("BUILDING");
   const lienByBuilding: Record<string, LienWatchRow> = Object.fromEntries(lienRows.map((r) => [r.buildingId, r]));
 
@@ -1518,7 +1541,9 @@ function RecurringTab({ start, end, search }: { start: string; end: string; sear
     return () => { cancelled = true; };
   }, [start, end, search]);
 
-  const [status, setStatus] = useState<StatusFilter>("ALL");
+  const [status, setStatus] = useState<StatusFilter>(DEFAULT_STATUS);
+  const { linkedSearch } = useContext(BillingControlsContext)!;
+  useEffect(() => { if (linkedSearch) setStatus("ALL"); }, [linkedSearch]);
   const [flags, setFlags] = useState<RecurringFlag[]>([]);
   const [age, setAge] = useState<AgeFilter>("ALL");
   const shownRows: RecurringBuildingRow[] = (data?.rows ?? []).flatMap((b) => {
@@ -1697,7 +1722,7 @@ export default function BillingPage() {
   const [start, setStart] = useState(monthStartISO);
   const [end, setEnd] = useState(todayISO);
   // Keeps the picked dates so turning it off goes back to them.
-  const [allTime, setAllTime] = useState(false);
+  const [allTime, setAllTime] = useState(true);
   const rangeStart = allTime ? ALL_TIME_START : start;
   const rangeEnd = allTime ? ALL_TIME_END : end;
 
@@ -1706,6 +1731,7 @@ export default function BillingPage() {
   // keystroke here is a real, unscoped query, not a cheap client-side filter.
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const [linkedSearch, setLinkedSearch] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setSearch(searchInput), 350);
     return () => clearTimeout(t);
@@ -1720,6 +1746,7 @@ export default function BillingPage() {
     if (q) {
       setSearchInput(q);
       setSearch(q);
+      setLinkedSearch(true);
     }
   }, []);
 
@@ -1741,8 +1768,9 @@ export default function BillingPage() {
     setEnd,
     allTime,
     setAllTime,
-    datesDefault: !allTime && start === monthStartISO() && end === todayISO(),
-    resetDates: () => { setAllTime(false); setStart(monthStartISO()); setEnd(todayISO()); },
+    datesDefault: allTime,
+    resetDates: () => { setAllTime(true); setStart(monthStartISO()); setEnd(todayISO()); },
+    linkedSearch,
   };
 
   // Jobs past their scheduled day that aren't marked complete, per tab.
