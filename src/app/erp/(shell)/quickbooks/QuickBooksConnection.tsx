@@ -115,7 +115,7 @@ export function QuickBooksConnection({
     <section className={`space-y-2 rounded-lg border px-4 py-3 shadow-sm ${needsReconnect ? "border-amber-300 bg-amber-50" : "border-gray-200 bg-white"}`}>
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-sm font-semibold text-gray-900">Connection</h2>
-        <InfoTip text="Read-only. Every night the ERP reads the Profit and Loss (by month, cash basis, from January last year) and today's A/R Aging from QuickBooks. It never changes anything there. A sandbox connection only previews, so test data never replaces real numbers. Only an Admin can connect or disconnect." wide />
+        <InfoTip text="Every night the ERP reads the Profit and Loss (by month, cash basis, from January last year), today's A/R Aging, customers, products and payments from QuickBooks. It only writes to QuickBooks when an invoice is approved on Ready to send. A sandbox connection only previews, so test data never replaces real numbers. Only an Admin can connect or disconnect." wide />
         {connection ? (
           <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${needsReconnect ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-700"}`}>
             {needsReconnect ? "Needs reconnecting" : "Connected"}

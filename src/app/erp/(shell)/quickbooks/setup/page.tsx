@@ -19,7 +19,7 @@ export default async function QuickBooksSetupPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="flex items-center gap-1 text-2xl font-semibold text-gray-900">
           Invoice setup
-          <InfoTip text="Getting ready for the ERP to send invoices to QuickBooks itself. Link each company to its QuickBooks customer and each kind of line to a product. Saved in the ERP only; nothing changes in QuickBooks yet." />
+          <InfoTip text="Where the ERP's invoices go in QuickBooks: each company's customer, each job's sub-customer and each kind of line's product. Saved in the ERP. A new customer or sub-customer is made in QuickBooks the first time one of its invoices is approved." />
         </h1>
         <Link href="/erp/quickbooks" className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
           ← QuickBooks

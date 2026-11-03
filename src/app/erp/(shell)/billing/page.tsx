@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect, useRef, useId } from "r
 import Link from "next/link";
 import { formatUnitDisplay } from "@/lib/erp/unitDisplay";
 import { UnitInvoiceChips, expectedBillingStatus, type UnitInvoiceChip } from "@/app/erp/components/UnitInvoiceChips";
+import { BillingFlowBar, useBillingFlow } from "@/app/erp/components/BillingFlowBar";
 import { Button, InfoTip, useConfirm } from "@/app/erp/components/ui";
 import { LienDeadlinePill, LienWarningIcon, lienDetailText } from "@/app/erp/components/LienDeadlinePill";
 import type { LienWatchRow } from "@/lib/erp/lienWatch";
@@ -413,12 +414,12 @@ function PostConInvoiceCell({ hs }: { hs: PostConHubSpot | undefined | "loading"
   if (!hs) return <span className="text-xs text-gray-400">No deal</span>;
   if ("error" in hs) return <span className="text-xs text-red-500" title={hs.error}>HubSpot error</span>;
   if (hs.invoices.length === 0) return <span className="text-xs text-gray-400">None</span>;
-  return <UnitInvoiceChips invoices={hs.invoices} compact />;
+  return <BillingChips invoices={hs.invoices} compact />;
 }
 
 function buildPostConCsv(rows: PostConProjectRow[], start: string, end: string, hsByProject: Record<string, PostConHubSpot> = {}): string {
   const escape = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
-  const headers = ["Project", "Item", "Type", "Value", "Billing Status", "HubSpot Invoices"].map(escape).join(",");
+  const headers = ["Project", "Item", "Type", "Value", "Billing Status", "Invoices"].map(escape).join(",");
   const dataRows: string[] = [];
   for (const project of rows) {
     const hs = hsByProject[project.projectId];
@@ -496,6 +497,8 @@ function useLienRows(kind: LienWatchRow["kind"]): LienWatchRow[] {
 function LienWatchStrip({ rows, info, limit }: { rows: LienWatchRow[]; info: string; /** Rows shown before "Show all" */ limit?: number }) {
   const [showMissing, setShowMissing] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  // Folded to one line: the Lien column already shows each job's deadline.
+  const [open, setOpen] = useState(false);
   const due = rows
     .filter(lienNeedsLook)
     .sort(
@@ -506,9 +509,15 @@ function LienWatchStrip({ rows, info, limit }: { rows: LienWatchRow[]; info: str
   const missing = rows.filter((r) => (r.missing === "STATE" || r.missing === "NO_END_DATE") && !lienDecisionCloses(r.decision?.value));
   if (due.length === 0 && missing.length === 0) return null;
   return (
-    <section className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
+    <section className="rounded-lg border border-gray-200 bg-white px-4 py-2.5 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Lien deadlines</h3>
+        {due.length > 0 ? (
+          <button type="button" onClick={() => setOpen((v) => !v)} className="text-sm font-medium text-gray-900 hover:text-pink-600">
+            {due.length} lien deadline{due.length !== 1 ? "s" : ""} need{due.length === 1 ? "s" : ""} a look {open ? "▴" : "▾"}
+          </button>
+        ) : (
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Lien deadlines</h3>
+        )}
         <InfoTip text={info} />
         {missing.length > 0 && (
           <button type="button" onClick={() => setShowMissing((v) => !v)} className="text-xs text-gray-500 hover:text-pink-600 hover:underline">
@@ -516,7 +525,7 @@ function LienWatchStrip({ rows, info, limit }: { rows: LienWatchRow[]; info: str
           </button>
         )}
       </div>
-      {due.length > 0 && (
+      {open && due.length > 0 && (
         <ul className="mt-2 flex flex-col gap-1.5">
           {(limit && !showAll ? due.slice(0, limit) : due).map((r) => (
             <li key={r.key} className="flex flex-wrap items-center gap-2 text-sm">
@@ -533,7 +542,7 @@ function LienWatchStrip({ rows, info, limit }: { rows: LienWatchRow[]; info: str
           ))}
         </ul>
       )}
-      {limit && due.length > limit && (
+      {open && limit && due.length > limit && (
         <button type="button" onClick={() => setShowAll((v) => !v)} className="mt-1.5 text-xs font-medium text-pink-600 hover:underline">
           {showAll ? "Show less" : `Show all ${due.length}`}
         </button>
@@ -817,23 +826,23 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
           <table className="w-full min-w-[880px] text-left text-sm">
             <thead className="border-b border-gray-300 bg-gray-200 text-xs font-semibold uppercase text-gray-700">
               <tr>
-                <th className="px-4 py-3">Project</th>
-                <th className="px-4 py-3">SOV Item</th>
-                <th className="px-4 py-3 text-right">Value</th>
-                <th className="px-4 py-3">Billing Status</th>
-                <th className="min-w-[15rem] px-4 py-3">
+                <th className="px-3 py-2.5">Project</th>
+                <th className="px-3 py-2.5">Item</th>
+                <th className="w-px whitespace-nowrap px-3 py-2.5 text-right">Value</th>
+                <th className="w-px whitespace-nowrap px-3 py-2.5">Status</th>
+                <th className="px-3 py-2.5">
                   <span className="flex items-center gap-1">
-                    HubSpot Invoices
-                    <InfoTip align="right" text="Invoices linked to each line. Link or fix them on the project's Invoices & Quotes tab." />
+                    Invoice
+                    <InfoTip align="right" text="The invoice for each line. Hover a chip for its full status; the number opens it on the Invoices page. Link or fix invoices on the project's Invoices & Quotes tab." />
                   </span>
                 </th>
-                <th className="px-4 py-3">
+                <th className="w-px whitespace-nowrap px-3 py-2.5">
                   <span className="flex items-center gap-1">
                     Billed via
                     <InfoTip align="right" text={BILLING_PREF_INFO} />
                   </span>
                 </th>
-                <th className="px-4 py-3">
+                <th className="w-px whitespace-nowrap px-3 py-2.5">
                   <span className="flex items-center gap-1">
                     Lien
                     <InfoTip align="right" text="Where an unpaid job stands on filing a lien, and the days left. A warning mark beside the project name means it needs a look: amber when an invoice is late, red from the day to decide onward. Set it up on the project's Liens tab." />
@@ -864,18 +873,18 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
                   if (lineRows.length === 0 && project.contractValueCents != null) {
                     return (
                       <tr key={project.projectId} className="border-t border-gray-100 hover:bg-gray-50">
-                        <td className="px-4 py-3 font-medium text-gray-900">
+                        <td className="px-3 py-2.5 font-medium text-gray-900">
                           <Link href={`/erp/projects/${project.projectId}`} className="hover:text-pink-600 hover:underline">
                             {project.jobTitle}
                           </Link>
                           <CoiWarningPill warning={project.coiWarning} />
                           <LienWarningIcon row={lienByProject[project.projectId]} className="ml-1.5" />
                         </td>
-                        <td className="px-4 py-3 text-gray-400">-</td>
-                        <td className="px-4 py-3 text-right tabular-nums font-medium text-gray-900">
+                        <td className="px-3 py-2.5 text-gray-400">-</td>
+                        <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums font-medium text-gray-900">
                           {fmt(project.contractValueCents)}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-2.5">
                           <select
                             value={project.projectBillingStatus ?? "NOT_BILLED"}
                             onChange={(e) => updateProjectBillingStatus(project.projectId, e.target.value)}
@@ -886,13 +895,13 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
                             ))}
                           </select>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-2.5">
                           <PostConInvoiceCell hs={hsFor(project.projectId)} />
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-2.5">
                           <BillingPrefCell pref={project.billing} />
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3">
+                        <td className="whitespace-nowrap px-3 py-2.5">
                           <LienDeadlinePill row={lienByProject[project.projectId]} />
                         </td>
                       </tr>
@@ -900,7 +909,7 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
                   }
                   return allProjectRows.map((row, idx) => (
                     <tr key={row.type === "sov" ? row.item.id : row.type === "co" ? row.co.id : `${project.projectId}-contract`} className={`border-t border-gray-100 hover:bg-gray-50 ${row.type === "co" ? "bg-blue-50/30" : ""}`}>
-                      <td className="px-4 py-3 font-medium text-gray-900">
+                      <td className="max-w-[16rem] px-3 py-2.5 font-medium text-gray-900">
                         {idx === 0 ? (
                           <>
                             <Link href={`/erp/projects/${project.projectId}`} className="hover:text-pink-600 hover:underline">
@@ -913,8 +922,8 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
                           <span className="text-gray-300 select-none">↳</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-gray-700">
-                        {row.type === "sov" ? row.item.description : row.type === "contract" ? (
+                      <td className="max-w-[20rem] px-3 py-2.5 text-gray-700">
+                        {row.type === "sov" ? <span className="line-clamp-2" title={row.item.description}>{row.item.description}</span> : row.type === "contract" ? (
                           <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-gray-600">Contract</span>
                         ) : (
                           <span className="flex items-center gap-1.5">
@@ -925,10 +934,10 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-right tabular-nums font-medium text-gray-900">
+                      <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums font-medium text-gray-900">
                         {row.type === "sov" ? fmt(row.item.scheduledValueCents) : row.type === "co" ? fmt(row.co.contractValueCents) : fmt(row.valueCents)}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2.5">
                         {row.type === "contract" ? (
                           <select
                             value={project.projectBillingStatus ?? "NOT_BILLED"}
@@ -961,16 +970,18 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
                           </select>
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2.5">
                         <span className="flex flex-wrap items-center gap-1.5">
-                          {row.type !== "contract" && <UnitInvoiceChips invoices={(row.type === "sov" ? row.item.invoices : row.co.invoices) ?? []} compact />}
+                          {row.type !== "contract" && <BillingChips invoices={(row.type === "sov" ? row.item.invoices : row.co.invoices) ?? []} compact />}
+                          {row.type === "sov" && <BillItLink itemKey={`SOV:${row.item.id}`} status={row.item.billingStatus} invoices={row.item.invoices} />}
+                          {row.type === "co" && <BillItLink itemKey={`CO:${row.co.id}`} status={row.co.billingStatus} invoices={row.co.invoices} />}
                           {idx === 0 && <PostConProjectFlags hs={hsFor(project.projectId)} projectId={project.projectId} />}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2.5">
                         {idx === 0 && <BillingPrefCell pref={project.billing} />}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3">
+                      <td className="whitespace-nowrap px-3 py-2.5">
                         {idx === 0 && <LienDeadlinePill row={lienByProject[project.projectId]} />}
                       </td>
                     </tr>
@@ -981,14 +992,14 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
             {shownRows.length > 0 && (
               <tfoot className="border-t-2 border-gray-300 bg-gray-100 text-xs font-semibold text-gray-700">
                 <tr>
-                  <td className="px-4 py-3" colSpan={2}>
+                  <td className="px-3 py-2.5" colSpan={2}>
                     Total - {allItems.length} SOV item{allItems.length !== 1 ? "s" : ""}
                     {allCOs.length > 0 ? ` + ${allCOs.length} change order${allCOs.length !== 1 ? "s" : ""}` : ""}
                     {wholeProjectRows.length > 0 ? ` + ${wholeProjectRows.length} project total${wholeProjectRows.length !== 1 ? "s" : ""}` : ""}
                     {" "}across {shownRows.length} project{shownRows.length !== 1 ? "s" : ""}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{fmt(totalCents)}</td>
-                  <td className="px-4 py-3" colSpan={4} />
+                  <td className="px-3 py-2.5 text-right tabular-nums">{fmt(totalCents)}</td>
+                  <td className="px-3 py-2.5" colSpan={4} />
                 </tr>
               </tfoot>
             )}
@@ -1034,7 +1045,7 @@ type JanFlag = "OVERDUE" | "LIEN" | "MISMATCH" | "NO_INVOICE";
 const JAN_FLAGS: Array<{ value: JanFlag; label: string }> = [
   { value: "OVERDUE", label: "Overdue invoice" },
   { value: "LIEN", label: "Lien" },
-  { value: "MISMATCH", label: "HubSpot mismatch" },
+  { value: "MISMATCH", label: "Status doesn't match invoice" },
   { value: "NO_INVOICE", label: "No invoice" },
 ];
 
@@ -1052,7 +1063,7 @@ type JanResponse = {
 
 function buildJanCsv(rows: JanBuildingRow[], start: string, end: string): string {
   const escape = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
-  const headers = ["Building", "Unit", "Beds/Baths", "Scope", "Completed", "Contract Amount", "Billing Status", "HubSpot Invoice"].map(escape).join(",");
+  const headers = ["Building", "Unit", "Beds/Baths", "Scope", "Completed", "Contract Amount", "Billing Status", "Invoice"].map(escape).join(",");
   const dataRows: string[] = [];
   for (const building of rows) {
     for (const unit of building.units) {
@@ -1243,19 +1254,19 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
           <table className="w-full min-w-[640px] text-left text-sm">
             <thead className="border-b border-gray-300 bg-gray-200 text-xs font-semibold uppercase text-gray-700">
               <tr>
-                <th className="px-4 py-3">Building</th>
-                <th className="px-4 py-3">Unit</th>
-                <th className="px-4 py-3">Beds / Baths</th>
-                <th className="px-4 py-3">Completed</th>
-                <th className="px-4 py-3 text-right">Contract Amount</th>
-                <th className="px-4 py-3">Billing Status</th>
-                <th className="px-4 py-3">
+                <th className="px-3 py-2.5">Building</th>
+                <th className="px-3 py-2.5">Unit</th>
+                <th className="w-px whitespace-nowrap px-3 py-2.5">Bed / Bath</th>
+                <th className="w-px whitespace-nowrap px-3 py-2.5">Completed</th>
+                <th className="w-px whitespace-nowrap px-3 py-2.5 text-right">Amount</th>
+                <th className="w-px whitespace-nowrap px-3 py-2.5">Status</th>
+                <th className="px-3 py-2.5">
                   <span className="flex items-center gap-1">
-                    HubSpot Invoice
-                    <InfoTip align="right" text="Synced hourly from HubSpot. A ! means HubSpot's invoice status doesn't match the billing status here. Search also finds invoice numbers." />
+                    Invoice
+                    <InfoTip align="right" text="The invoice for each unit. Hover a chip for its full status; the number opens it on the Invoices page. A ! means the invoice's status doesn't match the status here. Search also finds invoice numbers." />
                   </span>
                 </th>
-                <th className="px-4 py-3">
+                <th className="w-px whitespace-nowrap px-3 py-2.5">
                   <span className="flex items-center gap-1">
                     Billed via
                     <InfoTip align="right" text={BILLING_PREF_INFO} />
@@ -1283,17 +1294,23 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
                       key={row.type === "unit" ? row.unit.projectId : row.co.id}
                       className={`border-t border-gray-100 hover:bg-gray-50 ${row.type === "co" ? "bg-blue-50/30" : ""}`}
                     >
-                      <td className="px-4 py-3 font-medium text-gray-900">
+                      <td className="px-3 py-2.5 font-medium text-gray-900">
                         {idx === 0 ? (
                           <>
-                            {building.buildingName}
+                            {/* Jobs with no building are grouped under "project:<id>" (billing/janitorial route), so they open the job. */}
+                            <Link
+                              href={building.buildingId.startsWith("project:") ? `/erp/projects/${building.buildingId.slice("project:".length)}` : `/erp/buildings/${building.buildingId}`}
+                              className="hover:text-pink-600 hover:underline"
+                            >
+                              {building.buildingName}
+                            </Link>
                             <LienWarningIcon row={lienByBuilding[building.buildingId]} className="ml-1.5" />
                           </>
                         ) : (
                           <span className="text-gray-300 select-none">↳</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-gray-700">
+                      <td className="px-3 py-2.5 text-gray-700">
                         {row.type === "unit" ? (
                           <Link href={`/erp/projects/${row.unit.projectId}`} className="hover:text-pink-600 hover:underline">
                             {formatUnitDisplay(row.unit.unitNumber) || row.unit.jobTitle}
@@ -1308,18 +1325,18 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">
+                      <td className="whitespace-nowrap px-3 py-2.5 text-gray-500 text-xs">
                         {[row.unit.bedrooms != null ? `${row.unit.bedrooms} bd` : null, row.unit.bathrooms != null ? `${row.unit.bathrooms} ba` : null].filter(Boolean).join(" / ") || "-"}
                       </td>
-                      <td className="px-4 py-3 text-gray-500 text-xs tabular-nums">
+                      <td className="whitespace-nowrap px-3 py-2.5 text-gray-500 text-xs tabular-nums">
                         {new Date(row.type === "unit" ? row.unit.completedAt : row.co.completedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}
                       </td>
-                      <td className="px-4 py-3 text-right tabular-nums font-medium text-gray-900">
+                      <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums font-medium text-gray-900">
                         {row.type === "unit"
                           ? (row.unit.contractCents > 0 ? fmt(row.unit.contractCents) : <span className="text-gray-400">-</span>)
                           : fmt(row.co.contractValueCents)}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2.5">
                         {row.type === "unit" ? (
                           <select
                             value={row.unit.billingStatus}
@@ -1342,10 +1359,17 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
                           </select>
                         )}
                       </td>
-                      <td className="px-4 py-3">
-                        {row.type === "unit" ? <JanInvoiceCell unit={row.unit} /> : <UnitInvoiceChips invoices={row.co.invoices ?? []} compact />}
+                      <td className="px-3 py-2.5">
+                        {row.type === "unit" ? (
+                          <JanInvoiceCell unit={row.unit} />
+                        ) : (
+                          <span className="flex flex-wrap items-center gap-1.5">
+                            <BillingChips invoices={row.co.invoices ?? []} compact />
+                            <BillItLink itemKey={`CO:${row.co.id}`} status={row.co.billingStatus} invoices={row.co.invoices} />
+                          </span>
+                        )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2.5">
                         {row.type === "unit" && <BillingPrefCell pref={row.unit.billing} />}
                       </td>
                     </tr>
@@ -1356,13 +1380,13 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
             {shownRows.length > 0 && (
               <tfoot className="border-t-2 border-gray-300 bg-gray-100 text-xs font-semibold text-gray-700">
                 <tr>
-                  <td className="px-4 py-3" colSpan={4}>
+                  <td className="px-3 py-2.5" colSpan={4}>
                     Total - {allUnits.length} unit{allUnits.length !== 1 ? "s" : ""}
                     {allCOs.length > 0 ? ` + ${allCOs.length} change order${allCOs.length !== 1 ? "s" : ""}` : ""}
                     {" "}across {shownRows.length} building{shownRows.length !== 1 ? "s" : ""}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{fmt(totalCents)}</td>
-                  <td className="px-4 py-3" colSpan={3} />
+                  <td className="px-3 py-2.5 text-right tabular-nums">{fmt(totalCents)}</td>
+                  <td className="px-3 py-2.5" colSpan={3} />
                 </tr>
               </tfoot>
             )}
@@ -1373,17 +1397,46 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
   );
 }
 
+/** Invoice chips that open the invoice on the Invoices page for people who can see it, else HubSpot. */
+function BillingChips({ invoices, compact }: { invoices: UnitInvoiceChip[]; compact?: boolean }) {
+  const flow = useBillingFlow();
+  return (
+    <UnitInvoiceChips
+      invoices={invoices}
+      compact={compact}
+      invoiceHref={flow?.canSeeInvoices ? (inv) => (inv.invoiceNumber ? `/erp/invoices?q=${encodeURIComponent(inv.invoiceNumber)}` : null) : undefined}
+    />
+  );
+}
+
+/** "Bill it" on finished work with no invoice: opens Ready to bill with this item ticked. Admin and Business Manager only. */
+function BillItLink({ itemKey, status, invoices, fallback }: { itemKey: string; status: string; invoices: UnitInvoiceChip[] | undefined; fallback?: string }) {
+  const flow = useBillingFlow();
+  if (!flow?.canBill || normalizeBillingStatus(status) !== "NOT_BILLED" || (invoices ?? []).length > 0) return fallback ? <span className="text-xs text-gray-400">{fallback}</span> : null;
+  return (
+    <Link href={`/erp/ready-to-send?tab=bill&pick=${encodeURIComponent(itemKey)}`} className="whitespace-nowrap text-xs font-medium text-pink-600 hover:underline">
+      Bill it →
+    </Link>
+  );
+}
+
 function JanInvoiceCell({ unit }: { unit: JanUnitRow }) {
   const invoices = unit.invoices ?? [];
-  if (invoices.length === 0) return <span className="text-xs text-gray-400">None</span>;
+  if (invoices.length === 0) {
+    return unit.turnoverRequestId ? (
+      <BillItLink itemKey={`TURN:${unit.turnoverRequestId}`} status={unit.billingStatus} invoices={invoices} fallback="None" />
+    ) : (
+      <span className="text-xs text-gray-400">None</span>
+    );
+  }
   const expected = expectedBillingStatus(invoices);
   const mismatch = expected !== null && expected !== unit.billingStatus;
   return (
     <span className="flex items-center gap-1.5">
-      <UnitInvoiceChips invoices={invoices} compact />
+      <BillingChips invoices={invoices} compact />
       {mismatch && (
         <span
-          title={`HubSpot says ${expected === "PAID" ? "paid" : "invoiced, not paid"}, but this unit is marked ${BILLING_OPTIONS.find((o) => o.value === unit.billingStatus)?.label ?? unit.billingStatus}.`}
+          title={`The invoice says ${expected === "PAID" ? "paid" : "invoiced, not paid"}, but this unit is marked ${BILLING_OPTIONS.find((o) => o.value === unit.billingStatus)?.label ?? unit.billingStatus}.`}
           className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-400 text-[10px] font-bold text-white"
         >
           !
@@ -1428,7 +1481,7 @@ type RecurringResponse = {
 
 function buildRecurringCsv(rows: RecurringBuildingRow[], start: string, end: string): string {
   const escape = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
-  const headers = ["Building", "Month", "Monthly Amount", "Billing Status", "HubSpot Invoice"].map(escape).join(",");
+  const headers = ["Building", "Month", "Monthly Amount", "Billing Status", "Invoice"].map(escape).join(",");
   const dataRows: string[] = [];
   for (const building of rows) {
     for (const period of building.periods) {
@@ -1540,17 +1593,17 @@ function RecurringTab({ start, end, search }: { start: string; end: string; sear
           <table className="w-full min-w-[640px] text-left text-sm">
             <thead className="border-b border-gray-300 bg-gray-200 text-xs font-semibold uppercase text-gray-700">
               <tr>
-                <th className="px-4 py-3">Building</th>
-                <th className="px-4 py-3">Month</th>
-                <th className="px-4 py-3 text-right">Monthly Amount</th>
-                <th className="px-4 py-3">Billing Status</th>
-                <th className="px-4 py-3">
+                <th className="px-3 py-2.5">Building</th>
+                <th className="px-3 py-2.5">Month</th>
+                <th className="w-px whitespace-nowrap px-3 py-2.5 text-right">Amount</th>
+                <th className="w-px whitespace-nowrap px-3 py-2.5">Status</th>
+                <th className="px-3 py-2.5">
                   <span className="flex items-center gap-1">
-                    HubSpot Invoice
-                    <InfoTip align="right" text="Linked by hand on the building's Invoices & Quotes tab. Search also finds invoice numbers." />
+                    Invoice
+                    <InfoTip align="right" text="The invoice for each month. Hover a chip for its full status; the number opens it on the Invoices page. Linked on the building's Invoices & Quotes tab. Search also finds invoice numbers." />
                   </span>
                 </th>
-                <th className="px-4 py-3">
+                <th className="w-px whitespace-nowrap px-3 py-2.5">
                   <span className="flex items-center gap-1">
                     Billed via
                     <InfoTip align="right" text={BILLING_PREF_INFO} />
@@ -1571,7 +1624,7 @@ function RecurringTab({ start, end, search }: { start: string; end: string; sear
                 shownRows.map((building) =>
                   building.periods.map((period, idx) => (
                     <tr key={period.periodId} className="border-t border-gray-100 hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium text-gray-900">
+                      <td className="px-3 py-2.5 font-medium text-gray-900">
                         {idx === 0 ? (
                           <Link href={`/erp/buildings/${building.buildingId}`} className="hover:text-pink-600 hover:underline">
                             {building.buildingName}
@@ -1580,7 +1633,7 @@ function RecurringTab({ start, end, search }: { start: string; end: string; sear
                           <span className="text-gray-300 select-none">↳</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-gray-700">
+                      <td className="px-3 py-2.5 text-gray-700">
                         <Link href={`/erp/janitorial/contracts/${building.contractId}`} className="hover:text-pink-600 hover:underline">
                           {new Date(period.periodStart).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" })}
                         </Link>
@@ -1588,10 +1641,10 @@ function RecurringTab({ start, end, search }: { start: string; end: string; sear
                           <p className="text-xs text-gray-500">Incl. {period.extras.join(", ")}</p>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-right tabular-nums font-medium text-gray-900">
+                      <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums font-medium text-gray-900">
                         {fmt(period.totalCents)}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2.5">
                         <select
                           value={period.billingStatus}
                           onChange={(e) => updateBillingStatus(period, e.target.value)}
@@ -1602,16 +1655,16 @@ function RecurringTab({ start, end, search }: { start: string; end: string; sear
                           ))}
                         </select>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2.5">
                         {(period.invoices ?? []).length > 0 ? (
-                          <UnitInvoiceChips invoices={period.invoices ?? []} compact />
+                          <BillingChips invoices={period.invoices ?? []} compact />
                         ) : (
                           <Link href={`/erp/buildings/${building.buildingId}?tab=${encodeURIComponent("Invoices & Quotes")}`} className="text-xs text-gray-400 hover:text-pink-600 hover:underline">
                             None
                           </Link>
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2.5">
                         {idx === 0 && <BillingPrefCell pref={building.billing} />}
                       </td>
                     </tr>
@@ -1622,11 +1675,11 @@ function RecurringTab({ start, end, search }: { start: string; end: string; sear
             {shownRows.length > 0 && (
               <tfoot className="border-t-2 border-gray-300 bg-gray-100 text-xs font-semibold text-gray-700">
                 <tr>
-                  <td className="px-4 py-3" colSpan={2}>
+                  <td className="px-3 py-2.5" colSpan={2}>
                     Total - {allPeriods.length} month{allPeriods.length !== 1 ? "s" : ""} across {shownRows.length} building{shownRows.length !== 1 ? "s" : ""}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{fmt(totalCents)}</td>
-                  <td className="px-4 py-3" colSpan={3} />
+                  <td className="px-3 py-2.5 text-right tabular-nums">{fmt(totalCents)}</td>
+                  <td className="px-3 py-2.5" colSpan={3} />
                 </tr>
               </tfoot>
             )}
@@ -1722,7 +1775,13 @@ export default function BillingPage() {
     <BillingControlsContext.Provider value={controls}>
     <div className="space-y-5">
       {/* Header */}
-      <h1 className="text-2xl font-semibold text-gray-900">Project Billing</h1>
+      <div className="space-y-2">
+        <BillingFlowBar current="billing" />
+        <h1 className="flex items-center gap-1 text-2xl font-semibold text-gray-900">
+          Project Billing
+          <InfoTip text="Every piece of work and whether it's billed and paid. Finished work that isn't billed goes to Ready to send (Bill it). Invoice numbers open the invoice on the Invoices page." />
+        </h1>
+      </div>
 
       {/* Tabs */}
       <div className="border-b border-gray-200">

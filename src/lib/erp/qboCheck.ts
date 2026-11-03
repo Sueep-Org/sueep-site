@@ -157,10 +157,10 @@ export async function loadMoneyOwedCheck(): Promise<MoneyOwedCheck> {
     const qbo: string[] = [];
     const e = num ? erpInfo.get(num) : undefined;
     if (e) {
-      erp.push(`HubSpot invoice dated ${day(e.invoiceDate?.toISOString())}, due ${day(e.dueDate?.toISOString())}, status ${e.status ?? "unknown"}`);
+      erp.push(`Invoice dated ${day(e.invoiceDate?.toISOString())}, due ${day(e.dueDate?.toISOString())}, status ${e.status ?? "unknown"}`);
       if (e.totalCents != null) erp.push(`Total ${fmt(e.totalCents)}, balance ${fmt(e.balanceCents ?? e.totalCents)}`);
       if (e.paidDate) erp.push(`Marked paid ${day(e.paidDate.toISOString())}`);
-    } else erp.push("No HubSpot invoice with this number in the ERP");
+    } else erp.push("No invoice with this number in the ERP");
     const q = num ? qboInvByNumber.get(num) : undefined;
     if (q) {
       qbo.push(`Invoice dated ${day(q.txnDate)}, due ${day(q.dueDate)}, customer ${q.customer}`);

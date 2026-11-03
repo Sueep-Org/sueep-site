@@ -12,6 +12,7 @@ import { loadAllLienWatch } from "./lienWatchBuildings";
 import { loadCutoffStatus } from "./billingCutoffs";
 import { lienDecisionCloses, lienPillLabel, type LienStage } from "./lienDeadline";
 import { invoiceKey, withHubSpotId } from "./invoiceLinkSource";
+import { loadUnlinkedHubSpotInvoices } from "./unlinkedHubSpotInvoices";
 
 /**
  * Money tab cards (DASHBOARDS_PLAN.md Phase 4): Needs action (overdue
@@ -131,7 +132,7 @@ export function overdueSection(invoices: OverdueInvoice[]): CardSection {
     })),
     empty: "No overdue invoices.",
     footer: invoices.length ? `${centsToDollarsCompact(total)} overdue in total` : undefined,
-    href: "/erp/billing",
+    href: "/erp/invoices?filter=overdue",
   };
 }
 
@@ -446,48 +447,23 @@ async function loadReconciliation(todayKey: string): Promise<JobTabRow[]> {
   const since = new Date(`${BILLING_DATA_START}T00:00:00Z`);
   const graceCutoff = new Date(Date.parse(`${todayKey}T00:00:00Z`) - UNLINKED_GRACE_DAYS * DAY_MS);
 
-  const [pending, unitLinks, sovLinks, contractLinks] = await Promise.all([
-    prisma.hubSpotInvoiceLineItemMatch.findMany({
-      where: { status: "PENDING_REVIEW" },
-      select: {
-        hubspotInvoiceId: true, amountCents: true, createdAt: true,
-        project: { select: { id: true, jobTitle: true } }, building: { select: { id: true, name: true } },
-      },
-    }),
+  const [unlinked, unitLinks, sovLinks, contractLinks] = await Promise.all([
+    loadUnlinkedHubSpotInvoices(BILLING_DATA_START),
     prisma.hubSpotUnitInvoice.findMany({ where: { status: { not: "voided" } }, select: { hubspotInvoiceId: true, turnoverRequestId: true } }),
     prisma.hubSpotSovInvoice.findMany({ where: { status: { not: "voided" } }, select: { hubspotInvoiceId: true, sovItemId: true, changeOrderId: true } }),
     prisma.hubSpotContractInvoice.findMany({ where: { status: { not: "voided" } }, select: { hubspotInvoiceId: true, periodId: true } }),
   ]);
-  const linkedInvoiceIds = new Set([...unitLinks, ...sovLinks, ...contractLinks].map((l) => l.hubspotInvoiceId));
 
-  // HubSpot invoices not placed anywhere in the ERP, one row per invoice.
-  const unplaced = new Map<string, { title: string; href: string; cents: number; lines: number; firstKey: string }>();
-  for (const m of pending) {
-    // Older than the trusted billing data: the sync's first pass over history.
-    if (linkedInvoiceIds.has(m.hubspotInvoiceId) || m.createdAt < since) continue;
-    const firstKey = utcDateKey(m.createdAt);
-    const row = unplaced.get(m.hubspotInvoiceId);
-    if (row) {
-      row.cents += m.amountCents;
-      row.lines += 1;
-      if (firstKey < row.firstKey) row.firstKey = firstKey;
-      continue;
-    }
-    unplaced.set(m.hubspotInvoiceId, {
-      title: m.project?.jobTitle ?? m.building?.name ?? "No building or project matched",
-      href: m.project ? `/erp/projects/${m.project.id}` : m.building ? `/erp/buildings/${m.building.id}` : "/erp/billing",
-      cents: m.amountCents,
-      lines: 1,
-      firstKey,
-    });
-  }
-  const unplacedRows: JobTabRow[] = [...unplaced.entries()]
-    .sort((a, b) => a[1].firstKey.localeCompare(b[1].firstKey))
-    .map(([id, r]) => ({
-      id: `hs-${id}`, href: r.href, title: r.title,
-      note: `${r.lines} line${r.lines === 1 ? "" : "s"} · first seen ${shortDate(r.firstKey)}`,
-      value: centsToDollarsCompact(r.cents), valueTitle: centsToDollars(r.cents), group: "HubSpot invoice, not linked in the ERP",
-    }));
+  // HubSpot invoices dated since the billing data start that aren't placed anywhere in the ERP.
+  const unplacedRows: JobTabRow[] = unlinked.map((u) => ({
+    id: `hs-${u.hubspotInvoiceId}`,
+    href: u.number ? `/erp/invoices?filter=needs-linking&q=${encodeURIComponent(u.number)}` : u.href,
+    title: u.title,
+    note: `${u.number ? `${u.number} · ` : ""}${u.status ?? "status unknown"}${u.invoiceDateKey ? ` · dated ${shortDate(u.invoiceDateKey)}` : ""}`,
+    value: centsToDollarsCompact(u.amountCents),
+    valueTitle: centsToDollars(u.amountCents),
+    group: "HubSpot invoice, not linked in the ERP",
+  }));
 
   // ERP lines marked Billed with nothing linked.
   const linkedTurnovers = new Set(unitLinks.flatMap((l) => l.turnoverRequestId ?? []));
@@ -562,7 +538,7 @@ export async function loadChecks(): Promise<DashboardCardData> {
         rows: recon,
         empty: "HubSpot and the ERP agree.",
         footer: `Since ${shortDate(BILLING_DATA_START)}`,
-        href: "/erp/billing",
+        href: "/erp/invoices?filter=needs-linking",
       },
     ],
   };

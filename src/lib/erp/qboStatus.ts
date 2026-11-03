@@ -95,8 +95,8 @@ export async function loadQboStatus(): Promise<QboStatus> {
     const wrongCustomer = owed.rows.filter((r) => r.nameDiffers);
     const sum = (rows: typeof owed.rows) => rows.reduce((s, r) => s + Math.abs((r.erpCents ?? 0) - (r.qboCents ?? 0)), 0);
     const link = `${details}?tab=${encodeURIComponent("Money owed")}`;
-    if (notInQbo.length) items.push({ text: `${plural(notInQbo.length, "invoice")} open in the ERP aren't open in QuickBooks (${money(sum(notInQbo))}), mostly HubSpot sync failures or payments HubSpot didn't get.`, href: link });
-    if (paidOnlyInErp.length) items.push({ text: `${plural(paidOnlyInErp.length, "invoice")} marked paid in HubSpot are still open in QuickBooks (${money(sum(paidOnlyInErp))}).`, href: link });
+    if (notInQbo.length) items.push({ text: `${plural(notInQbo.length, "invoice")} open in the ERP aren't open in QuickBooks (${money(sum(notInQbo))}), mostly HubSpot sync failures or payments HubSpot didn't get.`, href: "/erp/invoices?filter=not-in-quickbooks" });
+    if (paidOnlyInErp.length) items.push({ text: `${plural(paidOnlyInErp.length, "invoice")} marked paid in HubSpot are still open in QuickBooks (${money(sum(paidOnlyInErp))}).`, href: "/erp/invoices?filter=mismatch" });
     if (owed.unappliedCents) items.push({ text: `${money(owed.unappliedCents)} of payments and credits in QuickBooks aren't applied to any invoice.`, href: link });
     if (onlyInQbo.length) items.push({ text: `${plural(onlyInQbo.length, "invoice")} open in QuickBooks aren't in the ERP (${money(sum(onlyInQbo))}).`, href: link });
     if (balance.length) items.push({ text: `${plural(balance.length, "invoice")} have a different balance in each system.`, href: link });

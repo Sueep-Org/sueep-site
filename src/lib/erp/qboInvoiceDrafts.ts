@@ -200,6 +200,25 @@ export async function setQboDraftDueDate(id: string, dueKey: string): Promise<{ 
   return { ok: true };
 }
 
+/** Edits a month draft's base amount and extras. Saved on the month, which the draft reads live. */
+export async function editQboMonthDraft(
+  id: string,
+  input: { amountCents: number; charges: { description: string; amountCents: number }[] },
+): Promise<{ ok: true } | { error: string }> {
+  const d = await loadDraft(id);
+  if (!d) return { error: "This draft isn't waiting anymore." };
+  if (d.kind !== "MONTH" || !d.periodId) return { error: "Only janitorial months can be edited here. Discard and draft again from Ready to bill." };
+  // The month is a real row in the shared database, so sandbox tests don't change it.
+  if (d.environment !== "production") return { error: "This is a sandbox test of a real month, so it can't be edited from local dev." };
+  const periodId = d.periodId;
+  await prisma.$transaction([
+    prisma.recurringContractPeriod.update({ where: { id: periodId }, data: { amountCents: input.amountCents } }),
+    prisma.recurringContractCharge.deleteMany({ where: { periodId } }),
+    prisma.recurringContractCharge.createMany({ data: input.charges.map((c) => ({ ...c, periodId })) }),
+  ]);
+  return { ok: true };
+}
+
 /** Discards a waiting draft. Picked items go back on Ready to bill; a live month isn't drafted again unless asked. */
 export async function discardQboDraft(id: string, email: string): Promise<{ ok: true } | { error: string }> {
   const d = await loadDraft(id);

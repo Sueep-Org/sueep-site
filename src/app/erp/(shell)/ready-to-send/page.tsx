@@ -10,13 +10,16 @@ import { loadBuildingInvoiceDestination, loadProjectInvoiceDestination, type Inv
 import { loadBillableGroups, loadWaitingItemDrafts } from "@/lib/erp/itemInvoiceDrafts";
 import { describePlan, invoiceLinesFor, planDelivery } from "@/lib/erp/invoiceDelivery";
 import { CLAIM_TEXT, DRAFT_LEAD_DAYS, billingDateKey, draftLines, isApproveEnabled, linesTotal, monthLabel } from "@/lib/erp/janitorialInvoiceDrafts";
-import { ReadyToSend, type BillableGroupRow, type ContractSetting, type DeliveryRow, type DraftRow, type MonthRow, type QboTestRow, type SentRow } from "./ReadyToSend";
+import { ReadyToSend, type BillableGroupRow, type ContractSetting, type DeliveryRow, type DraftRow, type MonthRow, type QboTestRow } from "./ReadyToSend";
 import { withHubSpotId } from "@/lib/erp/invoiceLinkSource";
 import { qboEnvironment } from "@/lib/erp/qboClient";
+import { BillingFlowBar } from "@/app/erp/components/BillingFlowBar";
 import { draftContent, draftsGoToQuickBooks, loadRecentQboTests, loadWaitingQboDrafts, qboInvoiceUrl } from "@/lib/erp/qboInvoiceDrafts";
 
 export const metadata: Metadata = { title: "Ready to send" };
 export const dynamic = "force-dynamic";
+
+const groupHref = (type: string, id: string) => (type === "PROJECT" ? `/erp/projects/${id}` : `/erp/buildings/${id}`);
 
 function destinationSummary(d: InvoiceDestination | null): { client: string | null; method: string | null; sendTo: string | null } {
   if (!d) return { client: null, method: null, sendTo: null };
@@ -54,7 +57,7 @@ export default async function ReadyToSendPage() {
   };
 
   const qboEnv = qboEnvironment();
-  const [draftRows0, failed, discarded, contracts, approveEnabled, billable, itemDrafts, waitingDeliveries, sentDeliveries, toQuickBooks, qboDrafts, qboTests] = await Promise.all([
+  const [draftRows0, failed, discarded, contracts, approveEnabled, billable, itemDrafts, waitingDeliveries, toQuickBooks, qboDrafts, qboTests] = await Promise.all([
     prisma.hubSpotContractInvoice.findMany({
       where: { draftedByErp: true, status: "draft" },
       select: { hubspotInvoiceId: true, amountCents: true, invoiceDate: true, dueDate: true, period: { select: periodSelect } },
@@ -78,7 +81,6 @@ export default async function ReadyToSendPage() {
     loadBillableGroups(),
     loadWaitingItemDrafts(),
     prisma.invoiceDelivery.findMany({ where: { status: { in: ["NEEDS_UPLOAD", "NEEDS_SENDING"] } }, orderBy: { createdAt: "asc" } }),
-    prisma.invoiceDelivery.findMany({ where: { status: { in: ["EMAILED", "DONE"] }, updatedAt: { gte: new Date(Date.now() - 14 * 86_400_000) } }, orderBy: { updatedAt: "desc" }, take: 30 }),
     draftsGoToQuickBooks(),
     loadWaitingQboDrafts(),
     loadRecentQboTests(),
@@ -124,6 +126,9 @@ export default async function ReadyToSendPage() {
       ...destinationSummary(destinations.get(`BUILDING:${d.period.recurringContract.buildingId}`) ?? null),
       deliveryPlan: describePlan(planDelivery(destinations.get(`BUILDING:${d.period.recurringContract.buildingId}`) ?? null)),
       paymentTermsDays: destinations.get(`BUILDING:${d.period.recurringContract.buildingId}`)?.paymentTermsDays ?? null,
+      href: `/erp/janitorial/contracts/${d.period.recurringContract.id}`,
+      blocked: null,
+      canEdit: true,
     };
   });
   for (const { draft, lines, dueDate } of itemDrafts) {
@@ -154,6 +159,9 @@ export default async function ReadyToSendPage() {
       ...destinationSummary(destinations.get(`${draft.groupType}:${draft.groupId}`) ?? null),
       deliveryPlan: describePlan(planDelivery(destinations.get(`${draft.groupType}:${draft.groupId}`) ?? null)),
       paymentTermsDays: destinations.get(`${draft.groupType}:${draft.groupId}`)?.paymentTermsDays ?? null,
+      href: groupHref(draft.groupType, draft.groupId),
+      blocked: null,
+      canEdit: false,
     });
   }
 
@@ -161,13 +169,14 @@ export default async function ReadyToSendPage() {
   for (const d of qboDrafts) {
     const dest = destinations.get(`${d.groupType}:${d.groupId}`) ?? null;
     const c = draftContent(d, dest?.paymentTermsDays ?? null);
+    const noCompany = dest?.company ? null : `No client company on this ${d.groupType === "PROJECT" ? "job" : "building"}. Set one before approving.`;
     draftRows.push({
       kind: "qbo",
       rowId: d.id,
       periodId: d.id,
       building: d.title,
       month: c.subtitle,
-      note: dest?.company ? null : `No client company on this ${d.groupType === "PROJECT" ? "job" : "building"}. Set one before approving.`,
+      note: noCompany,
       discardedBy: null,
       hubspotInvoiceId: null,
       invoiceDateKey: c.invoiceDateKey,
@@ -184,6 +193,10 @@ export default async function ReadyToSendPage() {
           : `Test: creates the invoice in the QuickBooks sandbox company and emails only you a copy. Nothing in the ERP is marked billed. Live: ${describePlan(planDelivery(dest))}`,
       paymentTermsDays: dest?.paymentTermsDays ?? null,
       testOnly: qboEnv !== "production",
+      href: d.kind === "MONTH" && d.period ? `/erp/janitorial/contracts/${d.period.recurringContract.id}` : groupHref(d.groupType, d.groupId),
+      blocked: noCompany,
+      // A sandbox month is a real month in the shared database, so only live drafts edit it.
+      canEdit: d.kind === "MONTH" && qboEnv === "production",
     });
   }
   const qboTestRows: QboTestRow[] = qboTests.map((t) => ({
@@ -217,20 +230,14 @@ export default async function ReadyToSendPage() {
       viewUrl: d.viewUrl,
       // QuickBooks PDFs come through the ERP (the QuickBooks one needs a sign-in).
       pdfUrl: d.qboInvoiceId ? `/api/erp/invoice-deliveries/${d.id}/pdf` : d.pdfUrl,
+      // Deliveries are only made for live invoices, so they open in the real QuickBooks.
+      qboUrl: d.qboInvoiceId ? qboInvoiceUrl("production", d.qboInvoiceId) : null,
       link: d.link,
       lines,
       logins: loginLinks.filter((l) => l.companyId === d.clientCompanyId).map((l) => l.login.name),
       approvedAt: d.createdAt.toISOString(),
     });
   }
-  const sentRows: SentRow[] = sentDeliveries.map((d) => ({
-    id: d.id,
-    title: d.title,
-    invoiceNumber: d.invoiceNumber,
-    totalCents: d.totalCents,
-    how: d.status === "EMAILED" ? `Emailed to ${d.sentTo.join(", ")}` : `Marked done by ${d.doneByEmail ?? "someone"}`,
-    when: (d.emailedAt ?? d.doneAt ?? d.updatedAt).toISOString(),
-  }));
 
   const billableRows: BillableGroupRow[] = billable.map((g) => ({
     key: g.key,
@@ -261,17 +268,21 @@ export default async function ReadyToSendPage() {
   }));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      <BillingFlowBar current="send" />
       <h1 className="flex items-center gap-1 text-2xl font-semibold text-gray-900">
         Ready to send
         <InfoTip
-          text={`Invoices the ERP drafted, in HubSpot or (once switched) for QuickBooks: janitorial months ${DRAFT_LEAD_DAYS} days before each billing day, and finished work picked under Ready to bill. Drafts don't go to QuickBooks or the client. Approve opens the invoice in HubSpot, which sends it to QuickBooks, and marks the month Billed.`}
+          text={
+            toQuickBooks
+              ? `Invoices the ERP drafted: janitorial months ${DRAFT_LEAD_DAYS} days before each billing day, and finished work picked under Ready to bill. Drafts stay in the ERP. Approve creates the invoice in QuickBooks, marks the work Billed and sends it to the client.`
+              : `Invoices the ERP drafted in HubSpot: janitorial months ${DRAFT_LEAD_DAYS} days before each billing day, and finished work picked under Ready to bill. Drafts don't go to QuickBooks or the client. Approve opens the invoice in HubSpot, which sends it to QuickBooks, and marks the work Billed.`
+          }
         />
       </h1>
       <ReadyToSend
         drafts={draftRows}
         deliveries={deliveryRows}
-        sent={sentRows}
         billable={billableRows}
         failed={failed.map(monthRow)}
         discarded={discarded.map(monthRow)}

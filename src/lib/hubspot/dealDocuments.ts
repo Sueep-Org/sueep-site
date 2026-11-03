@@ -93,7 +93,7 @@ function toCents(raw: string | null | undefined): number | null {
   return Number.isFinite(n) ? Math.round(n * 100) : null;
 }
 
-async function batchRead(objectType: string, ids: string[], properties: string[]): Promise<HubSpotObject[]> {
+export async function batchRead(objectType: string, ids: string[], properties: string[]): Promise<HubSpotObject[]> {
   if (ids.length === 0) return [];
   const out: HubSpotObject[] = [];
   // HubSpot batch reads cap at 100 inputs.
