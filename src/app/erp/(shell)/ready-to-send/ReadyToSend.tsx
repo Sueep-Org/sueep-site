@@ -32,7 +32,7 @@ export type DraftRow = MonthRow & {
   deliveryPlan: string;
   /** Client company's payment terms. Null means the due date can be set on the draft. */
   paymentTermsDays: number | null;
-  /** A QuickBooks sandbox draft: Approve is a test, so it doesn't need the Approve switch. */
+  /** A QuickBooks sandbox draft: Approve is a test that changes nothing real. */
   testOnly?: boolean;
   /** The building, job or contract page */
   href: string | null;
@@ -45,7 +45,13 @@ export type DraftRow = MonthRow & {
 export type QboTestRow = { id: string; title: string; invoiceNumber: string | null; totalCents: number; url: string | null; when: string };
 
 /** Where new drafts go on this server, and its recent sandbox test invoices. */
-export type QboDraftsInfo = { environment: "sandbox" | "production"; on: boolean; tests: QboTestRow[] };
+export type QboDraftsInfo = {
+  environment: "sandbox" | "production";
+  on: boolean;
+  tests: QboTestRow[];
+  /** What the next QuickBooks invoice number would be, for the switch's confirm box */
+  nextInvoiceNumber: number;
+};
 
 export type DeliveryRow = {
   id: string;
@@ -89,11 +95,8 @@ function draftUrl(d: DraftRow): string {
   return d.kind === "month" ? `/api/erp/invoice-drafts/${d.rowId}` : `/api/erp/item-drafts/${d.rowId}`;
 }
 
-/** Sandbox test drafts don't need the Approve switch; a draft with a blocker can't be approved. */
-const canApprove = (d: DraftRow, approveEnabled: boolean) => !d.blocked && (approveEnabled || !!d.testOnly);
-
-/** Why a draft's Approve is greyed out, for its hover text. */
-const approveBlockedReason = (d: DraftRow, approveEnabled: boolean) => d.blocked ?? (approveEnabled || d.testOnly ? undefined : "Approve is off");
+/** A draft with a blocker (e.g. no client company) can't be approved; the blocker is its hover text. */
+const canApprove = (d: DraftRow) => !d.blocked;
 
 type Tab = "approve" | "bill" | "sending" | "contracts";
 const TABS: Tab[] = ["approve", "bill", "sending", "contracts"];
@@ -135,7 +138,6 @@ export function ReadyToSend({
   failed,
   discarded,
   contracts,
-  approveEnabled,
   isAdmin,
   qbo,
 }: {
@@ -145,7 +147,6 @@ export function ReadyToSend({
   failed: MonthRow[];
   discarded: MonthRow[];
   contracts: ContractSetting[];
-  approveEnabled: boolean;
   isAdmin: boolean;
   qbo: QboDraftsInfo;
 }) {
@@ -158,6 +159,7 @@ export function ReadyToSend({
   const [expanded, setExpanded] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>(deliveries.length ? "sending" : drafts.length || failed.length ? "approve" : "bill");
   const [pick, setPick] = useState<string | null>(null);
+  const [switching, setSwitching] = useState(false);
   useEffect(() => {
     const { tab: t, pick: p } = urlParams();
     if (t) setTab(t);
@@ -270,22 +272,30 @@ export function ReadyToSend({
     });
   }
 
-  async function setQboDrafts(on: boolean) {
+  async function setQboDrafts(on: boolean, nextInvoiceNumber?: number): Promise<boolean> {
+    let saved = false;
     await run("qbo-switch", async () => {
-      const { ok, data } = await call("/api/erp/invoice-drafts/settings", "PUT", { qboDrafts: on });
+      const { ok, data } = await call("/api/erp/invoice-drafts/settings", "PUT", { qboDrafts: on, nextInvoiceNumber });
       if (!ok) toast(String(data.error ?? "Could not save."));
+      else toast(on ? "New invoices now go to QuickBooks." : "New invoices now go to HubSpot. Turn HubSpot's invoice sync to QuickBooks back on.");
+      saved = ok;
     });
+    return saved;
   }
 
-  async function setApprove(on: boolean) {
-    await run("approve-switch", async () => {
-      const { ok, data } = await call("/api/erp/invoice-drafts/settings", "PUT", { approveEnabled: on });
-      if (!ok) toast(String(data.error ?? "Could not save."));
+  async function switchToHubSpot() {
+    const ok = await confirm({
+      title: "Switch to HubSpot (backup)?",
+      message:
+        "New drafts will be made in HubSpot instead of QuickBooks. HubSpot only copies invoices into QuickBooks while its invoice sync is on, so turn that back on in HubSpot too, or these invoices won't reach QuickBooks. Drafts already waiting stay where they are.",
+      confirmLabel: "Switch to HubSpot",
+      danger: true,
     });
+    if (ok) await setQboDrafts(false);
   }
 
   const selectedRows = drafts.filter((d) => selected.has(d.rowId));
-  const destination = qbo.on ? `QuickBooks${qbo.environment === "sandbox" ? " sandbox" : ""}` : "HubSpot";
+  const destination = qbo.on ? `QuickBooks${qbo.environment === "sandbox" ? " (test company)" : ""}` : "HubSpot (backup)";
   const billableCount = billable.reduce((s, g) => s + g.items.length, 0);
   const tabs: { key: Tab; label: string; count?: number; alert?: boolean }[] = [
     { key: "approve", label: "To approve", count: drafts.length, alert: failed.length > 0 },
@@ -293,11 +303,9 @@ export function ReadyToSend({
     { key: "sending", label: "Needs sending", count: deliveries.length, alert: deliveries.length > 0 },
     { key: "contracts", label: "Contracts" },
   ];
-  const statusOk = approveEnabled || (qbo.on && qbo.environment === "sandbox");
-  const settings = [
-    ...(isAdmin && qbo.environment === "sandbox" ? [{ label: `Draft in ${qbo.on ? "HubSpot" : "QuickBooks"} instead`, onClick: () => void setQboDrafts(!qbo.on) }] : []),
-    ...(isAdmin ? [{ label: `Turn Approve ${approveEnabled ? "off" : "on"}`, onClick: () => void setApprove(!approveEnabled) }] : []),
-  ];
+  const settings = isAdmin
+    ? [qbo.on ? { label: "Switch to HubSpot (backup)", onClick: () => void switchToHubSpot() } : { label: "Switch to QuickBooks", onClick: () => setSwitching(true) }]
+    : [];
 
   return (
     <div className="space-y-4">
@@ -317,16 +325,16 @@ export function ReadyToSend({
           </button>
         ))}
         <span className="ml-auto flex items-center gap-1.5 text-xs text-gray-500">
-          <span className={`h-2 w-2 rounded-full ${statusOk ? "bg-emerald-500" : "bg-amber-500"}`} aria-hidden />
-          {destination} · Approve {approveEnabled ? "on" : "off"}
+          <span className={`h-2 w-2 rounded-full ${qbo.on ? "bg-emerald-500" : "bg-amber-500"}`} aria-hidden />
+          Invoices go to {destination}
           <InfoTip
             align="right"
             text={
               qbo.environment === "sandbox"
-                ? "Local dev. QuickBooks drafts here are tests: Approve makes the invoice in the sandbox company, emails only you a copy, and changes nothing else, even with Approve off. HubSpot drafts follow the Approve switch."
+                ? "Local dev. QuickBooks drafts here are tests: Approve makes the invoice in Intuit's test company, emails only you a copy, and changes nothing real."
                 : qbo.on
-                  ? "Approve creates the invoice in QuickBooks, marks the work Billed and sends it to the client. Only an Admin can switch Approve on or off."
-                  : "Approve opens the invoice in HubSpot, which sends it to QuickBooks. Approve stays off until the first real invoice is approved with the bookkeeper watching. Only an Admin can switch it."
+                  ? "Approve creates the invoice in QuickBooks, marks the work Billed and sends it to the client. An Admin can switch to HubSpot as a backup from the menu here."
+                  : "Backup mode: Approve opens the invoice in HubSpot, and HubSpot copies it into QuickBooks only while its invoice sync is on. An Admin switches back to QuickBooks from the menu here."
             }
           />
           {settings.length > 0 && <RowMenu label="Invoice settings" items={settings} disabled={busy !== null} />}
@@ -337,7 +345,7 @@ export function ReadyToSend({
         <section className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             {selectedRows.length > 0 && (
-              <Button size="sm" disabled={!selectedRows.every((r) => canApprove(r, approveEnabled)) || busy !== null} onClick={() => void approve(selectedRows)}>
+              <Button size="sm" disabled={!selectedRows.every((r) => canApprove(r)) || busy !== null} onClick={() => void approve(selectedRows)}>
                 Approve selected ({selectedRows.length})
               </Button>
             )}
@@ -409,7 +417,7 @@ export function ReadyToSend({
                         </span>
                       </button>
                       <span className="text-right font-semibold tabular-nums text-gray-900">{centsToDollars(d.totalCents)}</span>
-                      <Button size="xs" disabled={!canApprove(d, approveEnabled) || busy !== null} onClick={() => void approve([d])} title={approveBlockedReason(d, approveEnabled)}>
+                      <Button size="xs" disabled={!canApprove(d) || busy !== null} onClick={() => void approve([d])} title={d.blocked ?? undefined}>
                         {d.testOnly ? "Test approve" : "Approve"}
                       </Button>
                       <RowMenu
@@ -505,7 +513,48 @@ export function ReadyToSend({
       {tab === "contracts" && <ContractSettings contracts={contracts} toQuickBooks={qbo.on} />}
 
       {editing && <EditDraft draft={editing} onClose={() => setEditing(null)} />}
+      {switching && (
+        <SwitchToQuickBooks
+          suggested={qbo.nextInvoiceNumber}
+          busy={busy !== null}
+          onClose={() => setSwitching(false)}
+          onConfirm={async (n) => {
+            if (await setQboDrafts(true, n)) setSwitching(false);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/** Confirm box for switching new invoices to QuickBooks, with the next invoice number. */
+function SwitchToQuickBooks({ suggested, busy, onClose, onConfirm }: { suggested: number; busy: boolean; onClose: () => void; onConfirm: (n: number) => Promise<void> }) {
+  const [value, setValue] = useState(String(suggested));
+  const n = Number(value);
+  const valid = Number.isInteger(n) && n > 0;
+  return (
+    <Modal open onClose={onClose} dismissible={!busy} size="sm">
+      <h3 className="text-base font-semibold text-gray-900">Switch to QuickBooks</h3>
+      <p className="mt-1 text-xs text-gray-500">New drafts will be made for QuickBooks. Approve creates each invoice there and sends it to the client. Drafts already waiting stay as they are.</p>
+      <label className={`${labelClass.default} mt-4`}>
+        <span className="flex items-center gap-1">
+          Next invoice number
+          <InfoTip text="Filled in from the highest invoice number the ERP knows. If someone made an invoice in HubSpot today, check its number there and use the one after it." />
+        </span>
+        <span className="mt-1 flex items-center gap-1 text-sm text-gray-700">
+          INV-
+          <input value={value} onChange={(e) => setValue(e.target.value.replace(/\D/g, ""))} inputMode="numeric" className={`${inputClass.md} w-32`} />
+        </span>
+      </label>
+      <div className="mt-5 flex justify-end gap-2">
+        <Button variant="secondary" size="sm" onClick={onClose} disabled={busy}>
+          Cancel
+        </Button>
+        <Button size="sm" disabled={!valid || busy} onClick={() => void onConfirm(n)}>
+          Switch to QuickBooks
+        </Button>
+      </div>
+    </Modal>
   );
 }
 

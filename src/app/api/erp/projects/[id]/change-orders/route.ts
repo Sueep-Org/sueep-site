@@ -56,6 +56,14 @@ export async function POST(req: Request, ctx: Ctx) {
       })
     : [];
 
+  // Planned date range (YYYY-MM-DD), stored as UTC midnight like the CO editor
+  const dayOrNull = (v: unknown) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(`${v}T00:00:00Z`) : null);
+  const startDate = dayOrNull(body.startDate);
+  const endDate = dayOrNull(body.endDate);
+  if (startDate && endDate && endDate < startDate) {
+    return NextResponse.json({ error: "End date must be on or after the start date" }, { status: 400 });
+  }
+
   const estimatedCostCents = inputToCents(body.estimatedCost) ?? null;
   // The office's Next day upcharge box adds it on top of the price typed (see nextDayUpcharge.ts)
   const nextDayUpcharge = body.nextDayUpcharge === true;
@@ -99,6 +107,8 @@ export async function POST(req: Request, ctx: Ctx) {
         estSupervisors: estSupervisors == null ? undefined : Math.round(estSupervisors),
         noCrewRequired,
         nextDayUpcharge,
+        startDate: startDate ?? undefined,
+        endDate: endDate ?? undefined,
         estimatedDays: estimatedDays == null ? undefined : Math.round(estimatedDays),
         reason: body.reason != null ? String(body.reason).trim() || null : null,
         resolutionNotes: body.resolutionNotes != null ? String(body.resolutionNotes).trim() || null : null,

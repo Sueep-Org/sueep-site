@@ -37,9 +37,9 @@
 
 import { prisma } from "@/lib/prisma";
 import { changeOrderActuals, computeProjectActualsWithChangeOrders, isQualifyingChangeOrder } from "@/lib/erp/projectMargin";
-import { costLaborLogs, costManualHours } from "@/lib/erp/laborCost";
+import { costJanitorialShifts, costLaborLogs, costManualHours, sumJanitorialByContract } from "@/lib/erp/laborCost";
 import { loadPayHistories, payRateOn } from "@/lib/erp/payRates";
-import { laborCostByContract, monthBounds, type ContractLabor } from "@/lib/erp/janitorialProfit";
+import { monthBounds, type ContractLabor } from "@/lib/erp/janitorialProfit";
 import { normalizeProjectSegment } from "@/lib/erp/projectSegments";
 import { todayEasternAsUtcMidnight, todayEasternKey, utcDateKey } from "@/lib/erp/dates";
 import { normalizeBillingStatus } from "@/lib/erp/billingStatus";
@@ -699,12 +699,20 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
   // custom range, a contract month counts only for the days of it inside
   // the range (7 of 31 days is 7/31 of the amount), with labor for just
   // those days. In the Paid view a paid month counts in full on its paid day.
-  const laborCache = new Map<string, Awaited<ReturnType<typeof laborCostByContract>>>();
-  const laborFor = async (fromDay: string, toDay: string) => {
+  // Every shift in these months is priced once up front (one load, not one per
+  // month), then each window below just adds up its own days.
+  const periodSpan = periods.reduce<{ from: Date; to: Date } | null>((s, p) => {
+    const { start, end } = monthBounds(p.periodStart);
+    const to = end > today ? today : end;
+    return { from: !s || start < s.from ? start : s.from, to: !s || to > s.to ? to : s.to };
+  }, null);
+  const costedShifts = periodSpan ? await costJanitorialShifts(periodSpan.from, periodSpan.to) : { shifts: [], costs: new Map() };
+  const laborCache = new Map<string, Map<string, ContractLabor>>();
+  const laborFor = (fromDay: string, toDay: string) => {
     const k = `${fromDay}..${toDay}`;
     let v = laborCache.get(k);
     if (!v) {
-      v = await laborCostByContract(new Date(`${fromDay}T00:00:00.000Z`), new Date(`${toDay}T00:00:00.000Z`));
+      v = sumJanitorialByContract(costedShifts, fromDay, toDay);
       laborCache.set(k, v);
     }
     return v;
@@ -750,11 +758,11 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
     if (anchor === "paid") {
       anchorKey = bucketOf(period.paidAt ? todayEasternKey(period.paidAt) : monthFrom);
       revenueCents = fullCents;
-      labor = anchorKey ? (await laborFor(monthFrom, monthTo)).get(period.recurringContractId) : undefined;
+      labor = anchorKey ? laborFor(monthFrom, monthTo).get(period.recurringContractId) : undefined;
     } else {
       anchorKey = share > 0 ? (range ? FINANCE_RANGE_KEY : key) : null;
       revenueCents = partCents;
-      labor = anchorKey && partFrom <= partTo ? (await laborFor(partFrom, partTo)).get(period.recurringContractId) : undefined;
+      labor = anchorKey && partFrom <= partTo ? laborFor(partFrom, partTo).get(period.recurringContractId) : undefined;
     }
     if (!anchorKey) continue;
 

@@ -4,8 +4,9 @@ export function HowInvoicingWorks() {
   return (
     <>
       <Callout type="info">
-        This describes invoicing through QuickBooks, which starts on the cutover day. Until then, invoices are made in HubSpot
-        and HubSpot sends them to QuickBooks.
+        This describes the normal way, with invoices going to QuickBooks. If an Admin switches Ready to send to{" "}
+        <strong>HubSpot (backup)</strong>, invoices are made in HubSpot instead, and reach QuickBooks only while HubSpot&apos;s
+        invoice sync is on.
       </Callout>
 
       <H2>The short version</H2>
