@@ -3,10 +3,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { centsToDollars, inputToCents } from "@/lib/erp/money";
-import { NEXT_DAY_UPCHARGE_LABEL, isNextDayStart, nextDayUpchargeCents } from "@/lib/nextDayUpcharge";
+import { centsToDollars } from "@/lib/erp/money";
+import { isNextDayStart } from "@/lib/nextDayUpcharge";
 import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
-import { CHANGE_ORDER_ESTIMATE_DAY_HOURS, getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
+import { CHANGE_ORDER_ESTIMATE_DAY_HOURS, changeOrderDayCount, getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
 import { ChangeOrderLaborEstimator } from "./ChangeOrderLaborEstimator";
 import { LaborRateCardEditor } from "./LaborRateCardEditor";
 
@@ -193,6 +193,7 @@ export function ProjectChangeOrdersSection({
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [nextDayUpcharge, setNextDayUpcharge] = useState(false);
+  const days = changeOrderDayCount(startDate, endDate);
 
   const defaultNotifyIds = useState(() => {
     const ids: string[] = [];
@@ -243,8 +244,9 @@ export function ProjectChangeOrdersSection({
           estSupervisors: estSupervisorCount.trim() || undefined,
           noCrewRequired: estNoCrewRequired,
           // No hours input anymore — every change order estimate assumes a
-          // flat 8-hour day per person (see CHANGE_ORDER_ESTIMATE_DAY_HOURS).
-          estHours: String(CHANGE_ORDER_ESTIMATE_DAY_HOURS),
+          // flat 8-hour day per person (see CHANGE_ORDER_ESTIMATE_DAY_HOURS), times the days in the range.
+          estHours: String(CHANGE_ORDER_ESTIMATE_DAY_HOURS * days),
+          estimatedDays: startDate ? days : undefined,
           contractValue: contractValue.trim() || undefined,
           estLabor: estLabor.trim() || undefined,
           nextDayUpcharge,
@@ -430,18 +432,13 @@ export function ProjectChangeOrdersSection({
             onContractValueChange={setContractValue}
             estLabor={estLabor}
             onEstLaborChange={setEstLabor}
+            days={days}
+            nextDayUpcharge={nextDayUpcharge}
+            onNextDayUpchargeChange={setNextDayUpcharge}
+            autoFill
             disabled={loading}
           />
         </div>
-        <label className="mt-4 flex items-center gap-2 text-sm text-gray-700">
-          <input type="checkbox" checked={nextDayUpcharge} onChange={(e) => setNextDayUpcharge(e.target.checked)} disabled={loading} />
-          {NEXT_DAY_UPCHARGE_LABEL}
-          {nextDayUpcharge && (inputToCents(contractValue) ?? 0) > 0 ? (
-            <span className="text-xs text-gray-500">
-              adds {centsToDollars(nextDayUpchargeCents(inputToCents(contractValue)!))}, total {centsToDollars(inputToCents(contractValue)! + nextDayUpchargeCents(inputToCents(contractValue)!))}
-            </span>
-          ) : null}
-        </label>
         {notifiableEmployees.length > 0 && (
           <div className="mt-4 border-t border-gray-200 pt-4">
             <label className="block text-xs font-medium text-gray-600">Notify employees</label>

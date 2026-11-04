@@ -14,9 +14,8 @@ import { computeTurnoverPricing } from "@/lib/turnoverPricing";
 import { parseBuildingNameFromDealName, parseAddressFromDealName } from "@/lib/hubspot/dealNaming";
 import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
-import { CHANGE_ORDER_ESTIMATE_DAY_HOURS, getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
-import { NEXT_DAY_UPCHARGE_LABEL, isNextDayStart, nextDayUpchargeCents } from "@/lib/nextDayUpcharge";
-import { inputToCents } from "@/lib/erp/money";
+import { CHANGE_ORDER_ESTIMATE_DAY_HOURS, changeOrderDayCount, getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
+import { NEXT_DAY_UPCHARGE_LABEL, isNextDayStart } from "@/lib/nextDayUpcharge";
 import { ChangeOrderLaborEstimator } from "../[id]/ChangeOrderLaborEstimator";
 import { UnitNameInput } from "@/app/erp/components/UnitNameInput";
 import { unitNameKey } from "@/lib/erp/unitNames";
@@ -636,6 +635,7 @@ export function NewProjectForm({
   const [coNextDayUpcharge, setCoNextDayUpcharge] = useState(false);
   const [coStartDate, setCoStartDate] = useState("");
   const [coEndDate, setCoEndDate] = useState("");
+  const coDays = changeOrderDayCount(coStartDate, coEndDate);
   const [nextDayUpcharge, setNextDayUpcharge] = useState(false);
   const coLaborRates = coProjectId
     ? getChangeOrderLaborRates(allProjects.find((p) => p.id === coProjectId)?.laborRateCard)
@@ -1080,8 +1080,9 @@ export function NewProjectForm({
           estSupervisors: coEstSupervisorCount.trim() || undefined,
           noCrewRequired: coNoCrewRequired,
           // No hours input anymore — every change order estimate assumes a
-          // flat 8-hour day per person (see CHANGE_ORDER_ESTIMATE_DAY_HOURS).
-          estHours: String(CHANGE_ORDER_ESTIMATE_DAY_HOURS),
+          // flat 8-hour day per person (see CHANGE_ORDER_ESTIMATE_DAY_HOURS), times the days in the range.
+          estHours: String(CHANGE_ORDER_ESTIMATE_DAY_HOURS * coDays),
+          estimatedDays: coStartDate ? coDays : undefined,
           contractValue: coContractValue.trim() || undefined,
           estLabor: coEstLabor.trim() || undefined,
           nextDayUpcharge: coNextDayUpcharge,
@@ -1353,18 +1354,12 @@ export function NewProjectForm({
           onContractValueChange={setCoContractValue}
           estLabor={coEstLabor}
           onEstLaborChange={setCoEstLabor}
+          days={coDays}
+          nextDayUpcharge={coNextDayUpcharge}
+          onNextDayUpchargeChange={setCoNextDayUpcharge}
+          autoFill
           disabled={loading}
         />
-
-        <label className="flex items-center gap-2 text-sm text-gray-700">
-          <input type="checkbox" checked={coNextDayUpcharge} onChange={(e) => setCoNextDayUpcharge(e.target.checked)} disabled={loading} />
-          {NEXT_DAY_UPCHARGE_LABEL}
-          {coNextDayUpcharge && (inputToCents(coContractValue) ?? 0) > 0 ? (
-            <span className="text-xs text-gray-500">
-              adds {formatUsd(nextDayUpchargeCents(inputToCents(coContractValue)!))}, total {formatUsd(inputToCents(coContractValue)! + nextDayUpchargeCents(inputToCents(coContractValue)!))}
-            </span>
-          ) : null}
-        </label>
 
         {notifiableEmployees.length > 0 && (
           <div>

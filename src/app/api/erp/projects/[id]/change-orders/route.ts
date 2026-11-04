@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { inputToCents } from "@/lib/erp/money";
-import { withNextDayUpcharge } from "@/lib/nextDayUpcharge";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -65,10 +64,9 @@ export async function POST(req: Request, ctx: Ctx) {
   }
 
   const estimatedCostCents = inputToCents(body.estimatedCost) ?? null;
-  // The office's Next day upcharge box adds it on top of the price typed (see nextDayUpcharge.ts)
+  // The forms already put the next day upcharge into the price shown and sent (see ChangeOrderLaborEstimator)
   const nextDayUpcharge = body.nextDayUpcharge === true;
-  const typedContractValueCents = inputToCents(body.contractValue) ?? null;
-  const contractValueCents = typedContractValueCents == null ? null : withNextDayUpcharge(typedContractValueCents, nextDayUpcharge);
+  const contractValueCents = inputToCents(body.contractValue) ?? null;
   const estLaborCents = inputToCents(body.estLabor) ?? null;
   const estMaterialCents = inputToCents(body.estMaterial) ?? null;
 
