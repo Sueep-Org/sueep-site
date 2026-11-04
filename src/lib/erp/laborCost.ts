@@ -279,6 +279,18 @@ export type JanitorialLaborByContract = Map<string, { hours: number; costCents: 
  * the same way payroll pays it.
  */
 export async function costJanitorialByContract(start: Date, end: Date): Promise<JanitorialLaborByContract> {
+  return sumJanitorialByContract(await costJanitorialShifts(start, end), utcDateKey(start), utcDateKey(end));
+}
+
+export type CostedJanitorialShifts = { shifts: ResolvedShiftHours[]; costs: Map<string, LineCost> };
+
+/**
+ * Every janitorial shift in the full weeks around [start, end], priced with
+ * the shared rule. Price a long span once and sum any windows inside it with
+ * sumJanitorialByContract: a shift costs the same either way, since overtime
+ * only looks at its own week.
+ */
+export async function costJanitorialShifts(start: Date, end: Date): Promise<CostedJanitorialShifts> {
   // Overtime depends on the whole week, so price the full weeks around the range.
   const span = weekSpan([utcDateKey(start), utcDateKey(end)]);
   const shifts = (await loadJanitorialHours(span.start, span.end)).filter((r) => r.hours > 0);
@@ -287,10 +299,11 @@ export async function costJanitorialByContract(start: Date, end: Date): Promise<
     loadWorkLines(employeeIds, [], span.start, span.end, shifts),
     loadPayHistories(employeeIds),
   ]);
-  const costs = costWorkLines(lines, histories);
+  return { shifts, costs: costWorkLines(lines, histories) };
+}
 
-  const startKey = utcDateKey(start);
-  const endKey = utcDateKey(end);
+/** Janitorial labor per contract for the days startKey..endKey ("YYYY-MM-DD", inclusive). */
+export function sumJanitorialByContract({ shifts, costs }: CostedJanitorialShifts, startKey: string, endKey: string): JanitorialLaborByContract {
   const byContract: JanitorialLaborByContract = new Map();
   for (const r of shifts) {
     if (r.date < startKey || r.date > endKey) continue;

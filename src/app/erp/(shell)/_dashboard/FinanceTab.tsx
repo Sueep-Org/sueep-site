@@ -1,4 +1,4 @@
-import { unstable_cache } from "next/cache";
+import { cachedFinanceSummary } from "@/lib/erp/financeSummaryCached";
 import Link from "next/link";
 import { FinanceDateRange } from "./FinanceDateRange";
 import { QuickBooksCompare } from "./QuickBooksCompare";
@@ -6,7 +6,6 @@ import { InfoTip } from "@/app/erp/components/ui";
 import { todayEasternKey } from "@/lib/erp/dates";
 import { JobTabs, type JobTabRow } from "./JobTabs";
 import {
-  computeFinanceSummary,
   costBreakdown,
   sumMonths,
   COST_GROUPS,
@@ -457,12 +456,6 @@ function futureRows(jobs: FutureJob[], todayKey: string): JobTabRow[] {
     };
   });
 }
-
-/** How long a Finance tab calculation is reused, per view and date range. */
-const SUMMARY_SECONDS = 300;
-
-/** The whole Finance tab calculation is the slow part, so the same view is reused for 5 minutes. */
-const cachedFinanceSummary = unstable_cache(computeFinanceSummary, ["finance-tab-summary-v2"], { revalidate: SUMMARY_SECONDS });
 
 export async function FinanceTab({ period: periodParam, by }: { period: string | undefined; by: string | undefined }) {
   const anchor: FinanceAnchor = by === "paid" ? "paid" : "completed";

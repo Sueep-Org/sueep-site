@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { todayEasternKey } from "./dates";
 import { loadOpenInvoices } from "./dashboardMoney";
-import { FINANCE_DATA_START, computeFinanceSummary, type FinanceMonth } from "./financeSummary";
+import { FINANCE_DATA_START, type FinanceMonth } from "./financeSummary";
+import { cachedFinanceSummary } from "./financeSummaryCached";
 import { HEALTH_SHARE_SETTING_KEY, parseHealthSharePct } from "./healthCost";
 
 /**
@@ -468,7 +469,7 @@ export async function loadMonthlyCheck(): Promise<MonthCheck[]> {
   ]);
   const months = [...new Set(qboLines.map((l) => l.month))].sort().reverse();
   if (!months.length) return [];
-  const summary = await computeFinanceSummary("paid", { startKey: FINANCE_DATA_START });
+  const summary = await cachedFinanceSummary("paid", { startKey: FINANCE_DATA_START });
   const share = parseHealthSharePct(shareSetting?.value) / 100;
 
   // Each ERP job's HubSpot invoice numbers: SOV lines and change orders, unit turns, contract months.

@@ -4,9 +4,9 @@ export function ReadyToSendHelp() {
   return (
     <>
       <Callout type="info">
-        This page describes invoicing through QuickBooks, which starts on the cutover day. Until then, drafts are made in
-        HubSpot and Approve opens them there; everything else on the page works the same. The top right of Ready to send
-        says where invoices go right now.
+        The top right of Ready to send says where invoices go: <strong>QuickBooks</strong> normally, or{" "}
+        <strong>HubSpot (backup)</strong>. In backup mode drafts are made in HubSpot and Approve opens them there; everything
+        else on the page works the same.
       </Callout>
 
       <H2>What this is</H2>
@@ -138,8 +138,14 @@ export function ReadyToSendHelp() {
         name on the line, like THE SMITH for &quot;Recurring cleaning THE SMITH&quot;.
       </P>
 
-      <H3>Approve is off</H3>
-      <P>Approve stays off until an Admin turns it on from the ... menu at the top right.</P>
+      <H3>Switching to HubSpot and back (Admins)</H3>
+      <P>
+        The <strong>...</strong> menu at the top right has <strong>Switch to HubSpot (backup)</strong>, for when QuickBooks
+        can&apos;t be used. HubSpot copies invoices into QuickBooks only while its invoice sync is on, so turn that on in
+        HubSpot too. <strong>Switch to QuickBooks</strong> asks for the next invoice number: it&apos;s filled in from the
+        highest number the ERP knows, so only change it if someone made an invoice in HubSpot that day (use the one after
+        it). Drafts already waiting stay where they were made.
+      </P>
 
       <H3>Couldn&apos;t draft</H3>
       <P>

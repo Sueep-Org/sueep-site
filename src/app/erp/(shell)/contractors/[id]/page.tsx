@@ -27,7 +27,7 @@ import { CONTRACTOR_LABOR_PAGE_SIZE } from "./laborPagination";
 import { ContractorDeleteButton } from "./ContractorDeleteButton";
 import { ContractorBidsSection } from "./ContractorBidsSection";
 import { canSeeProposals } from "@/lib/erp/subBids";
-import { loadContractorBidLines, loadSubScores, summarizeBids } from "@/lib/erp/subBidStats";
+import { loadAllSubScoresCached, loadContractorBidLines, summarizeBids } from "@/lib/erp/subBidStats";
 import { Stars } from "@/app/erp/components/Stars";
 import { ContractorRatingsSection, type RatingRow } from "./ContractorRatingsSection";
 import { loadUnlinkedBidsFor } from "@/lib/erp/subBidLinks";
@@ -64,8 +64,110 @@ export default async function ContractorDetailPage({ params }: PageProps) {
   const auth = await getErpAuth();
   const canSeeSsn = canViewSsn(auth?.role ?? "EMPLOYEE");
   const canSeePay = canEditPayInfo(auth?.role ?? "EMPLOYEE");
-  const bidLines = canSeeProposals(auth?.role) ? ((await loadContractorBidLines([contractor.id])).get(contractor.id) ?? []) : null;
-  const unlinkedBids = bidLines ? await loadUnlinkedBidsFor(contractor.id) : [];
+  const showProposals = canSeeProposals(auth?.role);
+
+  // Everything below only needs the contractor's id, so it all starts now
+  // instead of one query after another. Awaited where each part is used.
+  const openJobsPromise = prisma.project
+    .findMany({
+      where: {
+        status: { notIn: ["COMPLETE", "ARCHIVED"] },
+        OR: [
+          { contractorAssignments: { some: { contractorId: contractor.id } } },
+          { changeOrders: { some: { contractorAssignments: { some: { contractorId: contractor.id } } } } },
+        ],
+      },
+      select: { id: true, jobTitle: true },
+    })
+    .then(async (jobs) => ({ jobs, requirements: await loadJobRequirements(jobs.map((p) => p.id)) }));
+  // Only offered as link candidates if they're (a) a subcontractor
+  // application and (b) not already claimed by some other contractor —
+  // the DB-level unique constraint on Contractor.candidateApplicationId is
+  // the real guarantee, this just keeps the picker from offering dead ends.
+  const linkableApplicationsPromise = prisma.candidateApplication.findMany({
+    where: {
+      responses: { path: ["sub_isSubcontractor"], equals: "Yes" },
+      contractor: null,
+    },
+    select: { id: true, fullName: true, email: true },
+    orderBy: { createdAt: "desc" },
+  });
+  // A contractor's work lives in two tables, same split as Employee's
+  // LaborEntry vs ProjectChangeOrderLaborer: ContractorAssignment for
+  // project/building-level work, ChangeOrderContractorAssignment for CO
+  // work. Fetched in full and merged here, same as /api/erp/contractor-labor
+  // does for subsequent pages, so the initial load and "Load more" agree on
+  // ordering.
+  const workPromise = Promise.all([
+    prisma.contractorAssignment.findMany({
+      where: { contractorId: contractor.id },
+      select: {
+        id: true,
+        projectId: true,
+        role: true,
+        startDate: true,
+        endDate: true,
+        assignedDate: true,
+        costCents: true,
+        taskDescription: true,
+        createdAt: true,
+        project: { select: { id: true, jobTitle: true } },
+        building: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.changeOrderContractorAssignment.findMany({
+      where: { contractorId: contractor.id },
+      select: {
+        id: true,
+        role: true,
+        startDate: true,
+        endDate: true,
+        assignedDate: true,
+        costCents: true,
+        notes: true,
+        createdAt: true,
+        changeOrder: { select: { id: true, title: true, project: { select: { id: true, jobTitle: true } } } },
+      },
+    }),
+    prisma.contractorAssignment.groupBy({ by: ["projectId"], where: { contractorId: contractor.id, projectId: { not: null } } }),
+    prisma.changeOrderContractorAssignment.findMany({
+      where: { contractorId: contractor.id },
+      select: { changeOrder: { select: { projectId: true } } },
+      distinct: ["changeOrderId"],
+    }),
+  ]).then(async ([assignments, coAssignments, laborProjectGroups, coProjectRows]) => {
+    const laborProjectIds = new Set([
+      ...laborProjectGroups.map((g) => g.projectId).filter((pid): pid is string => pid != null),
+      ...coProjectRows.map((r) => r.changeOrder.projectId),
+    ]);
+    const laborProjects = laborProjectIds.size
+      ? await prisma.project.findMany({
+          where: { id: { in: Array.from(laborProjectIds) } },
+          select: { id: true, jobTitle: true },
+          orderBy: { jobTitle: "asc" },
+        })
+      : [];
+    return { assignments, coAssignments, laborProjects };
+  });
+  const ratingsPromise = showProposals
+    ? Promise.all([
+        // The same cached scores as the Contractors list, cleared when a bid, rating or override is saved.
+        loadAllSubScoresCached(),
+        prisma.contractorRating.findMany({
+          where: { contractorId: contractor.id },
+          orderBy: { createdAt: "desc" },
+          include: { project: { select: { jobTitle: true } } },
+        }),
+      ])
+    : Promise.resolve(null);
+  const viewerRolePromise = auth ? erpRoleForEmail(contractor.email) : Promise.resolve(null);
+  // If one fails first, the rest are never awaited; keep that from
+  // surfacing as an unhandled rejection (awaiting them still throws).
+  for (const p of [openJobsPromise, linkableApplicationsPromise, workPromise, ratingsPromise, viewerRolePromise]) p.catch(() => {});
+
+  const [bidLines, unlinkedBids] = showProposals
+    ? await Promise.all([loadContractorBidLines([contractor.id]).then((m) => m.get(contractor.id) ?? []), loadUnlinkedBidsFor(contractor.id)])
+    : [null, []];
   const suggestedBidCount = unlinkedBids.filter((b) => b.matchReason).length;
 
   // Company profile / Insurance / Licensing are always editable. A value
@@ -137,17 +239,7 @@ export default async function ContractorDetailPage({ params }: PageProps) {
   const contractorSsnTone = contractor.ssn ? "complete" : "empty";
 
   // Open jobs where this sub is below what the GC requires.
-  const openJobAssignments = await prisma.project.findMany({
-    where: {
-      status: { notIn: ["COMPLETE", "ARCHIVED"] },
-      OR: [
-        { contractorAssignments: { some: { contractorId: contractor.id } } },
-        { changeOrders: { some: { contractorAssignments: { some: { contractorId: contractor.id } } } } },
-      ],
-    },
-    select: { id: true, jobTitle: true },
-  });
-  const jobRequirements = await loadJobRequirements(openJobAssignments.map((p) => p.id));
+  const { jobs: openJobAssignments, requirements: jobRequirements } = await openJobsPromise;
   const jobGaps = openJobAssignments
     .map((p) => {
       const req = jobRequirements.get(p.id);
@@ -169,18 +261,7 @@ export default async function ContractorDetailPage({ params }: PageProps) {
   const backgroundCheckTone =
     contractor.backgroundCheckStatus === "PASSED" ? "complete" : contractor.backgroundCheckStatus === "FAILED" ? "warning" : contractor.backgroundCheckStatus === "PENDING" ? "warning" : "empty";
 
-  // Only offered as link candidates if they're (a) a subcontractor
-  // application and (b) not already claimed by some other contractor —
-  // the DB-level unique constraint on Contractor.candidateApplicationId is
-  // the real guarantee, this just keeps the picker from offering dead ends.
-  const linkableApplications = await prisma.candidateApplication.findMany({
-    where: {
-      responses: { path: ["sub_isSubcontractor"], equals: "Yes" },
-      contractor: null,
-    },
-    select: { id: true, fullName: true, email: true },
-    orderBy: { createdAt: "desc" },
-  });
+  const linkableApplications = await linkableApplicationsPromise;
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "https://sueep.com";
   const resendConfigured = Boolean(process.env.RESEND_API_KEY);
@@ -191,75 +272,14 @@ export default async function ContractorDetailPage({ params }: PageProps) {
     paperwork.length === 0 ? "None required yet" : `${uploadedPaperworkCount}/${paperwork.length} uploaded`;
   const documentsTone = paperwork.length === 0 ? "neutral" : uploadedPaperworkCount === paperwork.length ? "complete" : "warning";
 
-  // A contractor's work lives in two tables, same split as Employee's
-  // LaborEntry vs ProjectChangeOrderLaborer: ContractorAssignment for
-  // project/building-level work, ChangeOrderContractorAssignment for CO
-  // work. Fetched in full and merged here, same as /api/erp/contractor-labor
-  // does for subsequent pages, so the initial load and "Load more" agree on
-  // ordering.
-  const [assignments, coAssignments, laborProjectGroups, coProjectRows] = await Promise.all([
-    prisma.contractorAssignment.findMany({
-      where: { contractorId: contractor.id },
-      select: {
-        id: true,
-        projectId: true,
-        role: true,
-        startDate: true,
-        endDate: true,
-        assignedDate: true,
-        costCents: true,
-        taskDescription: true,
-        createdAt: true,
-        project: { select: { id: true, jobTitle: true } },
-        building: { select: { id: true, name: true } },
-      },
-    }),
-    prisma.changeOrderContractorAssignment.findMany({
-      where: { contractorId: contractor.id },
-      select: {
-        id: true,
-        role: true,
-        startDate: true,
-        endDate: true,
-        assignedDate: true,
-        costCents: true,
-        notes: true,
-        createdAt: true,
-        changeOrder: { select: { id: true, title: true, project: { select: { id: true, jobTitle: true } } } },
-      },
-    }),
-    prisma.contractorAssignment.groupBy({ by: ["projectId"], where: { contractorId: contractor.id, projectId: { not: null } } }),
-    prisma.changeOrderContractorAssignment.findMany({
-      where: { contractorId: contractor.id },
-      select: { changeOrder: { select: { projectId: true } } },
-      distinct: ["changeOrderId"],
-    }),
-  ]);
-
-  const laborProjectIds = new Set([
-    ...laborProjectGroups.map((g) => g.projectId).filter((pid): pid is string => pid != null),
-    ...coProjectRows.map((r) => r.changeOrder.projectId),
-  ]);
-  const laborProjects = laborProjectIds.size
-    ? await prisma.project.findMany({
-        where: { id: { in: Array.from(laborProjectIds) } },
-        select: { id: true, jobTitle: true },
-        orderBy: { jobTitle: "asc" },
-      })
-    : [];
+  const { assignments, coAssignments, laborProjects } = await workPromise;
 
   // Ratings tab: scores, every rating, and the jobs a rating can be about
   // (jobs they worked plus jobs they bid on).
-  const ratingsData = bidLines
-    ? await (async () => {
-        const [scores, ratings] = await Promise.all([
-          loadSubScores([contractor.id]),
-          prisma.contractorRating.findMany({
-            where: { contractorId: contractor.id },
-            orderBy: { createdAt: "desc" },
-            include: { project: { select: { jobTitle: true } } },
-          }),
-        ]);
+  const ratingsRaw = await ratingsPromise;
+  const ratingsData = bidLines && ratingsRaw
+    ? (() => {
+        const [scores, ratings] = ratingsRaw;
         const projectOptions = new Map(laborProjects.map((p) => [p.id, p.jobTitle]));
         for (const l of bidLines) projectOptions.set(l.projectId, l.projectTitle);
         const rows: RatingRow[] = ratings.map((r) => ({
@@ -334,7 +354,7 @@ export default async function ContractorDetailPage({ params }: PageProps) {
 
   const upcomingTimeOff = contractor.timeOff.filter((t) => t.status !== "DENIED" && t.endDate >= new Date()).length;
   const timeOffReviewBlockForViewer = auth
-    ? timeOffReviewBlock(auth, { email: contractor.email, erpRole: await erpRoleForEmail(contractor.email) })
+    ? timeOffReviewBlock(auth, { email: contractor.email, erpRole: await viewerRolePromise })
     : "Sign in to review time off.";
   const timeOffStatus = upcomingTimeOff ? `${upcomingTimeOff} upcoming` : contractor.timeOff.length ? "None upcoming" : "None logged";
 

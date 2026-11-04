@@ -15,7 +15,7 @@ import { parseBuildingNameFromDealName, parseAddressFromDealName } from "@/lib/h
 import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { CHANGE_ORDER_ESTIMATE_DAY_HOURS, getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
-import { NEXT_DAY_UPCHARGE_LABEL, nextDayUpchargeCents } from "@/lib/nextDayUpcharge";
+import { NEXT_DAY_UPCHARGE_LABEL, isNextDayStart, nextDayUpchargeCents } from "@/lib/nextDayUpcharge";
 import { inputToCents } from "@/lib/erp/money";
 import { ChangeOrderLaborEstimator } from "../[id]/ChangeOrderLaborEstimator";
 import { UnitNameInput } from "@/app/erp/components/UnitNameInput";
@@ -634,6 +634,8 @@ export function NewProjectForm({
   const [coEstLabor, setCoEstLabor] = useState("");
   // Next day upcharge, added on top of the price (see nextDayUpcharge.ts). One for a change order, one for all the units.
   const [coNextDayUpcharge, setCoNextDayUpcharge] = useState(false);
+  const [coStartDate, setCoStartDate] = useState("");
+  const [coEndDate, setCoEndDate] = useState("");
   const [nextDayUpcharge, setNextDayUpcharge] = useState(false);
   const coLaborRates = coProjectId
     ? getChangeOrderLaborRates(allProjects.find((p) => p.id === coProjectId)?.laborRateCard)
@@ -1063,6 +1065,7 @@ export function NewProjectForm({
     setNotifyResult(null);
     if (!coProjectId) { setError("Please select a project."); return; }
     if (!coTitle.trim()) { setError("Title is required."); return; }
+    if (coStartDate && coEndDate && coEndDate < coStartDate) { setError("End date must be on or after the start date."); return; }
     setLoading(true);
     try {
       const res = await fetch(`/api/erp/projects/${coProjectId}/change-orders`, {
@@ -1082,6 +1085,8 @@ export function NewProjectForm({
           contractValue: coContractValue.trim() || undefined,
           estLabor: coEstLabor.trim() || undefined,
           nextDayUpcharge: coNextDayUpcharge,
+          startDate: coStartDate || undefined,
+          endDate: coEndDate || undefined,
         }),
       });
       const data = (await res.json()) as { id?: string; error?: string };
@@ -1310,6 +1315,25 @@ export function NewProjectForm({
           <div>
             <label className={label} htmlFor="co-requested-by">Requested by</label>
             <input id="co-requested-by" className={input} value={coRequestedBy} onChange={(e) => setCoRequestedBy(e.target.value)} />
+          </div>
+          <div>
+            <label className={label} htmlFor="co-start-date">Start date</label>
+            <input
+              id="co-start-date"
+              type="date"
+              className={input}
+              value={coStartDate}
+              onChange={(e) => {
+                setCoStartDate(e.target.value);
+                // Ticks the upcharge for today or tomorrow, still untickable
+                setCoNextDayUpcharge(isNextDayStart(e.target.value));
+                if (coEndDate && e.target.value && coEndDate < e.target.value) setCoEndDate(e.target.value);
+              }}
+            />
+          </div>
+          <div>
+            <label className={label} htmlFor="co-end-date">End date</label>
+            <input id="co-end-date" type="date" className={input} value={coEndDate} min={coStartDate || undefined} onChange={(e) => setCoEndDate(e.target.value)} />
           </div>
           <div className="sm:col-span-3">
             <label className={label} htmlFor="co-comments">Comments</label>

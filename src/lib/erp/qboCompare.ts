@@ -6,7 +6,8 @@
  */
 import { prisma } from "@/lib/prisma";
 import { CHECK_LINE_LABELS, loadMonthlyCheck } from "./qboCheck";
-import { computeFinanceSummary, FINANCE_DATA_START } from "./financeSummary";
+import { FINANCE_DATA_START } from "./financeSummary";
+import { cachedFinanceSummary } from "./financeSummaryCached";
 import { QBO_COST_SECTIONS } from "./qboOverhead";
 
 export type CompareReason = { text: string; cents: number };
@@ -62,9 +63,11 @@ const top = (reasons: CompareReason[]) =>
     .slice(0, MAX_REASONS);
 
 export async function loadQuickBooksComparison(): Promise<CompareMonth[]> {
-  const [checks, summary, qboCostLines, payments] = await Promise.all([
+  // The summary first: loadMonthlyCheck reads the same one, and two cold
+  // requests at once would each do the whole calculation.
+  const summary = await cachedFinanceSummary("paid", { startKey: FINANCE_DATA_START });
+  const [checks, qboCostLines, payments] = await Promise.all([
     loadMonthlyCheck(),
-    computeFinanceSummary("paid", { startKey: FINANCE_DATA_START }),
     prisma.qboPnlLine.findMany({ where: { month: { gte: FINANCE_DATA_START }, section: { in: [...QBO_COST_SECTIONS] } }, select: { month: true, amountCents: true } }),
     prisma.qboPayment.findMany({ where: { txnDate: { gte: `${FINANCE_DATA_START}-01` } }, select: { txnDate: true, links: true } }),
   ]);

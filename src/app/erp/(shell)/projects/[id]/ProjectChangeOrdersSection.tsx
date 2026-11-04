@@ -3,7 +3,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { centsToDollars } from "@/lib/erp/money";
+import { centsToDollars, inputToCents } from "@/lib/erp/money";
+import { NEXT_DAY_UPCHARGE_LABEL, isNextDayStart, nextDayUpchargeCents } from "@/lib/nextDayUpcharge";
 import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
 import { CHANGE_ORDER_ESTIMATE_DAY_HOURS, getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
 import { ChangeOrderLaborEstimator } from "./ChangeOrderLaborEstimator";
@@ -188,6 +189,10 @@ export function ProjectChangeOrdersSection({
   const [estNoCrewRequired, setEstNoCrewRequired] = useState(false);
   const [contractValue, setContractValue] = useState("");
   const [estLabor, setEstLabor] = useState("");
+  // Planned date range + next day upcharge (see nextDayUpcharge.ts)
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [nextDayUpcharge, setNextDayUpcharge] = useState(false);
 
   const defaultNotifyIds = useState(() => {
     const ids: string[] = [];
@@ -217,6 +222,10 @@ export function ProjectChangeOrdersSection({
     const form = e.currentTarget;
     setError("");
     setNotifyResult(null);
+    if (startDate && endDate && endDate < startDate) {
+      setError("End date must be on or after the start date");
+      return;
+    }
     setLoading(true);
     const fd = new FormData(form);
 
@@ -238,6 +247,9 @@ export function ProjectChangeOrdersSection({
           estHours: String(CHANGE_ORDER_ESTIMATE_DAY_HOURS),
           contractValue: contractValue.trim() || undefined,
           estLabor: estLabor.trim() || undefined,
+          nextDayUpcharge,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
         }),
       });
       const data = (await res.json()) as ProjectChangeOrderRow & { error?: string };
@@ -254,6 +266,9 @@ export function ProjectChangeOrdersSection({
       setEstNoCrewRequired(false);
       setContractValue("");
       setEstLabor("");
+      setStartDate("");
+      setEndDate("");
+      setNextDayUpcharge(false);
 
       // Send notifications to selected employees
       if (notifyEmployeeIds.length > 0) {
@@ -372,6 +387,29 @@ export function ProjectChangeOrdersSection({
             </label>
             <input id="co-requestedBy" name="requestedBy" className={input} />
           </div>
+          <div>
+            <label className={label} htmlFor="co-startDate">
+              Start date
+            </label>
+            <input
+              id="co-startDate"
+              type="date"
+              className={input}
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                // Ticks the upcharge for today or tomorrow, still untickable
+                setNextDayUpcharge(isNextDayStart(e.target.value));
+                if (endDate && e.target.value && endDate < e.target.value) setEndDate(e.target.value);
+              }}
+            />
+          </div>
+          <div>
+            <label className={label} htmlFor="co-endDate">
+              End date
+            </label>
+            <input id="co-endDate" type="date" className={input} value={endDate} min={startDate || undefined} onChange={(e) => setEndDate(e.target.value)} />
+          </div>
           <div className="sm:col-span-2 lg:col-span-3">
             <label className={label} htmlFor="co-description">
               Comments
@@ -395,6 +433,15 @@ export function ProjectChangeOrdersSection({
             disabled={loading}
           />
         </div>
+        <label className="mt-4 flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" checked={nextDayUpcharge} onChange={(e) => setNextDayUpcharge(e.target.checked)} disabled={loading} />
+          {NEXT_DAY_UPCHARGE_LABEL}
+          {nextDayUpcharge && (inputToCents(contractValue) ?? 0) > 0 ? (
+            <span className="text-xs text-gray-500">
+              adds {centsToDollars(nextDayUpchargeCents(inputToCents(contractValue)!))}, total {centsToDollars(inputToCents(contractValue)! + nextDayUpchargeCents(inputToCents(contractValue)!))}
+            </span>
+          ) : null}
+        </label>
         {notifiableEmployees.length > 0 && (
           <div className="mt-4 border-t border-gray-200 pt-4">
             <label className="block text-xs font-medium text-gray-600">Notify employees</label>

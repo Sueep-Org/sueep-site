@@ -43,102 +43,103 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
   const scope = isSupervisor && scopeParam !== "all" ? "mine" : "all";
   const projectWhere = scope === "mine" && supervisorScope?.where ? supervisorScope.where : undefined;
 
-  const projects = await prisma.project.findMany({
-    where: projectWhere,
-    orderBy: [{ projectDate: "desc" }, { updatedAt: "desc" }],
-    include: {
-      laborEntries: {
-        select: {
-          id: true,
-          employeeId: true,
-          workDate: true,
-          createdAt: true,
-          workerName: true,
-          role: true,
-          hours: true,
-          commuteHours: true,
-          hourlyRateCents: true,
-          taskDescription: true,
-          qualityNotes: true,
-          employee: { select: { firstName: true, lastName: true } },
-        },
-        orderBy: { workDate: "desc" },
-      },
-      materialEntries: {
-        select: { usedOn: true, category: true, itemName: true, quantity: true, unit: true, costCents: true, notes: true },
-        orderBy: { usedOn: "asc" },
-      },
-      distanceEntries: { select: { miles: true } },
-      contractorAssignments: {
-        select: {
-          costCents: true,
-          role: true,
-          startDate: true,
-          endDate: true,
-          notes: true,
-          contractor: { select: { name: true } },
-          sovItems: { select: { id: true, description: true, scheduledValueCents: true } },
-        },
-      },
-      building: { select: { id: true, name: true, address: true } },
-      changeOrders: {
-        select: {
-          id: true,
-          title: true,
-          status: true,
-          startDate: true,
-          requestedDate: true,
-          billingStatus: true,
-          percentInvoiced: true,
-          estimatedCostCents: true,
-          estimatedDays: true,
-          requestedBy: true,
-          supervisor: true,
-          description: true,
-          contractValueCents: true,
-          estMaterialCents: true,
-          estTravelCents: true,
-          estLaborCents: true,
-          actualLaborCents: true,
-          actualMaterialCents: true,
-          actualTravelCents: true,
-          estHours: true,
-          actualHours: true,
-          materialEntries: { select: { costCents: true } },
-          laborers: {
-            select: { id: true, employeeId: true, name: true, role: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true, taskDescription: true, qualityRating: true, qualityNotes: true },
-            orderBy: { workDate: "desc" },
+  const [projects, qualityChecks, buildings] = await Promise.all([
+    prisma.project.findMany({
+      where: projectWhere,
+      orderBy: [{ projectDate: "desc" }, { updatedAt: "desc" }],
+      include: {
+        laborEntries: {
+          select: {
+            id: true,
+            employeeId: true,
+            workDate: true,
+            createdAt: true,
+            workerName: true,
+            role: true,
+            hours: true,
+            commuteHours: true,
+            hourlyRateCents: true,
+            taskDescription: true,
+            qualityNotes: true,
+            employee: { select: { firstName: true, lastName: true } },
           },
-          contractorAssignments: {
-            select: {
-              costCents: true,
-              role: true,
-              startDate: true,
-              endDate: true,
-              notes: true,
-              contractor: { select: { name: true } },
+          orderBy: { workDate: "desc" },
+        },
+        materialEntries: {
+          select: { usedOn: true, category: true, itemName: true, quantity: true, unit: true, costCents: true, notes: true },
+          orderBy: { usedOn: "asc" },
+        },
+        distanceEntries: { select: { miles: true } },
+        contractorAssignments: {
+          select: {
+            costCents: true,
+            role: true,
+            startDate: true,
+            endDate: true,
+            notes: true,
+            contractor: { select: { name: true } },
+            sovItems: { select: { id: true, description: true, scheduledValueCents: true } },
+          },
+        },
+        building: { select: { id: true, name: true, address: true } },
+        changeOrders: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            startDate: true,
+            requestedDate: true,
+            billingStatus: true,
+            percentInvoiced: true,
+            estimatedCostCents: true,
+            estimatedDays: true,
+            requestedBy: true,
+            supervisor: true,
+            description: true,
+            contractValueCents: true,
+            estMaterialCents: true,
+            estTravelCents: true,
+            estLaborCents: true,
+            actualLaborCents: true,
+            actualMaterialCents: true,
+            actualTravelCents: true,
+            estHours: true,
+            actualHours: true,
+            materialEntries: { select: { costCents: true } },
+            laborers: {
+              select: { id: true, employeeId: true, name: true, role: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true, taskDescription: true, qualityRating: true, qualityNotes: true },
+              orderBy: { workDate: "desc" },
+            },
+            contractorAssignments: {
+              select: {
+                costCents: true,
+                role: true,
+                startDate: true,
+                endDate: true,
+                notes: true,
+                contractor: { select: { name: true } },
+              },
             },
           },
-        },
-        orderBy: { createdAt: "desc" },
-      },
-    },
-  });
-
-  const qualityChecks = await prisma.qualityCheck.findMany({
-    orderBy: [{ createdAt: "desc" }],
-    include: {
-      turnoverRequest: {
-        select: {
-          unitNumber: true,
-          building: { select: { name: true } },
+          orderBy: { createdAt: "desc" },
         },
       },
-    },
-  });
-  const buildings = await prisma.building.findMany({
-    select: { id: true, name: true, address: true },
-  });
+    }),
+    prisma.qualityCheck.findMany({
+      orderBy: [{ createdAt: "desc" }],
+      include: {
+        turnoverRequest: {
+          select: {
+            unitNumber: true,
+            building: { select: { name: true } },
+          },
+        },
+      },
+    }),
+    prisma.building.findMany({
+      select: { id: true, name: true, address: true },
+    }),
+  ]);
   const buildingIdByName = new Map(buildings.map((building) => [normalizeMatchValue(building.name), building.id]));
   const buildingNameById = new Map(buildings.map((building) => [building.id, building.name]));
   const buildingAddressById = new Map(buildings.map((building) => [building.id, building.address]));

@@ -19,7 +19,6 @@ import { BILLING_DATA_START } from "./dashboardMoney";
 import { todayEasternKey, utcDateKey } from "./dates";
 import { addDaysKey } from "./manualHoursRepeat";
 import { loadBuildingInvoiceDestination, loadProjectInvoiceDestination } from "./invoiceDestination";
-import { isApproveEnabled } from "./janitorialInvoiceDrafts";
 import { deliverApprovedInvoice, invoiceLinesFor } from "./invoiceDelivery";
 import { syncProjectBillingFromRequest, syncProjectBillingFromSOV, syncSovPercentDone } from "@/lib/sovSync";
 import { createItemsDraft, draftsGoToQuickBooks, itemKeysOnQboDrafts, type QboDraftLine } from "./qboInvoiceDrafts";
@@ -291,7 +290,6 @@ async function linkedItems(hubspotInvoiceId: string) {
 }
 
 export async function approveItemDraft(draftId: string, email: string): Promise<{ ok: true; number: string | null; delivery: string } | { error: string }> {
-  if (!(await isApproveEnabled())) return { error: "Approve is turned off. An Admin turns it on for the first invoice with the bookkeeper." };
   const draft = await prisma.itemInvoiceDraft.findUnique({ where: { id: draftId } });
   if (!draft || draft.status !== "DRAFT") return { error: "This draft isn't waiting anymore." };
   let snap: InvoiceSnapshot;

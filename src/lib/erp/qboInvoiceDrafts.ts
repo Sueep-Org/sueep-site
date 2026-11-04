@@ -29,7 +29,7 @@ import { prisma } from "@/lib/prisma";
 import { todayEasternKey, utcDateKey } from "./dates";
 import { addDaysKey } from "./manualHoursRepeat";
 import { loadBuildingInvoiceDestination, loadProjectInvoiceDestination, type InvoiceDestination } from "./invoiceDestination";
-import { billingDateKey, draftLines, isApproveEnabled, monthLabel } from "./janitorialInvoiceDrafts";
+import { billingDateKey, draftLines, monthLabel } from "./janitorialInvoiceDrafts";
 import { markItemsBilled } from "./itemInvoiceDrafts";
 import { loadQboConnection, qboEnvironment, qboGet, qboPost, type QboEnvironment } from "./qboClient";
 import { LINE_KINDS, QBO_ITEM_MAP_KEY, sameName, subCustomerName, type LineKind } from "./qboMapping";
@@ -54,13 +54,34 @@ export async function draftsGoToQuickBooks(): Promise<boolean> {
   return (await prisma.appSetting.findUnique({ where: { key: switchKey(qboEnvironment()) } }))?.value === "true";
 }
 
-/** Admin switch. Only the sandbox can be switched until the cutover. */
-export async function setDraftsGoToQuickBooks(on: boolean): Promise<{ ok: true } | { error: string }> {
+/**
+ * Admin switch: new drafts go to QuickBooks (normal) or HubSpot (backup).
+ * Switching to QuickBooks can set the next invoice number, so the ERP carries
+ * on after the last one made anywhere else.
+ */
+export async function setDraftsGoToQuickBooks(on: boolean, nextNumber?: number): Promise<{ ok: true } | { error: string }> {
   const env = qboEnvironment();
-  if (env === "production") return { error: "The live site switches to QuickBooks on the cutover day, not before." };
+  if (on && env === "production") {
+    const conn = await loadQboConnection();
+    if (!conn || conn.status !== "CONNECTED") return { error: "Connect QuickBooks on the QuickBooks page first." };
+  }
+  if (on && nextNumber !== undefined) {
+    if (!Number.isInteger(nextNumber) || nextNumber < 1 || nextNumber > 9_999_999) return { error: "Enter the next invoice number, like 1411." };
+    const taken = await highestInvoiceNumber();
+    if (nextNumber <= taken) return { error: `INV-${taken} is already used. Pick ${taken + 1} or higher.` };
+    await prisma.appSetting.upsert({ where: { key: counterKey(env) }, create: { key: counterKey(env), value: String(nextNumber) }, update: { value: String(nextNumber) } });
+  }
   const value = on ? "true" : "false";
   await prisma.appSetting.upsert({ where: { key: switchKey(env) }, create: { key: switchKey(env), value }, update: { value } });
   return { ok: true };
+}
+
+/** The number the next QuickBooks invoice from this server would get, for the switch's confirm box. */
+export async function suggestedNextInvoiceNumber(): Promise<number> {
+  const env = qboEnvironment();
+  const saved = await prisma.appSetting.findUnique({ where: { key: counterKey(env) } });
+  const highest = await highestInvoiceNumber();
+  return Math.max(Number(saved?.value) || 0, highest + 1);
 }
 
 /** A janitorial month's lines, with the kind of each for its QuickBooks product. */
@@ -322,17 +343,22 @@ async function productsFor(env: QboEnvironment, kinds: LineKind[]): Promise<Map<
  * The next INV-xxxx for this environment. The first time, it starts after
  * the highest number seen in QuickBooks or HubSpot; the cutover can set it.
  */
+/** The highest INV-xxxx seen in QuickBooks or HubSpot (1000 when none). */
+async function highestInvoiceNumber(): Promise<number> {
+  const [row] = await prisma.$queryRaw<{ n: number | null }[]>`
+    SELECT max(n)::int AS n FROM (
+      SELECT substring("docNumber" from '^INV-(\\d+)$')::int AS n FROM "QboInvoice"
+      UNION ALL SELECT substring("invoiceNumber" from '^INV-(\\d+)$')::int FROM "HubSpotUnitInvoice"
+      UNION ALL SELECT substring("invoiceNumber" from '^INV-(\\d+)$')::int FROM "HubSpotSovInvoice"
+      UNION ALL SELECT substring("invoiceNumber" from '^INV-(\\d+)$')::int FROM "HubSpotContractInvoice"
+    ) x`;
+  return row?.n ?? 1000;
+}
+
 async function nextInvoiceNumber(env: QboEnvironment): Promise<string> {
   const key = counterKey(env);
   if (!(await prisma.appSetting.findUnique({ where: { key } }))) {
-    const [row] = await prisma.$queryRaw<{ n: number | null }[]>`
-      SELECT max(n)::int AS n FROM (
-        SELECT substring("docNumber" from '^INV-(\\d+)$')::int AS n FROM "QboInvoice"
-        UNION ALL SELECT substring("invoiceNumber" from '^INV-(\\d+)$')::int FROM "HubSpotUnitInvoice"
-        UNION ALL SELECT substring("invoiceNumber" from '^INV-(\\d+)$')::int FROM "HubSpotSovInvoice"
-        UNION ALL SELECT substring("invoiceNumber" from '^INV-(\\d+)$')::int FROM "HubSpotContractInvoice"
-      ) x`;
-    await prisma.appSetting.createMany({ data: [{ key, value: String((row?.n ?? 1000) + 1) }], skipDuplicates: true });
+    await prisma.appSetting.createMany({ data: [{ key, value: String((await highestInvoiceNumber()) + 1) }], skipDuplicates: true });
   }
   // One statement, so two approvals at once never get the same number.
   const [taken] = await prisma.$queryRaw<{ n: number }[]>`
@@ -375,7 +401,6 @@ export async function approveQboDraft(id: string, email: string): Promise<{ ok: 
   const env = qboEnvironment();
   const d = await loadDraft(id);
   if (!d) return { error: "This draft isn't waiting anymore." };
-  if (env === "production" && !(await isApproveEnabled())) return { error: "Approve is turned off. An Admin turns it on for the first invoice with the bookkeeper." };
   const conn = await loadQboConnection();
   if (!conn || conn.status !== "CONNECTED") return { error: "QuickBooks isn't connected. Connect it on the QuickBooks page." };
 

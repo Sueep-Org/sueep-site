@@ -35,14 +35,8 @@ import {
 import { createMonthDraft, draftsGoToQuickBooks, monthHasQboDraft } from "./qboInvoiceDrafts";
 
 export const DRAFT_LEAD_DAYS = 3;
-/** AppSetting key: Approve stays off until an Admin turns it on (first one with the bookkeeper). */
-export const APPROVE_SETTING_KEY = "invoiceApproveEnabled";
 const CLAIM = "Drafting now";
 const CLAIM_MINUTES = 10;
-
-export async function isApproveEnabled(): Promise<boolean> {
-  return (await prisma.appSetting.findUnique({ where: { key: APPROVE_SETTING_KEY } }))?.value === "true";
-}
 
 /** The billing day in that month, pulled back when the month is short. */
 export function billingDateKey(periodStart: Date, billingDay: number): string {
@@ -247,7 +241,6 @@ export async function editDraft(
 
 /** Opens the draft in HubSpot (sends it to QuickBooks), marks the month BILLED, then delivers it (invoiceDelivery.ts). */
 export async function approveDraft(periodId: string, email: string): Promise<{ ok: true; number: string | null; delivery: string } | { error: string }> {
-  if (!(await isApproveEnabled())) return { error: "Approve is turned off. An Admin turns it on for the first invoice with the bookkeeper." };
   const refreshed = await refreshDraft(periodId);
   if ("error" in refreshed) return refreshed;
   const found = await draftLink(periodId);
