@@ -38,7 +38,7 @@ export type TurnoverPricingInput = {
    * turnoverPricingPackages.ts. Unlike the flags above, these reference
    * items that only exist on buildings that defined them. */
   selectedCustomLineItemIds?: string[];
-  /** Work starting today or tomorrow, +25% on the whole price (see nextDayUpcharge.ts). */
+  /** Work starting today or tomorrow, +20% on the whole price (see nextDayUpcharge.ts). */
   nextDayUpcharge?: boolean;
 };
 

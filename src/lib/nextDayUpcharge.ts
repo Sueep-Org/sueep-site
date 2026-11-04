@@ -1,12 +1,12 @@
 /**
- * Next day upcharge: work that starts today or tomorrow (Eastern) costs 25%
+ * Next day upcharge: work that starts today or tomorrow (Eastern) costs 20%
  * more. Added on its own when a property manager or GC requests online, and
  * by a checkbox when the office creates the job. A test for now, so one flat
  * percent everywhere. Safe to import on the client.
  */
 import { todayEasternKey } from "@/lib/erp/dates";
 
-export const NEXT_DAY_UPCHARGE_PERCENT = 25;
+export const NEXT_DAY_UPCHARGE_PERCENT = 20;
 export const NEXT_DAY_UPCHARGE_LABEL = `Next day upcharge (+${NEXT_DAY_UPCHARGE_PERCENT}%)`;
 
 /** True when a start day (YYYY-MM-DD) is today or tomorrow, Eastern. */
