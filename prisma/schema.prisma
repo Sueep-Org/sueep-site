@@ -738,6 +738,12 @@ model RecurringContractPeriod {
   /// Last failure making or updating this month's draft, cleared on success
   draftError            String?
   draftErrorAt          DateTime?
+  /// Recipients set on this month's HubSpot draft on Ready to send. Used on
+  /// Approve when draftRecipientsSetAt is set, else the billing settings.
+  draftSendTo               String[]  @default([])
+  draftCc                   String[]  @default([])
+  draftRecipientsSetAt      DateTime?
+  draftRecipientsSetByEmail String?
 
   @@unique([recurringContractId, periodStart])
 }
@@ -4094,6 +4100,11 @@ model QboInvoiceDraft {
   qboInvoiceId     String?
   invoiceNumber    String?
   qboCustomerId    String?
+  /// Recipients set on Ready to send. Used on Approve when recipientsSetAt is set, else the billing settings.
+  sendTo               String[]  @default([])
+  cc                   String[]  @default([])
+  recipientsSetAt      DateTime?
+  recipientsSetByEmail String?
 
   // Also in the migration: one waiting or approved draft per month and environment (partial unique index).
   @@index([environment, status])
@@ -4128,6 +4139,11 @@ model ItemInvoiceDraft {
   invoiceNumber    String?
   /// Problem to show on the draft, e.g. no billing contact on the deal
   note             String?
+  /// Recipients set on Ready to send. Used on Approve when recipientsSetAt is set, else the billing settings.
+  sendTo               String[]  @default([])
+  cc                   String[]  @default([])
+  recipientsSetAt      DateTime?
+  recipientsSetByEmail String?
 
   @@index([status])
 }

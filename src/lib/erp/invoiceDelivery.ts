@@ -22,7 +22,7 @@ import { escapeHtml, sendEmail } from "@/lib/email";
 import { DAILY_EMAIL_LIMIT, loadEmailQuota } from "./emailQuota";
 import { centsToDollars } from "./money";
 import { BILLING_METHOD_LABELS, PORTAL_METHODS, type BillingMethod } from "./clientCompanies";
-import { loadBuildingInvoiceDestination, loadProjectInvoiceDestination, type InvoiceDestination } from "./invoiceDestination";
+import { loadBuildingInvoiceDestination, loadProjectInvoiceDestination, withDraftRecipients, type DraftRecipients, type InvoiceDestination } from "./invoiceDestination";
 import { qboGetPdf } from "./qboClient";
 
 export type DeliveryPlan =
@@ -47,6 +47,8 @@ export function describePlan(p: DeliveryPlan): string {
 }
 
 export type InvoiceForDelivery = {
+  /** Recipients set on the draft, which replace the billing settings' Send to and cc */
+  recipients?: DraftRecipients | null;
   /** One of these two is set */
   hubspotInvoiceId: string | null;
   qboInvoiceId?: string | null;
@@ -149,7 +151,7 @@ async function emailInvoice(
 export async function deliverApprovedInvoice(inv: InvoiceForDelivery, approverEmail: string): Promise<string> {
   let dest: InvoiceDestination | null = null;
   try {
-    dest = await loadDestination(inv.destType, inv.destId);
+    dest = withDraftRecipients(await loadDestination(inv.destType, inv.destId), inv.recipients);
   } catch {
     // Treated as no destination below.
   }
@@ -199,7 +201,7 @@ export async function deliverApprovedInvoice(inv: InvoiceForDelivery, approverEm
  * so nothing lands on the live Needs sending list.
  */
 export async function emailSandboxTest(inv: InvoiceForDelivery, approverEmail: string): Promise<string> {
-  const dest = await loadDestination(inv.destType, inv.destId).catch(() => null);
+  const dest = withDraftRecipients(await loadDestination(inv.destType, inv.destId).catch(() => null), inv.recipients);
   const banner =
     `<div style="background:#e0f2fe;border:1px solid #7dd3fc;border-radius:6px;padding:10px 12px;margin-bottom:16px;font-size:13px;color:#0c4a6e">` +
     `<strong>Sandbox test.</strong> Made in the QuickBooks sandbox company and sent only to you. On the live site: ${escapeHtml(describePlan(planDelivery(dest)))}</div>`;

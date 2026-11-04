@@ -123,6 +123,23 @@ export function sovItemDateChanges(
   return changes;
 }
 
+/** The last day work was done on an SOV line, up to today: its scheduled
+ * days, worker days, labor entries and contractor end dates. Null when
+ * nothing was logged or scheduled on it, so the caller falls back to now. */
+export async function sovItemLastWorkDay(id: string): Promise<Date | null> {
+  const upTo = new Date();
+  const [day, workerDay, labor, legacyLabor, contractor] = await Promise.all([
+    prisma.projectDayAssignment.findFirst({ where: { sovItems: { some: { id } }, date: { lte: upTo } }, orderBy: { date: "desc" }, select: { date: true } }),
+    prisma.projectWorkerDayAssignment.findFirst({ where: { assignedSovItemId: id, date: { lte: upTo } }, orderBy: { date: "desc" }, select: { date: true } }),
+    prisma.laborEntry.findFirst({ where: { sovItems: { some: { id } }, workDate: { lte: upTo } }, orderBy: { workDate: "desc" }, select: { workDate: true } }),
+    prisma.laborEntry.findFirst({ where: { sovItemId: id, workDate: { lte: upTo } }, orderBy: { workDate: "desc" }, select: { workDate: true } }),
+    prisma.contractorAssignment.findFirst({ where: { sovItems: { some: { id } }, endDate: { lte: upTo } }, orderBy: { endDate: "desc" }, select: { endDate: true } }),
+  ]);
+  const dates = [day?.date, workerDay?.date, labor?.workDate, legacyLabor?.workDate, contractor?.endDate].filter((d): d is Date => !!d);
+  if (dates.length === 0) return null;
+  return new Date(Math.max(...dates.map((d) => d.getTime())));
+}
+
 /** Marks SOV lines done because work logged on them finished them, dated
  * `on` (the day of that work). Lines already done keep their own date. */
 export async function markSovItemsCompleted(ids: string[], on: Date) {

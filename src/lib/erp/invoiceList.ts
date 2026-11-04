@@ -47,6 +47,8 @@ export type InvoiceListRow = {
   paidMismatch: string | null;
   qboUrl: string | null;
   hubspotUrl: string | null;
+  /** The invoice PDF: QuickBooks' (through the ERP, no QuickBooks login needed), else HubSpot's */
+  pdfUrl: string | null;
 };
 
 const normNumber = (n: string | null | undefined) => (n ?? "").trim().toUpperCase() || null;
@@ -76,6 +78,7 @@ type ErpGroup = {
   balanceCents: number | null;
   lineSum: number;
   viewUrl: string | null;
+  pdfUrl: string | null;
   titles: Set<string>;
   href: string | null;
   billingHref: string;
@@ -83,6 +86,8 @@ type ErpGroup = {
   /** The linked lines' ERP billing status (NOT_BILLED | BILLED | PAID) */
   lineStatuses: string[];
 };
+
+const qboPdfUrl = (qboId: string) => `/api/erp/qbo-invoices/${encodeURIComponent(qboId)}/pdf`;
 
 export async function loadInvoiceList(): Promise<InvoiceListRow[]> {
   const todayKey = todayEasternKey();
@@ -99,6 +104,7 @@ export async function loadInvoiceList(): Promise<InvoiceListRow[]> {
     balanceDueCents: true,
     amountCents: true,
     viewUrl: true,
+    pdfUrl: true,
   } as const;
   const buildingCompanies = { managedByCompany: { select: { name: true } }, ownedByCompany: { select: { name: true } } } as const;
   const [qboInvoices, payments, customers, units, lines, months, deliveries, unlinked] = await Promise.all([
@@ -152,6 +158,7 @@ export async function loadInvoiceList(): Promise<InvoiceListRow[]> {
         balanceCents: r.balanceDueCents,
         lineSum: 0,
         viewUrl: r.viewUrl,
+        pdfUrl: r.pdfUrl,
         titles: new Set(),
         href,
         billingHref: `/erp/billing?tab=${billing.tab}&q=${encodeURIComponent(billing.q)}`,
@@ -283,6 +290,7 @@ export async function loadInvoiceList(): Promise<InvoiceListRow[]> {
       paidMismatch: mismatchFor(g, q.balanceCents <= 0, q.balanceCents > 0),
       qboUrl: qboInvoiceUrl("production", q.qboId),
       hubspotUrl: g && g.source !== "QUICKBOOKS" ? g.viewUrl : null,
+      pdfUrl: qboPdfUrl(q.qboId),
     });
   }
 
@@ -325,6 +333,7 @@ export async function loadInvoiceList(): Promise<InvoiceListRow[]> {
       paidMismatch: mismatchFor(g, g.status === "paid", false),
       qboUrl: fromErp && g.qboInvoiceId ? qboInvoiceUrl("production", g.qboInvoiceId) : null,
       hubspotUrl: fromErp ? null : g.viewUrl,
+      pdfUrl: fromErp && g.qboInvoiceId ? qboPdfUrl(g.qboInvoiceId) : g.pdfUrl,
     });
   }
 
@@ -356,6 +365,7 @@ export async function loadInvoiceList(): Promise<InvoiceListRow[]> {
       paidMismatch: null,
       qboUrl: null,
       hubspotUrl: null,
+      pdfUrl: null,
     });
   }
 

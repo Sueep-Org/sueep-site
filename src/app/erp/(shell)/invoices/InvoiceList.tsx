@@ -253,6 +253,17 @@ export function InvoiceList({ rows, showQuickBooks }: { rows: InvoiceListRow[]; 
                   <tr onClick={() => setOpen(isOpen ? null : r.key)} className={`cursor-pointer hover:bg-gray-50 ${isOpen ? "bg-gray-50" : ""}`}>
                     <td className="whitespace-nowrap px-3 py-2 font-medium text-gray-900">
                       {r.number ?? "-"}
+                      {r.pdfUrl && (
+                        <a
+                          href={r.pdfUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="ml-2 text-xs font-normal text-pink-600 hover:text-pink-700"
+                        >
+                          PDF
+                        </a>
+                      )}
                       {(r.needsLinking || r.paidMismatch) && (
                         <span
                           title={r.paidMismatch ?? "Not linked to any work in the ERP"}
@@ -516,6 +527,11 @@ function InvoiceDetails({ r, showQuickBooks, onLink }: { r: InvoiceListRow; show
           <div className="font-semibold uppercase tracking-wide text-gray-400">Sent and links</div>
           {r.sent && <div>{r.sent}</div>}
           <div className="flex flex-wrap gap-3">
+            {r.pdfUrl && (
+              <a href={r.pdfUrl} target="_blank" rel="noreferrer" className={link}>
+                PDF
+              </a>
+            )}
             {showQuickBooks && r.qboUrl && (
               <a href={r.qboUrl} target="_blank" rel="noreferrer" className={link}>
                 Open in QuickBooks

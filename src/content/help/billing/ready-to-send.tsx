@@ -42,7 +42,21 @@ export function ReadyToSendHelp() {
         </LI>
         <LI>
           The <strong>...</strong> menu on each draft has <strong>Open page</strong>, <strong>Email me a preview</strong>,{" "}
-          <strong>Edit amounts</strong> (janitorial months only) and <strong>Discard</strong>.
+          <strong>Edit amounts</strong> (janitorial months), <strong>Edit lines</strong> (QuickBooks drafts of picked work),{" "}
+          <strong>Edit recipients</strong> (invoices that are emailed) and <strong>Discard</strong>.
+        </LI>
+        <LI>
+          <strong>Recipients</strong>: open a draft to see who it&apos;s emailed to (To and Cc) and where that comes from: the
+          company&apos;s, building&apos;s or job&apos;s billing settings, or &quot;Set on this invoice&quot;. Click{" "}
+          <strong>Edit</strong> to pick To, Cc or Off for each of the client company&apos;s contacts and the job&apos;s
+          contacts, or add any other email. Tick <strong>Also use for future invoices</strong> to save it on the building or
+          job too. <strong>Use billing settings</strong> undoes a change. Invoices that go through a portal (Procore, Coupa,
+          vendor portal) or Other aren&apos;t emailed, so they have no recipients.
+        </LI>
+        <LI>
+          <strong>Edit lines</strong> lets you rename, reprice, remove or add lines before you approve. Each line is for one
+          unit or job on the invoice, and that unit or job is billed the total of its lines. It changes the invoice only, not
+          the job&apos;s own price. Every unit or job keeps at least one line; to leave one off, discard and draft again.
         </LI>
         <LI>
           <strong>Due date</strong>: when the client company has payment terms (Net 30...), it&apos;s the invoice date plus the
@@ -125,8 +139,9 @@ export function ReadyToSendHelp() {
           item&apos;s value, mark it Paid by hand when the client pays.
         </LI>
         <LI>
-          Click <strong>Draft invoice</strong>. You get one draft per building or job, one line per item, dated the day you
-          approve it.
+          Click <strong>Draft invoice</strong>. You get one draft per building or job, dated the day you approve it. In
+          QuickBooks drafts, a unit turn gets one line per service (Full cleaning, Full painting, Carpet cleaning...) priced
+          so they add up to what you charge; everything else is one line per item.
         </LI>
       </UL>
       <P>A group without a client company can&apos;t be drafted. Set the client company on the building or project first.</P>

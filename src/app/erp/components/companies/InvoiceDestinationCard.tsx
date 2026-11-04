@@ -7,6 +7,7 @@ const SOURCE_LABEL: Record<DestinationSource, string> = {
   project: "Project override",
   building: "Building override",
   company: "Company",
+  draft: "This invoice",
 };
 
 function SourceTag({ source, name }: { source: DestinationSource | null; name: string | null }) {

@@ -9,7 +9,7 @@
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { todayEasternKey, utcDateKey } from "./dates";
-import { loadBuildingInvoiceDestination, loadProjectInvoiceDestination, type InvoiceDestination } from "./invoiceDestination";
+import { draftRecipients, loadBuildingInvoiceDestination, loadProjectInvoiceDestination, periodRecipients, withDraftRecipients, type InvoiceDestination } from "./invoiceDestination";
 import { billingDateKey, draftLines, linesTotal, monthLabel } from "./janitorialInvoiceDrafts";
 import { describePlan, invoiceEmailHtml, invoiceLinesFor, planDelivery, type InvoiceForDelivery } from "./invoiceDelivery";
 import { setInvoiceDates } from "@/lib/hubspot/invoiceDrafts";
@@ -48,7 +48,7 @@ async function loadDraft(kind: DraftKind, rowId: string): Promise<LoadedDraft | 
       invoiceDateKey: billingDateKey(p.periodStart, p.recurringContract.billingDayOfMonth),
       dueDateKey: link.dueDate ? utcDateKey(link.dueDate) : null,
       lines: draftLines(label, p),
-      destination: await loadBuildingInvoiceDestination(p.recurringContract.buildingId),
+      destination: withDraftRecipients(await loadBuildingInvoiceDestination(p.recurringContract.buildingId), periodRecipients(p)),
       updateDue: async (due) => {
         await prisma.hubSpotContractInvoice.update({ where: { id: link.id }, data: { dueDate: due } });
       },
@@ -67,7 +67,10 @@ async function loadDraft(kind: DraftKind, rowId: string): Promise<LoadedDraft | 
     invoiceDateKey: [invoiceDate ? utcDateKey(invoiceDate) : todayEasternKey(d.createdAt), todayEasternKey()].sort().pop()!,
     dueDateKey: dueDate ? dueDate.slice(0, 10) : null,
     lines,
-    destination: d.groupType === "PROJECT" ? await loadProjectInvoiceDestination(d.groupId) : await loadBuildingInvoiceDestination(d.groupId),
+    destination: withDraftRecipients(
+      d.groupType === "PROJECT" ? await loadProjectInvoiceDestination(d.groupId) : await loadBuildingInvoiceDestination(d.groupId),
+      draftRecipients(d),
+    ),
     updateDue: async (due) => {
       await prisma.$transaction([
         prisma.hubSpotUnitInvoice.updateMany({ where: { hubspotInvoiceId: d.hubspotInvoiceId }, data: { dueDate: due } }),

@@ -124,7 +124,7 @@ function list(v: unknown): string[] {
   return out;
 }
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function emailList(v: unknown, label: string): { value: string[] } | { error: string } {
   const emails = list(v);

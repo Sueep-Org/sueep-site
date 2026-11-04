@@ -89,6 +89,7 @@ export function HowInvoicingWorks() {
         </LI>
         <LI>
           <strong>Invoices:</strong> every invoice with its status, payments and balance, like HubSpot&apos;s invoice list.
+          <strong> PDF</strong> next to the number opens the invoice as the client sees it, no QuickBooks login needed.
         </LI>
         <LI>
           <strong>QuickBooks page:</strong> whether the ERP and QuickBooks agree, and the money owed check.
