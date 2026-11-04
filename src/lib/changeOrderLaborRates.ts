@@ -23,6 +23,14 @@
  * page) as the fixed `hours` input to computeChangeOrderLaborEstimate. */
 export const CHANGE_ORDER_ESTIMATE_DAY_HOURS = 8;
 
+/** Work days in a change order's planned range (YYYY-MM-DD), both ends
+ * counted. 1 when there's no range yet, so the price is one day's work. */
+export function changeOrderDayCount(startKey: string, endKey: string): number {
+  if (!startKey || !endKey || endKey < startKey) return 1;
+  const ms = new Date(`${endKey}T00:00:00Z`).getTime() - new Date(`${startKey}T00:00:00Z`).getTime();
+  return Math.round(ms / 86_400_000) + 1;
+}
+
 export type ChangeOrderLaborRole = "CLEANER" | "FOREMAN";
 
 export type ChangeOrderLaborRateCard = {

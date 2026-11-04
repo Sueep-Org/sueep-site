@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { NEXT_DAY_UPCHARGE_LABEL, nextDayUpchargeCents, withNextDayUpcharge } from "@/lib/nextDayUpcharge";
 import { inputClass, labelClass } from "@/app/erp/components/ui";
 import { centsToDollars } from "@/lib/erp/money";
 import {
@@ -34,6 +35,13 @@ type Props = {
    * this affordance (e.g. the read-only supervisor request form) can omit it. */
   noCrewRequired?: boolean;
   onNoCrewRequiredChange?: (v: boolean) => void;
+  /** Days in the planned date range, the crew price is per day. Defaults to 1. */
+  days?: number;
+  /** Next day upcharge box (see nextDayUpcharge.ts). Shown when the change handler is passed. */
+  nextDayUpcharge?: boolean;
+  onNextDayUpchargeChange?: (v: boolean) => void;
+  /** Create forms: keep the price and labor fields filled from the calculation until someone types in them. */
+  autoFill?: boolean;
   disabled?: boolean;
 };
 
@@ -59,6 +67,10 @@ export function ChangeOrderLaborEstimator({
   onEstLaborChange,
   noCrewRequired = false,
   onNoCrewRequiredChange,
+  days = 1,
+  nextDayUpcharge = false,
+  onNextDayUpchargeChange,
+  autoFill = false,
   disabled,
 }: Props) {
   const crewDisabled = disabled || noCrewRequired;
@@ -76,15 +88,48 @@ export function ChangeOrderLaborEstimator({
   const counts = {
     cleanerCount: Number(cleanerCount) || 0,
     supervisorCount: Number(supervisorCount) || 0,
-    hours: CHANGE_ORDER_ESTIMATE_DAY_HOURS,
+    hours: CHANGE_ORDER_ESTIMATE_DAY_HOURS * Math.max(1, days),
   };
   const priceEstimate = pricingRates ? computeChangeOrderLaborEstimate(counts, pricingRates) : null;
   const costEstimate = computeChangeOrderLaborEstimate(counts, ACTUAL_CHANGE_ORDER_LABOR_COST_RATES);
+  // The upcharge is part of the price the client pays, never the labor cost
+  const priceCents = priceEstimate ? withNextDayUpcharge(priceEstimate.totalCents, nextDayUpcharge) : null;
 
   function useCalculatedNumbers() {
-    if (priceEstimate) onContractValueChange((priceEstimate.totalCents / 100).toFixed(2));
+    priceTouchedRef.current = false;
+    laborTouchedRef.current = false;
+    if (priceCents != null) onContractValueChange((priceCents / 100).toFixed(2));
     onEstLaborChange((costEstimate.totalCents / 100).toFixed(2));
   }
+
+  // Typed prices stay typed: auto-fill stops for a field once someone edits it
+  const priceTouchedRef = useRef(false);
+  const laborTouchedRef = useRef(false);
+  useEffect(() => {
+    if (!autoFill) return;
+    if (!priceTouchedRef.current && priceCents != null && priceCents > 0) onContractValueChange((priceCents / 100).toFixed(2));
+    if (!laborTouchedRef.current && costEstimate.totalCents > 0) onEstLaborChange((costEstimate.totalCents / 100).toFixed(2));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoFill, priceCents, costEstimate.totalCents]);
+
+  // A cleared field (or a fresh form after saving) goes back to auto-fill
+  useEffect(() => {
+    if (contractValue === "") priceTouchedRef.current = false;
+    if (estLabor === "") laborTouchedRef.current = false;
+  }, [contractValue, estLabor]);
+
+  // A typed price gets the upcharge added or taken back out when the box
+  // changes, by hand or by the start date ticking it
+  const prevUpchargeRef = useRef(nextDayUpcharge);
+  useEffect(() => {
+    if (prevUpchargeRef.current === nextDayUpcharge) return;
+    prevUpchargeRef.current = nextDayUpcharge;
+    const typedCents = Math.round(Number(contractValue) * 100);
+    if (!priceTouchedRef.current || !(typedCents > 0)) return;
+    const next = nextDayUpcharge ? typedCents + nextDayUpchargeCents(typedCents) : Math.round(typedCents / (1 + nextDayUpchargeCents(100) / 100));
+    onContractValueChange((next / 100).toFixed(2));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nextDayUpcharge]);
 
   // Auto-fills # of supervisors from # of cleaners (a crew always needs at
   // least one — see deriveChangeOrderSupervisorCount), but only until
@@ -153,10 +198,23 @@ export function ChangeOrderLaborEstimator({
         </div>
       </div>
 
+      {onNextDayUpchargeChange ? (
+        <label className="mt-3 flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" checked={nextDayUpcharge} disabled={disabled} onChange={(e) => onNextDayUpchargeChange?.(e.target.checked)} />
+          {NEXT_DAY_UPCHARGE_LABEL}
+        </label>
+      ) : null}
+
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md bg-gray-50 px-3 py-2">
         <div className="text-sm text-gray-700">
           <div>
-            Price: <span className="font-semibold text-gray-900">{priceEstimate ? centsToDollars(priceEstimate.totalCents) : "-"}</span>
+            Price: <span className="font-semibold text-gray-900">{priceCents != null ? centsToDollars(priceCents) : "-"}</span>
+            {priceEstimate && (days > 1 || nextDayUpcharge) ? (
+              <span className="ml-1 text-xs text-gray-500">
+                {days > 1 ? `${days} days` : "1 day"}
+                {nextDayUpcharge ? `, incl. ${centsToDollars(nextDayUpchargeCents(priceEstimate.totalCents))} next day upcharge` : ""}
+              </span>
+            ) : null}
             {pricingRates ? (
               <span className="ml-1 text-xs text-gray-400">
                 ({centsToDollars(pricingRates.cleanerHourlyRateCents)}/hr cleaner, {centsToDollars(pricingRates.foremanHourlyRateCents)}/hr
@@ -196,7 +254,7 @@ export function ChangeOrderLaborEstimator({
             placeholder="0.00"
             value={contractValue}
             disabled={disabled}
-            onChange={(e) => onContractValueChange(e.target.value)}
+            onChange={(e) => { priceTouchedRef.current = true; onContractValueChange(e.target.value); }}
           />
         </div>
         <div>
@@ -210,7 +268,7 @@ export function ChangeOrderLaborEstimator({
             placeholder="0.00"
             value={estLabor}
             disabled={disabled}
-            onChange={(e) => onEstLaborChange(e.target.value)}
+            onChange={(e) => { laborTouchedRef.current = true; onEstLaborChange(e.target.value); }}
           />
         </div>
       </div>
