@@ -3,8 +3,22 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, InfoTip, Modal, inputClass, labelClass, useConfirm, useToast } from "@/app/erp/components/ui";
+import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { centsToDollars, parseMoneyInput } from "@/lib/erp/money";
 import type { DraftLine } from "@/lib/hubspot/invoiceDrafts";
+
+/** Who an emailed draft goes to, and the contacts Edit recipients offers. */
+export type DraftRecipientsRow = {
+  to: string[];
+  cc: string[];
+  /** e.g. "UDR billing settings" or "Set on this invoice" */
+  from: string | null;
+  /** Set on this draft, so it can go back to the billing settings */
+  set: boolean;
+  contacts: { name: string; role: string | null; email: string; from: "Company" | "Job" }[];
+  /** For "Also use for future invoices to this building" */
+  groupLabel: "building" | "job";
+};
 
 export type MonthRow = { periodId: string; building: string; month: string; note: string | null; discardedBy: string | null };
 
@@ -30,6 +44,8 @@ export type DraftRow = MonthRow & {
   sendTo: string | null;
   /** What happens on Approve, e.g. "Emails it to ap@udr.com." */
   deliveryPlan: string;
+  /** Null when the invoice isn't emailed (a portal or Other) */
+  recipients: DraftRecipientsRow | null;
   /** Client company's payment terms. Null means the due date can be set on the draft. */
   paymentTermsDays: number | null;
   /** A QuickBooks sandbox draft: Approve is a test that changes nothing real. */
@@ -40,6 +56,10 @@ export type DraftRow = MonthRow & {
   blocked: string | null;
   /** Janitorial months can change their amount and extras */
   canEdit: boolean;
+  /** QuickBooks picked-work drafts: their lines, each tied to a unit or job (Edit lines) */
+  editLines?: { itemKey: string; name: string; amountCents: number }[];
+  /** The units or jobs on the draft a line can be for, e.g. "777 South Broad Apartments - Unit 318" */
+  lineTargets?: { key: string; label: string }[];
 };
 
 export type QboTestRow = { id: string; title: string; invoiceNumber: string | null; totalCents: number; url: string | null; when: string };
@@ -156,6 +176,8 @@ export function ReadyToSend({
   const [busy, setBusy] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<DraftRow | null>(null);
+  const [editingLines, setEditingLines] = useState<DraftRow | null>(null);
+  const [editingRecipients, setEditingRecipients] = useState<DraftRow | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>(deliveries.length ? "sending" : drafts.length || failed.length ? "approve" : "bill");
   const [pick, setPick] = useState<string | null>(null);
@@ -427,6 +449,8 @@ export function ReadyToSend({
                           ...(d.href ? [{ label: "Open page", href: d.href }] : []),
                           { label: "Email me a preview", onClick: () => void preview(d) },
                           ...(d.canEdit ? [{ label: "Edit amounts", onClick: () => setEditing(d) }] : []),
+                          ...(d.editLines ? [{ label: "Edit lines", onClick: () => setEditingLines(d) }] : []),
+                          ...(d.recipients ? [{ label: "Edit recipients", onClick: () => setEditingRecipients(d) }] : []),
                           { label: "Discard", onClick: () => void discard(d), danger: true },
                         ]}
                       />
@@ -450,8 +474,28 @@ export function ReadyToSend({
                           <span>Invoice date {fmtDay(d.invoiceDateKey)}</span>
                           {d.paymentTermsDays != null ? <span>Due {fmtDay(d.dueDate)} (Net {d.paymentTermsDays})</span> : <DueDateInput draft={d} />}
                           {d.method && <span>{d.method}</span>}
-                          {d.sendTo && <span>{d.sendTo}</span>}
+                          {!d.recipients && d.sendTo && <span>{d.sendTo}</span>}
                         </div>
+                        {d.recipients && (
+                          <div className="flex items-start gap-2 text-xs text-gray-600">
+                            <div className="min-w-0 flex-1 space-y-0.5">
+                              <p className="break-words">
+                                <span className="text-gray-500">To </span>
+                                {d.recipients.to.join(", ") || <span className="text-amber-700">nobody yet</span>}
+                              </p>
+                              {d.recipients.cc.length > 0 && (
+                                <p className="break-words">
+                                  <span className="text-gray-500">Cc </span>
+                                  {d.recipients.cc.join(", ")}
+                                </p>
+                              )}
+                              {d.recipients.from && <p className="text-gray-400">{d.recipients.from}</p>}
+                            </div>
+                            <button type="button" onClick={() => setEditingRecipients(d)} className="shrink-0 font-medium text-pink-600 hover:text-pink-700">
+                              Edit
+                            </button>
+                          </div>
+                        )}
                         <p className="text-xs text-gray-600">On Approve: {d.deliveryPlan}</p>
                         {warning && <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">{warning}</p>}
                       </div>
@@ -513,6 +557,8 @@ export function ReadyToSend({
       {tab === "contracts" && <ContractSettings contracts={contracts} toQuickBooks={qbo.on} />}
 
       {editing && <EditDraft draft={editing} onClose={() => setEditing(null)} />}
+      {editingLines && <EditLines draft={editingLines} onClose={() => setEditingLines(null)} />}
+      {editingRecipients && <EditRecipients draft={editingRecipients} onClose={() => setEditingRecipients(null)} />}
       {switching && (
         <SwitchToQuickBooks
           suggested={qbo.nextInvoiceNumber}
@@ -776,6 +822,216 @@ function EditDraft({ draft, onClose }: { draft: DraftRow; onClose: () => void })
   );
 }
 
+/** A QuickBooks picked-work draft's lines: rename, reprice, remove or add. Changes the invoice only, never the job's price. */
+function EditLines({ draft, onClose }: { draft: DraftRow; onClose: () => void }) {
+  const router = useRouter();
+  // "777 South Broad Apartments - Unit 318" reads "Unit 318": the building is the title.
+  const prefix = `${draft.building} - `;
+  const targets = (draft.lineTargets ?? []).map((t) => ({ ...t, label: t.label.startsWith(prefix) ? t.label.slice(prefix.length) : t.label }));
+  const [rows, setRows] = useState((draft.editLines ?? []).map((l) => ({ itemKey: l.itemKey, name: l.name, amount: (l.amountCents / 100).toFixed(2) })));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const newTotal = rows.reduce((sum, r) => sum + (parseMoneyInput(r.amount) ?? 0), 0);
+  const update = (i: number, patch: Partial<(typeof rows)[number]>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+
+  async function save() {
+    const lines = [];
+    for (const r of rows) {
+      const cents = parseMoneyInput(r.amount);
+      if (!r.itemKey) return setError("Pick what each line is for.");
+      if (!r.name.trim() || cents == null) return setError("Each line needs a name and an amount.");
+      lines.push({ itemKey: r.itemKey, name: r.name.trim(), amountCents: cents });
+    }
+    setSaving(true);
+    setError("");
+    const { ok, data } = await call(draftUrl(draft), "PUT", { lines });
+    setSaving(false);
+    if (!ok) return setError(String(data.error ?? "Could not save."));
+    onClose();
+    router.refresh();
+  }
+
+  return (
+    <Modal open onClose={onClose} dismissible={!saving} size="lg">
+      <h3 className="flex items-center gap-1 text-base font-semibold text-gray-900">
+        {draft.building}
+        <InfoTip text="Changes this invoice only. The job keeps its own price; each unit or job is billed the total of its lines." />
+      </h3>
+      <div className="mt-4 space-y-3">
+        {rows.map((r, i) => (
+          <div key={i} className="space-y-2 rounded-md border border-gray-200 p-3">
+            <input value={r.name} onChange={(e) => update(i, { name: e.target.value })} placeholder="Line, e.g. Trash removal" aria-label="Line name" className={inputClass.sm} />
+            <div className="flex gap-2">
+              <SearchableSelect
+                value={r.itemKey}
+                onChange={(v) => update(i, { itemKey: v })}
+                options={targets.map((t) => ({ value: t.key, label: t.label }))}
+                allLabel="Pick a unit or job"
+                placeholder="For…"
+                className="min-w-0 flex-1"
+              />
+              <input
+                value={r.amount}
+                onChange={(e) => update(i, { amount: e.target.value })}
+                placeholder="0.00"
+                inputMode="decimal"
+                aria-label="Amount"
+                // inputClass is full width; the amount keeps a fixed width beside the unit picker.
+                className={`${inputClass.sm.replace("w-full", "w-28")} shrink-0 py-1.5`}
+              />
+              <Button size="xs" variant="ghost" onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}>
+                Remove
+              </Button>
+            </div>
+          </div>
+        ))}
+        <Button size="xs" variant="secondary" onClick={() => setRows((rs) => [...rs, { itemKey: targets.length === 1 ? targets[0]!.key : "", name: "", amount: "" }])}>
+          + Add line
+        </Button>
+        <p className="flex justify-between border-t border-gray-100 pt-2 text-sm">
+          <span className="text-gray-500">Total</span>
+          <span className="font-semibold tabular-nums text-gray-900">
+            {centsToDollars(newTotal)}
+            {newTotal !== draft.totalCents && <span className="ml-2 font-normal text-gray-500">was {centsToDollars(draft.totalCents)}</span>}
+          </span>
+        </p>
+        {error && <p className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
+      </div>
+      <div className="mt-5 flex justify-end gap-2">
+        <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>
+          Cancel
+        </Button>
+        <Button size="sm" onClick={save} disabled={saving}>
+          {saving ? "Saving…" : "Save"}
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
+type Send = "to" | "cc" | "off";
+
+/** Who the invoice is emailed to: the company's and job's contacts, plus any other address. */
+function EditRecipients({ draft, onClose }: { draft: DraftRow; onClose: () => void }) {
+  const router = useRouter();
+  const r = draft.recipients!;
+  const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+  const sendOf = (email: string): Send => (r.to.some((t) => same(t, email)) ? "to" : r.cc.some((c) => same(c, email)) ? "cc" : "off");
+  // Saved contacts first, then any current address that isn't one of them.
+  const [rows, setRows] = useState(() => [
+    ...r.contacts.map((c) => ({ email: c.email, label: c.name, detail: [c.role, c.from === "Job" ? "Job contact" : null].filter(Boolean).join(" · "), send: sendOf(c.email) })),
+    ...[...r.to, ...r.cc]
+      .filter((e, i, all) => !r.contacts.some((c) => same(c.email, e)) && all.findIndex((x) => same(x, e)) === i)
+      .map((e) => ({ email: e, label: e, detail: "Other", send: sendOf(e) })),
+  ]);
+  const [other, setOther] = useState("");
+  const [forFuture, setForFuture] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const setSend = (i: number, send: Send) => setRows((rs) => rs.map((x, j) => (j === i ? { ...x, send } : x)));
+
+  function addOther() {
+    const e = other.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return setError(`"${e}" isn't an email address.`);
+    setError("");
+    setOther("");
+    const at = rows.findIndex((x) => same(x.email, e));
+    if (at >= 0) return setSend(at, "to");
+    setRows((rs) => [...rs, { email: e, label: e, detail: "Other", send: "to" }]);
+  }
+
+  async function send(body: Record<string, unknown>) {
+    setSaving(true);
+    setError("");
+    const { ok, data } = await call("/api/erp/draft-recipients", "PUT", { kind: draft.kind, rowId: draft.rowId, ...body });
+    setSaving(false);
+    if (!ok) return setError(String(data.error ?? "Could not save."));
+    onClose();
+    router.refresh();
+  }
+
+  const to = rows.filter((x) => x.send === "to").map((x) => x.email);
+  const cc = rows.filter((x) => x.send === "cc").map((x) => x.email);
+
+  return (
+    <Modal open onClose={onClose} dismissible={!saving} size="lg">
+      <h3 className="flex items-center gap-1 text-base font-semibold text-gray-900">
+        Who gets {draft.building}
+        <InfoTip text={`Now: ${r.from ?? "nothing set"}. Saving changes this invoice; tick the box below to keep it for later invoices too.`} />
+      </h3>
+      <div className="mt-4 space-y-3">
+        {rows.length > 0 ? (
+          <ul className="divide-y divide-gray-100 rounded-md border border-gray-200">
+            {rows.map((x, i) => (
+              <li key={x.email} className="flex items-center gap-3 px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-gray-900">{x.label}</p>
+                  <p className="truncate text-xs text-gray-500">{[x.label !== x.email ? x.email : null, x.detail].filter(Boolean).join(" · ")}</p>
+                </div>
+                <div className="flex shrink-0 overflow-hidden rounded-md border border-gray-300 text-xs">
+                  {(["to", "cc", "off"] as const).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setSend(i, v)}
+                      className={`px-2.5 py-1 ${x.send === v ? "bg-pink-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                    >
+                      {v === "to" ? "To" : v === "cc" ? "Cc" : "Off"}
+                    </button>
+                  ))}
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-gray-500">No saved contacts with an email. Add an address below.</p>
+        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {r.contacts.length > 1 && (
+            <Button size="xs" variant="secondary" onClick={() => setRows((rs) => rs.map((x) => (x.detail === "Other" ? x : { ...x, send: "to" })))}>
+              All contacts to To
+            </Button>
+          )}
+          <input
+            value={other}
+            onChange={(e) => setOther(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && other.trim()) {
+                e.preventDefault();
+                addOther();
+              }
+            }}
+            placeholder="Other email"
+            inputMode="email"
+            aria-label="Other email"
+            className={`${inputClass.sm.replace("w-full", "w-56")} py-1.5`}
+          />
+          <Button size="xs" variant="secondary" onClick={addOther} disabled={!other.trim()}>
+            Add
+          </Button>
+        </div>
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" checked={forFuture} onChange={(e) => setForFuture(e.target.checked)} />
+          Also use for future invoices to this {r.groupLabel}
+        </label>
+        {error && <p className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
+      </div>
+      <div className="mt-5 flex items-center justify-end gap-2">
+        {r.set && (
+          <Button variant="ghost" size="sm" className="mr-auto" onClick={() => void send({ reset: true })} disabled={saving}>
+            Use billing settings
+          </Button>
+        )}
+        <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>
+          Cancel
+        </Button>
+        <Button size="sm" onClick={() => (to.length ? void send({ to, cc, forFuture }) : setError("Pick at least one person for To."))} disabled={saving}>
+          {saving ? "Saving…" : "Save"}
+        </Button>
+      </div>
+    </Modal>
+  );
+}
 
 /** Finished, unbilled work with no invoice yet. Tick items and draft: one invoice per building or job. */
 function ReadyToBill({ groups, pick }: { groups: BillableGroupRow[]; /** Item key to tick on arrival, from Project Billing */ pick: string | null }) {

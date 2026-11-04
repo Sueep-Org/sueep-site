@@ -28,7 +28,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { todayEasternKey, utcDateKey } from "./dates";
 import { addDaysKey } from "./manualHoursRepeat";
-import { loadBuildingInvoiceDestination, loadProjectInvoiceDestination, type InvoiceDestination } from "./invoiceDestination";
+import { draftRecipients, loadBuildingInvoiceDestination, loadProjectInvoiceDestination, withDraftRecipients, type InvoiceDestination } from "./invoiceDestination";
 import { billingDateKey, draftLines, monthLabel } from "./janitorialInvoiceDrafts";
 import { markItemsBilled } from "./itemInvoiceDrafts";
 import { loadQboConnection, qboEnvironment, qboGet, qboPost, type QboEnvironment } from "./qboClient";
@@ -155,8 +155,10 @@ const draftInclude = {
 } as const;
 type LoadedQboDraft = Prisma.QboInvoiceDraftGetPayload<{ include: typeof draftInclude }>;
 
-function destinationOf(d: { groupType: string; groupId: string }): Promise<InvoiceDestination | null> {
-  return d.groupType === "PROJECT" ? loadProjectInvoiceDestination(d.groupId) : loadBuildingInvoiceDestination(d.groupId);
+/** Where the draft goes: the billing settings, with any recipients set on the draft. */
+async function destinationOf(d: { groupType: string; groupId: string; recipientsSetAt: Date | null; sendTo: string[]; cc: string[] }): Promise<InvoiceDestination | null> {
+  const dest = d.groupType === "PROJECT" ? await loadProjectInvoiceDestination(d.groupId) : await loadBuildingInvoiceDestination(d.groupId);
+  return withDraftRecipients(dest, draftRecipients(d));
 }
 
 /**
@@ -237,6 +239,39 @@ export async function editQboMonthDraft(
     prisma.recurringContractCharge.deleteMany({ where: { periodId } }),
     prisma.recurringContractCharge.createMany({ data: input.charges.map((c) => ({ ...c, periodId })) }),
   ]);
+  return { ok: true };
+}
+
+/**
+ * Edits a picked-work draft's lines: rename, reprice, remove or add. Each line
+ * stays tied to a unit or job already on the draft (its billed amount is the
+ * sum of its lines), and each keeps at least one line. Only the invoice
+ * changes, never the job's own price.
+ */
+export async function editQboItemsDraft(id: string, input: { itemKey: string; name: string; amountCents: number }[]): Promise<{ ok: true } | { error: string }> {
+  const d = await loadDraft(id);
+  if (!d) return { error: "This draft isn't waiting anymore." };
+  if (d.kind !== "ITEMS") return { error: "Janitorial months are edited with Edit amounts." };
+  const template = new Map<string, QboDraftLine>();
+  for (const l of d.lines as QboDraftLine[]) if (l.itemKey && !template.has(l.itemKey)) template.set(l.itemKey, l);
+
+  const lines: QboDraftLine[] = [];
+  const perItem = new Map<string, number>();
+  for (const l of input) {
+    const t = template.get(l.itemKey);
+    if (!t) return { error: "Each line has to be for a unit or job on this invoice." };
+    lines.push({ ...t, name: l.name, amountCents: l.amountCents });
+    perItem.set(l.itemKey, (perItem.get(l.itemKey) ?? 0) + l.amountCents);
+  }
+  for (const [key, t] of template) {
+    const sum = perItem.get(key);
+    if (sum == null) return { error: `${t.description} has no lines left. To leave it off, discard the draft and draft again.` };
+    if (sum < 0) return { error: `${t.description} can't total less than $0.` };
+  }
+  // Keep each unit's lines together, in the draft's order.
+  const order = [...template.keys()];
+  lines.sort((a, b) => order.indexOf(a.itemKey!) - order.indexOf(b.itemKey!));
+  await prisma.qboInvoiceDraft.update({ where: { id: d.id }, data: { lines: lines as unknown as Prisma.InputJsonValue, totalCents: total(lines) } });
   return { ok: true };
 }
 
@@ -452,6 +487,7 @@ export async function approveQboDraft(id: string, email: string): Promise<{ ok: 
   const check = totalSeen === totalCents ? "" : ` QuickBooks shows ${(totalSeen / 100).toFixed(2)}, not ${(totalCents / 100).toFixed(2)}. Check it there.`;
 
   const forDelivery: InvoiceForDelivery = {
+    recipients: draftRecipients(d),
     hubspotInvoiceId: null,
     qboInvoiceId: created.Id,
     number: savedNumber,
@@ -493,9 +529,15 @@ export async function approveQboDraft(id: string, email: string): Promise<{ ok: 
       prisma.recurringContractPeriod.updateMany({ where: { id: d.periodId, billingStatus: "NOT_BILLED" }, data: { billingStatus: "BILLED", draftError: null, draftErrorAt: null } }),
     );
   }
+  // A turn can have several lines (one per service): one link per item, for its whole amount.
+  const byItem = new Map<string, { projectId: string | null; amountCents: number }>();
   for (const l of lines) {
     if (!l.itemKey) continue;
-    const [kind, itemId] = l.itemKey.split(":") as [string, string];
+    const seen = byItem.get(l.itemKey);
+    byItem.set(l.itemKey, { projectId: l.projectId, amountCents: (seen?.amountCents ?? 0) + l.amountCents });
+  }
+  for (const [itemKey, l] of byItem) {
+    const [kind, itemId] = itemKey.split(":") as [string, string];
     if (kind === "TURN") {
       const tr = await prisma.turnoverRequest.findUniqueOrThrow({ where: { id: itemId }, select: { buildingId: true, unitNumber: true } });
       writes.push(prisma.hubSpotUnitInvoice.create({ data: { ...link, manual: true, buildingId: tr.buildingId!, unitNumber: tr.unitNumber!, turnoverRequestId: itemId, amountCents: l.amountCents } }));

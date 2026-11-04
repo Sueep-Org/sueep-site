@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { notifyReadyToBill } from "@/lib/erp/notifyReadyToBill";
-import { syncSovPercentDone, syncProjectBillingFromSOV, sovItemDateChanges, parseSovItemDate } from "@/lib/sovSync";
+import { syncSovPercentDone, syncProjectBillingFromSOV, sovItemDateChanges, parseSovItemDate, sovItemLastWorkDay } from "@/lib/sovSync";
 
 type Ctx = { params: Promise<{ id: string; itemId: string }> };
 
@@ -36,6 +36,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if (!VALID_BILLING.includes(val)) return NextResponse.json({ error: "Invalid billingStatus" }, { status: 400 });
     data.billingStatus = val;
   }
+  // Ticked done with no date typed: date it the last day the work was done,
+  // not the day someone ticked the box.
+  let typedCompletedAt = parseSovItemDate(body.completedAt);
+  if (!typedCompletedAt && data.completed === true && !existing.completed) {
+    typedCompletedAt = await sovItemLastWorkDay(itemId);
+  }
   Object.assign(
     data,
     sovItemDateChanges(
@@ -44,7 +50,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
         completed: (data.completed as boolean | undefined) ?? existing.completed,
         billingStatus: (data.billingStatus as string | undefined) ?? existing.billingStatus,
       },
-      { completedAt: parseSovItemDate(body.completedAt), paidAt: parseSovItemDate(body.paidAt) },
+      { completedAt: typedCompletedAt, paidAt: parseSovItemDate(body.paidAt) },
     ),
   );
 

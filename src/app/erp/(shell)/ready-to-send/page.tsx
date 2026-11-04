@@ -5,16 +5,17 @@ import { getErpAuth, canApproveInvoices } from "@/lib/erpAuth";
 import { InfoTip } from "@/app/erp/components/ui";
 import { todayEasternKey } from "@/lib/erp/dates";
 import { addDaysKey } from "@/lib/erp/manualHoursRepeat";
-import { BILLING_METHOD_LABELS } from "@/lib/erp/clientCompanies";
-import { loadBuildingInvoiceDestination, loadProjectInvoiceDestination, type InvoiceDestination } from "@/lib/erp/invoiceDestination";
+import { BILLING_METHOD_LABELS, PORTAL_METHODS } from "@/lib/erp/clientCompanies";
+import { recipientContacts, type RecipientContact } from "@/lib/erp/invoiceRecipients";
+import { draftRecipients, loadBuildingInvoiceDestination, loadProjectInvoiceDestination, periodRecipients, withDraftRecipients, type InvoiceDestination } from "@/lib/erp/invoiceDestination";
 import { loadBillableGroups, loadWaitingItemDrafts } from "@/lib/erp/itemInvoiceDrafts";
 import { describePlan, invoiceLinesFor, planDelivery } from "@/lib/erp/invoiceDelivery";
 import { CLAIM_TEXT, DRAFT_LEAD_DAYS, billingDateKey, draftLines, linesTotal, monthLabel } from "@/lib/erp/janitorialInvoiceDrafts";
-import { ReadyToSend, type BillableGroupRow, type ContractSetting, type DeliveryRow, type DraftRow, type MonthRow, type QboTestRow } from "./ReadyToSend";
+import { ReadyToSend, type BillableGroupRow, type ContractSetting, type DeliveryRow, type DraftRecipientsRow, type DraftRow, type MonthRow, type QboTestRow } from "./ReadyToSend";
 import { withHubSpotId } from "@/lib/erp/invoiceLinkSource";
 import { qboEnvironment } from "@/lib/erp/qboClient";
 import { BillingFlowBar } from "@/app/erp/components/BillingFlowBar";
-import { draftContent, draftsGoToQuickBooks, suggestedNextInvoiceNumber, loadRecentQboTests, loadWaitingQboDrafts, qboInvoiceUrl } from "@/lib/erp/qboInvoiceDrafts";
+import { draftContent, draftsGoToQuickBooks, type QboDraftLine, suggestedNextInvoiceNumber, loadRecentQboTests, loadWaitingQboDrafts, qboInvoiceUrl } from "@/lib/erp/qboInvoiceDrafts";
 
 export const metadata: Metadata = { title: "Ready to send" };
 export const dynamic = "force-dynamic";
@@ -27,6 +28,30 @@ function destinationSummary(d: InvoiceDestination | null): { client: string | nu
     client: d.company?.name ?? null,
     method: d.method.value ? BILLING_METHOD_LABELS[d.method.value] : null,
     sendTo: d.sendTo.value.join(", ") || null,
+  };
+}
+
+/** Where Send to comes from, e.g. "UDR billing settings". */
+function recipientsFrom(d: InvoiceDestination): string | null {
+  const s = d.sendTo;
+  if (s.source === "draft") return "Set on this invoice";
+  if (s.source === "project") return "Job billing settings";
+  if (s.source === "building") return "Building billing settings";
+  if (s.source === "company") return `${s.sourceName} billing settings`;
+  return null;
+}
+
+/** Recipients for a draft row; null when it isn't emailed (a portal or Other). */
+function recipientsRow(d: InvoiceDestination | null, groupType: string, contacts: RecipientContact[]): DraftRecipientsRow | null {
+  const method = d?.method.value ?? null;
+  if (method && (method === "OTHER" || PORTAL_METHODS.includes(method))) return null;
+  return {
+    to: d?.sendTo.value ?? [],
+    cc: d?.cc.value ?? [],
+    from: d ? recipientsFrom(d) : null,
+    set: d?.sendTo.source === "draft",
+    contacts,
+    groupLabel: groupType === "PROJECT" ? "job" : "building",
   };
 }
 
@@ -52,6 +77,9 @@ export default async function ReadyToSendPage() {
     draftError: true,
     draftDiscardedAt: true,
     draftDiscardedByEmail: true,
+    draftSendTo: true,
+    draftCc: true,
+    draftRecipientsSetAt: true,
     charges: { select: { description: true, amountCents: true }, orderBy: { createdAt: "asc" as const } },
     recurringContract: { select: { id: true, billingDayOfMonth: true, invoiceLabel: true, buildingId: true, building: { select: { name: true } } } },
   };
@@ -99,6 +127,12 @@ export default async function ReadyToSendPage() {
   for (const g of billable) await destinationFor(g.type, g.id);
   for (const { draft } of itemDrafts) await destinationFor(draft.groupType, draft.groupId);
   for (const d of qboDrafts) await destinationFor(d.groupType, d.groupId);
+  // The client company's and job's contacts, for Edit recipients.
+  const contacts = new Map<string, RecipientContact[]>();
+  for (const [key, dest] of destinations) {
+    const [type, id] = key.split(":");
+    contacts.set(key, await recipientContacts(dest?.company?.id ?? null, type === "PROJECT" ? id! : null));
+  }
 
   const label = (p: (typeof drafts)[number]["period"]) => p.recurringContract.invoiceLabel?.trim() || p.recurringContract.building.name;
   const monthRow = (p: (typeof drafts)[number]["period"]): MonthRow => ({
@@ -111,6 +145,7 @@ export default async function ReadyToSendPage() {
 
   const draftRows: DraftRow[] = drafts.map((d) => {
     const lines = draftLines(label(d.period), d.period);
+    const dest = withDraftRecipients(destinations.get(`BUILDING:${d.period.recurringContract.buildingId}`) ?? null, periodRecipients(d.period));
     return {
       kind: "month",
       rowId: d.period.id,
@@ -123,9 +158,10 @@ export default async function ReadyToSendPage() {
       charges: d.period.charges,
       totalCents: linesTotal(lines),
       draftTotalCents: d.amountCents,
-      ...destinationSummary(destinations.get(`BUILDING:${d.period.recurringContract.buildingId}`) ?? null),
-      deliveryPlan: describePlan(planDelivery(destinations.get(`BUILDING:${d.period.recurringContract.buildingId}`) ?? null)),
-      paymentTermsDays: destinations.get(`BUILDING:${d.period.recurringContract.buildingId}`)?.paymentTermsDays ?? null,
+      ...destinationSummary(dest),
+      deliveryPlan: describePlan(planDelivery(dest)),
+      recipients: recipientsRow(dest, "BUILDING", contacts.get(`BUILDING:${d.period.recurringContract.buildingId}`) ?? []),
+      paymentTermsDays: dest?.paymentTermsDays ?? null,
       href: `/erp/janitorial/contracts/${d.period.recurringContract.id}`,
       blocked: null,
       canEdit: true,
@@ -133,6 +169,7 @@ export default async function ReadyToSendPage() {
   });
   for (const { draft, lines, dueDate } of itemDrafts) {
     const total = lines.reduce((s, l) => s + l.amountCents, 0);
+    const dest = withDraftRecipients(destinations.get(`${draft.groupType}:${draft.groupId}`) ?? null, draftRecipients(draft));
     draftRows.push({
       kind: "items",
       rowId: draft.id,
@@ -146,7 +183,7 @@ export default async function ReadyToSendPage() {
       // so show today, and the due date it would get if approved today.
       invoiceDateKey: todayKey,
       dueDate: (() => {
-        const terms = destinations.get(`${draft.groupType}:${draft.groupId}`)?.paymentTermsDays;
+        const terms = dest?.paymentTermsDays;
         if (terms != null) return addDaysKey(todayKey, terms);
         const set = dueDate?.toISOString().slice(0, 10) ?? null;
         return set && set > todayKey ? set : todayKey;
@@ -156,9 +193,10 @@ export default async function ReadyToSendPage() {
       charges: [],
       totalCents: total,
       draftTotalCents: total,
-      ...destinationSummary(destinations.get(`${draft.groupType}:${draft.groupId}`) ?? null),
-      deliveryPlan: describePlan(planDelivery(destinations.get(`${draft.groupType}:${draft.groupId}`) ?? null)),
-      paymentTermsDays: destinations.get(`${draft.groupType}:${draft.groupId}`)?.paymentTermsDays ?? null,
+      ...destinationSummary(dest),
+      deliveryPlan: describePlan(planDelivery(dest)),
+      recipients: recipientsRow(dest, draft.groupType, contacts.get(`${draft.groupType}:${draft.groupId}`) ?? []),
+      paymentTermsDays: dest?.paymentTermsDays ?? null,
       href: groupHref(draft.groupType, draft.groupId),
       blocked: null,
       canEdit: false,
@@ -167,7 +205,7 @@ export default async function ReadyToSendPage() {
 
   // Drafts for QuickBooks (qboInvoiceDrafts.ts). On local dev these are sandbox tests.
   for (const d of qboDrafts) {
-    const dest = destinations.get(`${d.groupType}:${d.groupId}`) ?? null;
+    const dest = withDraftRecipients(destinations.get(`${d.groupType}:${d.groupId}`) ?? null, draftRecipients(d));
     const c = draftContent(d, dest?.paymentTermsDays ?? null);
     const noCompany = dest?.company ? null : `No client company on this ${d.groupType === "PROJECT" ? "job" : "building"}. Set one before approving.`;
     draftRows.push({
@@ -191,12 +229,15 @@ export default async function ReadyToSendPage() {
         qboEnv === "production"
           ? `Creates the invoice in QuickBooks and marks the work Billed. ${describePlan(planDelivery(dest))}`
           : `Test: creates the invoice in the QuickBooks sandbox company and emails only you a copy. Nothing in the ERP is marked billed. Live: ${describePlan(planDelivery(dest))}`,
+      recipients: recipientsRow(dest, d.groupType, contacts.get(`${d.groupType}:${d.groupId}`) ?? []),
       paymentTermsDays: dest?.paymentTermsDays ?? null,
       testOnly: qboEnv !== "production",
       href: d.kind === "MONTH" && d.period ? `/erp/janitorial/contracts/${d.period.recurringContract.id}` : groupHref(d.groupType, d.groupId),
       blocked: noCompany,
       // A sandbox month is a real month in the shared database, so only live drafts edit it.
       canEdit: d.kind === "MONTH" && qboEnv === "production",
+      editLines: d.kind === "ITEMS" ? (c.lines as QboDraftLine[]).filter((l) => l.itemKey).map((l) => ({ itemKey: l.itemKey!, name: l.name, amountCents: l.amountCents })) : undefined,
+      lineTargets: d.kind === "ITEMS" ? [...new Map((c.lines as QboDraftLine[]).filter((l) => l.itemKey).map((l) => [l.itemKey!, l.description])).entries()].map(([key, label]) => ({ key, label })) : undefined,
     });
   }
   const qboTestRows: QboTestRow[] = qboTests.map((t) => ({

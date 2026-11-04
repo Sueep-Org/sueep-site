@@ -17,7 +17,8 @@ import {
   type BillingOverride,
 } from "./clientCompanies";
 
-export type DestinationSource = "project" | "building" | "company";
+/** "draft": recipients set on the waiting draft on Ready to send */
+export type DestinationSource = "project" | "building" | "company" | "draft";
 
 export type Sourced<T> = { value: T; source: DestinationSource | null; sourceName: string | null };
 
@@ -58,6 +59,25 @@ function pick<T>(levels: Level[], get: (l: Level) => T, isSet: (v: T) => boolean
     if (isSet(v)) return { value: v, source: l.source, sourceName: l.name };
   }
   return { value: empty, source: null, sourceName: null };
+}
+
+export type DraftRecipients = { to: string[]; cc: string[] };
+
+/** A draft's own recipients, when someone set them on Ready to send. */
+export function draftRecipients(d: { recipientsSetAt: Date | null; sendTo: string[]; cc: string[] }): DraftRecipients | null {
+  return d.recipientsSetAt ? { to: d.sendTo, cc: d.cc } : null;
+}
+
+/** The same for a janitorial month's HubSpot draft, kept on the month. */
+export function periodRecipients(p: { draftRecipientsSetAt: Date | null; draftSendTo: string[]; draftCc: string[] }): DraftRecipients | null {
+  return p.draftRecipientsSetAt ? { to: p.draftSendTo, cc: p.draftCc } : null;
+}
+
+/** Recipients set on the draft win over the job, building and company settings. */
+export function withDraftRecipients(d: InvoiceDestination | null, r: DraftRecipients | null | undefined): InvoiceDestination | null {
+  if (!d || !r) return d;
+  const set = <T>(value: T): Sourced<T> => ({ value, source: "draft", sourceName: "This invoice" });
+  return { ...d, sendTo: set(r.to), cc: set(r.cc) };
 }
 
 /** Pure part, so it can be checked without a database. */

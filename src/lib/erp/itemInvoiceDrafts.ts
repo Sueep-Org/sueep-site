@@ -14,11 +14,12 @@
  * lives in the ERP instead and needs no HubSpot deal.
  */
 import { prisma } from "@/lib/prisma";
+import { computeTurnoverPricing } from "@/lib/turnoverPricing";
 import { normalizeBillingStatus } from "./billingStatus";
 import { BILLING_DATA_START } from "./dashboardMoney";
 import { todayEasternKey, utcDateKey } from "./dates";
 import { addDaysKey } from "./manualHoursRepeat";
-import { loadBuildingInvoiceDestination, loadProjectInvoiceDestination } from "./invoiceDestination";
+import { draftRecipients, loadBuildingInvoiceDestination, loadProjectInvoiceDestination } from "./invoiceDestination";
 import { deliverApprovedInvoice, invoiceLinesFor } from "./invoiceDelivery";
 import { syncProjectBillingFromRequest, syncProjectBillingFromSOV, syncSovPercentDone } from "@/lib/sovSync";
 import { createItemsDraft, draftsGoToQuickBooks, itemKeysOnQboDrafts, type QboDraftLine } from "./qboInvoiceDrafts";
@@ -46,6 +47,8 @@ export type BillableItem = {
   lineName: string;
   lineDescription: string;
   cents: number;
+  /** A turn's priced services, one QuickBooks line each (empty when it has none) */
+  parts: { name: string; cents: number }[];
   doneKey: string;
   projectId: string;
   href: string;
@@ -68,6 +71,68 @@ function unitLabel(unitNumber: string): string {
   return /^[a-z]?\d+[a-z]?$/i.test(unitNumber.trim()) ? `Unit ${unitNumber.trim()}` : unitNumber.trim();
 }
 const NOT_VOIDED = { status: { not: "voided" } };
+
+/** A turn's services at today's building prices, plus its Other work, one invoice line each. */
+function turnParts(tr: {
+  requestType: string;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  fullPaint: boolean;
+  touchUpPaint: number | null;
+  fullClean: boolean;
+  carpetCleaning: boolean;
+  materialsAdditional: boolean;
+  ceilingPaint: boolean;
+  compounding: number | null;
+  isPartialTurn: boolean;
+  partialTurnLayout: string | null;
+  selectedCustomLineItemIds: unknown;
+  nextDayUpcharge: boolean;
+  otherWork: boolean;
+  otherDescription: string | null;
+  otherCents: number | null;
+  building: { name: string; pricingPackage: unknown } | null;
+}): { name: string; cents: number }[] {
+  const pricing = computeTurnoverPricing({
+    requestType: tr.requestType === "REGULAR" ? "REGULAR" : "TURNOVER",
+    buildingName: tr.building?.name,
+    pricingPackage: tr.building?.pricingPackage,
+    bedrooms: tr.bedrooms,
+    bathrooms: tr.bathrooms,
+    isCommonArea: tr.bedrooms === null && tr.bathrooms === null,
+    fullPaint: tr.fullPaint,
+    touchUpPaint: tr.touchUpPaint ?? 0,
+    fullClean: tr.fullClean,
+    carpetCleaning: tr.carpetCleaning,
+    materialsAdditional: tr.materialsAdditional,
+    ceilingPaint: tr.ceilingPaint,
+    compounding: tr.compounding ?? 0,
+    isPartialTurn: tr.isPartialTurn,
+    partialTurnLayout: tr.partialTurnLayout,
+    selectedCustomLineItemIds: Array.isArray(tr.selectedCustomLineItemIds) ? tr.selectedCustomLineItemIds.filter((v): v is string => typeof v === "string") : [],
+    nextDayUpcharge: tr.nextDayUpcharge,
+  });
+  const parts = pricing.lines.filter((l) => l.cents > 0);
+  if (tr.otherWork && tr.otherCents) parts.push({ name: tr.otherDescription?.trim() || "Other work", cents: tr.otherCents });
+  return parts;
+}
+
+/**
+ * An item's invoice lines. A turn gets one per service, priced so they add up
+ * to the amount billed: when that differs from the services at list price (a
+ * hand-edited price, or building prices changed since), each service gets its
+ * share and the last takes the rounding. Anything else is one line.
+ */
+function itemLines(item: BillableItem, amountCents: number): { name: string; amountCents: number }[] {
+  const listed = item.parts.reduce((sum, p) => sum + p.cents, 0);
+  if (!listed) return [{ name: item.lineName, amountCents }];
+  let left = amountCents;
+  return item.parts.map((p, i) => {
+    const cents = i === item.parts.length - 1 ? left : Math.round((p.cents * amountCents) / listed);
+    left -= cents;
+    return { name: p.name, amountCents: cents };
+  });
+}
 
 /** Where an item's invoice belongs: its job's own deal, else its building's. */
 function groupFor(p: {
@@ -108,7 +173,33 @@ export async function loadBillableGroups(only?: Set<string>): Promise<BillableGr
         contractValueCents: true,
         turnoverCompletedAt: true,
         projectEndDate: true,
-        turnoverRequest: { select: { id: true, unitNumber: true, billingStatus: true, approvedPriceCents: true, priceCents: true, building: { select: { id: true, name: true, hubspotDealId: true } } } },
+        turnoverRequest: {
+          select: {
+            id: true,
+            unitNumber: true,
+            billingStatus: true,
+            approvedPriceCents: true,
+            priceCents: true,
+            requestType: true,
+            bedrooms: true,
+            bathrooms: true,
+            fullPaint: true,
+            touchUpPaint: true,
+            fullClean: true,
+            carpetCleaning: true,
+            materialsAdditional: true,
+            ceilingPaint: true,
+            compounding: true,
+            isPartialTurn: true,
+            partialTurnLayout: true,
+            selectedCustomLineItemIds: true,
+            nextDayUpcharge: true,
+            otherWork: true,
+            otherDescription: true,
+            otherCents: true,
+            building: { select: { id: true, name: true, hubspotDealId: true, pricingPackage: true } },
+          },
+        },
       },
     }),
     prisma.projectSOVItem.findMany({
@@ -152,6 +243,7 @@ export async function loadBillableGroups(only?: Set<string>): Promise<BillableGr
       lineDescription: `${g.name} - ${unitLabel(tr.unitNumber!)}`,
       // Same amount the Billing page shows for a turn.
       cents: tr.approvedPriceCents ?? tr.priceCents ?? t.contractValueCents ?? 0,
+      parts: turnParts(tr),
       doneKey: t.turnoverCompletedAt ? todayEasternKey(t.turnoverCompletedAt) : utcDateKey(t.projectEndDate!),
       projectId: t.id,
       href: `/erp/projects/${t.id}`,
@@ -166,6 +258,7 @@ export async function loadBillableGroups(only?: Set<string>): Promise<BillableGr
       lineName: i.description,
       lineDescription: p.jobTitle,
       cents: i.scheduledValueCents,
+      parts: [],
       doneKey: utcDateKey(i.completedAt ?? i.updatedAt),
       projectId: p.id,
       href: `/erp/projects/${p.id}`,
@@ -180,6 +273,7 @@ export async function loadBillableGroups(only?: Set<string>): Promise<BillableGr
       lineName: co.title,
       lineDescription: `${co.project.jobTitle} - Change order`,
       cents: co.contractValueCents ?? 0,
+      parts: [],
       doneKey: utcDateKey(co.completedAt ?? co.updatedAt),
       projectId: co.project.id,
       href: `/erp/projects/${co.project.id}/change-orders/${co.id}`,
@@ -211,14 +305,16 @@ export async function draftItems(picks: { key: string; amountCents: number }[], 
         results.push({ group: g.name, ok: false, note: `No client company on this ${g.type === "BUILDING" ? "building" : "job"}.` });
         continue;
       }
-      const lines: QboDraftLine[] = g.items.map((i) => ({
-        itemKey: i.key,
-        projectId: i.projectId,
-        lineKind: i.kind,
-        name: i.lineName,
-        description: i.lineDescription,
-        amountCents: amountByKey.get(i.key) ?? i.cents,
-      }));
+      const lines: QboDraftLine[] = g.items.flatMap((i) =>
+        itemLines(i, amountByKey.get(i.key) ?? i.cents).map((l) => ({
+          itemKey: i.key,
+          projectId: i.projectId,
+          lineKind: i.kind,
+          name: l.name,
+          description: i.lineDescription,
+          amountCents: l.amountCents,
+        })),
+      );
       await createItemsDraft(g, lines, email);
       results.push({ group: g.name, ok: true });
       continue;
@@ -319,6 +415,7 @@ export async function approveItemDraft(draftId: string, email: string): Promise<
   const { lines } = await invoiceLinesFor(draft.hubspotInvoiceId);
   const delivery = await deliverApprovedInvoice(
     {
+      recipients: draftRecipients(draft),
       hubspotInvoiceId: draft.hubspotInvoiceId,
       number: snap.number,
       title: draft.title,

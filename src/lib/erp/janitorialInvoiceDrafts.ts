@@ -18,7 +18,7 @@
 import { prisma } from "@/lib/prisma";
 import { todayEasternKey, utcDateKey } from "./dates";
 import { addDaysKey } from "./manualHoursRepeat";
-import { loadBuildingInvoiceDestination } from "./invoiceDestination";
+import { loadBuildingInvoiceDestination, periodRecipients } from "./invoiceDestination";
 import { deliverApprovedInvoice } from "./invoiceDelivery";
 import {
   associateDefault,
@@ -256,6 +256,7 @@ export async function approveDraft(periodId: string, email: string): Promise<{ o
     const lines = draftLines(labelFor(p), p);
     const delivery = await deliverApprovedInvoice(
       {
+        recipients: periodRecipients(p),
         hubspotInvoiceId: found.link.hubspotInvoiceId,
         number: snap.number,
         title: `${p.recurringContract.building.name}, ${monthLabel(p.periodStart)}`,

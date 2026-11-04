@@ -47,6 +47,8 @@ export type TurnoverPricingResult = {
   priceLabel: string;
   services: string[];
   breakdown: string[];
+  /** One priced line per service, for invoices. Adds up to priceCents. */
+  lines: { name: string; cents: number }[];
 };
 
 function formatUsd(cents: number): string {
@@ -55,6 +57,9 @@ function formatUsd(cents: number): string {
   );
 }
 
+/** "2/2", or "common area" for a common area. */
+const layoutText = (layout: string) => (layout === "common-area" ? "common area" : layout);
+
 export function computeTurnoverPricing(input: TurnoverPricingInput): TurnoverPricingResult {
   const pricingPackage = getTurnoverPricingPackage(input.buildingName, input.pricingPackage);
   const layoutOverride: TurnoverUnitLayout | null =
@@ -62,6 +67,7 @@ export function computeTurnoverPricing(input: TurnoverPricingInput): TurnoverPri
   const partialTurnSuffix = layoutOverride ? " (partial turn)" : "";
   const services: string[] = [];
   const breakdown: string[] = [];
+  const lines: { name: string; cents: number }[] = [];
   let priceCents = 0;
 
   // Computed unconditionally (not just when fullClean/fullPaint are checked)
@@ -76,12 +82,14 @@ export function computeTurnoverPricing(input: TurnoverPricingInput): TurnoverPri
     services.push("Full cleaning");
     priceCents += cleaningPrice;
     breakdown.push(`Cleaning price for ${cleaningRate.layout}${partialTurnSuffix}: ${formatUsd(cleaningPrice)}`);
+    lines.push({ name: `Full cleaning (${layoutText(cleaningRate.layout)})${partialTurnSuffix}`, cents: cleaningPrice });
   }
 
   if (input.fullPaint) {
     services.push("Full painting");
     priceCents += paintingPrice;
     breakdown.push(`Painting price for ${paintingRate.layout}${partialTurnSuffix}: ${formatUsd(paintingPrice)}`);
+    lines.push({ name: `Full painting (${layoutText(paintingRate.layout)})${partialTurnSuffix}`, cents: paintingPrice });
   }
 
   if (input.touchUpPaint > 0 && !input.fullPaint) {
@@ -90,6 +98,7 @@ export function computeTurnoverPricing(input: TurnoverPricingInput): TurnoverPri
     services.push(`${input.touchUpPaint} touch-up paint item${input.touchUpPaint === 1 ? "" : "s"}`);
     priceCents += touchUpPrice;
     breakdown.push(`Touch-up paint${partialTurnSuffix} (${input.touchUpPaint}x ${formatUsd(touchUpRate.dollars * 100)}): ${formatUsd(touchUpPrice)}`);
+    lines.push({ name: `Touch-up paint${partialTurnSuffix} (${input.touchUpPaint}x ${formatUsd(touchUpRate.dollars * 100)})`, cents: touchUpPrice });
   }
 
   if (input.carpetCleaning) {
@@ -98,6 +107,7 @@ export function computeTurnoverPricing(input: TurnoverPricingInput): TurnoverPri
     services.push("Carpet cleaning");
     priceCents += carpetPrice;
     breakdown.push(`Carpet cleaning${partialTurnSuffix}: ${formatUsd(carpetPrice)}`);
+    lines.push({ name: `Carpet cleaning${partialTurnSuffix}`, cents: carpetPrice });
   }
 
   if (input.materialsAdditional) {
@@ -106,6 +116,7 @@ export function computeTurnoverPricing(input: TurnoverPricingInput): TurnoverPri
     services.push("Additional materials");
     priceCents += materialsPrice;
     breakdown.push(`Additional materials${partialTurnSuffix}: ${formatUsd(materialsPrice)}`);
+    lines.push({ name: `Additional materials${partialTurnSuffix}`, cents: materialsPrice });
   }
 
   if (input.ceilingPaint) {
@@ -114,6 +125,7 @@ export function computeTurnoverPricing(input: TurnoverPricingInput): TurnoverPri
     services.push("Ceiling painting");
     priceCents += ceilingPaintPrice;
     breakdown.push(`Ceiling painting${partialTurnSuffix}: ${formatUsd(ceilingPaintPrice)}`);
+    lines.push({ name: `Ceiling painting${partialTurnSuffix}`, cents: ceilingPaintPrice });
   }
 
   // Independent of fullPaint/touchUpPaint — drywall repair, not painting.
@@ -123,6 +135,7 @@ export function computeTurnoverPricing(input: TurnoverPricingInput): TurnoverPri
     services.push(`${input.compounding} compounding item${input.compounding === 1 ? "" : "s"}`);
     priceCents += compoundingPrice;
     breakdown.push(`Compounding${partialTurnSuffix} (${input.compounding}x ${formatUsd(compoundingRate.dollars * 100)}): ${formatUsd(compoundingPrice)}`);
+    lines.push({ name: `Compounding${partialTurnSuffix} (${input.compounding}x ${formatUsd(compoundingRate.dollars * 100)})`, cents: compoundingPrice });
   }
 
   // Building-specific extras (den surcharge, occupied-unit fee, etc.) — see
@@ -140,12 +153,14 @@ export function computeTurnoverPricing(input: TurnoverPricingInput): TurnoverPri
     services.push(item.label);
     priceCents += itemPrice;
     breakdown.push(`${item.label}: ${formatUsd(itemPrice)}`);
+    lines.push({ name: item.label, cents: itemPrice });
   }
 
   if (input.nextDayUpcharge && priceCents > 0) {
     const upcharge = nextDayUpchargeCents(priceCents);
     priceCents += upcharge;
     breakdown.push(`${NEXT_DAY_UPCHARGE_LABEL}: ${formatUsd(upcharge)}`);
+    lines.push({ name: NEXT_DAY_UPCHARGE_LABEL, cents: upcharge });
   }
 
   if (services.length === 0) {
@@ -158,5 +173,6 @@ export function computeTurnoverPricing(input: TurnoverPricingInput): TurnoverPri
     priceLabel: formatUsd(priceCents),
     services,
     breakdown,
+    lines,
   };
 }
