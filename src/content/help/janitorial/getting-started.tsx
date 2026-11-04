@@ -1,97 +1,59 @@
-import { Callout, H2, H3, P, UL, LI, Steps, Step, A, Table, THead, TH, TD } from "@/app/erp/components/help/HelpComponents";
+import { Callout, H2, H3, P, Steps, Step, A, Table, THead, TH, TD } from "@/app/erp/components/help/HelpComponents";
 
 export function JanitorialGettingStarted() {
   return (
     <>
-      <H2>Overview</H2>
+      <H2>What this is</H2>
       <P>
-        Janitorial Contracts covers buildings we clean every week for a flat monthly price. This guide walks through the
-        whole cycle in the order you&apos;ll use it: set up the contract, schedule janitors, get them clocking in, watch the
-        day, review hours, run payroll, and bill the month. For every button and screen in detail, see{" "}
-        <A href="/erp/help/janitorial/janitorial-contracts">Janitorial Contracts</A>.
+        <strong>Janitorial Contracts</strong> covers buildings we clean every week for a flat monthly price. This guide is the
+        whole cycle in the order you use it, one short step each. Every step links to the article with the details.
       </P>
       <Callout type="info">
         The calendar is the source of truth for janitor pay. Hours come from the janitor&apos;s clock-in; if they don&apos;t
-        clock in, the scheduled hours are paid. Nothing else (like a number on their profile) sets their hours.
+        clock in, the scheduled hours are paid. Nothing else, like a number on their profile, sets their hours.
       </Callout>
 
-      <H2>The workflow</H2>
+      <H2>The cycle</H2>
       <Steps>
         <Step n={1} title="Set up the contract (once per building)">
-          Go to <strong>Janitorial Contracts</strong> in the left nav and click <strong>+ New contract</strong>.
-          <UL>
-            <LI>Pick the building, or choose <strong>New building</strong> to add it here.</LI>
-            <LI>Set the start date, the billing day (the day each month is added), service areas, and the salesperson.</LI>
-            <LI>
-              Enter the monthly price, or tick <strong>Calculate the price from roles, hours, and rates</strong> to build it
-              from staffing: people, hours a week, bill rate, and pay rate per role. The calculator shows payroll, tax, profit,
-              and margin as you type. Override any line or the total to quote a round number.
-            </LI>
-          </UL>
-          You can build or change the pricing later on the contract&apos;s <strong>Pricing</strong> tab. That&apos;s the
-          only place the monthly price is set.
+          <strong>Janitorial Contracts → + New contract</strong>: building, monthly price (typed or calculated from roles and
+          rates), billing day, start date, service areas and salesperson. See{" "}
+          <A href="/erp/help/janitorial/janitorial-contracts">Janitorial Contracts: Setup, Pricing and Billing</A>.
         </Step>
-
         <Step n={2} title="Put janitors on the schedule">
-          Open <strong>Schedule → Janitorial Contracts</strong> (or <strong>Open in calendar</strong> from the
-          contract&apos;s Schedule tab). Click the <strong>+</strong> on a day.
-          <UL>
-            <LI>Pick the building and add one or more janitors.</LI>
-            <LI>Set the start and end time. Keep <strong>Repeat every week</strong> on and choose the days.</LI>
-            <LI>Save. The shifts appear every week from that day on.</LI>
-          </UL>
-          Chips are <strong>dashed</strong> until hours are logged and turn <strong>solid</strong> once the janitor clocks
-          in. Several janitors at one building on the same day collapse into one chip; click it to see each person.
+          <strong>Schedule → Janitorial Contracts</strong>, click + on a day, pick the building, janitors and hours, and keep{" "}
+          <strong>Repeat every week</strong> on. See{" "}
+          <A href="/erp/help/janitorial/scheduling-and-hours">Janitorial Scheduling, Clock-In and Hours</A>.
         </Step>
-
         <Step n={3} title="Send each janitor their clock-in link">
-          The first time you schedule someone without a link, the shift dialog shows <strong>Create &amp; copy link</strong>.
-          Text the link to the janitor and ask them to save it to their phone&apos;s home screen. You can also manage links on
-          their profile under <strong>Personal &amp; Documents → Clock-in link</strong> (copy, email, reset, or turn off).
-          <P>
-            Janitors don&apos;t need an ERP login. Their page works in English or Spanish and shows today&apos;s shifts with
-            Clock in and Clock out buttons, their next 7 days, and their hours for the pay period.
-          </P>
+          The first time you schedule someone, the shift box offers <strong>Create &amp; copy link</strong>. Text it to them.
+          No ERP login needed; the page works in English or Spanish.
         </Step>
-
-        <Step n={4} title="Every day: check the Today tab">
-          <strong>Janitorial Contracts → Today</strong> refreshes every minute and puts problems at the top under{" "}
-          <strong>Needs attention</strong>:
-          <UL>
-            <LI><strong>Late:</strong> 15+ minutes past start with no clock-in. Call or text them from the row.</LI>
-            <LI><strong>Needs cover:</strong> the janitor has approved time off. Find a cover opens the calendar for that building.</LI>
-            <LI><strong>Didn&apos;t clock out</strong> and <strong>No clock-in</strong>: fix the hours with Correct hours.</LI>
-            <LI>Clock-ins far from the building are flagged too.</LI>
-          </UL>
-          To change one day (a cover, different hours, a closure), click the shift on the calendar and choose{" "}
-          <strong>This day only</strong>, or <strong>Skip this day</strong>. For a holiday, use <strong>Skip a day</strong>{" "}
-          at the top of the calendar.
+        <Step n={4} title="Every day: the Today tab">
+          <strong>Janitorial Contracts → Today</strong> lists anyone late, needing a cover, not clocked out or clocking in far
+          from the building, with Call, Text, Find a cover and Correct hours.
         </Step>
-
-        <Step n={5} title="Every week: review hours">
-          <strong>Janitorial Contracts → Hours</strong> shows every shift and where its hours came from: Clocked, From
-          schedule (no clock-in), Time off (approved only), Skipped, or Corrected. Tick <strong>Needs review only</strong> to see just the
-          flagged ones (late, left early, no clock-out, unscheduled, far from the building) and use{" "}
-          <strong>Correct</strong> to fix any of them. Shifts of 6+ hours have a 30 minute unpaid break taken off.
+        <Step n={5} title="Every week: the Hours tab">
+          <strong>Janitorial Contracts → Hours</strong> shows where each shift&apos;s hours came from. Tick{" "}
+          <strong>Needs review only</strong> and correct anything wrong.
         </Step>
-
-        <Step n={6} title="Each pay period: run payroll">
-          <strong>Compensation → Payroll</strong> pays janitorial hours automatically at each janitor&apos;s hourly rate,
-          combined with any project hours, with overtime past 40 hours a week. <strong>See janitorial shifts</strong> under
-          someone&apos;s hours opens exactly which shifts make up the number. A janitor with nothing scheduled shows a red{" "}
-          <strong>No janitorial schedule set</strong> warning.
+        <Step n={6} title="Each pay period: payroll">
+          <strong>Compensation → Payroll</strong> pays the janitorial hours automatically at each janitor&apos;s hourly rate,
+          with overtime past 40 hours a week. See{" "}
+          <A href="/erp/help/compensation/compensation-overview">Compensation Overview</A>.
         </Step>
-
         <Step n={7} title="Each month: bill the client">
-          On the billing day, the month is added to the contract&apos;s <strong>Billing</strong> tab at the monthly price.
-          Add one-off extras (like a deep clean) to that month, then mark it <strong>Billed</strong> and{" "}
-          <strong>Paid</strong>, either there or on <strong>Project Billing → Recurring</strong>. Commission for the
-          salesperson counts once the month is Paid.
+          The month is added on the billing day. With <strong>Auto-draft</strong> on, its invoice is drafted on Ready to send
+          3 days before; approving it marks the month Billed, and it turns Paid when the payment is recorded in QuickBooks.
+          See <A href="/erp/help/billing/how-invoicing-works">Start Here: How Billing Works</A>.
         </Step>
-
-        <Step n={8} title="Check how each building is doing">
-          The contract&apos;s Billing tab shows labor cost and margin for each month (janitorial hours × hourly rate). The
-          Contracts list shows every building&apos;s margin for last month and tags any that lost money.
+        <Step n={8} title="Visit the building">
+          Schedule quality checks from the contract&apos;s <strong>Quality</strong> tab and send the property manager a
+          summary. See <A href="/erp/help/janitorial/quality-checks">Janitorial Quality Checks</A>.
+        </Step>
+        <Step n={9} title="Check each building's profit">
+          The contract&apos;s <strong>Billing</strong> tab shows labor cost and margin per month; the Contracts list flags
+          buildings that lost money last month.
         </Step>
       </Steps>
 
@@ -136,13 +98,17 @@ export function JanitorialGettingStarted() {
             <TD>Raise the monthly price</TD>
             <TD>Change it on the contract&apos;s Pricing tab. It applies to months added from then on.</TD>
           </tr>
+          <tr>
+            <TD>The client renews for another year</TD>
+            <TD>Renew for another year on the contract page moves the expiration date forward.</TD>
+          </tr>
         </tbody>
       </Table>
 
       <H3>Who can use it</H3>
       <P>
-        Admins, Project Managers, the Business Manager, and Sales can see Janitorial Contracts and make changes. Everyone else who can see
-        the Schedule can view the janitorial calendar but can&apos;t change it.
+        Admins, Project Managers, the Business Manager and Sales can see Janitorial Contracts and make changes. Everyone else
+        who can see the Schedule can view the janitorial calendar but can&apos;t change it.
       </P>
     </>
   );

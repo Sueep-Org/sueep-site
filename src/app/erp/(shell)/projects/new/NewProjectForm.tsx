@@ -15,7 +15,7 @@ import { parseBuildingNameFromDealName, parseAddressFromDealName } from "@/lib/h
 import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { CHANGE_ORDER_ESTIMATE_DAY_HOURS, changeOrderDayCount, getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
-import { NEXT_DAY_UPCHARGE_LABEL, isNextDayStart } from "@/lib/nextDayUpcharge";
+import { NEXT_DAY_UPCHARGE_LABEL, isNextDayStart, nextDayCountInRange } from "@/lib/nextDayUpcharge";
 import { ChangeOrderLaborEstimator } from "../[id]/ChangeOrderLaborEstimator";
 import { UnitNameInput } from "@/app/erp/components/UnitNameInput";
 import { unitNameKey } from "@/lib/erp/unitNames";
@@ -1356,6 +1356,7 @@ export function NewProjectForm({
           onEstLaborChange={setCoEstLabor}
           days={coDays}
           nextDayUpcharge={coNextDayUpcharge}
+          nextDayDays={nextDayCountInRange(coStartDate, coEndDate)}
           onNextDayUpchargeChange={setCoNextDayUpcharge}
           autoFill
           disabled={loading}

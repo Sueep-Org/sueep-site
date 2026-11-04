@@ -18,7 +18,7 @@ export function ScheduleCalendarOverview() {
         chip to open it, and use the Projects / Janitorial / Management buttons to hide a layer.{" "}
         <strong>Projects</strong> is everything described below. <strong>Janitorial Contracts</strong> shows recurring janitorial shifts,
         see{" "}
-        <A href="/erp/help/janitorial/janitorial-contracts">Janitorial Contracts</A>. Admins and PMs
+        <A href="/erp/help/janitorial/scheduling-and-hours">Janitorial Scheduling, Clock-In and Hours</A>. Admins and PMs
         also see <strong>Management</strong>, for insurance expirations, time off and company
         deadlines, see <A href="/erp/help/schedule/management-calendar">Management Calendar</A>.
       </P>

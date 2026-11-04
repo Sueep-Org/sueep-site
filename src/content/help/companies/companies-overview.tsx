@@ -56,7 +56,9 @@ export function CompaniesOverview() {
       <P>
         The billing method decides what happens when an invoice is approved on{" "}
         <A href="/erp/help/billing/ready-to-send">Ready to send</A>: Email and RealPage email are emailed to Send to and Cc;
-        Procore, Coupa and vendor portals go on the upload list.
+        Procore, Coupa and vendor portals go on the Needs sending list for someone to upload; Other, or no method, goes on
+        Needs sending to send by hand. Set a method and Send to for every client you bill, so their invoices go out by
+        themselves. See <A href="/erp/help/billing/sending-invoices">Sending Invoices</A> for what happens after Approve.
       </P>
       <P>
         <strong>Invoices go to</strong> shows the answer and where each line came from. The most specific setting wins:
@@ -69,6 +71,11 @@ export function CompaniesOverview() {
       <P>
         Use an override only for what&apos;s different. For example, J Centra has its own billing email, so the J Centra
         building overrides <strong>Send to</strong> and keeps JAG&apos;s cc and everything else.
+      </P>
+      <P>
+        Recipients can also be changed for a single invoice on Ready to send with <strong>Edit recipients</strong>, which
+        offers the company&apos;s contacts. Ticking <strong>Also use for future invoices</strong> there saves the list as the
+        building&apos;s or job&apos;s override.
       </P>
     </>
   );

@@ -6,7 +6,7 @@ import { loadOpenInvoices, overdueSection, type OpenInvoice, type OverdueInvoice
 import { invoiceKey } from "./invoiceLinkSource";
 
 /**
- * Overdue tab card (Admin and Business Manager): open HubSpot invoices past
+ * Overdue tab card (Admin and Business Manager): open invoices past
  * their due date, and open invoices by how long ago the work they bill was
  * finished (30, 60 and 90+ days). Balances come from loadOpenInvoices, so
  * the totals match the Needs action card and the cash forecast.
@@ -134,7 +134,7 @@ async function loadOverdueData(todayKey: string) {
 
 export async function loadOverdueInvoicesCard(): Promise<DashboardCardData> {
   const { overdue, buckets } = await loadOverdueData(todayEasternKey());
-  const hubspot = { ...overdueSection(overdue), label: "HubSpot overdue" };
+  const hubspot = { ...overdueSection(overdue), label: "Past due date" };
   return {
     alertCount: overdue.length,
     sections: [hubspot, ...buckets.map(({ bucket, invoices }) => completionSection(bucket, invoices))],

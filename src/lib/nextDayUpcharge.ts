@@ -17,6 +17,18 @@ export function isNextDayStart(startKey: string | null | undefined, now: Date = 
   return startKey.slice(0, 10) <= tomorrow.toISOString().slice(0, 10);
 }
 
+/** How many days of a start-end range (YYYY-MM-DD) fall on today or tomorrow, Eastern. Only those days get the upcharge. */
+export function nextDayCountInRange(startKey: string | null | undefined, endKey: string | null | undefined, now: Date = new Date()): number {
+  if (!startKey || !isNextDayStart(startKey, now)) return 0;
+  const tomorrow = new Date(`${todayEasternKey(now)}T00:00:00Z`);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  const tomorrowKey = tomorrow.toISOString().slice(0, 10);
+  const end = endKey && endKey >= startKey ? endKey.slice(0, 10) : startKey.slice(0, 10);
+  const last = end < tomorrowKey ? end : tomorrowKey;
+  const ms = new Date(`${last}T00:00:00Z`).getTime() - new Date(`${startKey.slice(0, 10)}T00:00:00Z`).getTime();
+  return Math.round(ms / 86_400_000) + 1;
+}
+
 /** The upcharge on a price, in cents. */
 export function nextDayUpchargeCents(cents: number): number {
   return Math.round((cents * NEXT_DAY_UPCHARGE_PERCENT) / 100);

@@ -3,160 +3,181 @@ import { Callout, H2, H3, P, UL, LI, Steps, Step, ImgPlaceholder, A } from "@/ap
 export function BillingOverview() {
   return (
     <>
-      <H2>Overview</H2>
+      <H2>What this page is</H2>
       <P>
-        The Project Billing page (<strong>ERP → Project Billing</strong>) is where completed work
-        gets marked as billed and paid. It has three tabs: <strong>Post-Construction</strong>,{" "}
-        <strong>Janitorial</strong>, and <strong>Recurring</strong>. Each lists completed work in a
-        date range and lets you flip its billing status.
+        <strong>Project Billing</strong> (left menu, under Billing) lists every piece of finished work and whether it is{" "}
+        <strong>Not billed</strong>, <strong>Billed</strong> or <strong>Paid</strong>. It is the first of the billing steps:
+        Project Billing → Ready to send → Invoices. For how the steps fit together, read{" "}
+        <A href="/erp/help/billing/how-invoicing-works">Start Here: How Billing Works</A>.
       </P>
       <P>
-        It&apos;s the first of three steps, shown at the top of each page: <strong>Project Billing</strong> (is the work done
-        and billed?) → <strong>Ready to send</strong> (make and send the invoice) → <strong>Invoices</strong> (is it paid?).
-        For Admins and the Business Manager, <strong>Bill it</strong> on a Not billed line opens Ready to send with it
-        ticked. Invoice numbers on a line open that invoice on the Invoices page (PMs, Business Manager, Admin).
+        Admins, Project Managers, the Business Manager and Sales can open it. Making and approving invoices happens on{" "}
+        <A href="/erp/help/billing/ready-to-send">Ready to send</A>, not here.
       </P>
       <ImgPlaceholder label="Project Billing page with tabs and date range" />
 
-      <H2>Steps</H2>
+      <H2>The three tabs</H2>
       <Steps>
-        <Step n={1} title="The date range and search">
-          Above each table are a search box on the left, and the filter button (three lines) and{" "}
-          <strong>Download CSV</strong> on the right. The dates live inside the filter menu: a{" "}
-          <strong>From / To</strong> range (defaulting to the start of the current month through
-          today) and an <strong>All time</strong> checkbox that ignores the dates and loads
-          everything.
-          <Callout type="info">
-            Typing a search bypasses the date range entirely and searches across all dates by
-            project, building, or unit name instead. The date fields gray out while a search is
-            active, clear the search to go back to filtering by date.
-          </Callout>
-        </Step>
-
-        <Step n={2} title="Post-Construction tab">
-          Lists completed Schedule of Values items and change orders for post-construction
-          projects in range, grouped under their project.
+        <Step n={1} title="Post-Construction">
+          Finished Schedule of Values (SOV) lines and change orders on post-construction jobs, grouped under their job. Each
+          line has its completion date, amount, billing status, invoice and <strong>Billed via</strong>.
           <ImgPlaceholder label="Post-Construction billing tab" />
-          Click the <strong>Billing Status</strong> pill on any row to flip it between{" "}
-          <strong>Not Billed</strong>, <strong>Billed</strong>, and <strong>Paid</strong>, it saves
-          immediately. The total at the bottom reflects everything currently shown.
-          <Callout type="info">
-            The <strong>Lien</strong> column shows where an unpaid job stands and how many days
-            are left to file. A warning mark beside the project name means it needs a look. It counts from the project&apos;s completion date. <strong>Not due
-            yet</strong> means nothing is late. <strong>Past due</strong> means an invoice is late,
-            so a lien is possible. <strong>Decide on lien</strong> means it is time to choose
-            whether to file. A red pill means a required notice is due or the deadline has passed.
-            The <strong>Lien deadlines</strong> box above the table lists every job past the first
-            stage, whatever date range is showing, and the project&apos;s <strong>Liens</strong> tab (under Financials) has a
-            checklist of what a filing still depends on. Record a <strong>Decision</strong> there
-            once one is made: <strong>Not pursuing</strong> and <strong>Lien filed</strong> take
-            the job off the list. Admins and Project Managers get an email the morning a job
-            reaches the day to decide, and again when a required notice comes due. Set the
-            state and who hired us on the project&apos;s <strong>Liens</strong> tab. These
-            are general deadlines, check with an attorney before relying on them.
-          </Callout>
         </Step>
-
-        <Step n={3} title="Janitorial tab">
-          Lists completed janitorial turnover units in range, grouped under their building, with
-          bed/bath, completion date, and contract amount. Billing status works the same
-          click-to-flip way as Post-Construction. Liens on unit turns are tracked per building,
-          since a lien is filed against the property. Each unpaid turn has its own clock from the
-          day it was completed, and the building shows the earliest one still open. Buildings with a
-          late invoice or a lien step coming up are listed in the <strong>Lien deadlines</strong> box
-          above the table (two at first, then <strong>Show all</strong>) and get a warning mark by
-          the building name. The state is read from the building&apos;s address. Set up the rest on
-          the building&apos;s <strong>Liens</strong> tab, which works like a post-construction job&apos;s and
-          lists each unpaid turn.
+        <Step n={2} title="Janitorial">
+          Finished unit turns, grouped under their building, with bed and bath, completion date, amount, billing status and
+          invoice. Change orders on unit turns are listed with their unit.
           <ImgPlaceholder label="Janitorial billing tab" />
         </Step>
-
-        <Step n={4} title="Recurring tab">
-          Lists each janitorial contract&apos;s billing months, grouped under their building, one
-          row per month. The amount includes any one-off extras added that month. Clicking a month
-          opens the contract. The <strong>Invoice</strong> column shows invoices linked to
-          the month from the building&apos;s <strong>Invoices &amp; Quotes</strong> tab, and a
-          month is marked <strong>Paid</strong> once its paid invoices add up to its total. See{" "}
-          <A href="/erp/help/janitorial/janitorial-contracts">Janitorial Contracts</A> for how
-          contracts and their months get set up in the first place.
+        <Step n={3} title="Recurring">
+          Each janitorial contract&apos;s billing months, grouped under their building, one row per month. The amount includes
+          any one-off extras added to that month. Click a month to open its contract. A month is Paid once its paid invoices
+          add up to its total. See <A href="/erp/help/janitorial/janitorial-contracts">Janitorial Contracts: Setup, Pricing and Billing</A> for how months
+          are added.
           <ImgPlaceholder label="Recurring billing tab" />
-        </Step>
-
-        <Step n={5} title="Downloading a CSV">
-          Every tab has a <strong>Download CSV</strong> button, top right,
-          that exports exactly what&apos;s currently shown (respecting the active date range,
-          search and filters) with a running total row.
-        </Step>
-
-        <Callout>
-          Every tab has a <strong>Billed via</strong> column after the invoices: how the client wants
-          invoices sent (Procore, Coupa, email...). It comes from the client company, unless the
-          building or job overrides it. Click it to open the portal when one is saved.{" "}
-          <strong>Not set</strong> links to the company so you can fill it in.
-        </Callout>
-
-        <Step n={6} title="Filtering the table">
-          Below the dates, the filter menu
-          narrows what the date range or search loaded. Pick one
-          billing status (<strong>All</strong>, <strong>Not Billed</strong>, <strong>Billed</strong>,{" "}
-          <strong>Paid</strong>) and any of the options under it. Rows have to match everything
-          picked, and the total follows along.
-          <UL>
-            <LI>
-              Post-Construction: <strong>Overdue invoice</strong>, <strong>Lien</strong> (an
-              invoice is late or a lien step is due), <strong>COI expiring</strong>, and{" "}
-              <strong>Invoice not linked</strong>.
-            </LI>
-            <LI>
-              Janitorial: <strong>Overdue invoice</strong>, <strong>Lien</strong>, <strong>HubSpot mismatch</strong>{" "}
-              (HubSpot&apos;s invoice status disagrees with the billing status here), and{" "}
-              <strong>No invoice</strong>.
-            </LI>
-            <LI>
-              Recurring: <strong>Overdue invoice</strong> and <strong>No invoice</strong>.
-            </LI>
-          </UL>
-          <strong>Since completion</strong> shows only work finished <strong>30</strong> (30 to 59),{" "}
-          <strong>60</strong> (60 to 89) or <strong>90+</strong> days ago. Janitorial months count
-          from the last day of the month. Picking one turns on <strong>All time</strong> so older
-          work is loaded. Pair it with <strong>Billed</strong> to see what is still waiting on payment.
-        </Step>
-
-        <Step n={7} title="When a HubSpot invoice is on the wrong line">
-          HubSpot invoices are matched to SOV items, change orders and units automatically. To
-          fix a match, open the project or building, go to <strong>Invoices &amp; Quotes</strong>,
-          and click <strong>Edit</strong> on the invoice. An invoice can cover several lines. The
-          automatic match puts one invoice on a line, but you can link more by hand, for example
-          when a line is billed in parts. On a building, an invoice can be linked to units, to
-          change orders on those units, and to months of the building&apos;s janitorial contract.
-          Unit change orders and contract months are never matched automatically, so link them
-          by hand. A <strong>not linked</strong> flag on a billing row
-          means an invoice on that project still needs a line.
-          <Callout type="info">
-            A line, change order or unit follows the invoices linked to it: it is marked{" "}
-            <strong>Billed</strong> once an invoice is sent, and <strong>Paid</strong> once every
-            linked invoice is paid. Draft and voided invoices don&apos;t count. This happens once
-            per invoice, so if you move a line back by hand, it stays where you put it.
-          </Callout>
         </Step>
       </Steps>
 
-      <H3>Where billing status is also editable</H3>
+      <H2>Billing status</H2>
       <P>
-        Billing status isn&apos;t exclusive to this page. SOV items and change orders can also be
-        marked billed from a project&apos;s own Financials or Change Orders tab, see{" "}
-        <A href="/erp/help/projects/projects-overview">Projects Overview</A>. Either place updates
-        the same underlying status.
+        Click the status pill on a row to change it between <strong>Not billed</strong>, <strong>Billed</strong> and{" "}
+        <strong>Paid</strong>. It saves right away and the total at the bottom updates.
+      </P>
+      <UL>
+        <LI>
+          Statuses normally move by themselves: <strong>Billed</strong> when an invoice for the work is approved on Ready to
+          send, and <strong>Paid</strong> once every invoice linked to it is paid in QuickBooks. Draft and voided invoices
+          don&apos;t count.
+        </LI>
+        <LI>
+          A change you make by hand is kept. The ERP will not move it back, even if the invoice later says something else.
+        </LI>
+        <LI>
+          Use a hand change for things the ERP cannot see, for example a payment that was never recorded against its invoice in
+          QuickBooks, or work billed outside the ERP.
+        </LI>
+        <LI>
+          The same status can also be changed on a job&apos;s Financials or Change Orders tab, and on a janitorial
+          contract&apos;s Billing tab. It is one status, so a change in either place shows in both.
+        </LI>
+      </UL>
+
+      <H2>Bill it</H2>
+      <P>
+        Admins and the Business Manager see <strong>Bill it →</strong> on finished work that is Not billed and has no invoice.
+        It opens Ready to send on the Ready to bill tab with that line already ticked, so you can draft its invoice.
       </P>
 
-      <H2>Auto-drafted invoices</H2>
+      <H2>Invoices on a line</H2>
       <P>
-        For janitorial contracts with Auto-draft on, the ERP drafts the monthly invoice 3 days before the billing day. Admins
-        and the Business Manager review and approve them on{" "}
-        <A href="/erp/help/billing/ready-to-send">Ready to send</A>. Approving marks the month <strong>Billed</strong> here.
-        Finished unit turns, SOV lines and change orders can be drafted there too, under <strong>Ready to bill</strong>, for
-        clients that don&apos;t have a billing day.
+        Each line shows the invoices linked to it, by number. Click a number to open that invoice on the{" "}
+        <A href="/erp/help/billing/invoices-and-payments">Invoices page</A>, with its balance, payments and PDF.
       </P>
+      <UL>
+        <LI>Invoices approved on Ready to send are linked to their lines automatically.</LI>
+        <LI>
+          Older HubSpot invoices were matched to lines automatically, one invoice per line. To change a match, or to link more
+          than one invoice to a line (for example a line billed in parts), open the job or building, go to its{" "}
+          <strong>Invoices &amp; Quotes</strong> tab and click <strong>Edit</strong> on the invoice. Unit change orders and
+          janitorial months are never matched automatically, so link those by hand.
+        </LI>
+        <LI>
+          A <strong>not linked</strong> flag next to a job means one of its HubSpot invoices still needs a line. On the
+          Post-Construction tab, the job&apos;s <strong>Invoice</strong> column lists the invoices on the job&apos;s HubSpot
+          deal, and shows <strong>No deal</strong> when the job has none.
+        </LI>
+      </UL>
+
+      <H2>Billed via</H2>
+      <P>
+        Every tab has a <strong>Billed via</strong> column: how the client wants invoices sent (Email, RealPage email, Procore,
+        Coupa, vendor portal or Other). It comes from the client company, unless the building or job overrides it. Click it to
+        open the portal when one is saved. <strong>Not set</strong> links to the company so you can fill it in. See{" "}
+        <A href="/erp/help/companies/companies-overview">Companies and Billing Info</A>.
+      </P>
+
+      <H2>Finding what you need</H2>
+      <P>
+        The page opens showing <strong>Not Billed</strong> work from all dates, so you see everything still waiting for an
+        invoice. Opened from a job or contract link, it shows every status for that job. The filter button turns pink when
+        anything other than these defaults is on; <strong>Clear filters</strong> in the menu puts them back.
+      </P>
+      <H3>Dates and search</H3>
+      <UL>
+        <LI>
+          The filter button (three lines) holds the dates: <strong>All time</strong> is on by default. Untick it to pick a{" "}
+          <strong>From / To</strong> range.
+        </LI>
+        <LI>
+          Typing in the search box searches every date by job, building or unit name. The dates grey out while a search is
+          active; clear the search to go back to the dates.
+        </LI>
+      </UL>
+      <H3>Filters</H3>
+      <P>
+        In the same menu, pick one billing status (<strong>All</strong>, <strong>Not Billed</strong>, <strong>Billed</strong>,{" "}
+        <strong>Paid</strong>) and any of the options under it. Rows must match everything picked, and the total follows.
+      </P>
+      <UL>
+        <LI>
+          <strong>Post-Construction:</strong> Overdue invoice, Lien (an invoice is late or a lien step is due), COI expiring,
+          and Invoice not linked.
+        </LI>
+        <LI>
+          <strong>Janitorial:</strong> Overdue invoice, Lien, Status doesn&apos;t match invoice (the invoice says paid or
+          unpaid but the line says otherwise), and No invoice.
+        </LI>
+        <LI>
+          <strong>Recurring:</strong> Overdue invoice and No invoice.
+        </LI>
+        <LI>
+          <strong>Since completion:</strong> work finished 30 to 59, 60 to 89, or 90 or more days ago. Janitorial months count
+          from the last day of the month. Pair it with <strong>Billed</strong> to see what is still waiting on payment.
+        </LI>
+      </UL>
+      <H3>Download CSV</H3>
+      <P>
+        <strong>Download CSV</strong> (top right of each tab) exports exactly what is showing, with the dates, search and
+        filters applied, and a total row.
+      </P>
+
+      <H2>Jobs past their scheduled day</H2>
+      <P>
+        An amber bar at the top lists jobs and change orders whose last scheduled day has passed but nobody marked complete.
+        They are not billable until they are complete, so they don&apos;t appear in the tables. <strong>Mark complete</strong>{" "}
+        uses the last scheduled day as the end date.
+      </P>
+
+      <H2>Liens</H2>
+      <P>
+        The <strong>Lien</strong> column shows where an unpaid job stands and how many days are left to file. It counts from
+        the completion date. A warning mark beside a job or building means it needs a look.
+      </P>
+      <UL>
+        <LI>
+          <strong>Not due yet:</strong> nothing is late.
+        </LI>
+        <LI>
+          <strong>Past due:</strong> an invoice is late, so a lien is possible.
+        </LI>
+        <LI>
+          <strong>Decide on lien:</strong> time to choose whether to file.
+        </LI>
+        <LI>A red pill means a required notice is due or the deadline has passed.</LI>
+      </UL>
+      <P>
+        The <strong>Lien deadlines</strong> box above the table lists every job or building past the first stage, whatever
+        dates are showing (two at first, then <strong>Show all</strong>). Unit turns are tracked per building, since a lien is
+        filed against the property: each unpaid turn has its own clock, and the building shows the earliest one still open.
+      </P>
+      <P>
+        Set the state and who hired us on the job&apos;s or building&apos;s <strong>Liens</strong> tab, which also has a
+        checklist of what a filing still needs. Record a <strong>Decision</strong> there once one is made: Not pursuing and
+        Lien filed take it off the list. Admins and Project Managers get an email the morning a job reaches the day to decide,
+        and again when a required notice is due.
+      </P>
+      <Callout type="warning">
+        Lien deadlines here are general rules. Check with an attorney before relying on them.
+      </Callout>
     </>
   );
 }

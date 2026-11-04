@@ -9,7 +9,7 @@ export function BuildingsOverview() {
         pricing, units, and janitorial contracts is scoped to one. Buildings don&apos;t have
         their own item in the left nav, get to the list by going directly to{" "}
         <strong>ERP → Buildings</strong> in the address bar, or by clicking a building&apos;s name
-        from the <A href="/erp/help/billing/billing-overview">Billing → Recurring</A> tab.
+        from the <A href="/erp/help/billing/billing-overview">Project Billing → Recurring</A> tab.
       </P>
       <ImgPlaceholder label="Buildings list page" />
 
@@ -25,7 +25,7 @@ export function BuildingsOverview() {
 
         <Step n={2} title="Details tab">
           A building&apos;s own page opens on the <strong>Details</strong> tab: its profile fields,
-          plus a HubSpot deal search so turnover invoices can be matched to that deal, and (for
+          plus a HubSpot deal search (used to match older HubSpot invoices, and by the HubSpot invoice backup), and (for
           roles that can edit pricing) who earns commission on this building&apos;s turnover work.
           Below that, <strong>Property manager links</strong> shows which property managers have a
           private page for this building, with <strong>+ Add</strong> to set one up, and a shared{" "}
@@ -80,7 +80,7 @@ export function BuildingsOverview() {
         <Step n={6} title="Janitorial Contract tab">
           Shows whether this building has a recurring monthly janitorial contract, and its monthly
           rate. Contracts are created and managed on the Janitorial Contracts page, see{" "}
-          <A href="/erp/help/janitorial/janitorial-contracts">Janitorial Contracts</A>.
+          <A href="/erp/help/janitorial/janitorial-contracts">Janitorial Contracts: Setup, Pricing and Billing</A>.
         </Step>
       </Steps>
 

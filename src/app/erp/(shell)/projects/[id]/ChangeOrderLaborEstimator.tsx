@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { NEXT_DAY_UPCHARGE_LABEL, nextDayUpchargeCents, withNextDayUpcharge } from "@/lib/nextDayUpcharge";
+import { NEXT_DAY_UPCHARGE_LABEL, nextDayUpchargeCents } from "@/lib/nextDayUpcharge";
 import { inputClass, labelClass } from "@/app/erp/components/ui";
 import { centsToDollars } from "@/lib/erp/money";
 import {
@@ -39,6 +39,8 @@ type Props = {
   days?: number;
   /** Next day upcharge box (see nextDayUpcharge.ts). Shown when the change handler is passed. */
   nextDayUpcharge?: boolean;
+  /** Days of the range that start today or tomorrow, only those get the upcharge. Defaults to 1 when ticked. */
+  nextDayDays?: number;
   onNextDayUpchargeChange?: (v: boolean) => void;
   /** Create forms: keep the price and labor fields filled from the calculation until someone types in them. */
   autoFill?: boolean;
@@ -69,6 +71,7 @@ export function ChangeOrderLaborEstimator({
   onNoCrewRequiredChange,
   days = 1,
   nextDayUpcharge = false,
+  nextDayDays,
   onNextDayUpchargeChange,
   autoFill = false,
   disabled,
@@ -92,8 +95,13 @@ export function ChangeOrderLaborEstimator({
   };
   const priceEstimate = pricingRates ? computeChangeOrderLaborEstimate(counts, pricingRates) : null;
   const costEstimate = computeChangeOrderLaborEstimate(counts, ACTUAL_CHANGE_ORDER_LABOR_COST_RATES);
-  // The upcharge is part of the price the client pays, never the labor cost
-  const priceCents = priceEstimate ? withNextDayUpcharge(priceEstimate.totalCents, nextDayUpcharge) : null;
+  // The upcharge is part of the price the client pays, never the labor cost.
+  // Only the today/tomorrow days of the range get it, the rest are normal price.
+  const dayCount = Math.max(1, days);
+  const upchargeDays = Math.min(dayCount, Math.max(1, nextDayDays ?? 1));
+  const upchargeShare = nextDayUpcharge ? upchargeDays / dayCount : 0;
+  const upchargeCents = priceEstimate ? Math.round(nextDayUpchargeCents(priceEstimate.totalCents) * upchargeShare) : 0;
+  const priceCents = priceEstimate ? priceEstimate.totalCents + upchargeCents : null;
 
   function useCalculatedNumbers() {
     priceTouchedRef.current = false;
@@ -120,16 +128,17 @@ export function ChangeOrderLaborEstimator({
 
   // A typed price gets the upcharge added or taken back out when the box
   // changes, by hand or by the start date ticking it
-  const prevUpchargeRef = useRef(nextDayUpcharge);
+  const prevShareRef = useRef(upchargeShare);
   useEffect(() => {
-    if (prevUpchargeRef.current === nextDayUpcharge) return;
-    prevUpchargeRef.current = nextDayUpcharge;
+    if (prevShareRef.current === upchargeShare) return;
+    const prevFactor = 1 + (nextDayUpchargeCents(10_000) / 10_000) * prevShareRef.current;
+    const nextFactor = 1 + (nextDayUpchargeCents(10_000) / 10_000) * upchargeShare;
+    prevShareRef.current = upchargeShare;
     const typedCents = Math.round(Number(contractValue) * 100);
     if (!priceTouchedRef.current || !(typedCents > 0)) return;
-    const next = nextDayUpcharge ? typedCents + nextDayUpchargeCents(typedCents) : Math.round(typedCents / (1 + nextDayUpchargeCents(100) / 100));
-    onContractValueChange((next / 100).toFixed(2));
+    onContractValueChange((Math.round((typedCents / prevFactor) * nextFactor) / 100).toFixed(2));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nextDayUpcharge]);
+  }, [upchargeShare]);
 
   // Auto-fills # of supervisors from # of cleaners (a crew always needs at
   // least one — see deriveChangeOrderSupervisorCount), but only until
@@ -212,7 +221,9 @@ export function ChangeOrderLaborEstimator({
             {priceEstimate && (days > 1 || nextDayUpcharge) ? (
               <span className="ml-1 text-xs text-gray-500">
                 {days > 1 ? `${days} days` : "1 day"}
-                {nextDayUpcharge ? `, incl. ${centsToDollars(nextDayUpchargeCents(priceEstimate.totalCents))} next day upcharge` : ""}
+                {nextDayUpcharge
+                  ? `, incl. ${centsToDollars(upchargeCents)} next day upcharge${dayCount > 1 ? ` on ${upchargeDays} ${upchargeDays === 1 ? "day" : "days"}` : ""}`
+                  : ""}
               </span>
             ) : null}
             {pricingRates ? (

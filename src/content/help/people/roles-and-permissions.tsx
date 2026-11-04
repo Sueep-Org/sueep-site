@@ -19,7 +19,10 @@ export function RolesAndPermissions() {
         <tbody>
           <tr>
             <TD>Admin</TD>
-            <TD>Everything, plus users, the Company Info access log, and turning invoice Approve on or off.</TD>
+            <TD>
+              Everything, plus users, the Company Info access log, connecting QuickBooks, and switching invoices between
+              QuickBooks and the HubSpot backup.
+            </TD>
           </tr>
           <tr>
             <TD>Project Manager</TD>
@@ -54,13 +57,15 @@ export function RolesAndPermissions() {
         <LI>Edit companies, their contacts and billing, and billing overrides on buildings and projects.</LI>
         <LI>Link client portal logins to companies.</LI>
         <LI>
-          Review, edit, approve and discard auto-drafted invoices on <strong>Ready to send</strong>. Drafts waiting also show on
-          the dashboard&apos;s <strong>Money</strong> tab under Needs action.
+          Draft, edit, approve and discard invoices on <strong>Ready to send</strong>, and finish the Needs sending list. Drafts
+          waiting also show on the dashboard&apos;s <strong>Money</strong> tab under Needs action.
+        </LI>
+        <LI>Use the <strong>QuickBooks</strong> page: Sync now, Invoice setup and the Money owed check.
         </LI>
         <LI>Change the payment terms the dashboard&apos;s cash forecast uses (with Admins).</LI>
         <LI>
-          See the dashboard&apos;s <strong>Overdue</strong> tab (with Admins): open invoices past their HubSpot due date, and
-          open invoices 30, 60 and 90+ days after the work was finished.
+          See the dashboard&apos;s <strong>Overdue</strong> tab (with Admins): open invoices past their due date, and open
+          invoices 30, 60 and 90+ days after the work was finished.
         </LI>
       </UL>
       <P>Some things stay with Project Managers, since they&apos;re about running crews:</P>

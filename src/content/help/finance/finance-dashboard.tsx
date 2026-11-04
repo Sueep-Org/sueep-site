@@ -51,7 +51,8 @@ export function FinanceDashboard() {
         </LI>
         <LI>
           SOV dates: a line gets its done date when it&apos;s ticked off (or the work day of the labor log that finished it)
-          and its paid date when it&apos;s marked paid (or HubSpot&apos;s payment date when the payment came from HubSpot).
+          and its paid date when it&apos;s marked paid (or the payment date from QuickBooks, or HubSpot for older invoices, when
+          the payment was recorded there).
           Both can be changed on the project page: open the line&apos;s menu, click <strong>Edit</strong>, and pick the date.
         </LI>
         <LI>
