@@ -44,6 +44,8 @@ export type QboDraftLine = {
   name: string;
   description: string;
   amountCents: number;
+  /** When the work was finished ("YYYY-MM-DD"), QuickBooks' Service date on the line. Missing on drafts made before it was added. */
+  serviceDateKey?: string | null;
 };
 
 const switchKey = (env: QboEnvironment) => `qboInvoiceDrafts.${env}`;
@@ -86,7 +88,9 @@ export async function suggestedNextInvoiceNumber(): Promise<number> {
 
 /** A janitorial month's lines, with the kind of each for its QuickBooks product. */
 function monthLines(label: string, period: Parameters<typeof draftLines>[1]): QboDraftLine[] {
-  return draftLines(label, period).map((l, i) => ({ ...l, itemKey: null, projectId: null, lineKind: i === 0 ? "JAN_MONTH" : "JAN_EXTRA" }));
+  // Service date: the first of the month the line bills.
+  const serviceDateKey = utcDateKey(period.periodStart);
+  return draftLines(label, period).map((l, i) => ({ ...l, itemKey: null, projectId: null, lineKind: i === 0 ? "JAN_MONTH" : "JAN_EXTRA", serviceDateKey }));
 }
 
 const total = (lines: { amountCents: number }[]) => lines.reduce((s, l) => s + l.amountCents, 0);
@@ -471,7 +475,13 @@ export async function approveQboDraft(id: string, email: string): Promise<{ ok: 
           DetailType: "SalesItemLineDetail",
           Amount: l.amountCents / 100,
           Description: `${l.name} - ${l.description}`.slice(0, 4000),
-          SalesItemLineDetail: { ItemRef: { value: products.get(l.lineKind)! }, Qty: 1, UnitPrice: l.amountCents / 100, TaxCodeRef: { value: "NON" } },
+          SalesItemLineDetail: {
+            ItemRef: { value: products.get(l.lineKind)! },
+            Qty: 1,
+            UnitPrice: l.amountCents / 100,
+            TaxCodeRef: { value: "NON" },
+            ...(l.serviceDateKey ? { ServiceDate: l.serviceDateKey } : {}),
+          },
         })),
       },
       d.id,

@@ -313,6 +313,7 @@ export async function draftItems(picks: { key: string; amountCents: number }[], 
           name: l.name,
           description: i.lineDescription,
           amountCents: l.amountCents,
+          serviceDateKey: i.doneKey,
         })),
       );
       await createItemsDraft(g, lines, email);

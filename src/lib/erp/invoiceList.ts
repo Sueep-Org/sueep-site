@@ -29,6 +29,8 @@ export type InvoiceListRow = {
   subCustomer: string | null;
   invoiceDate: string | null;
   dueDate: string | null;
+  /** When the billed work was finished ("YYYY-MM-DD"), earliest and latest; months cover the whole month. Null when not linked to ERP work. */
+  workDate: { from: string; to: string; monthly: boolean } | null;
   totalCents: number;
   balanceCents: number;
   status: InvoiceStatus;
@@ -53,6 +55,16 @@ export type InvoiceListRow = {
 
 const normNumber = (n: string | null | undefined) => (n ?? "").trim().toUpperCase() || null;
 const keyOf = (d: Date | null) => (d ? utcDateKey(d) : null);
+
+/** A finished day as an invoice's work date. */
+const dayWork = (key: string | null) => (key ? { from: key, to: key, monthly: false } : null);
+
+/** A janitorial month as an invoice's work date: the whole month. */
+function monthWork(periodStart: Date) {
+  const from = utcDateKey(periodStart);
+  const end = new Date(Date.UTC(periodStart.getUTCFullYear(), periodStart.getUTCMonth() + 1, 0));
+  return { from, to: utcDateKey(end), monthly: true };
+}
 
 /** Days a new invoice gets to show up in the nightly QuickBooks copy before it counts as Not in QuickBooks. */
 const SYNC_GRACE_DAYS = 3;
@@ -79,6 +91,7 @@ type ErpGroup = {
   lineSum: number;
   viewUrl: string | null;
   pdfUrl: string | null;
+  workDate: { from: string; to: string; monthly: boolean } | null;
   titles: Set<string>;
   href: string | null;
   billingHref: string;
@@ -112,20 +125,24 @@ export async function loadInvoiceList(): Promise<InvoiceListRow[]> {
     prisma.qboPayment.findMany({ select: { txnDate: true, refNum: true, links: true } }),
     prisma.qboCustomer.findMany({ select: { qboId: true, displayName: true, fullyQualifiedName: true, parentQboId: true } }),
     prisma.hubSpotUnitInvoice.findMany({
-      select: { ...pick, building: { select: { id: true, name: true, ...buildingCompanies } }, turnoverRequest: { select: { billingStatus: true } } },
+      select: {
+        ...pick,
+        building: { select: { id: true, name: true, ...buildingCompanies } },
+        turnoverRequest: { select: { billingStatus: true, completedAt: true, projects: { select: { turnoverCompletedAt: true, projectEndDate: true }, take: 1 } } },
+      },
     }),
     prisma.hubSpotSovInvoice.findMany({
       select: {
         ...pick,
         project: { select: { id: true, jobTitle: true, clientCompany: { select: { name: true } } } },
-        sovItem: { select: { billingStatus: true } },
-        changeOrder: { select: { billingStatus: true } },
+        sovItem: { select: { billingStatus: true, completedAt: true } },
+        changeOrder: { select: { billingStatus: true, completedAt: true } },
       },
     }),
     prisma.hubSpotContractInvoice.findMany({
       select: {
         ...pick,
-        period: { select: { billingStatus: true, recurringContract: { select: { id: true, building: { select: { name: true, ...buildingCompanies } } } } } },
+        period: { select: { billingStatus: true, periodStart: true, recurringContract: { select: { id: true, building: { select: { name: true, ...buildingCompanies } } } } } },
       },
     }),
     prisma.invoiceDelivery.findMany({ select: { hubspotInvoiceId: true, qboInvoiceId: true, status: true, sentTo: true, emailedAt: true, doneAt: true } }),
@@ -141,6 +158,7 @@ export async function loadInvoiceList(): Promise<InvoiceListRow[]> {
     client: string | null,
     billing: { tab: string; q: string },
     lineStatus: string | null | undefined,
+    work: { from: string; to: string; monthly: boolean } | null,
   ) => {
     const key = invoiceKey(r);
     let g = groups.get(key);
@@ -159,6 +177,7 @@ export async function loadInvoiceList(): Promise<InvoiceListRow[]> {
         lineSum: 0,
         viewUrl: r.viewUrl,
         pdfUrl: r.pdfUrl,
+        workDate: null,
         titles: new Set(),
         href,
         billingHref: `/erp/billing?tab=${billing.tab}&q=${encodeURIComponent(billing.q)}`,
@@ -169,22 +188,37 @@ export async function loadInvoiceList(): Promise<InvoiceListRow[]> {
     }
     g.lineSum += r.amountCents;
     g.titles.add(title);
+    if (work) {
+      const w = g.workDate;
+      g.workDate = w
+        ? { from: work.from < w.from ? work.from : w.from, to: work.to > w.to ? work.to : w.to, monthly: w.monthly && work.monthly }
+        : work;
+    }
     if (lineStatus !== undefined) g.lineStatuses.push(normalizeBillingStatus(lineStatus ?? "NOT_BILLED"));
   };
   for (const r of units) {
     const b = r.building;
-    add(r, b.name, `/erp/buildings/${b.id}`, b.managedByCompany?.name ?? b.ownedByCompany?.name ?? null, { tab: "janitorial", q: b.name }, r.turnoverRequest?.billingStatus);
+    // Same completion day Project Billing shows for a turn.
+    const p = r.turnoverRequest?.projects[0];
+    const done = p?.turnoverCompletedAt
+      ? todayEasternKey(p.turnoverCompletedAt)
+      : p?.projectEndDate
+        ? utcDateKey(p.projectEndDate)
+        : r.turnoverRequest?.completedAt
+          ? todayEasternKey(r.turnoverRequest.completedAt)
+          : null;
+    add(r, b.name, `/erp/buildings/${b.id}`, b.managedByCompany?.name ?? b.ownedByCompany?.name ?? null, { tab: "janitorial", q: b.name }, r.turnoverRequest?.billingStatus, dayWork(done));
   }
   for (const r of lines) add(r, r.project.jobTitle, `/erp/projects/${r.project.id}`, r.project.clientCompany?.name ?? null, {
     tab: "post-construction",
     q: r.project.jobTitle,
-  }, r.sovItem?.billingStatus ?? r.changeOrder?.billingStatus);
+  }, r.sovItem?.billingStatus ?? r.changeOrder?.billingStatus, dayWork(keyOf(r.sovItem?.completedAt ?? r.changeOrder?.completedAt ?? null)));
   for (const r of months) {
     const c = r.period.recurringContract;
     add(r, `${c.building.name} (monthly)`, `/erp/janitorial/contracts/${c.id}`, c.building.managedByCompany?.name ?? c.building.ownedByCompany?.name ?? null, {
       tab: "recurring",
       q: c.building.name,
-    }, r.period.billingStatus);
+    }, r.period.billingStatus, monthWork(r.period.periodStart));
   }
   const groupByQboId = new Map<string, ErpGroup>();
   const groupByNumber = new Map<string, ErpGroup>();
@@ -278,6 +312,7 @@ export async function loadInvoiceList(): Promise<InvoiceListRow[]> {
       subCustomer: sub,
       invoiceDate: q.txnDate,
       dueDate: q.dueDate,
+      workDate: g?.workDate ?? null,
       totalCents: q.totalCents,
       balanceCents: q.balanceCents,
       ...s,
@@ -319,6 +354,7 @@ export async function loadInvoiceList(): Promise<InvoiceListRow[]> {
       subCustomer: null,
       invoiceDate: g.invoiceDate,
       dueDate: g.dueDate,
+      workDate: g.workDate,
       totalCents: total,
       balanceCents: balance,
       ...(onTheWay
@@ -352,6 +388,7 @@ export async function loadInvoiceList(): Promise<InvoiceListRow[]> {
       subCustomer: null,
       invoiceDate: u.invoiceDateKey,
       dueDate: null,
+      workDate: null,
       totalCents: u.amountCents,
       balanceCents: paid ? 0 : u.amountCents,
       status: "NOT_IN_QBO",

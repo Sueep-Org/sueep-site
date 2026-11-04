@@ -1097,7 +1097,7 @@ function ReadyToBill({ groups, pick }: { groups: BillableGroupRow[]; /** Item ke
       <div className="flex flex-wrap items-center gap-2">
         <p className="flex items-center gap-1 text-xs text-gray-500">
           Finished work with no invoice yet. Tick what to bill.
-          <InfoTip text="Unit turns, post-construction SOV lines and change orders that aren't billed. Click Draft invoice for one draft per building or job, one line per item. Amounts can be changed first." />
+          <InfoTip text="Unit turns, post-construction SOV lines and change orders that aren't billed. Click Draft invoice for one draft per building or job: one line per service for a unit turn, one line per item otherwise. Amounts can be changed first." />
         </p>
         {pickMissing && (
           <span className="text-xs text-amber-800" title="It shows here once it's marked complete, has a price, isn't billed, and its building or job has a client company.">

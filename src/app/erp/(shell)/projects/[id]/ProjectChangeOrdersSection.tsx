@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { centsToDollars } from "@/lib/erp/money";
-import { isNextDayStart } from "@/lib/nextDayUpcharge";
+import { isNextDayStart, nextDayCountInRange } from "@/lib/nextDayUpcharge";
 import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
 import { CHANGE_ORDER_ESTIMATE_DAY_HOURS, changeOrderDayCount, getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
 import { ChangeOrderLaborEstimator } from "./ChangeOrderLaborEstimator";
@@ -434,6 +434,7 @@ export function ProjectChangeOrdersSection({
             onEstLaborChange={setEstLabor}
             days={days}
             nextDayUpcharge={nextDayUpcharge}
+            nextDayDays={nextDayCountInRange(startDate, endDate)}
             onNextDayUpchargeChange={setNextDayUpcharge}
             autoFill
             disabled={loading}

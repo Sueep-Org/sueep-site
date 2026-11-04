@@ -414,8 +414,8 @@ export const NOTIFICATIONS = {
   INVOICE_TO_CLIENT: def({
     label: "Invoice to client",
     group: "Billing",
-    when: "Someone approves an invoice on Ready to send for a client billed by email. Has the invoice PDF and HubSpot's pay link.",
-    automatic: "The client company's Send to and Cc (or the building's or project's billing override)",
+    when: "Someone approves an invoice on Ready to send for a client billed by email. Has the invoice PDF and the pay link.",
+    automatic: "The client company's Send to and Cc (or the building's or project's billing override, or recipients set on the invoice)",
     sender: "sueep",
     // An approved invoice must reach the client, so it can't be switched off.
     alwaysOn: true,

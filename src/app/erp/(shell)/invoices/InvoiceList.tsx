@@ -33,7 +33,7 @@ const URL_FILTERS: Record<string, Partial<Filters>> = {
   "needs-linking": { fix: "NEEDS_LINKING" },
   mismatch: { fix: "MISMATCH" },
 };
-type Sort = "date" | "due" | "amount" | "balance";
+type Sort = "work" | "date" | "due" | "amount" | "balance";
 
 /** YYYY-MM-DD in local time. */
 function dayKey(d: Date): string {
@@ -73,6 +73,25 @@ function fmtDay(key: string | null): string {
   if (!key) return "-";
   const [y, m, d] = key.split("-").map(Number);
   return new Date(y!, m! - 1, d!).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+/** When the billed work was finished: "Oct 3, 2026", "Oct 3 to Oct 12, 2026", or "Oct 2026" for a janitorial month. */
+function fmtWork(w: InvoiceListRow["workDate"]): string {
+  if (!w) return "-";
+  const date = (key: string) => {
+    const [y, m, d] = key.split("-").map(Number);
+    return new Date(y!, m! - 1, d!);
+  };
+  const from = date(w.from);
+  const to = date(w.to);
+  const sameYear = from.getFullYear() === to.getFullYear();
+  if (w.monthly) {
+    const month = (d: Date, year: boolean) => d.toLocaleDateString("en-US", { month: "short", ...(year ? { year: "numeric" } : {}) });
+    return from.getMonth() === to.getMonth() && sameYear ? month(from, true) : `${month(from, !sameYear)} to ${month(to, true)}`;
+  }
+  if (w.from === w.to) return fmtDay(w.from);
+  const day = (d: Date, year: boolean) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(year ? { year: "numeric" } : {}) });
+  return `${day(from, !sameYear)} to ${day(to, true)}`;
 }
 
 function statusLabel(r: InvoiceListRow): string {
@@ -137,7 +156,15 @@ export function InvoiceList({ rows, showQuickBooks }: { rows: InvoiceListRow[]; 
 
   const visible = useMemo(() => {
     const value = (r: InvoiceListRow): string | number =>
-      sort.by === "amount" ? r.totalCents : sort.by === "balance" ? r.balanceCents : sort.by === "due" ? (r.dueDate ?? "") : (r.invoiceDate ?? "");
+      sort.by === "amount"
+        ? r.totalCents
+        : sort.by === "balance"
+          ? r.balanceCents
+          : sort.by === "due"
+            ? (r.dueDate ?? "")
+            : sort.by === "work"
+              ? (r.workDate?.from ?? "")
+              : (r.invoiceDate ?? "");
     return searched
       .filter((r) => matches(r, filters))
       .sort((a, b) => {
@@ -226,11 +253,12 @@ export function InvoiceList({ rows, showQuickBooks }: { rows: InvoiceListRow[]; 
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
-        <table className="w-full min-w-[760px] text-sm">
+        <table className="w-full min-w-[860px] text-sm">
           <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
             <tr>
               {th("Number", null)}
               {th("Client", null)}
+              {th("Work done", "work")}
               {th("Date", "date")}
               {th("Due", "due")}
               {th("Amount", "amount", true)}
@@ -241,7 +269,7 @@ export function InvoiceList({ rows, showQuickBooks }: { rows: InvoiceListRow[]; 
           <tbody className="divide-y divide-gray-100">
             {visible.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-sm text-gray-500">
+                <td colSpan={8} className="px-3 py-8 text-center text-sm text-gray-500">
                   No invoices match.
                 </td>
               </tr>
@@ -276,6 +304,7 @@ export function InvoiceList({ rows, showQuickBooks }: { rows: InvoiceListRow[]; 
                       <div className="text-gray-900">{r.client ?? "-"}</div>
                       {(r.forTitle ?? r.subCustomer) && <div className="text-xs text-gray-500">{r.forTitle ?? r.subCustomer}</div>}
                     </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-gray-700">{fmtWork(r.workDate)}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-gray-700">{fmtDay(r.invoiceDate)}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-gray-700">{fmtDay(r.dueDate)}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-gray-900">{centsToDollars(r.totalCents)}</td>
@@ -288,7 +317,7 @@ export function InvoiceList({ rows, showQuickBooks }: { rows: InvoiceListRow[]; 
                   </tr>
                   {isOpen && (
                     <tr className="bg-gray-50">
-                      <td colSpan={7} className="px-3 pb-4 pt-1">
+                      <td colSpan={8} className="px-3 pb-4 pt-1">
                         <InvoiceDetails r={r} showQuickBooks={showQuickBooks} onLink={() => setLinking(r)} />
                       </td>
                     </tr>
@@ -300,7 +329,7 @@ export function InvoiceList({ rows, showQuickBooks }: { rows: InvoiceListRow[]; 
           {visible.length > 0 && (
             <tfoot className="border-t border-gray-200 text-sm">
               <tr>
-                <td colSpan={4} className="px-3 py-2 text-xs text-gray-500">
+                <td colSpan={5} className="px-3 py-2 text-xs text-gray-500">
                   {visible.length} invoice{visible.length === 1 ? "" : "s"}
                 </td>
                 <td className="px-3 py-2 text-right font-medium tabular-nums text-gray-900">{centsToDollars(totals.total)}</td>
