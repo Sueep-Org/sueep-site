@@ -18,7 +18,7 @@ export default function TermsPage() {
       <header className="border-b border-gray-200 bg-gray-50">
         <div className="max-w-3xl mx-auto px-5 py-10 md:py-14">
           <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Terms of Use and End User License Agreement</h1>
-          <p className="mt-3 text-gray-600">Last updated: October 27, 2026</p>
+          <p className="mt-3 text-gray-600">Last updated: November 4, 2026</p>
         </div>
       </header>
 
@@ -68,8 +68,10 @@ export default function TermsPage() {
             time from the Sueep ERP or from the other service&apos;s own settings.
           </p>
           <p className="mt-3">
-            The QuickBooks connection reads Sueep&apos;s own QuickBooks company (reports, customers, invoices, payments and
-            expenses) to show financial information inside the Sueep ERP. It does not change anything in QuickBooks.
+            The QuickBooks connection reads Sueep&apos;s own QuickBooks company (reports, customers, products and services,
+            invoices, payments and credit memos) to show financial information inside the Sueep ERP. When Sueep staff
+            approve an invoice in the Sueep ERP, it creates that invoice in QuickBooks, along with the customer or
+            sub-customer it is billed to if needed. It does not edit, void or delete existing records in QuickBooks.
             Each connected service is governed by its own terms and privacy policy, and Sueep is not responsible for those
             services.
           </p>
