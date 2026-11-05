@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { getErpAuth } from "@/lib/erpAuth";
 import { canEditForecastTerms, loadTermsDays, MAX_TERMS_DAYS, TERMS_SETTING_KEY } from "@/lib/erp/dashboardCashForecast";
+import { saveSetting } from "@/lib/erp/settings";
 
 export const runtime = "nodejs";
 
@@ -22,10 +22,7 @@ export async function PUT(req: Request) {
   if (!Number.isInteger(days) || days < 0 || days > MAX_TERMS_DAYS) {
     return NextResponse.json({ error: `Days must be a whole number from 0 to ${MAX_TERMS_DAYS}` }, { status: 400 });
   }
-  await prisma.appSetting.upsert({
-    where: { key: TERMS_SETTING_KEY },
-    update: { value: String(days) },
-    create: { key: TERMS_SETTING_KEY, value: String(days) },
-  });
+  const result = await saveSetting(TERMS_SETTING_KEY, days, auth.email);
+  if ("error" in result) return NextResponse.json(result, { status: 400 });
   return NextResponse.json({ days });
 }

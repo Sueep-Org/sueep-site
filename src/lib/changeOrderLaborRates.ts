@@ -2,12 +2,12 @@
  * Two different Cleaner/Foreman $/hr concepts for change order labor, kept
  * deliberately separate:
  *
- *  - DEFAULT_CHANGE_ORDER_LABOR_RATES (+ a project's own Project.laborRateCard
+ *  - PricingSettings.coPriceRates (+ a project's own Project.laborRateCard
  *    override, via getChangeOrderLaborRates) — the BILLING rate. Has margin
  *    built in above wage cost. Drives the CO's price / contract value, and
  *    is what a pricing package (the "Extra prep coat"-style templates)
  *    resolves its $/hr against.
- *  - ACTUAL_CHANGE_ORDER_LABOR_COST_RATES — the real payroll wage, company-
+ *  - PricingSettings.coCostRates, the real payroll wage, company-
  *    wide, not project-overridable. Drives the CO's Est. Labor $ (what the
  *    work actually costs us), so that figure stays a true cost estimate
  *    instead of quietly matching the marked-up price.
@@ -18,10 +18,9 @@
  */
 
 /** We don't ask anyone to type an hours estimate for a change order — crews
- * are assumed to work a flat 8-hour day per person, full stop. Used by
- * ChangeOrderLaborEstimator (and its hand-rolled equivalent on the CO detail
- * page) as the fixed `hours` input to computeChangeOrderLaborEstimate. */
-export const CHANGE_ORDER_ESTIMATE_DAY_HOURS = 8;
+ * are assumed to work a flat day per person (PricingSettings.coDayHours, set
+ * on the Settings page). This is the default until someone saves another. */
+export const DEFAULT_CO_DAY_HOURS = 8;
 
 /** Work days in a change order's planned range (YYYY-MM-DD), both ends
  * counted. 1 when there's no range yet, so the price is one day's work. */
@@ -40,20 +39,20 @@ export type ChangeOrderLaborRateCard = {
 
 export type ResolvedChangeOrderLaborRates = Required<ChangeOrderLaborRateCard>;
 
-/** Company-wide fallback BILLING rate for any project without its own
- * Project.laborRateCard override — feeds the CO's price / contract value.
- * Deliberately above ACTUAL_CHANGE_ORDER_LABOR_COST_RATES; the difference
- * is margin. */
-export const DEFAULT_CHANGE_ORDER_LABOR_RATES: ResolvedChangeOrderLaborRates = {
+/** Starting company-wide BILLING rate (PricingSettings.coPriceRates, set on
+ * the Settings page) for any project without its own Project.laborRateCard
+ * override — feeds the CO's price / contract value. Deliberately above the
+ * cost rate below; the difference is margin. */
+export const DEFAULT_CO_PRICE_RATES: ResolvedChangeOrderLaborRates = {
   cleanerHourlyRateCents: 2000, // $20.00/hr
   foremanHourlyRateCents: 2884, // $28.84/hr
 };
 
-/** What we actually pay per hour, cleaner and supervisor — feeds the CO's
- * Est. Labor $ only. Fixed and company-wide: unlike the billing rate above,
- * this isn't something a project negotiates, so there's no per-project
- * override for it. */
-export const ACTUAL_CHANGE_ORDER_LABOR_COST_RATES: ResolvedChangeOrderLaborRates = {
+/** Starting wage we actually pay per hour (PricingSettings.coCostRates, set
+ * on the Settings page) — feeds the CO's Est. Labor $ only. Company-wide:
+ * unlike the billing rate above, this isn't something a project negotiates,
+ * so there's no per-project override for it. */
+export const DEFAULT_CO_COST_RATES: ResolvedChangeOrderLaborRates = {
   cleanerHourlyRateCents: 1800, // $18.00/hr
   foremanHourlyRateCents: 2000, // $20.00/hr (supervisor)
 };
@@ -77,13 +76,13 @@ export function sanitizeChangeOrderLaborRateCard(input: unknown): ChangeOrderLab
   return card;
 }
 
-/** Resolves a project's actual Cleaner/Foreman $/hr, filling in the default
- * for any role the project hasn't overridden. */
-export function getChangeOrderLaborRates(rateCard: unknown): ResolvedChangeOrderLaborRates {
+/** Resolves a project's actual Cleaner/Foreman $/hr, filling in the company
+ * rate (PricingSettings.coPriceRates) for any role the project hasn't overridden. */
+export function getChangeOrderLaborRates(rateCard: unknown, companyRates: ResolvedChangeOrderLaborRates): ResolvedChangeOrderLaborRates {
   const sanitized = sanitizeChangeOrderLaborRateCard(rateCard);
   return {
-    cleanerHourlyRateCents: sanitized.cleanerHourlyRateCents ?? DEFAULT_CHANGE_ORDER_LABOR_RATES.cleanerHourlyRateCents,
-    foremanHourlyRateCents: sanitized.foremanHourlyRateCents ?? DEFAULT_CHANGE_ORDER_LABOR_RATES.foremanHourlyRateCents,
+    cleanerHourlyRateCents: sanitized.cleanerHourlyRateCents ?? companyRates.cleanerHourlyRateCents,
+    foremanHourlyRateCents: sanitized.foremanHourlyRateCents ?? companyRates.foremanHourlyRateCents,
   };
 }
 
@@ -100,7 +99,7 @@ export function deriveChangeOrderSupervisorCount(cleanerCount: number): number {
 
 /** True once someone has explicitly set at least one of this project's
  * Cleaner/Foreman rates (via LaborRateCardEditor) — as opposed to silently
- * running on DEFAULT_CHANGE_ORDER_LABOR_RATES. Used to decide whether the
+ * running on the company rate. Used to decide whether the
  * public change-order request form is allowed to show a price at all: a
  * project nobody has priced yet shouldn't surface the internal default rate
  * as if it were a real, reviewed number. */

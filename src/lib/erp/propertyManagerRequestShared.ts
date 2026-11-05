@@ -56,10 +56,13 @@ export function estimateRequestCents(
   bedrooms: number,
   bathrooms: number,
   work: RequestWork,
-  isCommonArea = false,
-  nextDayUpcharge = false,
+  isCommonArea: boolean,
+  nextDayUpcharge: boolean,
+  nextDayPct: number,
 ): number {
   return computeTurnoverPricing({
+    nextDayPct,
+    standardPackage: pricingPackage,
     requestType: "TURNOVER",
     pricingPackage,
     bedrooms,

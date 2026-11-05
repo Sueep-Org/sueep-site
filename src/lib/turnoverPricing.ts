@@ -8,9 +8,10 @@ import {
   getTurnoverCompoundingRate,
   getTurnoverCustomLineItem,
   getTurnoverPricingPackage,
+  type TurnoverPricingPackage,
   type TurnoverUnitLayout,
 } from "@/lib/turnoverPricingPackages";
-import { NEXT_DAY_UPCHARGE_LABEL, nextDayUpchargeCents } from "@/lib/nextDayUpcharge";
+import { nextDayUpchargeCents, nextDayUpchargeLabel } from "@/lib/nextDayUpcharge";
 
 export type TurnoverPricingInput = {
   requestType: "TURNOVER" | "REGULAR";
@@ -38,8 +39,12 @@ export type TurnoverPricingInput = {
    * turnoverPricingPackages.ts. Unlike the flags above, these reference
    * items that only exist on buildings that defined them. */
   selectedCustomLineItemIds?: string[];
-  /** Work starting today or tomorrow, +20% on the whole price (see nextDayUpcharge.ts). */
+  /** Work starting today or tomorrow, +nextDayPct on the whole price (see nextDayUpcharge.ts). */
   nextDayUpcharge?: boolean;
+  /** PricingSettings.nextDayPct, from the Settings page */
+  nextDayPct: number;
+  /** PricingSettings.turnoverPackage: used when pricingPackage is empty */
+  standardPackage: TurnoverPricingPackage;
 };
 
 export type TurnoverPricingResult = {
@@ -61,7 +66,7 @@ function formatUsd(cents: number): string {
 const layoutText = (layout: string) => (layout === "common-area" ? "common area" : layout);
 
 export function computeTurnoverPricing(input: TurnoverPricingInput): TurnoverPricingResult {
-  const pricingPackage = getTurnoverPricingPackage(input.buildingName, input.pricingPackage);
+  const pricingPackage = getTurnoverPricingPackage(input.pricingPackage, input.standardPackage);
   const layoutOverride: TurnoverUnitLayout | null =
     input.isPartialTurn && input.partialTurnLayout ? (input.partialTurnLayout as TurnoverUnitLayout) : null;
   const partialTurnSuffix = layoutOverride ? " (partial turn)" : "";
@@ -157,10 +162,11 @@ export function computeTurnoverPricing(input: TurnoverPricingInput): TurnoverPri
   }
 
   if (input.nextDayUpcharge && priceCents > 0) {
-    const upcharge = nextDayUpchargeCents(priceCents);
+    const upcharge = nextDayUpchargeCents(priceCents, input.nextDayPct);
+    const label = nextDayUpchargeLabel(input.nextDayPct);
     priceCents += upcharge;
-    breakdown.push(`${NEXT_DAY_UPCHARGE_LABEL}: ${formatUsd(upcharge)}`);
-    lines.push({ name: NEXT_DAY_UPCHARGE_LABEL, cents: upcharge });
+    breakdown.push(`${label}: ${formatUsd(upcharge)}`);
+    lines.push({ name: label, cents: upcharge });
   }
 
   if (services.length === 0) {

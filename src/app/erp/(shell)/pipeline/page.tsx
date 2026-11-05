@@ -1,11 +1,12 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
+import { loadAlertSettings } from "@/lib/erp/alertSettingsServer";
 import Link from "next/link";
 import { getErpAuth, canEditCompanies, canManagePipeline, canViewPipelineBoard } from "@/lib/erpAuth";
 import { DEFAULT_CARD_FIELDS, cleanCardFields } from "@/lib/erp/boardCardFields";
 import { followedDealIds } from "@/lib/erp/dealFollowers";
 import { InfoTip } from "@/app/erp/components/ui";
-import { CLOSED_DAYS, loadPipelineBoard, type PipelineBoard } from "@/lib/erp/pipelineBoard";
+import { loadPipelineBoard, type PipelineBoard } from "@/lib/erp/pipelineBoard";
 import { WORK_SCOPES, WORK_SCOPE_LABELS, type PipelineKey } from "@/lib/erp/postConDeals";
 import { loadLostReasonOptions, type LostReasonOption } from "@/lib/erp/dealLostReasons";
 import { loadTypeOfBusinessOptions } from "@/lib/erp/dealCreate";
@@ -79,7 +80,7 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
           <PipelineBoardView
             key={pipeline}
             board={board}
-            closedDays={CLOSED_DAYS}
+            closedDays={(await loadAlertSettings()).dealsClosedDays}
             reasonOptions={reasonOptions}
             mayEditCompanies={canEditCompanies(auth.role)}
             typeOptions={typeOptions}

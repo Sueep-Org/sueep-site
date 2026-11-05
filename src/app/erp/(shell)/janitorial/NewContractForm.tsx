@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePricingSettings } from "@/app/components/PricingSettingsProvider";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
@@ -29,7 +30,8 @@ export function NewContractForm({ buildings, employees, taxRates }: { buildings:
   // can be built later on the contract's Pricing tab.
   const [useCalculator, setUseCalculator] = useState(false);
   const [rate, setRate] = useState("");
-  const [pricing, setPricing] = useState<ContractPricing>(emptyPricing);
+  const { janitorialSalesTaxPct } = usePricingSettings();
+  const [pricing, setPricing] = useState<ContractPricing>(() => emptyPricing(janitorialSalesTaxPct));
   const [billingDay, setBillingDay] = useState("1");
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
   // Follows the start date (one year later) until it is changed by hand.

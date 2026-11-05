@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useAppLists } from "@/app/components/AppListsProvider";
 import { Button, Modal, inputClass, labelClass } from "@/app/erp/components/ui";
-import { SCHEDULE_REMOVAL_REASONS, type ScheduleRemovalReason } from "@/lib/erp/scheduleRemovals";
+import type { ScheduleRemovalReason } from "@/lib/erp/scheduleRemovals";
 
 // Asks why a planned day is coming off the schedule. "Placed by mistake"
 // just deletes it, any other reason leaves it grayed out on the calendar.
@@ -19,6 +20,7 @@ export function RemoveDayModal({
   onClose: () => void;
   onRemove: (reason: ScheduleRemovalReason, note: string) => void;
 }) {
+  const reasons = useAppLists().removalReasons.filter((r) => !r.hidden);
   const [reason, setReason] = useState<ScheduleRemovalReason | "">("");
   const [note, setNote] = useState("");
 
@@ -43,7 +45,7 @@ export function RemoveDayModal({
       </p>
       <div className="mt-4 space-y-1.5">
         <span className={labelClass.default}>Why?</span>
-        {SCHEDULE_REMOVAL_REASONS.map((r) => (
+        {reasons.map((r) => (
           <label key={r.value} className="flex cursor-pointer items-center gap-2 text-sm text-gray-800">
             <input
               type="radio"

@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useAppLists } from "@/app/components/AppListsProvider";
 import { useRouter } from "next/navigation";
 import { Button, InfoTip, inputClass, labelClass, useConfirm, useToast } from "@/app/erp/components/ui";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
-import { HIRING_SOURCES, OFFICE_STAGES } from "@/lib/erp/officeHiring";
+import { OFFICE_STAGES } from "@/lib/erp/officeHiring";
 
 export type OfficeCandidateValues = {
   id: string;
@@ -28,6 +29,7 @@ export function OfficeCandidateEditor({
   initial: OfficeCandidateValues;
   openings: { id: string; title: string }[];
 }) {
+  const hiringSources = useAppLists().hiringSources;
   const router = useRouter();
   const confirm = useConfirm();
   const toast = useToast();
@@ -138,7 +140,7 @@ export function OfficeCandidateEditor({
             className="mt-1"
             value={v.source ?? ""}
             onChange={(val) => set("source", val || null)}
-            options={HIRING_SOURCES.map((s) => ({ value: s.value, label: s.label }))}
+            options={hiringSources.filter((s) => !s.hidden).map((s) => ({ value: s.value, label: s.label }))}
             placeholder="Where they came from…"
             allLabel="- None -"
           />

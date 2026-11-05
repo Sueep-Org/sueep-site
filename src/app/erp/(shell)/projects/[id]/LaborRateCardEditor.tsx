@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
 import { centsToDollars, parseMoneyInput } from "@/lib/erp/money";
+import { usePricingSettings } from "@/app/components/PricingSettingsProvider";
 import {
-  DEFAULT_CHANGE_ORDER_LABOR_RATES,
   sanitizeChangeOrderLaborRateCard,
   type ChangeOrderLaborRateCard,
 } from "@/lib/changeOrderLaborRates";
@@ -29,6 +29,7 @@ function toDollarInput(cents: number | undefined): string {
  * falls back to the company default shown as its placeholder. */
 export function LaborRateCardEditor({ projectId, initialRateCard, canEdit }: Props) {
   const router = useRouter();
+  const { coPriceRates } = usePricingSettings();
   const initial: ChangeOrderLaborRateCard = sanitizeChangeOrderLaborRateCard(initialRateCard);
 
   const [cleaner, setCleaner] = useState(toDollarInput(initial.cleanerHourlyRateCents));
@@ -107,10 +108,10 @@ export function LaborRateCardEditor({ projectId, initialRateCard, canEdit }: Pro
             value={cleaner}
             onChange={(e) => setCleaner(e.target.value)}
             disabled={!canEdit || loading}
-            placeholder={centsToDollars(DEFAULT_CHANGE_ORDER_LABOR_RATES.cleanerHourlyRateCents)}
+            placeholder={centsToDollars(coPriceRates.cleanerHourlyRateCents)}
           />
           <p className="mt-1 text-[11px] text-gray-400">
-            Default: {centsToDollars(DEFAULT_CHANGE_ORDER_LABOR_RATES.cleanerHourlyRateCents)}/hr
+            Default: {centsToDollars(coPriceRates.cleanerHourlyRateCents)}/hr
           </p>
         </div>
         <div>
@@ -126,10 +127,10 @@ export function LaborRateCardEditor({ projectId, initialRateCard, canEdit }: Pro
             value={foreman}
             onChange={(e) => setForeman(e.target.value)}
             disabled={!canEdit || loading}
-            placeholder={centsToDollars(DEFAULT_CHANGE_ORDER_LABOR_RATES.foremanHourlyRateCents)}
+            placeholder={centsToDollars(coPriceRates.foremanHourlyRateCents)}
           />
           <p className="mt-1 text-[11px] text-gray-400">
-            Default: {centsToDollars(DEFAULT_CHANGE_ORDER_LABOR_RATES.foremanHourlyRateCents)}/hr
+            Default: {centsToDollars(coPriceRates.foremanHourlyRateCents)}/hr
           </p>
         </div>
       </div>

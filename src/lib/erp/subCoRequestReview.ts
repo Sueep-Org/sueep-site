@@ -11,6 +11,7 @@
  * cancel it (the sub is told).
  */
 import { prisma } from "@/lib/prisma";
+import { loadPricingSettings } from "@/lib/pricingSettingsServer";
 import { escapeHtml, sendEmail } from "@/lib/email";
 import { getCoPricingPackage } from "@/lib/coPricingPackage";
 import { centsToDollars } from "./money";
@@ -175,7 +176,7 @@ export async function loadSubCoTab(projectId: string): Promise<SubCoTabData> {
     }),
     propertyManagerEmailsFor(project?.buildingId),
   ]);
-  const pkg = getCoPricingPackage(project?.building?.coPricingPackage ?? null);
+  const pkg = getCoPricingPackage(project?.building?.coPricingPackage ?? null, (await loadPricingSettings()).coPackage, (await loadPricingSettings()).nextDayPct);
   return {
     propertyManagers,
     surchargeOptions: pkg.surcharges.filter((s) => s.active).map((s) => ({ id: s.id, label: s.label, percent: s.percent })),
@@ -279,7 +280,7 @@ export async function updateSubCoRequest(id: string, actor: string, input: SubCo
       surcharge = { surchargeId: null, surchargeLabel: null, surchargePercent: null };
       changes.push(`Removed the ${r.surchargeLabel ?? ""} surcharge`.replace("  ", " "));
     } else {
-      const option = getCoPricingPackage(r.project.building?.coPricingPackage ?? null).surcharges.find((s) => s.id === input.surchargeId && s.active);
+      const option = getCoPricingPackage(r.project.building?.coPricingPackage ?? null, (await loadPricingSettings()).coPackage, (await loadPricingSettings()).nextDayPct).surcharges.find((s) => s.id === input.surchargeId && s.active);
       if (!option) return { error: "That surcharge isn't offered for this building." };
       surcharge = { surchargeId: option.id, surchargeLabel: option.label, surchargePercent: option.percent };
       changes.push(`Added the ${option.label} surcharge (+${option.percent}%)`);

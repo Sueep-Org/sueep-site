@@ -11,7 +11,8 @@ import { ProjectSafetySection } from "../../ProjectSafetySection";
 import type { SafetyCheck } from "../../ProjectSafetySection";
 import { centsToDollars } from "@/lib/erp/money";
 import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
-import { computeChangeOrderLaborEstimate, deriveChangeOrderSupervisorCount, getChangeOrderLaborRates, ACTUAL_CHANGE_ORDER_LABOR_COST_RATES, CHANGE_ORDER_ESTIMATE_DAY_HOURS } from "@/lib/changeOrderLaborRates";
+import { computeChangeOrderLaborEstimate, deriveChangeOrderSupervisorCount, getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
+import { usePricingSettings } from "@/app/components/PricingSettingsProvider";
 
 const input = inputClass.md;
 const label = labelClass.default;
@@ -252,7 +253,7 @@ export function ChangeOrderDetailEditor({
   projectId: string;
   projectTitle: string;
   /** This project's Labor rates override (see Project.laborRateCard) — falls
-   * back to DEFAULT_CHANGE_ORDER_LABOR_RATES via getChangeOrderLaborRates. */
+   * back to the Settings page rate via getChangeOrderLaborRates. */
   laborRateCard?: unknown;
   data: ChangeOrderDetailData;
   employees: EmployeeOption[];
@@ -266,6 +267,7 @@ export function ChangeOrderDetailEditor({
   contractorRows?: ContractorRow[];
 }) {
   const router = useRouter();
+  const pricingSettings = usePricingSettings();
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -311,7 +313,7 @@ export function ChangeOrderDetailEditor({
   const [actualTravel, setActualTravel] = useState(
     data.actualTravelCents != null ? (data.actualTravelCents / 100).toFixed(2) : "",
   );
-  // No longer editable (see CHANGE_ORDER_ESTIMATE_DAY_HOURS) — kept as a
+  // No longer editable (see PricingSettings.coDayHours) — kept as a
   // plain value, not state, so saving this CO round-trips whatever was
   // already stored instead of silently resetting older records to 8.
   const estHours = data.estHours != null ? String(data.estHours) : "";
@@ -348,14 +350,14 @@ export function ChangeOrderDetailEditor({
 
   // Two calculated numbers from the crew estimate above — see
   // ChangeOrderLaborEstimator for the same math on the create forms. No
-  // hours input here either — a flat CHANGE_ORDER_ESTIMATE_DAY_HOURS-hour
-  // day per person is always assumed. Price uses this project's Labor rates
+  // hours input here either — a flat day per person (Settings, Pricing)
+  // is always assumed. Price uses this project's Labor rates
   // (billing rate, has margin); labor cost uses the fixed actual pay rate.
   // Purely a suggestion: "Use this price" is the only thing that writes into
   // contractValue/estLabor below.
-  const crewCounts = { cleanerCount: Number(estLaborers) || 0, supervisorCount: Number(estSupervisors) || 0, hours: CHANGE_ORDER_ESTIMATE_DAY_HOURS };
-  const priceEstimate = computeChangeOrderLaborEstimate(crewCounts, getChangeOrderLaborRates(laborRateCard));
-  const costEstimate = computeChangeOrderLaborEstimate(crewCounts, ACTUAL_CHANGE_ORDER_LABOR_COST_RATES);
+  const crewCounts = { cleanerCount: Number(estLaborers) || 0, supervisorCount: Number(estSupervisors) || 0, hours: pricingSettings.coDayHours };
+  const priceEstimate = computeChangeOrderLaborEstimate(crewCounts, getChangeOrderLaborRates(laborRateCard, pricingSettings.coPriceRates));
+  const costEstimate = computeChangeOrderLaborEstimate(crewCounts, pricingSettings.coCostRates);
   function useCalculatedPrice() {
     setContractValue((priceEstimate.totalCents / 100).toFixed(2));
     setEstLabor((costEstimate.totalCents / 100).toFixed(2));

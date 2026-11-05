@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * Runs daily (see vercel.json). Auto-flags any Active employee with no
- * logged labor in INACTIVITY_THRESHOLD_MONTHS+ months as Inactive, and
+ * logged labor in the Settings page months (Payroll) as Inactive, and
  * emails a digest of who got flagged — see flagInactiveEmployees.
  */
 export async function GET(req: Request) {

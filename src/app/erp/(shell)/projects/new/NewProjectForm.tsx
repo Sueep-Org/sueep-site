@@ -1,21 +1,22 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
+import { useAppLists } from "@/app/components/AppListsProvider";
 import { useRouter } from "next/navigation";
 import { PROJECT_SEGMENT_OPTIONS } from "@/lib/erp/projectSegments";
 
 // Real estate is no longer a segment new projects can be created under.
 // It's only still selectable on existing real-estate projects' own setup editor.
 const CREATABLE_SEGMENT_OPTIONS = PROJECT_SEGMENT_OPTIONS.filter((opt) => opt.value !== "REAL_ESTATE");
-import { SERVICE_TYPE_OPTIONS } from "@/lib/erp/serviceTypes";
 import { getTurnoverPricingPackage, TURNOVER_UNIT_LAYOUTS, type TurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
 import { BuildingPricingPackageEditor } from "@/app/erp/(shell)/buildings/BuildingPricingPackageEditor";
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
 import { parseBuildingNameFromDealName, parseAddressFromDealName } from "@/lib/hubspot/dealNaming";
 import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
-import { CHANGE_ORDER_ESTIMATE_DAY_HOURS, changeOrderDayCount, getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
-import { NEXT_DAY_UPCHARGE_LABEL, isNextDayStart, nextDayCountInRange } from "@/lib/nextDayUpcharge";
+import { changeOrderDayCount, getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
+import { usePricingSettings } from "@/app/components/PricingSettingsProvider";
+import { isNextDayStart, nextDayCountInRange, nextDayUpchargeLabel } from "@/lib/nextDayUpcharge";
 import { ChangeOrderLaborEstimator } from "../[id]/ChangeOrderLaborEstimator";
 import { UnitNameInput } from "@/app/erp/components/UnitNameInput";
 import { unitNameKey } from "@/lib/erp/unitNames";
@@ -610,6 +611,8 @@ export function NewProjectForm({
   canEditPricing = false,
   payloadExtra,
 }: NewProjectFormProps) {
+  const pricingSettings = usePricingSettings();
+  const serviceTypeOptions = useAppLists().serviceTypes.filter((i) => !i.hidden).map((i) => i.label);
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [error, setError] = useState("");
@@ -638,7 +641,7 @@ export function NewProjectForm({
   const coDays = changeOrderDayCount(coStartDate, coEndDate);
   const [nextDayUpcharge, setNextDayUpcharge] = useState(false);
   const coLaborRates = coProjectId
-    ? getChangeOrderLaborRates(allProjects.find((p) => p.id === coProjectId)?.laborRateCard)
+    ? getChangeOrderLaborRates(allProjects.find((p) => p.id === coProjectId)?.laborRateCard, pricingSettings.coPriceRates)
     : null;
 
   const notifiableEmployees = useMemo(() => employees.filter((e) => e.email), [employees]);
@@ -834,8 +837,8 @@ export function NewProjectForm({
   const normalizedBathrooms = bathroomsToNumber(unitScopes[0]?.bathrooms ?? "1");
   const selectedBuilding = useMemo(() => buildings.find((b) => b.id === buildingProjectId) ?? null, [buildings, buildingProjectId]);
   const pricingPackage = useMemo(
-    () => getTurnoverPricingPackage(buildingName, isAddingBuilding ? newBuildingPricing : selectedBuilding?.pricingPackage),
-    [buildingName, selectedBuilding, isAddingBuilding, newBuildingPricing]
+    () => getTurnoverPricingPackage(isAddingBuilding ? newBuildingPricing : selectedBuilding?.pricingPackage, pricingSettings.turnoverPackage),
+    [selectedBuilding, isAddingBuilding, newBuildingPricing, pricingSettings.turnoverPackage]
   );
   const existingBuildingUnitNumbers = useMemo(
     () => new Set((selectedBuilding?.existingUnitNumbers ?? []).map(unitNameKey)),
@@ -1007,6 +1010,8 @@ export function NewProjectForm({
       const hasPricedService = unit.fullClean || unit.fullPaint || unit.touchUpPaint || unit.materialsAdditional || unit.carpetCleaning || unit.compounding;
       if (hasPricedService) {
         const unitPricing = computeTurnoverPricing({
+          nextDayPct: pricingSettings.nextDayPct,
+          standardPackage: pricingSettings.turnoverPackage,
           requestType: "TURNOVER",
           buildingName,
           pricingPackage,
@@ -1057,7 +1062,7 @@ export function NewProjectForm({
       perUnit,
       unitCount,
     };
-  }, [unitScopes, unitCount, buildingName, pricingPackage, nextDayUpcharge]);
+  }, [unitScopes, unitCount, buildingName, pricingPackage, nextDayUpcharge, pricingSettings.nextDayPct, pricingSettings.turnoverPackage]);
 
   async function onSubmitChangeOrder(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -1080,8 +1085,8 @@ export function NewProjectForm({
           estSupervisors: coEstSupervisorCount.trim() || undefined,
           noCrewRequired: coNoCrewRequired,
           // No hours input anymore — every change order estimate assumes a
-          // flat 8-hour day per person (see CHANGE_ORDER_ESTIMATE_DAY_HOURS), times the days in the range.
-          estHours: String(CHANGE_ORDER_ESTIMATE_DAY_HOURS * coDays),
+          // flat day per person (Settings, Pricing), times the days in the range.
+          estHours: String(pricingSettings.coDayHours * coDays),
           estimatedDays: coStartDate ? coDays : undefined,
           contractValue: coContractValue.trim() || undefined,
           estLabor: coEstLabor.trim() || undefined,
@@ -1616,7 +1621,6 @@ export function NewProjectForm({
             </div>
             {isAddingBuilding && canEditPricing ? (
               <BuildingPricingPackageEditor
-                buildingName=""
                 initialPackage={null}
                 canEdit
                 onChange={setNewBuildingPricing}
@@ -2066,7 +2070,7 @@ export function NewProjectForm({
                   </div>
                   <label className="mt-2 flex items-center gap-2 text-sm text-gray-700">
                     <input type="checkbox" checked={nextDayUpcharge} onChange={(e) => setNextDayUpcharge(e.target.checked)} />
-                    {NEXT_DAY_UPCHARGE_LABEL}
+                    {nextDayUpchargeLabel(pricingSettings.nextDayPct)}
                   </label>
                   <div className="mt-3 border-t border-gray-200 pt-3">
                     <p className="text-xs font-semibold uppercase text-gray-500">Price details</p>
@@ -2202,7 +2206,7 @@ export function NewProjectForm({
                 onChange={(e) => setServiceType(e.target.value)}
               >
                 <option value="">- Select -</option>
-                {SERVICE_TYPE_OPTIONS.map((opt) => (
+                {serviceTypeOptions.map((opt) => (
                   <option key={opt} value={opt}>
                     {opt}
                   </option>

@@ -16,7 +16,6 @@ import { DEFAULT_EMPLOYER_TAX_RATES, type EmployerTaxRates } from "@/lib/erp/emp
 
 export const WEEKS_PER_MONTH = 52 / 12;
 export const DEFAULT_SALES_TAX_PCT = 6;
-export const ROLE_SUGGESTIONS = ["Janitorial", "Cleaner", "Porter", "Foreman", "Supervisor", "Concierge", "Patrol"];
 
 export type PricingLine = {
   id: string;
@@ -65,10 +64,10 @@ export type PricingResult = {
   weeklyHours: number;
 };
 
-export function emptyPricing(): ContractPricing {
+export function emptyPricing(salesTaxPct: number): ContractPricing {
   return {
     lines: [newLine("Janitorial")],
-    salesTaxPct: DEFAULT_SALES_TAX_PCT,
+    salesTaxPct,
     overtime: null,
     holidays: null,
     totalOverrideCents: null,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePricingSettings } from "@/app/components/PricingSettingsProvider";
 import { useRouter } from "next/navigation";
 import {
   CO_ISSUE_PERS,
@@ -28,10 +29,13 @@ type IssueDraft = {
 type SurchargeDraft = { id: CoSurchargeId; label: string; percent: string; active: boolean };
 
 type Props = {
-  buildingId: string;
-  /** Building.coPricingPackage as saved; null means the default package. */
+  /** Omit on the Settings page, where this edits the standard list itself. */
+  buildingId?: string;
+  /** Building.coPricingPackage as saved (null means the standard list), or the standard list on Settings. */
   initialPackage: unknown;
   canEdit: boolean;
+  /** Settings page only: the standard list has been changed from the built-in one */
+  standardSaved?: boolean;
 };
 
 const inputCls = "w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 disabled:bg-gray-100";
@@ -47,12 +51,14 @@ function money(n: number) {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: n % 1 ? 2 : 0 });
 }
 
-export function BuildingCoPricingPackageEditor({ buildingId, initialPackage, canEdit }: Props) {
+export function BuildingCoPricingPackageEditor({ buildingId, initialPackage, canEdit, standardSaved = false }: Props) {
   const router = useRouter();
   const confirm = useConfirm();
-  const [isCustom, setIsCustom] = useState(initialPackage != null);
-  const [issues, setIssues] = useState<IssueDraft[]>(() => toDrafts(getCoPricingPackage(initialPackage)).issues);
-  const [surcharges, setSurcharges] = useState<SurchargeDraft[]>(() => toDrafts(getCoPricingPackage(initialPackage)).surcharges);
+  const { coPackage: standardPackage, nextDayPct } = usePricingSettings();
+  const isStandard = !buildingId;
+  const [isCustom, setIsCustom] = useState(isStandard ? standardSaved : initialPackage != null);
+  const [issues, setIssues] = useState<IssueDraft[]>(() => toDrafts(getCoPricingPackage(initialPackage, standardPackage, nextDayPct)).issues);
+  const [surcharges, setSurcharges] = useState<SurchargeDraft[]>(() => toDrafts(getCoPricingPackage(initialPackage, standardPackage, nextDayPct)).surcharges);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -89,11 +95,17 @@ export function BuildingCoPricingPackageEditor({ buildingId, initialPackage, can
     setMessage("");
     setLoading(true);
     try {
-      const res = await fetch(`/api/erp/buildings/${buildingId}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ coPricingPackage }),
-      });
+      const res = isStandard
+        ? await fetch("/api/erp/settings/packages/co", {
+            method: coPricingPackage ? "PUT" : "DELETE",
+            headers: { "content-type": "application/json" },
+            body: coPricingPackage ? JSON.stringify({ value: coPricingPackage }) : undefined,
+          })
+        : await fetch(`/api/erp/buildings/${buildingId}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ coPricingPackage }),
+          });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(data.error || "Failed to save CO pricing package");
@@ -121,18 +133,21 @@ export function BuildingCoPricingPackageEditor({ buildingId, initialPackage, can
       setIssues(drafts.issues);
       setSurcharges(drafts.surcharges);
       setIsCustom(true);
-      setMessage("CO pricing package saved. New CO requests will use these prices.");
+      setMessage(isStandard ? "Standard list saved. Buildings without their own list use it for new CO requests." : "CO pricing package saved. New CO requests will use these prices.");
     }
   }
 
   async function resetToDefault() {
-    if (!(await confirm({ message: "Replace this building's CO package with the default one? Your changes here will be lost.", confirmLabel: "Reset" }))) return;
+    const message = isStandard
+      ? "Put the standard list back to the built-in one? Your changes here will be lost."
+      : "Replace this building's CO package with the standard one? Your changes here will be lost.";
+    if (!(await confirm({ message, confirmLabel: "Reset" }))) return;
     if (await send(null)) {
-      const drafts = toDrafts(structuredClone(DEFAULT_CO_PRICING_PACKAGE));
+      const drafts = toDrafts(structuredClone(isStandard ? DEFAULT_CO_PRICING_PACKAGE : standardPackage));
       setIssues(drafts.issues);
       setSurcharges(drafts.surcharges);
       setIsCustom(false);
-      setMessage("Reset to the default CO package.");
+      setMessage(isStandard ? "Back to the built-in list." : "Reset to the standard CO package.");
     }
   }
 
@@ -140,7 +155,7 @@ export function BuildingCoPricingPackageEditor({ buildingId, initialPackage, can
     <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-gray-900">CO pricing package</h2>
+          <h2 className="text-sm font-semibold text-gray-900">{isStandard ? "Standard change order issues" : "CO pricing package"}</h2>
           <InfoTip
             wide
             text={
@@ -150,7 +165,7 @@ export function BuildingCoPricingPackageEditor({ buildingId, initialPackage, can
         </div>
         <div className="flex items-center gap-2">
           <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${isCustom ? "bg-violet-50 text-violet-700" : "bg-gray-100 text-gray-600"}`}>
-            {isCustom ? "Custom" : "Default"}
+            {isCustom ? (isStandard ? "Changed" : "Custom") : isStandard ? "Built-in" : "Standard"}
           </span>
           <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${canEdit ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>
             {canEdit ? "Editable" : "View only"}
@@ -270,7 +285,8 @@ export function BuildingCoPricingPackageEditor({ buildingId, initialPackage, can
               <input
                 value={s.percent}
                 onChange={(e) => setSurcharges((cur) => cur.map((x) => (x.id === s.id ? { ...x, percent: e.target.value } : x)))}
-                disabled={disabled}
+                disabled={disabled || s.id === "next-day"}
+                title={s.id === "next-day" ? "Same as the next day upcharge, set under Settings, Pricing" : undefined}
                 type="number"
                 min="0"
                 max="200"
@@ -298,11 +314,11 @@ export function BuildingCoPricingPackageEditor({ buildingId, initialPackage, can
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <Button size="md" type="button" onClick={save} disabled={disabled}>
-          {loading ? "Saving..." : "Save CO package"}
+          {loading ? "Saving..." : isStandard ? "Save standard list" : "Save CO package"}
         </Button>
         {isCustom && (
           <Button variant="secondary" size="md" type="button" onClick={resetToDefault} disabled={disabled}>
-            Reset to default
+            {isStandard ? "Reset to built-in list" : "Use the standard list"}
           </Button>
         )}
       </div>

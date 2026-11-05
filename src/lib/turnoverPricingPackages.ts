@@ -160,50 +160,6 @@ export const REAL_ESTATE_PRICING_PACKAGE: TurnoverPricingPackage = {
   },
 };
 
-const SONO_GIO_PRICING_PACKAGE: TurnoverPricingPackage = {
-  label: "The Block at SONO / The Gio Apartments pricing",
-  cleaningRates: { 1: 150, 2: 200, 3: 200 },
-  paintingRates: { 1: 500, 2: 600, 3: 600 },
-  cleaningLayoutRates: {
-    "studio": 120,
-    "1/1": 150,
-    "2/1": 200,
-    "2/2": 200,
-    "3/1": 200,
-    "3/2": 200,
-    "3/3": 200,
-    "common-area": 0,
-  },
-  paintingLayoutRates: {
-    "studio": 400,
-    "1/1": 500,
-    "2/1": 600,
-    "2/2": 600,
-    "3/1": 600,
-    "3/2": 600,
-    "3/3": 600,
-    "common-area": 0,
-  },
-};
-
-const BUILDING_PRICING_PACKAGES = [
-  {
-    match: ["the block at sono", "sono"],
-    package: SONO_GIO_PRICING_PACKAGE,
-  },
-  {
-    match: ["the gio apartments", "the gio"],
-    package: SONO_GIO_PRICING_PACKAGE,
-  },
-] as const;
-
-function normalizeBuildingName(value: string | null | undefined) {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 function readNumber(value: unknown): number | null {
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : null;
@@ -437,14 +393,9 @@ export function getTurnoverCompoundingRate(
   };
 }
 
-export function getTurnoverPricingPackage(
-  buildingName?: string | null,
-  storedPackage?: unknown
-): TurnoverPricingPackage {
+/** A building's own price table, or the standard one (PricingSettings.turnoverPackage,
+ * set on the Settings page) when it has none. */
+export function getTurnoverPricingPackage(storedPackage: unknown, standard: TurnoverPricingPackage): TurnoverPricingPackage {
   if (storedPackage) return sanitizeTurnoverPricingPackage(storedPackage);
-  const normalized = normalizeBuildingName(buildingName);
-  const match = BUILDING_PRICING_PACKAGES.find((entry) =>
-    entry.match.some((name) => normalized === name || normalized.includes(name)),
-  );
-  return match?.package ?? DEFAULT_TURNOVER_PRICING_PACKAGE;
+  return standard;
 }

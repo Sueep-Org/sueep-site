@@ -1,27 +1,17 @@
-export type MarginTier = { minMarginPercent: number; baseRate: number; acceleratorRate: number };
+import { utcDateKey } from "./dates";
+import { valueOn } from "./datedSettings";
+import { marginTierOn, recurringRateOn, type PayrollRules } from "./payrollRules";
 
 /**
  * Sales comp plan for one-time project deals. Recurring janitorial
- * contracts use a separate ACV + retention-tail model — see
- * `recurringCommissionRateForMonth` below. Commission rate depends on
+ * contracts use a separate ACV + retention-tail model, see
+ * `computeRecurringCommissionCents` below. Commission rate depends on
  * Sueep's margin % on the deal, and is applied against the deal's contract
- * value — not against margin dollars. Checked highest-first; the first tier
- * whose minMarginPercent the deal's margin meets or exceeds wins. Below 10%
- * margin, no commission at all.
+ * value, not against margin dollars. The tiers, the yearly accelerator
+ * threshold and the recurring rates are set on the Settings page
+ * (Commission tab) with start dates: each deal uses the rules in effect on
+ * the day it finished, each recurring month the rules on its start.
  */
-export const MARGIN_TIERS: MarginTier[] = [
-  { minMarginPercent: 30, baseRate: 0.05, acceleratorRate: 0.1 },
-  { minMarginPercent: 20, baseRate: 0.03, acceleratorRate: 0.07 },
-  { minMarginPercent: 10, baseRate: 0.01, acceleratorRate: 0.03 },
-  { minMarginPercent: -Infinity, baseRate: 0, acceleratorRate: 0 },
-];
-
-export function marginTierFor(marginPercent: number): MarginTier {
-  return MARGIN_TIERS.find((t) => marginPercent >= t.minMarginPercent)!;
-}
-
-/** Once a rep's cumulative revenue closed in a calendar year passes this, the accelerator rate applies to the excess. */
-export const ANNUAL_ACCELERATOR_THRESHOLD_CENTS = 1_500_000_00;
 
 export type CommissionDealInput = {
   id: string;
@@ -45,19 +35,20 @@ type RevenueEvent =
 
 /**
  * Splits each deal's contract value into the portion under vs. over the
- * owning rep's $1.5M annual cumulative-revenue threshold, taxing each
+ * owning rep's annual cumulative-revenue threshold (Settings), taxing each
  * portion at that deal's own margin-tier base/accelerator rate. Deals (and
  * any `extraRevenue`, e.g. recurring-contract billing, which counts toward
  * the cumulative total but is commissioned separately and so earns $0 here)
  * are walked chronologically per (owner, calendar year) so a single deal
  * that straddles the threshold is split correctly. A deal below the
- * 10%-margin cutoff earns $0 but its value still counts toward the
+ * lowest tier earns $0 but its value still counts toward the
  * cumulative total, since the threshold is about revenue closed, not
  * commissionable revenue.
  */
 export function computeCommissionCentsByDeal(
   deals: CommissionDealInput[],
-  extraRevenue: ExtraRevenueInput[] = []
+  extraRevenue: ExtraRevenueInput[],
+  rules: PayrollRules,
 ): Map<string, number> {
   const result = new Map<string, number>();
   const events: RevenueEvent[] = [
@@ -79,10 +70,11 @@ export function computeCommissionCentsByDeal(
     let cumulativeCents = 0;
     for (const e of list) {
       if (e.kind === "deal") {
-        const tier = marginTierFor(e.marginPercent);
+        const day = utcDateKey(e.date);
+        const tier = marginTierOn(rules, day, e.marginPercent);
         const underThresholdCents = Math.max(
           0,
-          Math.min(e.contractValueCents, ANNUAL_ACCELERATOR_THRESHOLD_CENTS - cumulativeCents)
+          Math.min(e.contractValueCents, valueOn(rules.acceleratorCents, day) - cumulativeCents)
         );
         const overThresholdCents = e.contractValueCents - underThresholdCents;
         const commissionForDeal = Math.round(underThresholdCents * tier.baseRate + overThresholdCents * tier.acceleratorRate);
@@ -95,21 +87,15 @@ export function computeCommissionCentsByDeal(
 }
 
 /**
- * Recurring janitorial contract commission (ACV + retention-tail model):
- * 5% of ACV — i.e. 5% of the monthly rate — paid monthly for the contract's
- * first 12 months (Year 1, acquisition), 2% for months 13-24 (Year 2,
- * retention tail), then $0 from month 25 on (Year 3+, fully transitioned to
- * Operations). `monthIndex` is 0-based: 0 is the contract's first billed month.
+ * Recurring janitorial contract commission (ACV + retention-tail model): a
+ * percent of each paid month's amount, one rate for the contract's first 12
+ * months (Year 1, acquisition), another for months 13-24 (Year 2, retention
+ * tail), then $0 from month 25 on. `monthIndex` is 0-based: 0 is the
+ * contract's first billed month. monthlyRateCents is the period's snapshotted
+ * rate, not necessarily the contract's current live rate.
  */
-export function recurringCommissionRateForMonth(monthIndex: number): number {
-  if (monthIndex < 12) return 0.05;
-  if (monthIndex < 24) return 0.02;
-  return 0;
-}
-
-/** monthlyRateCents is the specific period's snapshotted rate (a billing project's contractValueCents), not necessarily the contract's current live rate. */
-export function computeRecurringCommissionCents(monthlyRateCents: number, monthIndex: number): number {
-  return Math.round(monthlyRateCents * recurringCommissionRateForMonth(monthIndex));
+export function computeRecurringCommissionCents(monthlyRateCents: number, monthIndex: number, periodStartKey: string, rules: PayrollRules): number {
+  return Math.round(monthlyRateCents * recurringRateOn(rules, periodStartKey, monthIndex));
 }
 
 type CommissionEligibleEmployee = { id: string; email: string | null; firstName: string; lastName: string };

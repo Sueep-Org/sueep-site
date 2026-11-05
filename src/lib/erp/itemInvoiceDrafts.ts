@@ -15,6 +15,8 @@
  */
 import { prisma } from "@/lib/prisma";
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
+import { loadPricingSettings } from "@/lib/pricingSettingsServer";
+import type { PricingSettings } from "@/lib/pricingSettings";
 import { normalizeBillingStatus } from "./billingStatus";
 import { BILLING_DATA_START } from "./dashboardMoney";
 import { todayEasternKey, utcDateKey } from "./dates";
@@ -73,7 +75,7 @@ function unitLabel(unitNumber: string): string {
 const NOT_VOIDED = { status: { not: "voided" } };
 
 /** A turn's services at today's building prices, plus its Other work, one invoice line each. */
-function turnParts(tr: {
+function turnParts(settings: Pick<PricingSettings, "nextDayPct" | "turnoverPackage">, tr: {
   requestType: string;
   bedrooms: number | null;
   bathrooms: number | null;
@@ -94,6 +96,8 @@ function turnParts(tr: {
   building: { name: string; pricingPackage: unknown } | null;
 }): { name: string; cents: number }[] {
   const pricing = computeTurnoverPricing({
+    nextDayPct: settings.nextDayPct,
+    standardPackage: settings.turnoverPackage,
     requestType: tr.requestType === "REGULAR" ? "REGULAR" : "TURNOVER",
     buildingName: tr.building?.name,
     pricingPackage: tr.building?.pricingPackage,
@@ -159,6 +163,7 @@ const projectSelect = {
 /** Every finished, unbilled item with no invoice linked yet, grouped for invoicing. */
 export async function loadBillableGroups(only?: Set<string>): Promise<BillableGroup[]> {
   const s = since();
+  const pricingSettings = await loadPricingSettings();
   const [turns, sovItems, changeOrders] = await Promise.all([
     prisma.project.findMany({
       where: {
@@ -243,7 +248,7 @@ export async function loadBillableGroups(only?: Set<string>): Promise<BillableGr
       lineDescription: `${g.name} - ${unitLabel(tr.unitNumber!)}`,
       // Same amount the Billing page shows for a turn.
       cents: tr.approvedPriceCents ?? tr.priceCents ?? t.contractValueCents ?? 0,
-      parts: turnParts(tr),
+      parts: turnParts(pricingSettings, tr),
       doneKey: t.turnoverCompletedAt ? todayEasternKey(t.turnoverCompletedAt) : utcDateKey(t.projectEndDate!),
       projectId: t.id,
       href: `/erp/projects/${t.id}`,

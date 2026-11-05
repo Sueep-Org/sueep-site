@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { TurnoverRequestsGate } from "./TurnoverRequestsGate";
 import { MarketingNav } from "../components/MarketingNav";
+import { loadPricingSettings } from "@/lib/pricingSettingsServer";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -15,11 +16,14 @@ export const metadata: Metadata = {
 
 
 export default async function TurnoverRequestsPage() {
-  const buildings = await prisma.building.findMany({
-    orderBy: { name: "asc" },
-    // Public page: never send contacts or pricing to the browser.
-    select: { id: true, name: true, address: true },
-  });
+  const [buildings, { nextDayPct }] = await Promise.all([
+    prisma.building.findMany({
+      orderBy: { name: "asc" },
+      // Public page: never send contacts or pricing to the browser.
+      select: { id: true, name: true, address: true },
+    }),
+    loadPricingSettings(),
+  ]);
 
   return (
     <main className="min-h-screen bg-white text-gray-900">
@@ -36,7 +40,7 @@ export default async function TurnoverRequestsPage() {
 
       {/* Form */}
       <section className="mx-auto w-full max-w-5xl px-4 py-10 sm:py-14">
-        <TurnoverRequestsGate buildings={buildings} />
+        <TurnoverRequestsGate buildings={buildings} nextDayPct={nextDayPct} />
       </section>
 
       {/* Footer */}

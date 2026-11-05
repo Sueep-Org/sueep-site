@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useAppLists } from "@/app/components/AppListsProvider";
+import { listLabel, type ListItem } from "@/lib/erp/appLists";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useToast } from "@/app/erp/components/ui";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import {
-  HIRING_SOURCES,
   OFFICE_STAGES,
-  hiringSourceLabel,
   officeStageMeta,
   phoneKey,
   type OfficeStage,
@@ -47,14 +47,14 @@ const OUT_COLUMNS = OFFICE_STAGES.filter((s) => OUT_STAGES.includes(s.value));
 const stageIndex = (s: OfficeStage) => OFFICE_STAGES.findIndex((x) => x.value === s);
 
 /** Everything the card leaves out, for its hover text. */
-function details(c: OpeningCandidate): string {
+function details(c: OpeningCandidate, hiringSources: ListItem[]): string {
   return [
     c.fullName,
     c.phone,
     c.email,
     c.location,
     c.expectedSalary && `Expected: ${c.expectedSalary}`,
-    c.source && `Source: ${hiringSourceLabel(c.source)}`,
+    c.source && `Source: ${listLabel(hiringSources, c.source)}`,
     `Added ${new Date(c.createdAt).toLocaleDateString()}`,
   ]
     .filter(Boolean)
@@ -67,6 +67,7 @@ function details(c: OpeningCandidate): string {
  * refresh keeps them. Moves and stars save right away and roll back on error.
  */
 export function OpeningCandidatesView({ initial }: { initial: OpeningCandidate[] }) {
+  const hiringSources = useAppLists().hiringSources;
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -169,7 +170,7 @@ export function OpeningCandidatesView({ initial }: { initial: OpeningCandidate[]
           className="w-36"
           value={source}
           onChange={(v) => setParam("source", v)}
-          options={HIRING_SOURCES.map((s) => ({ value: s.value, label: s.label }))}
+          options={hiringSources.filter((s) => !s.hidden).map((s) => ({ value: s.value, label: s.label }))}
           placeholder="Any source"
           allLabel="Any source"
         />
@@ -275,6 +276,7 @@ function StageColumn({
   onMove: (id: string, stage: OfficeStage) => void;
   onStar: (id: string, on: boolean) => void;
 }) {
+  const hiringSources = useAppLists().hiringSources;
   const [over, setOver] = useState(false);
   const canDrop = !!dragging && !cards.some((c) => c.id === dragging);
   const tone = stage.value === "HIRED" ? "border-t-emerald-400" : OUT_STAGES.includes(stage.value) ? "border-t-gray-300" : "border-t-pink-300";
@@ -314,7 +316,7 @@ function StageColumn({
                 onDragStart(c.id);
               }}
               onDragEnd={onDragEnd}
-              title={details(c)}
+              title={details(c, hiringSources)}
               className={`cursor-grab rounded-md border bg-white px-2.5 py-2 shadow-sm active:cursor-grabbing ${
                 dragging === c.id ? "opacity-40" : ""
               } ${c.shortlisted ? "border-amber-200" : "border-gray-200"}`}
@@ -423,6 +425,7 @@ function CandidateTable({
   onMove: (id: string, stage: OfficeStage) => void;
   onStar: (id: string, on: boolean) => void;
 }) {
+  const hiringSources = useAppLists().hiringSources;
   if (rows.length === 0) {
     return <p className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">No matches.</p>;
   }
@@ -460,7 +463,7 @@ function CandidateTable({
                 <td className="max-w-[14rem] truncate px-4 py-2.5 text-gray-600" title={c.expectedSalary ?? undefined}>
                   {c.expectedSalary || "-"}
                 </td>
-                <td className="px-4 py-2.5 text-gray-600">{c.source ? hiringSourceLabel(c.source) : "-"}</td>
+                <td className="px-4 py-2.5 text-gray-600">{c.source ? listLabel(hiringSources, c.source) : "-"}</td>
                 <td className="px-4 py-2.5">
                   <select
                     value={c.stage}

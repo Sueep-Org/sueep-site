@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { NEXT_DAY_UPCHARGE_PERCENT, isNextDayStart } from "@/lib/nextDayUpcharge";
+import { isNextDayStart } from "@/lib/nextDayUpcharge";
 
 const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E73C6E] focus:outline-none focus:ring-1 focus:ring-[#E73C6E]";
@@ -151,9 +151,10 @@ function bathroomsToNumber(value: BathroomValue): number {
 interface Props {
   onBack: () => void;
   buildings: BuildingOption[];
+  nextDayPct: number;
 }
 
-export function PropertyManagerForm({ onBack, buildings }: Props) {
+export function PropertyManagerForm({ onBack, buildings, nextDayPct }: Props) {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormState>(initial);
   const [error, setError] = useState("");
@@ -468,7 +469,7 @@ export function PropertyManagerForm({ onBack, buildings }: Props) {
                   onChange={(e) => patch({ startDate: e.target.value })}
                 />
                 {isNextDayStart(form.startDate) && (
-                  <p className="mt-1 text-xs text-amber-700">Work starting today or tomorrow has a {NEXT_DAY_UPCHARGE_PERCENT}% next day upcharge.</p>
+                  <p className="mt-1 text-xs text-amber-700">Work starting today or tomorrow has a {nextDayPct}% next day upcharge.</p>
                 )}
               </div>
               <div>

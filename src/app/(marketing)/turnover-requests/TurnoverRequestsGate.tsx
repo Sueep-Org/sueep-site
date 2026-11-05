@@ -15,6 +15,8 @@ function parseRole(value: string | null): Role {
 
 interface Props {
   buildings: BuildingOption[];
+  /** Next day upcharge percent from Settings, shown on the forms */
+  nextDayPct: number;
 }
 
 function RoleCard({
@@ -65,7 +67,7 @@ function RoleCard({
   );
 }
 
-function TurnoverRequestsGateInner({ buildings }: Props) {
+function TurnoverRequestsGateInner({ buildings, nextDayPct }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -77,11 +79,11 @@ function TurnoverRequestsGateInner({ buildings }: Props) {
   }
 
   if (role === "property-manager") {
-    return <PropertyManagerForm onBack={() => selectRole(null)} buildings={buildings} />;
+    return <PropertyManagerForm onBack={() => selectRole(null)} buildings={buildings} nextDayPct={nextDayPct} />;
   }
 
   if (role === "project-manager") {
-    return <ProjectManagerForm onBack={() => selectRole(null)} />;
+    return <ProjectManagerForm onBack={() => selectRole(null)} nextDayPct={nextDayPct} />;
   }
 
   return (

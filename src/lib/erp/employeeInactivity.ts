@@ -1,9 +1,9 @@
 import { prisma } from "@/lib/prisma";
+import { loadPayrollRules } from "./payrollRulesServer";
 
-/** No logged labor (LaborEntry.workDate — an actual worked shift, not just
- * a calendar assignment) in this many months auto-flags an employee
- * Inactive. See flagInactiveEmployees. */
-export const INACTIVITY_THRESHOLD_MONTHS = 6;
+// No logged labor (LaborEntry.workDate, an actual worked shift, not just a
+// calendar assignment) in PayrollRules.inactiveAfterMonths (Settings,
+// Payroll) auto-flags an employee Inactive. See flagInactiveEmployees.
 
 function monthsAgo(months: number): Date {
   const d = new Date();
@@ -20,7 +20,7 @@ export type FlagInactiveEmployeesResult = {
  * Runs on a schedule (see /api/cron/employee-inactivity-check + vercel.json).
  * Any HOURLY, non-offshore employee currently Active whose most recent
  * logged labor (or who has never logged any) is older than
- * INACTIVITY_THRESHOLD_MONTHS gets switched to Inactive, tagged
+ * the Settings page months gets switched to Inactive, tagged
  * statusSource "AUTO" — distinct from a person manually setting Inactive,
  * so createLaborEntryForProject knows it's safe to flip this specific
  * employee back to Active automatically the moment they log labor again (a
@@ -41,7 +41,7 @@ export type FlagInactiveEmployeesResult = {
  * status column are the visibility here, not a digest.
  */
 export async function flagInactiveEmployees(): Promise<FlagInactiveEmployeesResult> {
-  const cutoff = monthsAgo(INACTIVITY_THRESHOLD_MONTHS);
+  const cutoff = monthsAgo((await loadPayrollRules()).inactiveAfterMonths);
 
   const activeEmployees = await prisma.employee.findMany({
     where: { status: "ACTIVE", isOffshore: false, isJanitorialContract: false, payType: { not: "SALARY" } },

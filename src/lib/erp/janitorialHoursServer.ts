@@ -3,6 +3,7 @@ import { utcDateKey } from "@/lib/erp/dates";
 import { loadJanitorialShifts } from "@/lib/erp/janitorialScheduleServer";
 import { distanceMeters, resolveJanitorialHours, type ResolvedShiftHours } from "@/lib/erp/janitorialHours";
 import { ensureBuildingCoordinates } from "@/lib/erp/geocode";
+import { loadPayrollRules } from "@/lib/erp/payrollRulesServer";
 
 /** Buildings looked up per load at most, so a page never waits on many geocoder calls. */
 const MAX_GEOCODES_PER_LOAD = 5;
@@ -46,7 +47,9 @@ export async function loadJanitorialHours(start: Date, end: Date): Promise<Resol
   const distance = (building: { latitude: number; longitude: number } | undefined, lat: number | null, lng: number | null, accuracy: number | null) =>
     building && lat != null && lng != null ? { meters: distanceMeters(building, { latitude: lat, longitude: lng }), accuracy } : null;
 
+  const rules = await loadPayrollRules();
   return resolveJanitorialHours({
+    rules,
     shifts,
     entries: entries.map((e) => {
       const building = coordsByContract.get(e.recurringContractId);

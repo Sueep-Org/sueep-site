@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
+import { loadPricingSettings } from "@/lib/pricingSettingsServer";
 import { matchUnitName } from "@/lib/erp/unitNames";
 import {
+  getTurnoverPricingPackage,
   sanitizeTurnoverPricingPackage,
   TURNOVER_UNIT_LAYOUTS,
   type TurnoverPricingPackage,
@@ -81,8 +83,8 @@ function readDollar(value: unknown) {
   return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : null;
 }
 
-function pricingPackageFromPayload(body: Record<string, unknown>, fallback: unknown): TurnoverPricingPackage {
-  const base = sanitizeTurnoverPricingPackage(fallback);
+function pricingPackageFromPayload(body: Record<string, unknown>, fallback: unknown, standard: TurnoverPricingPackage): TurnoverPricingPackage {
+  const base = getTurnoverPricingPackage(fallback, standard);
   const pricing = body.pricing && typeof body.pricing === "object" ? (body.pricing as Record<string, unknown>) : {};
   const dollars =
     pricing.pricePackageDollars && typeof pricing.pricePackageDollars === "object"
@@ -110,7 +112,7 @@ function pricingPackageFromPayload(body: Record<string, unknown>, fallback: unkn
   });
 }
 
-async function resolveBuilding(body: Record<string, unknown>) {
+async function resolveBuilding(body: Record<string, unknown>, standard: TurnoverPricingPackage) {
   const requestedId = stringValue(body.buildingId);
   if (requestedId) {
     const existing = await prisma.building.findUnique({ where: { id: requestedId } });
@@ -128,7 +130,7 @@ async function resolveBuilding(body: Record<string, unknown>) {
     buildings.find((building) => normalizeName(building.address) === normalizeName(address)) ?? buildings[0];
 
   if (existing) {
-    const pricingPackage = pricingPackageFromPayload(body, existing.pricingPackage);
+    const pricingPackage = pricingPackageFromPayload(body, existing.pricingPackage, standard);
     return prisma.building.update({
       where: { id: existing.id },
       data: {
@@ -150,7 +152,7 @@ async function resolveBuilding(body: Record<string, unknown>) {
       pmPhone: stringValue(body.pmPhone) || null,
       hubspotDealId: stringValue(body.buildingHubspotDealId) || null,
       // Prices set on the New Project form's new-building step, else standard
-      pricingPackage: pricingPackageFromPayload(body, body.buildingPricingPackage ?? null),
+      pricingPackage: pricingPackageFromPayload(body, body.buildingPricingPackage ?? null, standard),
     },
   });
 }
@@ -173,8 +175,9 @@ export async function createTurnoverRequestsFromPayload(body: Record<string, unk
     throw new Error("Start date is required for every unit");
   }
 
-  const building = await resolveBuilding(body);
-  const pricingPackage = pricingPackageFromPayload(body, building.pricingPackage);
+  const { nextDayPct, turnoverPackage } = await loadPricingSettings();
+  const building = await resolveBuilding(body, turnoverPackage);
+  const pricingPackage = pricingPackageFromPayload(body, building.pricingPackage, turnoverPackage);
   // A unit the building already has keeps its spelling (see unitNames.ts)
   const knownUnitNames = (await prisma.turnoverRequest.findMany({ where: { buildingId: building.id, unitNumber: { not: null } }, select: { unitNumber: true } })).map((r) => r.unitNumber!);
 
@@ -203,6 +206,8 @@ export async function createTurnoverRequestsFromPayload(body: Record<string, unk
       const unitNumber = matchUnitName(stringValue(unit.unitNumber) || (isCommonArea ? "Common Area" : `Unit ${index + 1}`), knownUnitNames);
 
       const pricing = computeTurnoverPricing({
+        nextDayPct,
+        standardPackage: turnoverPackage,
         requestType: "TURNOVER",
         buildingName: building.name,
         pricingPackage,

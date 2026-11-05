@@ -5,8 +5,8 @@ import {
   deriveChangeOrderSupervisorCount,
   getChangeOrderLaborRates,
   hasCustomChangeOrderLaborRate,
-  CHANGE_ORDER_ESTIMATE_DAY_HOURS,
 } from "@/lib/changeOrderLaborRates";
+import { loadPricingSettings } from "@/lib/pricingSettingsServer";
 import { isNextDayStart, withNextDayUpcharge } from "@/lib/nextDayUpcharge";
 
 export const runtime = "nodejs";
@@ -49,11 +49,12 @@ export async function GET(req: Request, ctx: Ctx) {
     return NextResponse.json({ priced: true, totalCents: 0 });
   }
 
-  const rates = getChangeOrderLaborRates(project.laborRateCard);
+  const pricing = await loadPricingSettings();
+  const rates = getChangeOrderLaborRates(project.laborRateCard, pricing.coPriceRates);
   const estimate = computeChangeOrderLaborEstimate(
-    { cleanerCount, supervisorCount, hours: CHANGE_ORDER_ESTIMATE_DAY_HOURS },
+    { cleanerCount, supervisorCount, hours: pricing.coDayHours },
     rates,
   );
 
-  return NextResponse.json({ priced: true, totalCents: withNextDayUpcharge(estimate.totalCents, nextDay), nextDayUpcharge: nextDay });
+  return NextResponse.json({ priced: true, totalCents: withNextDayUpcharge(estimate.totalCents, nextDay, pricing.nextDayPct), nextDayUpcharge: nextDay });
 }

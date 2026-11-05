@@ -72,7 +72,7 @@ export function BuildingLocationCard({
         <div>
           <h2 className="text-sm font-semibold text-gray-900">Building location</h2>
           <p className="text-xs text-gray-500">
-            Clock-ins more than about a quarter mile away are flagged for review. {statusText}
+            Clock-ins too far from the building are flagged for review (distance under Settings, Payroll). {statusText}
           </p>
           {hasLocation && (
             <a

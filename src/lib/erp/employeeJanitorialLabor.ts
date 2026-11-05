@@ -13,6 +13,8 @@ import { todayEasternAsUtcMidnight } from "@/lib/erp/dates";
 import { loadJanitorialHours } from "@/lib/erp/janitorialHoursServer";
 import { formatTime12 } from "@/lib/erp/janitorialSchedule";
 import { fixedPayHourlyCostCents, isFixedPay, loadPayHistories, payRateOn } from "@/lib/erp/payRates";
+import { loadPayrollRules } from "@/lib/erp/payrollRulesServer";
+import { valueOn } from "@/lib/erp/datedSettings";
 
 export type JanitorialLaborRow = {
   id: string;
@@ -46,7 +48,7 @@ export async function loadEmployeeJanitorialLabor(
   const end = range.end && range.end < today ? range.end : today;
   if (start > end) return [];
 
-  const [shifts, histories] = await Promise.all([loadJanitorialHours(start, end), loadPayHistories([employeeId])]);
+  const [shifts, histories, rules] = await Promise.all([loadJanitorialHours(start, end), loadPayHistories([employeeId]), loadPayrollRules()]);
   const history = histories.get(employeeId);
 
   return shifts
@@ -61,7 +63,7 @@ export async function loadEmployeeJanitorialLabor(
         buildingName: s.buildingName,
         workDate: new Date(`${s.date}T00:00:00.000Z`),
         hours: s.hours,
-        hourlyRateCents: !rate ? 0 : isFixedPay(rate) ? fixedPayHourlyCostCents(rate) : (rate.hourlyPayCents ?? 0),
+        hourlyRateCents: !rate ? 0 : isFixedPay(rate) ? fixedPayHourlyCostCents(rate, valueOn(rules.yearHours, s.date)) : (rate.hourlyPayCents ?? 0),
         taskDescription: from && to ? `${formatTime12(from)} to ${formatTime12(to)}` : null,
       };
     });

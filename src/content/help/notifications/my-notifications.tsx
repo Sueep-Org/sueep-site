@@ -19,15 +19,15 @@ export function MyNotifications() {
           Pick an area (Projects &amp; schedule, Turnovers, People...) to narrow the list, or click{" "}
           <strong>Unread only</strong>. <strong>Mark all read</strong> clears the count.
         </Step>
-        <Step n={3} title="All emails (Admins)">
-          Admins also get an <strong>All emails</strong> tab with every email the ERP has sent, to anyone. Search it by
+        <Step n={3} title="All emails (Admins and Business Managers)">
+          Admins and Business Managers also get an <strong>All emails</strong> tab with every email the ERP has sent, to anyone. Search it by
           subject or by an exact email address. Only emails sent to you count toward your unread number.
         </Step>
       </Steps>
 
       <Callout type="tip">
         Emails sent before October 5, 2026, sign-in codes, and emails that failed or were turned off aren&apos;t listed. Bcc
-        recipients are never shown. Admins and PMs can see failed emails in the Email Log on Email Settings.
+        recipients are never shown. Admins, PMs and Business Managers can see failed emails in the Email Log on Email Settings.
       </Callout>
     </>
   );

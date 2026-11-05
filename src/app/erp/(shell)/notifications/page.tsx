@@ -6,6 +6,7 @@ import { NOTIFICATIONS, defaultBackupPms, type EmailType } from "@/lib/notificat
 import { defaultSetting, loadAllSettings } from "@/lib/notificationSettings";
 import { NotificationsHeader } from "./NotificationsHeader";
 import { SettingsView, type SettingRow } from "./SettingsView";
+import { SaveDefaultsBanner } from "./SaveDefaultsBanner";
 
 export const metadata: Metadata = {
   title: "Email Settings",
@@ -14,6 +15,8 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 const WEEK_MS = 7 * 86_400_000;
+
+const sameList = (a: string[], b: string[]) => a.length === b.length && [...a].sort().join(",") === [...b].sort().join(",");
 
 export default async function NotificationsPage() {
   const auth = await getErpAuth();
@@ -31,6 +34,9 @@ export default async function NotificationsPage() {
   const rows: SettingRow[] = (Object.keys(NOTIFICATIONS) as EmailType[]).map((type) => {
     const d = NOTIFICATIONS[type];
     const fallback = defaultSetting(type);
+    const saved = settings[type];
+    // "Changed" means different from the built-in list, not just saved.
+    const differs = saved.enabled !== fallback.enabled || !sameList(saved.to, fallback.to) || !sameList(saved.cc, fallback.cc);
     return {
       type,
       label: d.label,
@@ -40,17 +46,22 @@ export default async function NotificationsPage() {
       toMode: d.toMode,
       ccEditable: d.ccEditable,
       alwaysOn: d.alwaysOn,
-      setting: settings[type],
+      setting: { ...saved, customized: saved.customized && differs },
+      saved: saved.customized,
       defaults: { enabled: fallback.enabled, to: fallback.to, cc: fallback.cc },
       lastSentAt: lastSentBy.get(type) ?? null,
       failedThisWeek: failedBy.get(type) ?? 0,
     };
   });
 
+  const unsaved = rows.filter((r) => !r.saved).length + (backupPmsCustomized ? 0 : 1);
+  const backupDiffers = backupPmsCustomized && !sameList(backupPms, defaultBackupPms());
+
   return (
     <div className="space-y-6">
       <NotificationsHeader active="settings" failedCount={failed.reduce((n, r) => n + r._count._all, 0)} />
-      <SettingsView rows={rows} backupPms={backupPms} backupPmsCustomized={backupPmsCustomized} defaultBackupPms={defaultBackupPms()} />
+      {unsaved > 0 && <SaveDefaultsBanner count={unsaved} canSave={process.env.VERCEL_ENV === "production"} />}
+      <SettingsView rows={rows} backupPms={backupPms} backupPmsCustomized={backupDiffers} defaultBackupPms={defaultBackupPms()} />
     </div>
   );
 }

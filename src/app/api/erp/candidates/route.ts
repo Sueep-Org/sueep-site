@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { loadAppLists } from "@/lib/erp/appListsServer";
 import type { Prisma } from "@prisma/client";
 import { canSeeOfficeHiring, getErpAuth } from "@/lib/erpAuth";
-import { HIRING_SOURCES, isOfficeStage, isValidEmail, phoneKey, statusForStage } from "@/lib/erp/officeHiring";
+import { isOfficeStage, isValidEmail, phoneKey, statusForStage } from "@/lib/erp/officeHiring";
 
 const VALID_STATUSES = ["APPLIED", "INTERVIEWING", "ONBOARDING", "DENIED"];
 
@@ -104,8 +105,8 @@ async function createOfficeCandidate(body: Record<string, unknown>, fullName: st
   const location = String(body.location || "").trim();
   const expectedSalary = String(body.expectedSalary || "").trim() || null;
   const internalNotes = String(body.internalNotes || "").trim() || null;
-  const sourceRaw = String(body.source || "").trim().toUpperCase();
-  const source = HIRING_SOURCES.some((s) => s.value === sourceRaw) ? sourceRaw : null;
+  const sourceRaw = String(body.source || "").trim();
+  const source = (await loadAppLists()).hiringSources.some((s) => s.value === sourceRaw) ? sourceRaw : null;
   const stage = isOfficeStage(body.stage) ? body.stage : "NEW";
 
   const sameOpening = await prisma.candidateApplication.findMany({

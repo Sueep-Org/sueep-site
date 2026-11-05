@@ -24,9 +24,10 @@ import { loadJanitorialHours } from "@/lib/erp/janitorialHoursServer";
 import type { ResolvedShiftHours } from "@/lib/erp/janitorialHours";
 import { fixedPayHourlyCostCents, isFixedPay, loadPayHistories, payRateOn, type PayHistories } from "@/lib/erp/payRates";
 import { fillRepeatingManualHours } from "@/lib/erp/manualHoursRepeat";
+import { valueOn } from "@/lib/erp/datedSettings";
+import type { PayrollRules } from "@/lib/erp/payrollRules";
+import { loadPayrollRules } from "@/lib/erp/payrollRulesServer";
 
-export const OT_THRESHOLD_HOURS = 40;
-const OT_PREMIUM = 0.5;
 
 export type WorkSource = "project" | "changeOrder" | "janitorial" | "manual";
 
@@ -75,8 +76,9 @@ function workerKey(line: WorkLine): string {
 }
 
 /** Costs every line. Pass all of a worker's lines for each week you care
- * about, since overtime depends on the whole week. */
-export function costWorkLines(lines: WorkLine[], histories: PayHistories): Map<string, LineCost> {
+ * about, since overtime depends on the whole week. Overtime uses the rule in
+ * effect on the week's Monday; salary hours the rule on each line's day. */
+export function costWorkLines(lines: WorkLine[], histories: PayHistories, rules: PayrollRules): Map<string, LineCost> {
   const buckets = new Map<string, WorkLine[]>();
   for (const line of lines) {
     const key = `${workerKey(line)}::${mondayKey(line.dateKey)}`;
@@ -88,30 +90,33 @@ export function costWorkLines(lines: WorkLine[], histories: PayHistories): Map<s
   const result = new Map<string, LineCost>();
   for (const bucket of buckets.values()) {
     bucket.sort((a, b) => (a.dateKey !== b.dateKey ? a.dateKey.localeCompare(b.dateKey) : a.createdAtMs - b.createdAtMs));
+    const week = mondayKey(bucket[0]!.dateKey);
+    const otAfter = valueOn(rules.otAfterHours, week);
+    const otPremium = valueOn(rules.otPremium, week);
 
     const priced = bucket.map((line) => {
       const rate = line.employeeId ? payRateOn(histories.get(line.employeeId), line.dateKey) : null;
-      if (isFixedPay(rate)) return { line, fixed: true, rateCents: fixedPayHourlyCostCents(rate!) };
+      if (isFixedPay(rate)) return { line, fixed: true, rateCents: fixedPayHourlyCostCents(rate!, valueOn(rules.yearHours, line.dateKey)) };
       return { line, fixed: false, rateCents: line.loggedRateCents ?? rate?.hourlyPayCents ?? 0 };
     });
 
     const hourly = priced.filter((p) => !p.fixed);
     const hourlyHours = hourly.reduce((s, p) => s + p.line.hours, 0);
     const hourlyStraight = hourly.reduce((s, p) => s + p.line.hours * p.rateCents, 0);
-    const premiumPerOtHour = hourlyHours > OT_THRESHOLD_HOURS ? (hourlyStraight / hourlyHours) * OT_PREMIUM : 0;
+    const premiumPerOtHour = hourlyHours > otAfter ? (hourlyStraight / hourlyHours) * otPremium : 0;
 
     let hourlyCumulative = 0;
     let fixedCumulative = 0;
     for (const p of priced) {
       const hours = p.line.hours;
       if (p.fixed) {
-        const reg = Math.max(0, Math.min(hours, OT_THRESHOLD_HOURS - fixedCumulative));
+        const reg = Math.max(0, Math.min(hours, otAfter - fixedCumulative));
         fixedCumulative += hours;
         const straight = reg * p.rateCents;
         result.set(p.line.id, { regHours: reg, otHours: 0, straightCents: straight, premiumCents: 0, costCents: straight, fixedPay: true, rateCents: p.rateCents });
         continue;
       }
-      const reg = Math.max(0, Math.min(hours, OT_THRESHOLD_HOURS - hourlyCumulative));
+      const reg = Math.max(0, Math.min(hours, otAfter - hourlyCumulative));
       const ot = hours - reg;
       hourlyCumulative += hours;
       const straight = hours * p.rateCents;
@@ -255,15 +260,16 @@ export async function costLaborLogs(
   const workerNames = Array.from(new Set(view.filter((l) => !l.employeeId && l.workerName).map((l) => l.workerName!)));
   const { start, end } = weekSpan(view.map((l) => l.dateKey));
 
-  const [allLines, histories] = await Promise.all([
+  const [allLines, histories, rules] = await Promise.all([
     loadWorkLines(employeeIds, workerNames, start, end),
     loadPayHistories(employeeIds),
+    loadPayrollRules(),
   ]);
   // Logs from the view that the week query didn't return (a typed-in name
   // with no match, say) still get costed on their own.
   const loadedIds = new Set(allLines.map((l) => l.id));
   const lines = [...allLines, ...view.filter((l) => !loadedIds.has(l.id))];
-  return costWorkLines(lines, histories);
+  return costWorkLines(lines, histories, rules);
 }
 
 /** Total cost of some logs, from a costLaborLogs result. */
@@ -295,11 +301,12 @@ export async function costJanitorialShifts(start: Date, end: Date): Promise<Cost
   const span = weekSpan([utcDateKey(start), utcDateKey(end)]);
   const shifts = (await loadJanitorialHours(span.start, span.end)).filter((r) => r.hours > 0);
   const employeeIds = Array.from(new Set(shifts.map((r) => r.employeeId)));
-  const [lines, histories] = await Promise.all([
+  const [lines, histories, rules] = await Promise.all([
     loadWorkLines(employeeIds, [], span.start, span.end, shifts),
     loadPayHistories(employeeIds),
+    loadPayrollRules(),
   ]);
-  return { shifts, costs: costWorkLines(lines, histories) };
+  return { shifts, costs: costWorkLines(lines, histories, rules) };
 }
 
 /** Janitorial labor per contract for the days startKey..endKey ("YYYY-MM-DD", inclusive). */
@@ -334,11 +341,12 @@ export async function costManualHours(start: Date, end: Date): Promise<{ dateKey
   });
   if (entries.length === 0) return [];
   const employeeIds = Array.from(new Set(entries.map((e) => e.employeeId)));
-  const [lines, histories] = await Promise.all([
+  const [lines, histories, rules] = await Promise.all([
     loadWorkLines(employeeIds, [], span.start, span.end),
     loadPayHistories(employeeIds),
+    loadPayrollRules(),
   ]);
-  const costs = costWorkLines(lines, histories);
+  const costs = costWorkLines(lines, histories, rules);
   const startKey = utcDateKey(start);
   const endKey = utcDateKey(end);
   return entries

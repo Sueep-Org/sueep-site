@@ -5,6 +5,7 @@
  * Follow-ups tab with pipeline next steps (dealFollowUps.ts).
  */
 import { cache } from "react";
+import { loadAlertSettings, type AlertSettings } from "@/lib/erp/alertSettingsServer";
 import type { CardSection, DashboardCardData } from "@/app/erp/(shell)/_dashboard/DashboardCard";
 import { centsToDollars, centsToDollarsCompact } from "./money";
 import { todayEasternKey } from "./dates";
@@ -19,9 +20,6 @@ import type { CardContext } from "./dashboardCardLoaders";
 import { quotePriceCheck, type PriceCheckRow } from "./quotePriceCheck";
 
 const SHOWN = 15;
-/** How far ahead "Bids due" looks, and how close counts as urgent (red number). */
-const DUE_WINDOW_DAYS = 30;
-const URGENT_DAYS = 3;
 
 function dayLabel(key: string): string {
   return new Date(`${key}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
@@ -32,11 +30,11 @@ function inDays(todayKey: string, key: string): string {
   return n === 0 ? "today" : n === 1 ? "tomorrow" : `in ${n} days`;
 }
 
-/** Bid due dates, job walks and expected award dates from today through DUE_WINDOW_DAYS, soonest first. Lost bids are left off. */
+/** Bid due dates, job walks and expected award dates from today through the Settings window (Alerts), soonest first. Lost bids are left off. */
 /** `bandOf` adds the chance to win to each row (left out for the tab count, which doesn't need it). */
-function bidsDueSection(bundle: Bundle, todayKey: string, bandOf?: (d: RawDeal) => WinBand | null): CardSection {
-  const last = addDaysKey(todayKey, DUE_WINDOW_DAYS);
-  const urgentBy = addDaysKey(todayKey, URGENT_DAYS);
+function bidsDueSection(bundle: Bundle, todayKey: string, alerts: AlertSettings, bandOf?: (d: RawDeal) => WinBand | null): CardSection {
+  const last = addDaysKey(todayKey, alerts.bidsDueWindowDays);
+  const urgentBy = addDaysKey(todayKey, alerts.bidsUrgentDays);
   const rows: (CardSection["rows"][number] & { day: string; dealId: string })[] = [];
   for (const d of bundle.deals) {
     if (outcomeOf(bundle, d.stageId) === "lost") continue;
@@ -69,7 +67,7 @@ function bidsDueSection(bundle: Bundle, todayKey: string, bandOf?: (d: RawDeal) 
     // A deal with both a bid due and a job walk this soon counts once.
     alertCount: new Set(rows.filter((r) => r.negative).map((r) => r.dealId)).size,
     rows: rows.slice(0, SHOWN).map(({ day: _day, dealId: _dealId, ...r }) => r),
-    empty: `No bid due dates, job walks or award dates in the next ${DUE_WINDOW_DAYS} days. They come from Bid Date, Job Walk Date and Award Date on HubSpot deals.`,
+    empty: `No bid due dates, job walks or award dates in the next ${alerts.bidsDueWindowDays} days. They come from Bid Date, Job Walk Date and Award Date on HubSpot deals.`,
     href: "/erp/schedule?calendar=management",
     footer: rows.length > SHOWN ? `Soonest ${SHOWN} of ${rows.length}.` : undefined,
   };
@@ -149,7 +147,7 @@ export async function loadBidsDue(ctx: CardContext): Promise<DashboardCardData> 
   const today = todayEasternKey();
   const bundle = await loadDeals();
   const [bands, followUps] = await Promise.all([loadWinBands(bundle), followUpSection(ctx, today)]);
-  const section = bidsDueSection(bundle, today, bands);
+  const section = bidsDueSection(bundle, today, await loadAlertSettings(), bands);
   return { alertCount: section.alertCount, sections: [section, followUps] };
 }
 
@@ -157,13 +155,13 @@ export async function loadBidsDue(ctx: CardContext): Promise<DashboardCardData> 
 export async function loadSalesBids(ctx: CardContext): Promise<DashboardCardData> {
   const bundle = await loadDeals();
   const today = todayEasternKey();
-  const due = bidsDueSection(bundle, today, await loadWinBands(bundle));
+  const due = bidsDueSection(bundle, today, await loadAlertSettings(), await loadWinBands(bundle));
   return { alertCount: due.alertCount, sections: [due, staleSection(bundle), await followUpSection(ctx, today)] };
 }
 
-/** Red number on the tab: bids due within URGENT_DAYS. Same for everyone, so it's safe to cache per role. */
+/** Red number on the tab: bids due within the Settings urgent days. Same for everyone, so it's safe to cache per role. */
 export async function countBidsDueAlerts(): Promise<number> {
-  return bidsDueSection(await loadDeals(), todayEasternKey()).alertCount ?? 0;
+  return bidsDueSection(await loadDeals(), todayEasternKey(), await loadAlertSettings()).alertCount ?? 0;
 }
 
 // ── Price check (Estimation Queue tab) ──────────────────────────────────────

@@ -1,13 +1,17 @@
 /**
- * Next day upcharge: work that starts today or tomorrow (Eastern) costs 20%
- * more. Added on its own when a property manager or GC requests online, and
- * by a checkbox when the office creates the job. A test for now, so one flat
- * percent everywhere. Safe to import on the client.
+ * Next day upcharge: work that starts today or tomorrow (Eastern) costs a
+ * percent more, set on the Settings page (Pricing). Added on its own when a
+ * property manager or GC requests online, and by a checkbox when the office
+ * creates the job. Safe to import on the client.
  */
 import { todayEasternKey } from "@/lib/erp/dates";
 
-export const NEXT_DAY_UPCHARGE_PERCENT = 20;
-export const NEXT_DAY_UPCHARGE_LABEL = `Next day upcharge (+${NEXT_DAY_UPCHARGE_PERCENT}%)`;
+/** Used until someone saves a different percent on the Settings page. */
+export const DEFAULT_NEXT_DAY_UPCHARGE_PERCENT = 20;
+
+export function nextDayUpchargeLabel(pct: number): string {
+  return `Next day upcharge (+${pct}%)`;
+}
 
 /** True when a start day (YYYY-MM-DD) is today or tomorrow, Eastern. */
 export function isNextDayStart(startKey: string | null | undefined, now: Date = new Date()): boolean {
@@ -30,11 +34,11 @@ export function nextDayCountInRange(startKey: string | null | undefined, endKey:
 }
 
 /** The upcharge on a price, in cents. */
-export function nextDayUpchargeCents(cents: number): number {
-  return Math.round((cents * NEXT_DAY_UPCHARGE_PERCENT) / 100);
+export function nextDayUpchargeCents(cents: number, pct: number): number {
+  return Math.round((cents * pct) / 100);
 }
 
 /** A price with the upcharge added when it applies. */
-export function withNextDayUpcharge(cents: number, applies: boolean): number {
-  return applies ? cents + nextDayUpchargeCents(cents) : cents;
+export function withNextDayUpcharge(cents: number, applies: boolean, pct: number): number {
+  return applies ? cents + nextDayUpchargeCents(cents, pct) : cents;
 }

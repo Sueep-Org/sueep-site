@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
+import { loadPricingSettings } from "@/lib/pricingSettingsServer";
 import { TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
 import { syncProjectBillingFromRequest } from "@/lib/sovSync";
 import { BILLING_STATUSES, voidReasonFor, type BillingStatus } from "@/lib/erp/billingStatus";
@@ -191,7 +192,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
     nextDayUpcharge: data.nextDayUpcharge !== undefined ? Boolean(data.nextDayUpcharge) : existing.nextDayUpcharge,
   };
 
-  const pricing = computeTurnoverPricing(pricingInput);
+  const { nextDayPct, turnoverPackage } = await loadPricingSettings();
+  const pricing = computeTurnoverPricing({ ...pricingInput, nextDayPct, standardPackage: turnoverPackage });
   const otherAddOn = effectiveOtherWork ? (effectiveOtherCents ?? 0) : 0;
   data.priceCents = (pricing.priceCents + otherAddOn) || null;
   if (body.pmSignatureUrl !== undefined && data.pmSignatureUrl) {

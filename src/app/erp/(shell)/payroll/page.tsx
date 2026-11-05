@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getErpAuth, canSeeFinancials, canSeePayroll } from "@/lib/erpAuth";
 import { DEFAULT_PAYROLL_ANCHOR } from "@/lib/erp/payPeriods";
 import { loadCommissionRows } from "@/lib/erp/commissionRows";
+import { loadPayrollRules } from "@/lib/erp/payrollRulesServer";
 import { CommissionByRep, type RepGroup } from "../commission/CommissionByRep";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { PayrollView } from "./PayrollView";
@@ -17,7 +18,7 @@ export default async function PayrollPage({ searchParams }: PageProps) {
   const auth = await getErpAuth();
   if (!auth || !canSeeFinancials(auth.role)) redirect("/erp");
 
-  const [{ deals: allRows, recurring: recurringRowsAll }, employees, reimbursements, anchorSetting] = await Promise.all([
+  const [{ deals: allRows, recurring: recurringRowsAll }, employees, reimbursements, anchorSetting, payrollRules] = await Promise.all([
     loadCommissionRows(),
     prisma.employee.findMany({ select: { id: true, firstName: true, lastName: true, status: true } }),
     prisma.reimbursement.findMany({
@@ -25,6 +26,7 @@ export default async function PayrollPage({ searchParams }: PageProps) {
       include: { employee: { select: { id: true, firstName: true, lastName: true } } },
     }),
     prisma.appSetting.findUnique({ where: { key: "payrollAnchor" } }),
+    loadPayrollRules(),
   ]);
 
   // For the commission Paid date picker: which pay period a date lands in,
@@ -128,6 +130,7 @@ export default async function PayrollPage({ searchParams }: PageProps) {
                 selectedYear={selectedYear}
                 reps={repGroups}
                 payrollAnchor={payrollAnchor}
+                rules={payrollRules}
               />
             ),
           },

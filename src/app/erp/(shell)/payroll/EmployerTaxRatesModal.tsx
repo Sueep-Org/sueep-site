@@ -76,7 +76,7 @@ export function EmployerTaxRatesModal({ open, onClose, onSaved }: { open: boolea
             Employer tax rates
             <InfoTip text="What Sueep pays on top of each employee's pay (ADP calls it Employer Liability). Not taken from their check. Contractors and offshore workers have none." />
           </h2>
-          {!canEdit && draft ? <p className="mt-1 text-xs text-gray-500">Only an Admin can change these.</p> : null}
+          {!canEdit && draft ? <p className="mt-1 text-xs text-gray-500">Only Admin and Business Manager can change these.</p> : null}
         </div>
         {!draft ? (
           <p className="text-sm text-gray-400">{error || "Loading…"}</p>

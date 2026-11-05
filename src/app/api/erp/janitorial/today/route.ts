@@ -4,6 +4,7 @@ import { getErpAuth, canManageJanitorial } from "@/lib/erpAuth";
 import { easternDateKey } from "@/lib/erp/janitorialHours";
 import { loadJanitorialHours } from "@/lib/erp/janitorialHoursServer";
 import { classifyToday } from "@/lib/erp/janitorialToday";
+import { loadPayrollRules } from "@/lib/erp/payrollRulesServer";
 
 /** Live status of today's janitorial shifts for the Janitorial > Today panel. */
 export async function GET() {
@@ -17,7 +18,7 @@ export async function GET() {
   const today = new Date(`${todayKey}T00:00:00.000Z`);
   // Yesterday too, for overnight shifts still running this morning.
   const rows = await loadJanitorialHours(new Date(today.getTime() - 86_400_000), today);
-  const items = classifyToday(rows, todayKey, now);
+  const items = classifyToday(rows, todayKey, now, (await loadPayrollRules()).lateEarlyMinutes);
 
   const employeeIds = Array.from(new Set(items.map((i) => i.employeeId)));
   const employees = employeeIds.length

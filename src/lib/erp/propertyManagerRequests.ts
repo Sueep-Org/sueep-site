@@ -21,6 +21,7 @@ import { getTurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
 import { todayEasternKey } from "./dates";
 import type { LinkedManager } from "./propertyManagerAccess";
 import { REQUEST_LAYOUTS, estimateRequestCents, requestLayoutLabel, requestWorkLabels } from "./propertyManagerRequestShared";
+import { loadPricingSettings } from "@/lib/pricingSettingsServer";
 import { isNextDayStart } from "@/lib/nextDayUpcharge";
 
 /** Stops a forwarded or misused link from flooding the queue. */
@@ -67,6 +68,7 @@ export async function createPropertyManagerRequests(
       })
     : null;
   if (!link) return { error: "Pick one of your buildings" };
+  const { nextDayPct, turnoverPackage } = await loadPricingSettings();
   const building = link.building;
 
   const requestedStartDate = dayValue(body.requestedStartDate);
@@ -78,7 +80,7 @@ export async function createPropertyManagerRequests(
   if (!rawUnits.length) return { error: "Add at least one unit" };
   if (rawUnits.length > MAX_UNITS_PER_BOOKING) return { error: `Book up to ${MAX_UNITS_PER_BOOKING} units at a time` };
 
-  const pricingPackage = getTurnoverPricingPackage(building.name, building.pricingPackage);
+  const pricingPackage = getTurnoverPricingPackage(building.pricingPackage, turnoverPackage);
   const units = [];
   const seen = new Set<string>();
   for (const u of rawUnits) {
@@ -129,7 +131,7 @@ export async function createPropertyManagerRequests(
       unitWalked,
       moveOutDate,
       moveInDate,
-      estimateCents: estimateRequestCents(pricingPackage, layout.bedrooms, layout.bathrooms, work, false, nextDayUpcharge),
+      estimateCents: estimateRequestCents(pricingPackage, layout.bedrooms, layout.bathrooms, work, false, nextDayUpcharge, nextDayPct),
     });
   }
 
@@ -240,6 +242,7 @@ export async function createWebsiteRequest(body: Record<string, unknown>, ip: st
   const buildingId = text(body.buildingId, 100);
   const building = buildingId ? await prisma.building.findUnique({ where: { id: buildingId }, select: { id: true, name: true, pricingPackage: true } }) : null;
   if (!building) return { error: "Please select a building." };
+  const { nextDayPct, turnoverPackage } = await loadPricingSettings();
 
   const isCommonArea = body.isCommonArea === true;
   const unitNumber = text(body.unitNumber, 40)?.replace(/^#/, "") ?? (isCommonArea ? "Common Area" : null);
@@ -288,7 +291,7 @@ export async function createWebsiteRequest(body: Record<string, unknown>, ip: st
   }
   if (duplicate) return { error: `There's already a request waiting for unit ${unitNumber}. Sueep will be in touch about it.` };
 
-  const pricingPackage = getTurnoverPricingPackage(building.name, building.pricingPackage);
+  const pricingPackage = getTurnoverPricingPackage(building.pricingPackage, turnoverPackage);
   const nextDayUpcharge = isNextDayStart(body.startDate as string);
   const unitQuality = typeof body.unitQuality === "string" && UNIT_QUALITIES.includes(body.unitQuality) ? body.unitQuality : null;
 
@@ -314,7 +317,7 @@ export async function createWebsiteRequest(body: Record<string, unknown>, ip: st
       requestedEndDate,
       notes: text(body.notes, 2000),
       nextDayUpcharge,
-      estimateCents: estimateRequestCents(pricingPackage, bedrooms, bathrooms, work, isCommonArea, nextDayUpcharge),
+      estimateCents: estimateRequestCents(pricingPackage, bedrooms, bathrooms, work, isCommonArea, nextDayUpcharge, nextDayPct),
     },
   });
   await emailStaffAboutRequests([request], building.name);

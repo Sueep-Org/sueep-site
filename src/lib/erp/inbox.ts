@@ -1,6 +1,7 @@
 /**
  * Each person's Notifications page: the ERP emails sent to their login
- * email, read from the Email Log. Admins also get an "All emails" view.
+ * email, read from the Email Log. Admins and Business Managers also get an
+ * "All emails" view.
  * Server only.
  */
 
@@ -17,7 +18,7 @@ export function inboxEmail(auth: ErpAuthContext): string {
 }
 
 export function canSeeAllEmails(auth: ErpAuthContext): boolean {
-  return auth.role === "ADMIN";
+  return auth.role === "ADMIN" || auth.role === "BUSINESS_MANAGER";
 }
 
 /** Emails that actually went out and belong on a Notifications page. */

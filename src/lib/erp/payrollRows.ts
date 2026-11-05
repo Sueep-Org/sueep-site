@@ -10,6 +10,7 @@ import { loadJanitorialHours } from "@/lib/erp/janitorialHoursServer";
 import { costWorkLines, janitorialWorkLine, manualWorkLine, type WorkLine } from "@/lib/erp/laborCost";
 import { loadPayHistories, payRateOn } from "@/lib/erp/payRates";
 import { fillRepeatingManualHours } from "@/lib/erp/manualHoursRepeat";
+import { loadPayrollRules } from "@/lib/erp/payrollRulesServer";
 import { timeOffEntryDays, unpaidTimeOffDays } from "@/lib/erp/timeOff";
 
 export function startOfDay(date: Date): Date {
@@ -170,7 +171,7 @@ export async function computePayrollRows(periodStart: Date, periodEnd: Date) {
   });
   const lineEmployeeIds = lines.map((l) => l.employeeId).filter((id): id is string => !!id);
   const employeeIds = Array.from(new Set([...lineEmployeeIds, ...salaryCandidates.map((e) => e.id)]));
-  const [employeesById, histories] = await Promise.all([
+  const [employeesById, histories, rules] = await Promise.all([
     prisma.employee
       .findMany({
         where: { id: { in: employeeIds } },
@@ -178,8 +179,9 @@ export async function computePayrollRows(periodStart: Date, periodEnd: Date) {
       })
       .then((list) => new Map(list.map((e) => [e.id, e]))),
     loadPayHistories(employeeIds),
+    loadPayrollRules(),
   ]);
-  const costs = costWorkLines(lines, histories);
+  const costs = costWorkLines(lines, histories, rules);
 
   // ── Employee rows ──────────────────────────────────────────────────────
   type EmployeeKey = string;

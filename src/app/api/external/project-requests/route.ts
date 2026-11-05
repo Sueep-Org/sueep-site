@@ -7,8 +7,8 @@ import {
   deriveChangeOrderSupervisorCount,
   getChangeOrderLaborRates,
   hasCustomChangeOrderLaborRate,
-  CHANGE_ORDER_ESTIMATE_DAY_HOURS,
 } from "@/lib/changeOrderLaborRates";
+import { loadPricingSettings } from "@/lib/pricingSettingsServer";
 import { generateChangeOrderContractPdf } from "@/lib/contracts/buildChangeOrderContractPdf";
 import { embedChangeOrderSignature } from "@/lib/contracts/fillChangeOrderPdf";
 import { isNextDayStart, withNextDayUpcharge } from "@/lib/nextDayUpcharge";
@@ -153,13 +153,14 @@ export async function POST(req: Request) {
     const priced = hasCustomChangeOrderLaborRate(project.laborRateCard) && (cleanerCount > 0 || supervisorCount > 0);
     // Same rule as the price shown on the form and the contract they signed
     const nextDayUpcharge = isNextDayStart(body.coEstimatedStartDate);
+    const pricing = await loadPricingSettings();
     if (priced) {
-      const rates = getChangeOrderLaborRates(project.laborRateCard);
+      const rates = getChangeOrderLaborRates(project.laborRateCard, pricing.coPriceRates);
       const estimate = computeChangeOrderLaborEstimate(
-        { cleanerCount, supervisorCount, hours: CHANGE_ORDER_ESTIMATE_DAY_HOURS },
+        { cleanerCount, supervisorCount, hours: pricing.coDayHours },
         rates,
       );
-      quotedPriceCents = withNextDayUpcharge(estimate.totalCents, nextDayUpcharge);
+      quotedPriceCents = withNextDayUpcharge(estimate.totalCents, nextDayUpcharge, pricing.nextDayPct);
     }
     const co = await prisma.projectChangeOrder.create({
       data: {
@@ -176,7 +177,7 @@ export async function POST(req: Request) {
         estLaborers: cleanerCount > 0 ? cleanerCount : null,
         estSupervisors: supervisorCount > 0 ? supervisorCount : null,
         noCrewRequired: body.coNoCrewRequired === true,
-        estHours: priced ? CHANGE_ORDER_ESTIMATE_DAY_HOURS : null,
+        estHours: priced ? pricing.coDayHours : null,
         contractValueCents: quotedPriceCents,
         nextDayUpcharge,
       },

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { loadAppLists } from "@/lib/erp/appListsServer";
 import { parsePostingInput } from "@/lib/erp/officeHiring";
 import { requireOfficeHiring } from "@/lib/erp/officeHiringAccess";
 
@@ -16,7 +17,7 @@ export async function POST(req: Request, ctx: Ctx) {
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
 
-  const { data, error } = parsePostingInput(body, true);
+  const { data, error } = parsePostingInput(body, true, (await loadAppLists()).hiringSources);
   if (error) return NextResponse.json({ error }, { status: 400 });
 
   const opening = await prisma.jobOpening.findUnique({ where: { id }, select: { id: true } });
