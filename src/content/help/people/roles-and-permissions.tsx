@@ -57,8 +57,14 @@ export function RolesAndPermissions() {
         <LI>Edit companies, their contacts and billing, and billing overrides on buildings and projects.</LI>
         <LI>Link client portal logins to companies.</LI>
         <LI>
-          Draft, edit, approve and discard invoices on <strong>Ready to send</strong>, and finish the Needs sending list. Drafts
-          waiting also show on the dashboard&apos;s <strong>Money</strong> tab under Needs action.
+          Draft, edit, approve and discard invoices on <strong>Ready to send</strong>, and finish the Needs sending list (mark
+          uploaded with proof, mark sent, resubmit sent-back invoices). Drafts waiting also show on the dashboard&apos;s{" "}
+          <strong>Money</strong> tab under Needs action.
+        </LI>
+        <LI>
+          On the <strong>Invoices</strong> page: set portal status (Under review, Approved, Sent back), log follow-ups on unpaid
+          invoices and explain short pays. Project Managers see all of it in each invoice&apos;s History but can&apos;t change
+          it.
         </LI>
         <LI>Use the <strong>QuickBooks</strong> page: Sync now, Invoice setup and the Money owed check.
         </LI>

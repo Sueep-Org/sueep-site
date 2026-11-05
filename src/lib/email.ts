@@ -1383,6 +1383,16 @@ export function buildReadyToBillEmail(params: {
   `;
 }
 
+export function buildInvoiceSentBackEmail(params: { invoice: string; client: string | null; portal: string; reason: string; by: string; url: string }) {
+  return `
+    <h2 style="margin:0 0 12px;color:#E73C6E">Invoice sent back</h2>
+    <p><strong>${escapeHtml(params.invoice)}</strong>${params.client ? ` for ${escapeHtml(params.client)}` : ""} was sent back in ${escapeHtml(params.portal)}. ${escapeHtml(params.by)} marked it.</p>
+    <p style="padding:10px 12px;background:#fef3c7;border-radius:6px">${escapeHtml(params.reason)}</p>
+    <p>Fix it in the portal, then click Resubmit on Ready to send.</p>
+    <p style="margin:20px 0"><a href="${escapeHtml(params.url)}" style="${BUTTON_STYLE}">Open Ready to send</a></p>
+  `;
+}
+
 export function buildRescheduleEmail(params: { jobTitle: string; oldLabel: string; newLabel: string; projectUrl: string | null; lang?: Lang }) {
   const es = params.lang === "es";
   return `

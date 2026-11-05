@@ -34,7 +34,7 @@ export async function erpBillingTotals(projectIds: string[]): Promise<Map<string
   const add = (projectId: string, cents: number, rawStatus: string | null) => {
     const status = normalizeBillingStatus(rawStatus);
     const t = out.get(projectId) ?? { invoicedCents: 0, paidCents: 0 };
-    if (status !== "NOT_BILLED") t.invoicedCents += cents;
+    if (status === "BILLED" || status === "PAID") t.invoicedCents += cents;
     if (status === "PAID") t.paidCents += cents;
     out.set(projectId, t);
   };

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
-import { getErpAuth, canManageQuickBooks, canSeeInvoices } from "@/lib/erpAuth";
+import { getErpAuth, canApproveInvoices, canManageQuickBooks, canSeeInvoices } from "@/lib/erpAuth";
 import { BillingFlowBar } from "@/app/erp/components/BillingFlowBar";
 import { InfoTip } from "@/app/erp/components/ui";
 import { loadInvoiceList } from "@/lib/erp/invoiceList";
@@ -21,7 +21,7 @@ export default async function InvoicesPage() {
         Invoices
         <InfoTip text="Every invoice and whether it's paid, from QuickBooks since January last year, read nightly with its payments. Click a row for what it's for (on Project Billing), payments and links. Not in QuickBooks: HubSpot invoices that never reached QuickBooks." />
       </h1>
-      <InvoiceList rows={rows} showQuickBooks={canManageQuickBooks(auth.role)} />
+      <InvoiceList rows={rows} showQuickBooks={canManageQuickBooks(auth.role)} canEdit={canApproveInvoices(auth.role)} />
     </div>
   );
 }

@@ -9,10 +9,11 @@ import { todayEasternKey, utcDateKey } from "./dates";
 import { centsToDollars, centsToDollarsCompact } from "./money";
 import { computeProjectActualsWithChangeOrders, isQualifyingChangeOrder } from "./projectMargin";
 import { loadAllLienWatch } from "./lienWatchBuildings";
-import { loadCutoffStatus } from "./billingCutoffs";
+import { deliveryCutoffText, loadCutoffStatus, loadDeliveryCutoffs, type DeliveryCutoff } from "./billingCutoffs";
 import { lienDecisionCloses, lienPillLabel, type LienStage } from "./lienDeadline";
 import { invoiceKey, withHubSpotId } from "./invoiceLinkSource";
 import { loadUnlinkedHubSpotInvoices } from "./unlinkedHubSpotInvoices";
+import { DELIVERY_WAITING_WHERE } from "./portalStatus";
 
 /**
  * Money tab cards (DASHBOARDS_PLAN.md Phase 4): Needs action (overdue
@@ -241,7 +242,7 @@ function readyToBillSection(items: BillItem[], todayKey: string): CardSection {
 
 // ── Ready to send (auto-drafted invoices) ────────────────────────────────
 
-type WaitingDraft = { id: string; title: string; note: string; cents: number };
+type WaitingDraft = { id: string; title: string; note: string; cents: number; cutoff?: DeliveryCutoff };
 
 /** Waiting on Ready to send: approved invoices still to upload or send, then drafts (janitorial months and picked finished work). */
 const loadWaitingDrafts = cache(async (): Promise<WaitingDraft[]> => {
@@ -254,15 +255,23 @@ const loadWaitingDrafts = cache(async (): Promise<WaitingDraft[]> => {
     prisma.itemInvoiceDraft.findMany({ where: { status: "DRAFT" }, select: { hubspotInvoiceId: true, title: true, totalCents: true }, orderBy: { createdAt: "asc" } }),
   ]);
   const deliveries = await prisma.invoiceDelivery.findMany({
-    where: { status: { in: ["NEEDS_UPLOAD", "NEEDS_SENDING"] } },
-    select: { id: true, title: true, status: true, invoiceNumber: true, totalCents: true },
+    where: DELIVERY_WAITING_WHERE,
+    select: { id: true, title: true, status: true, portalStatus: true, invoiceNumber: true, totalCents: true, destType: true, destId: true, clientCompanyId: true, createdAt: true },
     orderBy: { createdAt: "asc" },
   });
+  const cutoffs = await loadDeliveryCutoffs(deliveries);
+  // Missed cutoffs first, then ones coming up, then the rest in approval order.
+  const rank = (id: string) => {
+    const state = cutoffs.get(id)?.state;
+    return state === "MISSED" ? 0 : state === "SOON" ? 1 : 2;
+  };
+  deliveries.sort((a, b) => rank(a.id) - rank(b.id));
   return [
     ...deliveries.map((d) => ({
+      cutoff: cutoffs.get(d.id),
       id: `delivery-${d.id}`,
       title: d.title,
-      note: `${d.invoiceNumber ? `${d.invoiceNumber}, ` : ""}${d.status === "NEEDS_UPLOAD" ? "needs upload" : "needs sending"}`,
+      note: `${d.invoiceNumber ? `${d.invoiceNumber}, ` : ""}${d.portalStatus === "SENT_BACK" ? "sent back, resubmit" : d.status === "NEEDS_UPLOAD" ? "needs upload" : "needs sending"}`,
       cents: d.totalCents,
     })),
     // Month drafts are HubSpot drafts until the switch to QuickBooks.
@@ -281,7 +290,14 @@ function readyToSendSection(drafts: WaitingDraft[]): CardSection {
     key: "ready-to-send",
     label: "Ready to send",
     alertCount: drafts.length,
-    rows: drafts.map((d) => ({ id: d.id, href: "/erp/ready-to-send", title: d.title, note: d.note, value: centsToDollars(d.cents) })),
+    rows: drafts.map((d) => ({
+      id: d.id,
+      href: "/erp/ready-to-send",
+      title: d.title,
+      note: d.note,
+      value: centsToDollars(d.cents),
+      ...(d.cutoff ? { badges: [{ label: deliveryCutoffText(d.cutoff), tone: d.cutoff.state === "MISSED" ? ("red" as const) : ("amber" as const) }] } : {}),
+    })),
     empty: "Nothing to approve or send.",
     href: "/erp/ready-to-send",
   };

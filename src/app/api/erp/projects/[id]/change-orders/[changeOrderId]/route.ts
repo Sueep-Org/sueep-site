@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { normalizeBillingStatus, parseBillingStatus } from "@/lib/erp/billingStatus";
+import { normalizeBillingStatus, parseBillingStatus, voidReasonFor } from "@/lib/erp/billingStatus";
 import { prisma } from "@/lib/prisma";
 import { inputToCents } from "@/lib/erp/money";
 import { sendEmail, buildChangeOrderNotificationEmail } from "@/lib/email";
@@ -78,7 +78,10 @@ export async function PATCH(req: Request, ctx: Ctx) {
       if (!bs) {
         return NextResponse.json({ error: "Invalid billingStatus" }, { status: 400 });
       }
+      const v = voidReasonFor(bs, body.voidReason);
+      if ("error" in v) return NextResponse.json({ error: v.error }, { status: 400 });
       data.billingStatus = bs;
+      data.voidReason = v.voidReason;
       // Paid date for the Finance tab: stamped when it becomes paid, left
       // alone when it's saved as paid again, cleared when it's moved back.
       if (bs === "PAID") {

@@ -56,6 +56,7 @@ export async function GET(req: Request) {
               id: true,
               jobTitle: true,
               billingStatus: true,
+              voidReason: true,
               contractValueCents: true,
             },
           },
@@ -91,10 +92,11 @@ export async function GET(req: Request) {
       title: true,
       contractValueCents: true,
       billingStatus: true,
+      voidReason: true,
       completedAt: true,
       updatedAt: true,
       projectId: true,
-      project: { select: { id: true, jobTitle: true, billingStatus: true } },
+      project: { select: { id: true, jobTitle: true, billingStatus: true, voidReason: true } },
     },
     orderBy: { completedAt: "asc" },
   });
@@ -126,13 +128,14 @@ export async function GET(req: Request) {
         viewUrl: r.viewUrl,
       }));
 
-  type SOVItemRow = { id: string; description: string; scheduledValueCents: number; billingStatus: string; completedAt: string; invoices: InvoiceChip[] };
-  type CORow = { id: string; projectId: string; title: string; contractValueCents: number; billingStatus: string; completedAt: string; invoices: InvoiceChip[] };
+  type SOVItemRow = { id: string; description: string; scheduledValueCents: number; billingStatus: string; voidReason: string | null; completedAt: string; invoices: InvoiceChip[] };
+  type CORow = { id: string; projectId: string; title: string; contractValueCents: number; billingStatus: string; voidReason: string | null; completedAt: string; invoices: InvoiceChip[] };
 
   type ProjectRow = {
     projectId: string;
     jobTitle: string;
     projectBillingStatus: string | null;
+    projectVoidReason: string | null;
     // The project's flat contract, shown as its own line when it has no SOV
     // lines here (alone, or next to its change orders). Null otherwise.
     contractValueCents: number | null;
@@ -151,6 +154,7 @@ export async function GET(req: Request) {
         projectId: project.id,
         jobTitle: project.jobTitle,
         projectBillingStatus: normalizeBillingStatus(project.billingStatus),
+        projectVoidReason: project.voidReason,
         contractValueCents: null,
         completedAt: null,
         items: [],
@@ -162,6 +166,7 @@ export async function GET(req: Request) {
       description: item.description,
       scheduledValueCents: item.scheduledValueCents,
       billingStatus: item.billingStatus,
+      voidReason: item.voidReason,
       completedAt: (item.completedAt ?? item.updatedAt).toISOString(),
       invoices: invoicesFor("sovItemId", item.id),
     });
@@ -174,6 +179,7 @@ export async function GET(req: Request) {
         projectId: project.id,
         jobTitle: project.jobTitle,
         projectBillingStatus: normalizeBillingStatus(project.billingStatus),
+        projectVoidReason: project.voidReason,
         contractValueCents: null,
         completedAt: null,
         items: [],
@@ -186,6 +192,7 @@ export async function GET(req: Request) {
       title: co.title,
       contractValueCents: co.contractValueCents ?? 0,
       billingStatus: normalizeBillingStatus(co.billingStatus),
+      voidReason: co.voidReason,
       completedAt: (co.completedAt ?? co.updatedAt).toISOString(),
       invoices: invoicesFor("changeOrderId", co.id),
     });
@@ -211,7 +218,7 @@ export async function GET(req: Request) {
             ],
           }),
     },
-    select: { id: true, jobTitle: true, billingStatus: true, contractValueCents: true, projectEndDate: true, updatedAt: true, sov: { select: { _count: { select: { items: true } } } } },
+    select: { id: true, jobTitle: true, billingStatus: true, voidReason: true, contractValueCents: true, projectEndDate: true, updatedAt: true, sov: { select: { _count: { select: { items: true } } } } },
   });
 
   for (const project of wholeProjects) {
@@ -230,6 +237,7 @@ export async function GET(req: Request) {
       projectId: project.id,
       jobTitle: project.jobTitle,
       projectBillingStatus: normalizeBillingStatus(project.billingStatus),
+      projectVoidReason: project.voidReason,
       contractValueCents: project.contractValueCents,
       completedAt: (project.projectEndDate ?? project.updatedAt).toISOString(),
       items: [],

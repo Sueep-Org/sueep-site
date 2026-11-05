@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getErpAuth, canManageJanitorial, canSeeFinancials } from "@/lib/erpAuth";
 import { inputToCents } from "@/lib/erp/money";
 import { PERIOD_BILLING_STATUSES } from "@/lib/erp/recurringContracts";
+import { voidReasonFor, type BillingStatus } from "@/lib/erp/billingStatus";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -22,14 +23,17 @@ export async function PATCH(req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const data: { billingStatus?: string; amountCents?: number; paidAt?: Date | null } = {};
+  const data: { billingStatus?: string; voidReason?: string | null; amountCents?: number; paidAt?: Date | null } = {};
 
   if (body.billingStatus !== undefined) {
     const status = String(body.billingStatus).toUpperCase();
     if (!(PERIOD_BILLING_STATUSES as readonly string[]).includes(status)) {
       return NextResponse.json({ error: "Invalid billing status" }, { status: 400 });
     }
+    const v = voidReasonFor(status as BillingStatus, body.voidReason);
+    if ("error" in v) return NextResponse.json({ error: v.error }, { status: 400 });
     data.billingStatus = status;
+    data.voidReason = v.voidReason;
     // Paid date for the Finance tab: stamped when it becomes PAID, left alone
     // when it's saved as PAID again, cleared when it's moved back.
     const current = await prisma.recurringContractPeriod.findUnique({ where: { id }, select: { billingStatus: true } });

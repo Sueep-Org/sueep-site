@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { BillingStatusSelect, billingBadgeCls, voidTitle } from "@/app/erp/components/BillingStatusSelect";
+import { billingStatusLabel } from "@/lib/erp/billingStatus";
 
 export type SOVItem = {
   id: string;
@@ -12,21 +14,11 @@ export type SOVItem = {
   /** When it was finished (ISO), null when not done. */
   completedAt: string | null;
   billingStatus: string;
+  voidReason: string | null;
   /** When it was marked paid (ISO), null when not paid. */
   paidAt: string | null;
 };
 
-const BILLING_OPTIONS = [
-  { value: "NOT_BILLED", label: "Not Billed" },
-  { value: "BILLED",     label: "Billed" },
-  { value: "PAID",       label: "Paid" },
-] as const;
-
-function billingBadgeCls(status: string): string {
-  if (status === "PAID")    return "bg-emerald-100 text-emerald-700 border-emerald-200";
-  if (status === "BILLED")  return "bg-blue-100 text-blue-700 border-blue-200";
-  return "bg-gray-100 text-gray-600 border-gray-200";
-}
 
 function fmt(cents: number): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
@@ -157,20 +149,20 @@ export function ProjectSOVSection({ projectId, initialItems, canEdit, billingHre
     }
   }
 
-  async function updateBilling(item: SOVItem, billingStatus: string) {
-    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, billingStatus } : i)));
+  async function updateBilling(item: SOVItem, billingStatus: string, voidReason: string | null) {
+    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, billingStatus, voidReason } : i)));
     try {
       const res = await fetch(`/api/erp/projects/${projectId}/sov/items/${item.id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ billingStatus }),
+        body: JSON.stringify({ billingStatus, voidReason }),
       });
       if (res.ok) {
         const data = (await res.json()) as SOVItem;
         setItems((prev) => prev.map((i) => (i.id === item.id ? data : i)));
       }
     } catch {
-      setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, billingStatus: item.billingStatus } : i)));
+      setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, billingStatus: item.billingStatus, voidReason: item.voidReason } : i)));
     }
   }
 
@@ -286,18 +278,17 @@ export function ProjectSOVSection({ projectId, initialItems, canEdit, billingHre
                 {fmt(item.scheduledValueCents)}
               </span>
               {canEdit && !billingHref ? (
-                <select
+                <BillingStatusSelect
                   value={item.billingStatus}
-                  onChange={(e) => updateBilling(item, e.target.value)}
-                  className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold focus:outline-none cursor-pointer ${billingBadgeCls(item.billingStatus)}`}
-                >
-                  {BILLING_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
+                  voidReason={item.voidReason}
+                  onChange={(status, reason) => updateBilling(item, status, reason)}
+                />
               ) : (
-                <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${billingBadgeCls(item.billingStatus)}`}>
-                  {BILLING_OPTIONS.find((o) => o.value === item.billingStatus)?.label ?? item.billingStatus}
+                <span
+                  title={voidTitle(item.billingStatus, item.voidReason)}
+                  className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${billingBadgeCls(item.billingStatus)}`}
+                >
+                  {billingStatusLabel(item.billingStatus)}
                 </span>
               )}
               {canEdit && (

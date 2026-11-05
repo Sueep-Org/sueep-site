@@ -396,6 +396,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     completed: item.completed,
     completedAt: item.completedAt?.toISOString() ?? null,
     billingStatus: item.billingStatus,
+    voidReason: item.voidReason,
     paidAt: item.paidAt?.toISOString() ?? null,
   }));
 
@@ -727,6 +728,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             percentDone={project.percentDone}
             percentInvoiced={project.percentInvoiced}
             billingStatus={project.billingStatus}
+            voidReason={project.voidReason}
             billingHref={projectBillingHref({ jobTitle: project.jobTitle, segment: project.segment, isPostConstruction, hasSovItems: sovItems.length > 0 })}
             estMaterialCents={project.estMaterialCents}
             estTravelCents={project.estTravelCents}

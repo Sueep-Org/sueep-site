@@ -43,7 +43,8 @@ function paidOnOf(links: Array<{ paidDate: Date | null }>): Date | null {
 /** Where a line should move to, or null to leave it. */
 function nextStatus(links: Link[], billingStatus: string | null): "PAID" | "BILLED" | null {
   const status = normalizeBillingStatus(billingStatus);
-  if (links.length === 0 || status === "PAID") return null;
+  // A voided line stays voided: the person who voided it decides.
+  if (links.length === 0 || status === "PAID" || status === "VOIDED") return null;
   if (links.every((l) => l.status === "paid") && !links.some((l) => l.paidAppliedAt)) return "PAID";
   if (status === "NOT_BILLED" && !links.some((l) => l.billedAppliedAt)) return "BILLED";
   return null;
@@ -214,6 +215,7 @@ export async function applyPaidInvoiceLinks(scope: { projectId?: string; buildin
     for (const period of periods) {
       const group = byPeriod.get(period.id)!;
       const counted = group.some((l) => l.paidAppliedAt);
+      if (period.billingStatus === "VOIDED") continue;
       if (period.billingStatus !== "PAID") {
         // Moved back by a person after it was counted, or not paid in full yet.
         const sumCents = group.reduce((s, l) => s + l.amountCents, 0);

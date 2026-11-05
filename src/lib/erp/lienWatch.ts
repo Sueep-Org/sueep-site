@@ -8,7 +8,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
-import { isPaidStatus } from "./billingStatus";
+import { isOwedStatus } from "./billingStatus";
 import { todayEasternKey, utcDateKey } from "./dates";
 import { detectLienState, lienDeadline, lienReadiness, parseLienDecision, parseLienManualSteps, parseLienRole, parseLienState, type LienDeadline, type LienDecision, type LienReadiness } from "./lienDeadline";
 
@@ -127,10 +127,10 @@ export async function loadLienWatch(opts: { projectId?: string } = {}): Promise<
   for (const p of projects) {
     const items = p.sov?.items ?? [];
     let unpaid = 0;
-    for (const i of items) if (i.completed && !isPaidStatus(i.billingStatus)) unpaid += i.scheduledValueCents;
-    for (const co of p.changeOrders) if (!isPaidStatus(co.billingStatus)) unpaid += co.contractValueCents ?? 0;
+    for (const i of items) if (i.completed && isOwedStatus(i.billingStatus)) unpaid += i.scheduledValueCents;
+    for (const co of p.changeOrders) if (isOwedStatus(co.billingStatus)) unpaid += co.contractValueCents ?? 0;
     // No line detail at all: the whole contract is what's owed once the job is done.
-    if (items.length === 0 && p.changeOrders.length === 0 && p.status === "COMPLETE" && !isPaidStatus(p.billingStatus)) {
+    if (items.length === 0 && p.changeOrders.length === 0 && p.status === "COMPLETE" && isOwedStatus(p.billingStatus)) {
       unpaid += p.contractValueCents ?? 0;
     }
     unpaidById.set(p.id, unpaid);

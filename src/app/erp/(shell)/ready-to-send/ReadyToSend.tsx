@@ -6,6 +6,7 @@ import { Button, InfoTip, Modal, inputClass, labelClass, useConfirm, useToast } 
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { centsToDollars, parseMoneyInput } from "@/lib/erp/money";
 import type { DraftLine } from "@/lib/hubspot/invoiceDrafts";
+import type { PayApp } from "@/lib/erp/payAppLines";
 
 /** Who an emailed draft goes to, and the contacts Edit recipients offers. */
 export type DraftRecipientsRow = {
@@ -75,11 +76,19 @@ export type QboDraftsInfo = {
 
 export type DeliveryRow = {
   id: string;
-  status: "NEEDS_UPLOAD" | "NEEDS_SENDING";
+  /** SENT_BACK: uploaded, then sent back by the client to fix and resubmit */
+  status: "NEEDS_UPLOAD" | "NEEDS_SENDING" | "SENT_BACK";
   title: string;
   invoiceNumber: string | null;
   totalCents: number;
   reason: string | null;
+  /** Portal uploads for a job: every SOV line and change order with previous, this period and to date */
+  payApp: PayApp | null;
+  /** The client's billing cutoff when it's missed or within a few days */
+  cutoff: { text: string; missed: boolean } | null;
+  /** Who uploaded it, for sent-back ones */
+  uploadedBy: string | null;
+  portalReference: string | null;
   clientName: string | null;
   clientCompanyId: string | null;
   method: string | null;
@@ -1171,12 +1180,13 @@ function NeedsSending({ rows }: { rows: DeliveryRow[] }) {
   const toast = useToast();
   const [busy, setBusy] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [marking, setMarking] = useState<DeliveryRow | null>(null);
 
-  async function act(r: DeliveryRow, what: "done" | "email-again") {
+  async function emailAgain(r: DeliveryRow) {
     setBusy(r.id);
-    const { ok, data } = await call(`/api/erp/invoice-deliveries/${r.id}/${what}`, "POST");
+    const { ok, data } = await call(`/api/erp/invoice-deliveries/${r.id}/email-again`, "POST");
     setBusy(null);
-    toast(ok ? (what === "done" ? "Marked done." : String(data.note ?? "Emailed.")) : String(data.error ?? "Could not save."));
+    toast(ok ? String(data.note ?? "Emailed.") : String(data.error ?? "Could not save."));
     router.refresh();
   }
 
@@ -1188,7 +1198,7 @@ function NeedsSending({ rows }: { rows: DeliveryRow[] }) {
     <section className="space-y-2">
       <p className="flex items-center gap-1 text-xs text-gray-500">
         Approved, but not with the client yet. Click one for its lines and links.
-        <InfoTip text="Portal clients: open the portal, upload the PDF with these amounts (click an amount to copy it), then Mark uploaded. Email problems: fix the address on the company, building or project, then Email again from the menu." />
+        <InfoTip text="Portal clients: open the portal, upload the PDF with these amounts (click an amount to copy it), then Mark uploaded with the portal's number or a screenshot. Sent back: fix it in the portal, then Resubmit. Email problems: fix the address on the company, building or project, then Email again from the menu." />
       </p>
       <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white shadow-sm">
         {rows.map((r) => {
@@ -1208,40 +1218,61 @@ function NeedsSending({ rows }: { rows: DeliveryRow[] }) {
                     {r.invoiceNumber ? `${r.invoiceNumber} · ` : ""}
                     {r.title}
                   </span>
-                  <span className="block truncate text-xs text-amber-800">{r.reason}</span>
+                  <span className={`block truncate text-xs ${r.status === "SENT_BACK" ? "text-red-700" : "text-amber-800"}`}>
+                    {r.reason}
+                    {r.status === "SENT_BACK" && r.uploadedBy ? ` · ${r.uploadedBy}` : ""}
+                  </span>
                 </button>
+                {r.cutoff && (
+                  <span
+                    title="The client's billing cutoff day, from the job or its client company."
+                    className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${r.cutoff.missed ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}
+                  >
+                    {r.cutoff.text}
+                  </span>
+                )}
                 <span className="font-semibold tabular-nums text-gray-900">{centsToDollars(r.totalCents)}</span>
-                <Button size="xs" disabled={busy !== null} onClick={() => void act(r, "done")}>
-                  {r.status === "NEEDS_UPLOAD" ? "Mark uploaded" : "Mark sent"}
+                <Button size="xs" disabled={busy !== null} onClick={() => setMarking(r)}>
+                  {r.status === "SENT_BACK" ? "Resubmit" : r.status === "NEEDS_UPLOAD" ? "Mark uploaded" : "Mark sent"}
                 </Button>
                 <RowMenu
                   label={`More for ${r.title}`}
                   disabled={busy !== null}
-                  items={[...(r.status === "NEEDS_SENDING" ? [{ label: "Email again", onClick: () => void act(r, "email-again") }] : []), ...links]}
+                  items={[...(r.status === "NEEDS_SENDING" ? [{ label: "Email again", onClick: () => void emailAgain(r) }] : []), ...links]}
                 />
               </div>
               {isOpen && (
                 <div className="space-y-2 border-t border-gray-100 bg-gray-50 px-4 py-3 text-sm">
-                  <table className="w-full">
-                    <tbody className="divide-y divide-gray-100">
-                      {r.lines.map((l, i) => (
-                        <tr key={i}>
-                          <td className="py-1 pr-2 text-gray-900">
-                            {l.name}
-                            {l.description && <span className="ml-2 text-xs text-gray-500">{l.description}</span>}
-                          </td>
-                          <td className="py-1 text-right tabular-nums text-gray-900">
-                            <button type="button" title="Copy amount" className="hover:text-pink-600" onClick={() => void navigator.clipboard.writeText((l.amountCents / 100).toFixed(2)).then(() => toast("Amount copied."))}>
-                              {centsToDollars(l.amountCents)}
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  {r.payApp ? (
+                    <PayAppTable payApp={r.payApp} invoiceCents={r.totalCents} />
+                  ) : (
+                    <table className="w-full">
+                      <tbody className="divide-y divide-gray-100">
+                        {r.lines.map((l, i) => (
+                          <tr key={i}>
+                            <td className="py-1 pr-2 text-gray-900">
+                              {l.name}
+                              {l.description && <span className="ml-2 text-xs text-gray-500">{l.description}</span>}
+                            </td>
+                            <td className="py-1 text-right tabular-nums text-gray-900">
+                              <button type="button" title="Copy amount" className="hover:text-pink-600" onClick={() => void navigator.clipboard.writeText((l.amountCents / 100).toFixed(2)).then(() => toast("Amount copied."))}>
+                                {centsToDollars(l.amountCents)}
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
                     <span className="text-gray-600">{[r.clientName ?? "No client company", r.method].filter(Boolean).join(" · ")}</span>
                     {r.logins.length > 0 && <span className="text-gray-600">Login: {r.logins.join(", ")}</span>}
+                    {r.status === "SENT_BACK" && (
+                      <span className="text-gray-600">
+                        Uploaded by {r.uploadedBy ?? "someone"}
+                        {r.portalReference ? `, #${r.portalReference.replace(/^#/, "")}` : ""}
+                      </span>
+                    )}
                     {links.map((l) => (
                       <a key={l.label} href={l.href} target={l.external ? "_blank" : undefined} rel={l.external ? "noreferrer" : undefined} className="font-medium text-pink-600 hover:underline">
                         {l.label}
@@ -1254,7 +1285,171 @@ function NeedsSending({ rows }: { rows: DeliveryRow[] }) {
           );
         })}
       </ul>
+      {marking && <MarkDeliveryDone row={marking} onClose={() => setMarking(null)} />}
     </section>
+  );
+}
+
+/** The job's whole schedule of values the way a Procore pay app asks for it. Click a number to copy it. */
+function PayAppTable({ payApp, invoiceCents }: { payApp: PayApp; invoiceCents: number }) {
+  const toast = useToast();
+  const copy = (cents: number) => void navigator.clipboard.writeText((cents / 100).toFixed(2)).then(() => toast("Amount copied."));
+  const money = (cents: number, strong = false) => (
+    <button type="button" title="Copy amount" onClick={() => copy(cents)} className={`tabular-nums hover:text-pink-600 ${strong ? "font-semibold text-gray-900" : cents ? "text-gray-900" : "text-gray-400"}`}>
+      {centsToDollars(cents)}
+    </button>
+  );
+  const th = "px-2 py-1 text-right font-medium";
+  const td = "px-2 py-1 text-right";
+  const t = payApp.totals;
+  return (
+    <div className="space-y-1">
+      <p className="flex items-center gap-1 text-xs font-medium text-gray-700">
+        Pay app
+        <InfoTip text="Every SOV line and change order on the job, in SOV order. Previous is what earlier invoices billed, This period is this invoice. Click any amount to copy it." />
+      </p>
+      {t.thisCents !== invoiceCents && (
+        <p className="rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-900">
+          This period adds up to {centsToDollars(t.thisCents)}, but the invoice is {centsToDollars(invoiceCents)}. Some of it isn&apos;t linked to an SOV line.
+        </p>
+      )}
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px] text-xs">
+          <thead className="text-gray-500">
+            <tr>
+              <th className="px-2 py-1 text-left font-medium">Line</th>
+              <th className={th}>Scheduled</th>
+              <th className={th}>Previous</th>
+              <th className={th}>This period</th>
+              <th className={th}>To date</th>
+              <th className={th}>%</th>
+              <th className={th}>Balance</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {payApp.lines.map((l, i) => (
+              <tr key={i} className={l.thisCents ? "bg-pink-50/40" : undefined}>
+                <td className="px-2 py-1 text-gray-900">
+                  {l.kind === "CO" && <span className="mr-1 text-gray-500">CO</span>}
+                  {l.description}
+                </td>
+                <td className={td}>{money(l.scheduledCents)}</td>
+                <td className={td}>{money(l.previousCents)}</td>
+                <td className={td}>{money(l.thisCents, l.thisCents > 0)}</td>
+                <td className={td}>{money(l.toDateCents)}</td>
+                <td className={`${td} tabular-nums text-gray-700`}>{l.percent == null ? "-" : `${l.percent}%`}</td>
+                <td className={td}>{money(l.balanceCents)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot className="border-t border-gray-200 font-semibold">
+            <tr>
+              <td className="px-2 py-1 text-gray-900">Total</td>
+              <td className={td}>{money(t.scheduledCents, true)}</td>
+              <td className={td}>{money(t.previousCents, true)}</td>
+              <td className={td}>{money(t.thisCents, true)}</td>
+              <td className={td}>{money(t.toDateCents, true)}</td>
+              <td className={`${td} tabular-nums text-gray-900`}>{t.percent == null ? "-" : `${t.percent}%`}</td>
+              <td className={td}>{money(t.balanceCents, true)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/** Mark uploaded / Mark sent / Resubmit: the portal's number, a screenshot or PDF as proof, and a note. */
+function MarkDeliveryDone({ row, onClose }: { row: DeliveryRow; onClose: () => void }) {
+  const router = useRouter();
+  const toast = useToast();
+  const resubmit = row.status === "SENT_BACK";
+  const upload = row.status !== "NEEDS_SENDING";
+  const [reference, setReference] = useState("");
+  const [note, setNote] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
+  const tooBig = !!file && file.size > 4 * 1024 * 1024;
+  const ready = !tooBig && (!upload || !!reference.trim() || !!file);
+
+  async function save() {
+    setSaving(true);
+    const fd = new FormData();
+    fd.set("reference", reference);
+    fd.set("note", note);
+    if (file) fd.set("file", file);
+    const res = await fetch(`/api/erp/invoice-deliveries/${row.id}/${resubmit ? "resubmit" : "done"}`, { method: "POST", body: fd });
+    const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    setSaving(false);
+    if (!res.ok) {
+      toast(String(data.error ?? "Could not save."));
+      return;
+    }
+    toast(resubmit ? "Marked resubmitted." : upload ? "Marked uploaded." : "Marked sent.");
+    onClose();
+    router.refresh();
+  }
+
+  return (
+    <Modal open onClose={onClose} dismissible={!saving} size="sm">
+      <h3 className="text-base font-semibold text-gray-900">
+        {resubmit ? `Resubmitted in ${row.method ?? "the portal"}` : upload ? `Uploaded to ${row.method ?? "the portal"}` : "Sent by hand"}
+      </h3>
+      <p className="mt-1 text-xs text-gray-500">
+        {row.invoiceNumber ? `${row.invoiceNumber} · ` : ""}
+        {row.title} · {centsToDollars(row.totalCents)}
+      </p>
+      {resubmit && row.reason && <p className="mt-2 rounded-md bg-red-50 px-3 py-2 text-xs text-red-800">{row.reason}</p>}
+      <div className="mt-4 space-y-3">
+        {upload && (
+          <label className={labelClass.default}>
+            <span className="flex items-center gap-1">
+              Portal number
+              <InfoTip text={resubmit ? "The new number if the portal gave one; leave empty to keep the old one. Add this or a screenshot." : "The number the portal gave it, e.g. the Procore pay app or invoice number. Add this or a screenshot."} />
+            </span>
+            <input
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+              maxLength={100}
+              placeholder={resubmit && row.portalReference ? row.portalReference : undefined}
+              className={`${inputClass.md} mt-1 w-full`}
+            />
+          </label>
+        )}
+        <label className={labelClass.default}>
+          <span className="flex items-center gap-1">
+            Proof
+            <InfoTip text={upload ? "A screenshot of the submitted invoice or the portal's confirmation. PDF or photo, up to 4 MB." : "The email you sent or a mailing receipt, if you have one. PDF or photo, up to 4 MB."} />
+          </span>
+          <input
+            type="file"
+            accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            className="mt-1 block w-full text-sm text-gray-700"
+          />
+          {tooBig && <span className="mt-1 block text-xs text-red-600">Too large, max 4 MB.</span>}
+        </label>
+        <label className={labelClass.default}>
+          Note
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            maxLength={1000}
+            rows={2}
+            placeholder={resubmit ? "e.g. Fixed the retainage line" : upload ? "e.g. Attached lien waiver too" : "e.g. Emailed from my inbox to the new AP contact"}
+            className={`${inputClass.md} mt-1 w-full`}
+          />
+        </label>
+      </div>
+      <div className="mt-5 flex justify-end gap-2">
+        <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>
+          Cancel
+        </Button>
+        <Button size="sm" disabled={!ready || saving} onClick={() => void save()}>
+          {saving ? "Saving..." : resubmit ? "Mark resubmitted" : upload ? "Mark uploaded" : "Mark sent"}
+        </Button>
+      </div>
+    </Modal>
   );
 }
 

@@ -10,4 +10,4 @@ const SUMMARY_SECONDS = 300;
  * pages share it, so opening one warms the others. Only for pages and routes:
  * scripts and crons call computeFinanceSummary directly.
  */
-export const cachedFinanceSummary = unstable_cache(computeFinanceSummary, ["finance-tab-summary-v2"], { revalidate: SUMMARY_SECONDS });
+export const cachedFinanceSummary = unstable_cache(computeFinanceSummary, ["finance-tab-summary-v3"], { revalidate: SUMMARY_SECONDS });

@@ -6,6 +6,7 @@ import { notifyReadyToBill, type ReadyToBillItem } from "@/lib/erp/notifyReadyTo
 // commission purposes.
 function mapBillingToProject(status: string): { billingStatus: string | null; percentInvoiced: number } {
   if (status === "PAID") return { billingStatus: "PAID", percentInvoiced: 100 };
+  if (status === "VOIDED") return { billingStatus: "VOIDED", percentInvoiced: 0 };
   if (status === "BILLED") return { billingStatus: "BILLED", percentInvoiced: 100 };
   return { billingStatus: "NOT_BILLED", percentInvoiced: 0 };
 }
@@ -16,10 +17,11 @@ function mapBillingToProject(status: string): { billingStatus: string | null; pe
  * one, but looped individually (rather than updateMany) so each project's
  * own current billingCompletedAt can be checked before stamping it.
  * `paidOn` is the day the payment came in (a HubSpot invoice's paid date),
- * used for that stamp instead of now.
+ * used for that stamp instead of now. A voided request's reason is copied
+ * so the project shows why.
  */
-export async function syncProjectBillingFromRequest(turnoverRequestId: string, billingStatus: string, paidOn: Date | null = null) {
-  const data = mapBillingToProject(billingStatus);
+export async function syncProjectBillingFromRequest(turnoverRequestId: string, billingStatus: string, paidOn: Date | null = null, voidReason: string | null = null) {
+  const data = { ...mapBillingToProject(billingStatus), voidReason: billingStatus === "VOIDED" ? voidReason : null };
   const projects = await prisma.project.findMany({
     where: { turnoverRequestId },
     select: { id: true, billingCompletedAt: true },
@@ -54,7 +56,13 @@ export async function syncProjectBillingFromSOV(projectId: string) {
   });
   if (!sov || sov.items.length === 0) return;
 
-  const items = sov.items;
+  // Voided lines won't be billed, so the project goes by the rest. All of
+  // them voided makes the project Voided.
+  const items = sov.items.filter((i) => i.billingStatus !== "VOIDED");
+  if (items.length === 0) {
+    await prisma.project.update({ where: { id: projectId }, data: { billingStatus: "VOIDED", percentInvoiced: 0 } });
+    return;
+  }
   const anyActive = items.some((i) => i.billingStatus === "BILLED" || i.billingStatus === "PAID");
   if (!anyActive) {
     await prisma.project.update({ where: { id: projectId }, data: { billingStatus: null, percentInvoiced: 0 } });
@@ -168,7 +176,7 @@ export async function markSovItemsCompleted(ids: string[], on: Date) {
  * HubSpot says it was paid, or now when HubSpot has no payment date. */
 export async function markSovItemPaid(id: string, paidOn: Date | null) {
   await prisma.projectSOVItem.updateMany({
-    where: { id, billingStatus: { not: "PAID" } },
+    where: { id, billingStatus: { notIn: ["PAID", "VOIDED"] } },
     data: { billingStatus: "PAID", paidAt: paidOn ?? new Date() },
   });
 }

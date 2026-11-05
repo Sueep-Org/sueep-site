@@ -159,6 +159,16 @@ export function FinanceDashboard() {
           with the two amounts written underneath. Change orders count on their own completion day (see Revenue above).
         </LI>
         <LI>
+          Each category shows its <strong>margin</strong>: profit divided by revenue for all of its work in the dates added
+          together, so bigger jobs count for more. Change orders get their own margin, worked out from their own revenue and
+          job costs, so they don&apos;t raise or lower the contract margin. A margin in red lost money. Hover a margin for the
+          profit in dollars.
+        </LI>
+        <LI>
+          Work marked <strong>Voided</strong> on Billing counts as $0 revenue, but its costs still count, so it lowers the
+          margin. In the job list it shows as &quot;voided&quot;.
+        </LI>
+        <LI>
           Click the <strong>i</strong> next to a category&apos;s amount to see the jobs behind it, biggest first, with what
           was counted for each (its contract, how many SOV lines, how many change orders). A job with spending but no
           finished work in the dates shows as &quot;costs only&quot;. Click a job to open it.

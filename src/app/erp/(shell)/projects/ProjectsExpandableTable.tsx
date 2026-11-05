@@ -548,10 +548,10 @@ export function LaborTable({ entries, initialVisible = 5, showFinancials = true 
 }
 
 export function billingBadge(status: string | null) {
-  // Old and new spellings both show as one of the three standard statuses.
+  // Old and new spellings both show as one of the standard statuses.
   const s = normalizeBillingStatus(status);
   if (s === "NOT_BILLED") return <EmptyValue />;
-  const cls = s === "PAID" ? "bg-emerald-100 text-emerald-700" : "bg-pink-100 text-pink-700";
+  const cls = s === "PAID" ? "bg-emerald-100 text-emerald-700" : s === "VOIDED" ? "bg-red-50 text-red-700" : "bg-pink-100 text-pink-700";
   return <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${cls}`}>{billingStatusLabel(s)}</span>;
 }
 

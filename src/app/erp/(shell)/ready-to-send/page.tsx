@@ -10,6 +10,10 @@ import { recipientContacts, type RecipientContact } from "@/lib/erp/invoiceRecip
 import { draftRecipients, loadBuildingInvoiceDestination, loadProjectInvoiceDestination, periodRecipients, withDraftRecipients, type InvoiceDestination } from "@/lib/erp/invoiceDestination";
 import { loadBillableGroups, loadWaitingItemDrafts } from "@/lib/erp/itemInvoiceDrafts";
 import { describePlan, invoiceLinesFor, planDelivery } from "@/lib/erp/invoiceDelivery";
+import { DELIVERY_WAITING_WHERE } from "@/lib/erp/portalStatus";
+import { deliveryCutoffText, loadDeliveryCutoffs } from "@/lib/erp/billingCutoffs";
+import { loadPayApp } from "@/lib/erp/payAppLines";
+import { namesByEmail } from "@/lib/erp/janitorialQualityChecks";
 import { CLAIM_TEXT, DRAFT_LEAD_DAYS, billingDateKey, draftLines, linesTotal, monthLabel } from "@/lib/erp/janitorialInvoiceDrafts";
 import { ReadyToSend, type BillableGroupRow, type ContractSetting, type DeliveryRow, type DraftRecipientsRow, type DraftRow, type MonthRow, type QboTestRow } from "./ReadyToSend";
 import { withHubSpotId } from "@/lib/erp/invoiceLinkSource";
@@ -108,7 +112,7 @@ export default async function ReadyToSendPage() {
     suggestedNextInvoiceNumber(),
     loadBillableGroups(),
     loadWaitingItemDrafts(),
-    prisma.invoiceDelivery.findMany({ where: { status: { in: ["NEEDS_UPLOAD", "NEEDS_SENDING"] } }, orderBy: { createdAt: "asc" } }),
+    prisma.invoiceDelivery.findMany({ where: DELIVERY_WAITING_WHERE, orderBy: { createdAt: "asc" } }),
     draftsGoToQuickBooks(),
     loadWaitingQboDrafts(),
     loadRecentQboTests(),
@@ -254,16 +258,26 @@ export default async function ReadyToSendPage() {
   const loginLinks = companyIds.length
     ? await prisma.clientCompanyLogin.findMany({ where: { companyId: { in: companyIds } }, select: { companyId: true, login: { select: { name: true } } } })
     : [];
+  const uploaderNames = await namesByEmail([...new Set(waitingDeliveries.map((d) => d.doneByEmail).filter((e): e is string => !!e))]);
   const deliveryRows: DeliveryRow[] = [];
-  for (const d of waitingDeliveries) {
+  const cutoffs = await loadDeliveryCutoffs(waitingDeliveries);
+  // Sent back by the client first (someone already started these), then missed cutoffs, then cutoffs coming up.
+  const rank = (d: (typeof waitingDeliveries)[number]) => (d.portalStatus === "SENT_BACK" ? 0 : cutoffs.get(d.id)?.state === "MISSED" ? 1 : cutoffs.get(d.id) ? 2 : 3);
+  const ordered = [...waitingDeliveries].sort((a, b) => rank(a) - rank(b));
+  for (const d of ordered) {
     const { lines } = d.hubspotInvoiceId ? await invoiceLinesFor(d.hubspotInvoiceId) : { lines: (d.lines ?? []) as DeliveryRow["lines"] };
     deliveryRows.push({
       id: d.id,
-      status: d.status === "NEEDS_UPLOAD" ? "NEEDS_UPLOAD" : "NEEDS_SENDING",
+      status: d.portalStatus === "SENT_BACK" ? "SENT_BACK" : d.status === "NEEDS_UPLOAD" ? "NEEDS_UPLOAD" : "NEEDS_SENDING",
       title: d.title,
       invoiceNumber: d.invoiceNumber,
       totalCents: d.totalCents,
-      reason: d.reason,
+      reason: d.portalStatus === "SENT_BACK" ? `Sent back: ${d.sentBackReason ?? "no reason given"}` : d.reason,
+      // Portal uploads for a job: the whole SOV as a pay app, for typing into Procore and the like.
+      payApp: d.destType === "PROJECT" && d.status !== "NEEDS_SENDING" && PORTAL_METHODS.includes(d.method as (typeof PORTAL_METHODS)[number]) ? await loadPayApp(d.destId, d) : null,
+      cutoff: cutoffs.has(d.id) ? { text: deliveryCutoffText(cutoffs.get(d.id)!), missed: cutoffs.get(d.id)!.state === "MISSED" } : null,
+      uploadedBy: d.doneByEmail ? (uploaderNames.get(d.doneByEmail.toLowerCase()) ?? d.doneByEmail.split("@")[0]!) : null,
+      portalReference: d.portalReference,
       clientName: d.clientName,
       clientCompanyId: d.clientCompanyId,
       method: d.method && d.method in BILLING_METHOD_LABELS ? BILLING_METHOD_LABELS[d.method as keyof typeof BILLING_METHOD_LABELS] : null,

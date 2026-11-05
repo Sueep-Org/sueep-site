@@ -171,7 +171,7 @@ async function applySovResolution(
   // Jumping straight from not-yet-invoiced to paid with no ERP-side BILLED
   // step is itself a signal something's off (wrong project matched, stale
   // ERP data) — don't auto-apply, route to review instead.
-  if (target.billingStatus === "NOT_BILLED") return { status: "PENDING_REVIEW", matchedSovItemId: target.id };
+  if (target.billingStatus === "NOT_BILLED" || target.billingStatus === "VOIDED") return { status: "PENDING_REVIEW", matchedSovItemId: target.id };
 
   if (!amountReconciles(r.amountCents, target.scheduledValueCents, AMOUNT_TOLERANCE_CENTS)) {
     return { status: "PENDING_REVIEW", matchedSovItemId: target.id };

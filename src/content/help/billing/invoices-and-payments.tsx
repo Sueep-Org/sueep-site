@@ -39,12 +39,17 @@ export function InvoicesAndPayments() {
               <strong>For:</strong> the work it bills, linking to its job or building and to its lines on Project Billing.
             </LI>
             <LI>
-              <strong>Payments:</strong> each payment with its date, amount and reference (check number and so on).
+              <strong>History:</strong> everything that happened to it, oldest first: the invoice date, who approved it on
+              Ready to send, who it was emailed to or who uploaded it (with the portal number, note and a{" "}
+              <strong>Proof</strong> link to the screenshot), portal status changes such as sent back and resubmitted,
+              follow-ups, the short pay reason, and each payment with its reference (check number and so on). Red means sent
+              back, green means approved or paid.
             </LI>
             <LI>
-              <strong>Sent and links:</strong> how it reached the client (&quot;Emailed to ...&quot;, &quot;Uploaded or sent by
-              hand&quot;, or still waiting), whether it was made on Ready to send, the PDF, <strong>Open in QuickBooks</strong>{" "}
-              (Admins and the Business Manager) and the HubSpot invoice for older ones.
+              <strong>Status and links:</strong> whether it&apos;s still waiting to be sent, its portal status with buttons to
+              change it, the short pay reason, the last follow-up with <strong>Log follow-up</strong>, the PDF,{" "}
+              <strong>Open in QuickBooks</strong> and the HubSpot invoice for older ones. The buttons and Open in QuickBooks are
+              for Admins and the Business Manager.
             </LI>
           </UL>
         </LI>
@@ -52,23 +57,39 @@ export function InvoicesAndPayments() {
       <H3>Statuses</H3>
       <UL>
         <LI>
-          <strong>Unpaid:</strong> money still owed, not yet due.
+          <strong>Open:</strong> nothing paid yet, not yet due.
         </LI>
         <LI>
-          <strong>Overdue:</strong> money still owed after the due date, with how many days late.
+          <strong>Partly paid:</strong> some of it paid, not yet due. The rest is in Balance.
         </LI>
         <LI>
-          <strong>Paid:</strong> nothing left to pay. A partly paid invoice stays Unpaid or Overdue, with the rest in Balance.
+          <strong>Overdue:</strong> money still owed after the due date, with how many days late (partly paid or not).
+        </LI>
+        <LI>
+          <strong>Paid:</strong> nothing left to pay.
         </LI>
         <LI>
           <strong>Not in QuickBooks:</strong> an older HubSpot invoice that never reached QuickBooks.
         </LI>
       </UL>
+      <P>
+        On unpaid invoices, one short line under the status says what matters most, in this order: a red{" "}
+        <strong>Missed promise</strong>, why it was paid short (or &quot;Short, no reason yet&quot;), the portal status (for
+        example &quot;Procore: Under review&quot;, red when sent back), or a promise to pay still to come.
+      </P>
+      <H3>Portal status</H3>
+      <P>
+        Invoices uploaded to Procore, Coupa or a vendor portal show where the client&apos;s portal has them: Submitted, Under
+        review, Approved, Sent back or Resubmitted. After checking the portal, open the invoice and click{" "}
+        <strong>Under review</strong>, <strong>Approved</strong> or <strong>Sent back</strong>. Sent back and Resubmit are
+        explained in <A href="/erp/help/billing/sending-invoices">Sending Invoices: Email, Portals and Needs Sending</A>.
+      </P>
       <H3>Search and Filter</H3>
       <UL>
         <LI>The search box finds an invoice by number, client, building or job.</LI>
         <LI>
-          <strong>Filter</strong> narrows by status (with a count on each), client, and invoice date (This month, Last 30 days,
+          <strong>Filter</strong> narrows by status (All, Unpaid, Overdue, Paid, <strong>Missed promise</strong> and{" "}
+          <strong>In portal, not approved</strong>, each with a count), client, and invoice date (This month, Last 30 days,
           This year, Last year, or your own From and To).
         </LI>
         <LI>
@@ -107,19 +128,57 @@ export function InvoicesAndPayments() {
       </P>
 
       <H2>Chasing unpaid invoices</H2>
+      <H3>Finding them</H3>
       <UL>
         <LI>
-          On the Invoices page, Filter by <strong>Overdue</strong>, or sort by Balance.
+          On the Invoices page, Filter by <strong>Overdue</strong> or <strong>Missed promise</strong>, or sort by Balance.
         </LI>
         <LI>
           The dashboard&apos;s <strong>Overdue</strong> tab (Admins and the Business Manager) lists open invoices past their due
-          date, and open invoices by how long ago the work was finished: 30, 60 and 90+ days.
+          date, and open invoices by how long ago the work was finished: 30, 60 and 90+ days. Clicking one opens it on the
+          Invoices page.
         </LI>
         <LI>
           On Project Billing, filter by <strong>Billed</strong> with <strong>Since completion</strong> for the same view by
           job, with lien deadlines.
         </LI>
       </UL>
+      <H3>Logging a follow-up</H3>
+      <Steps>
+        <Step n={1} title="Open the invoice">
+          From the Overdue tab, or find it on the Invoices page and click the row.
+        </Step>
+        <Step n={2} title="Click Log follow-up">
+          Under Status and links (Admins and the Business Manager, unpaid invoices with a number). Pick how (Email, Phone,
+          Portal message, In person, Other), who you spoke to, what they said and, if they gave one, the day they promised to
+          pay by.
+        </Step>
+        <Step n={3} title="Save">
+          It shows in the invoice&apos;s History, and the last follow-up and any promise show above the button.
+        </Step>
+      </Steps>
+      <UL>
+        <LI>
+          A promise still to come shows under the status as &quot;Promised Nov 10&quot;. Once that day passes unpaid, it turns
+          red, &quot;Missed promise&quot;.
+        </LI>
+        <LI>
+          On the Overdue tab, each invoice shows its last follow-up or promise. Missed promises get a red badge and move to the
+          top of their group; invoices with a promise still to come move to the bottom.
+        </LI>
+        <LI>
+          Logged one by mistake? Click <strong>Remove</strong> on that History line. Only the person who logged it, or an
+          Admin, can remove it.
+        </LI>
+      </UL>
+      <H3>Short pays</H3>
+      <P>
+        When a client pays part of an invoice, it shows &quot;Short, no reason yet&quot; under the status. Open it and click{" "}
+        <strong>Explain short pay</strong> (Admins and the Business Manager): pick <strong>Retainage held</strong>,{" "}
+        <strong>Disputed line</strong>, <strong>Back charge</strong> or <strong>Other</strong>, the amount (starts at the whole
+        open balance) and a note (needed for Other). The reason then shows under the status, in History and on the
+        Overdue tab. <strong>Edit short pay</strong> changes it, and <strong>Clear</strong> inside it removes it.
+      </P>
 
       <H2>Needs a fix</H2>
       <P>Open the invoice; an amber note says what is wrong, with a button to fix it.</P>
@@ -138,6 +197,10 @@ export function InvoicesAndPayments() {
         <LI>
           <strong>Not in QuickBooks:</strong> an older HubSpot invoice that never reached QuickBooks. The bookkeeper adds it
           there.
+        </LI>
+        <LI>
+          <strong>Short pay, no reason:</strong> partly paid and nobody has said why. Click <strong>Explain short pay</strong>{" "}
+          (see Short pays above).
         </LI>
       </UL>
       <Callout type="tip">

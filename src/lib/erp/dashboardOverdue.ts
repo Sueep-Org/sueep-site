@@ -4,6 +4,9 @@ import { todayEasternKey, utcDateKey } from "./dates";
 import { centsToDollars, centsToDollarsCompact } from "./money";
 import { loadOpenInvoices, overdueSection, type OpenInvoice, type OverdueInvoice } from "./dashboardMoney";
 import { invoiceKey } from "./invoiceLinkSource";
+import { loadFollowUps, summarizeFollowUps } from "./invoiceFollowUps";
+import { followUpNumber } from "./invoiceFollowUpShared";
+import { loadShortPays } from "./invoiceShortPays";
 
 /**
  * Overdue tab card (Admin and Business Manager): open invoices past
@@ -129,15 +132,52 @@ async function loadOverdueData(todayKey: string) {
     })
     .sort((a, b) => b.daysSinceDone - a.daysSinceDone);
   const buckets = COMPLETION_BUCKETS.map((b) => ({ bucket: b, invoices: aged.filter((i) => i.daysSinceDone >= b.min && i.daysSinceDone <= b.max) }));
-  return { overdue, buckets };
+  return { open, overdue, buckets };
+}
+
+/**
+ * Follow-ups on each row (INVOICE_TRACKING_PLAN.md Phase 4): the last one or
+ * the promise in the note, why it was paid short when someone said (Phase 6), a red badge for a missed promise, missed promises
+ * first and promises still to come last within each group. Rows open the
+ * invoice on the Invoices page, where follow-ups are logged.
+ */
+async function withFollowUps(sections: CardSection[], open: OpenInvoice[], todayKey: string): Promise<CardSection[]> {
+  const byId = new Map(open.map((i) => [i.id, i]));
+  const [followUps, shortPays] = await Promise.all([loadFollowUps(), loadShortPays()]);
+  return sections.map((section) => {
+    const groupOrder = [...new Set(section.rows.map((r) => r.group ?? ""))];
+    const rows = section.rows.map((sectionRow) => {
+      let row = sectionRow;
+      const inv = byId.get(row.id);
+      const number = followUpNumber(inv?.number);
+      const f = number ? summarizeFollowUps(followUps.get(number), true, todayKey) : null;
+      const href = number ? `/erp/invoices?q=${encodeURIComponent(number)}` : row.href;
+      const shortPay = number ? shortPays.get(number) : undefined;
+      if (shortPay) row = { ...row, note: `${row.note ?? ""} · ${shortPay.label.toLowerCase()}` };
+      if (!f) return { row: { ...row, href }, rank: 1 };
+      const promise = f.promisedDay ? (f.promiseMissed ? `missed promise ${shortDate(f.promisedDay)}` : `promised ${shortDate(f.promisedDay)}`) : null;
+      return {
+        row: {
+          ...row,
+          href,
+          note: `${row.note ?? ""} · ${promise ?? `followed up ${shortDate(f.lastDay)}`}`,
+          ...(f.promiseMissed ? { badges: [{ label: "Missed promise", tone: "red" as const, title: `Promised ${shortDate(f.promisedDay!)}. Last follow-up ${shortDate(f.lastDay)} by ${f.lastBy}.` }] } : {}),
+        },
+        rank: f.promiseMissed ? 0 : f.promisedDay ? 2 : 1,
+      };
+    });
+    rows.sort((a, b) => groupOrder.indexOf(a.row.group ?? "") - groupOrder.indexOf(b.row.group ?? "") || a.rank - b.rank);
+    return { ...section, rows: rows.map((r) => r.row) };
+  });
 }
 
 export async function loadOverdueInvoicesCard(): Promise<DashboardCardData> {
-  const { overdue, buckets } = await loadOverdueData(todayEasternKey());
+  const todayKey = todayEasternKey();
+  const { open, overdue, buckets } = await loadOverdueData(todayKey);
   const hubspot = { ...overdueSection(overdue), label: "Past due date" };
   return {
     alertCount: overdue.length,
-    sections: [hubspot, ...buckets.map(({ bucket, invoices }) => completionSection(bucket, invoices))],
+    sections: await withFollowUps([hubspot, ...buckets.map(({ bucket, invoices }) => completionSection(bucket, invoices))], open, todayKey),
   };
 }
 

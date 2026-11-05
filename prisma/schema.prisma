@@ -64,10 +64,12 @@ model Project {
   /// of silently falling outside a single day's window.
   turnoverDigestSentAt DateTime?
 
-  /// NOT_BILLED | BILLED | PAID (see src/lib/erp/billingStatus.ts). Older rows
+  /// NOT_BILLED | BILLED | PAID | VOIDED (see src/lib/erp/billingStatus.ts). Older rows
   /// may still hold BILLING / INVOICE_PAID until the one-time update in
   /// prisma/data-migrations/unify-billing-status.sql has run.
   billingStatus String?
+  /// Why it was set to VOIDED (required then, cleared when it leaves VOIDED).
+  voidReason    String?
 
   contractValueCents Int?
 
@@ -407,8 +409,10 @@ model TurnoverRequest {
   completedAt        DateTime?
   invoiceGeneratedAt DateTime?
   invoiceUrl         String?
-  /// NOT_BILLED | BILLED | PAID
+  /// NOT_BILLED | BILLED | PAID | VOIDED
   billingStatus      String    @default("NOT_BILLED")
+  /// Why it was set to VOIDED (required then, cleared when it leaves VOIDED).
+  voidReason         String?
 
   createdBy String?
   status    TurnoverRequestStatus @default(PENDING)
@@ -713,8 +717,10 @@ model RecurringContractPeriod {
   /// One-off extras for the month live in `charges`. The default is only a
   /// safety net for older deployed code that doesn't set it.
   amountCents   Int       @default(0)
-  /// NOT_BILLED | BILLED | PAID
+  /// NOT_BILLED | BILLED | PAID | VOIDED
   billingStatus String    @default("NOT_BILLED")
+  /// Why it was set to VOIDED (required then, cleared when it leaves VOIDED).
+  voidReason    String?
   /// Stamped when billingStatus becomes PAID, cleared if it's moved back.
   /// The Finance tab's "Paid" view counts the month's revenue here. Months
   /// paid before this existed have none and fall back to periodStart.
@@ -1031,6 +1037,8 @@ model ProjectChangeOrder {
   /// ProjectDayAssignment.changeOrders) to show up.
   endDate             DateTime?
   billingStatus       String?
+  /// Why it was set to VOIDED (required then, cleared when it leaves VOIDED).
+  voidReason          String?
   /// Stamped when billingStatus becomes PAID, cleared if it's moved back.
   /// The Finance tab's "Paid" view counts the change order here. Ones
   /// paid before this existed have none and fall back to completedAt.
@@ -2792,8 +2800,10 @@ model ProjectSOVItem {
   /// When the line was finished. Set when it's marked done, cleared when it's
   /// unmarked, editable by hand. The finance dashboard counts the line here.
   completedAt         DateTime?
-  /// NOT_BILLED | BILLED | PAID
+  /// NOT_BILLED | BILLED | PAID | VOIDED
   billingStatus       String     @default("NOT_BILLED")
+  /// Why it was set to VOIDED (required then, cleared when it leaves VOIDED).
+  voidReason          String?
   /// When the line was marked paid. Cleared when it stops being paid.
   paidAt              DateTime?
   createdAt           DateTime   @default(now())
@@ -4191,8 +4201,95 @@ model InvoiceDelivery {
   /// Who marked it uploaded or sent by hand, and when
   doneAt           DateTime?
   doneByEmail      String?
+  /// UPLOADED (to a portal) | SENT (by hand), set with DONE
+  doneAs           String?
+  /// The portal's number for it, e.g. the Procore pay app or invoice number
+  portalReference  String?
+  doneNote         String?
+  proofs           InvoiceDeliveryProof[]
+  /// Uploads only: where the portal has it (lib/erp/portalStatus.ts),
+  /// SUBMITTED | UNDER_REVIEW | APPROVED | SENT_BACK | RESUBMITTED. Paid comes from QuickBooks.
+  portalStatus     String?
+  portalStatusAt   DateTime?
+  /// Why the client sent it back, while portalStatus is SENT_BACK
+  sentBackReason   String?
+  statusChanges    InvoiceDeliveryStatusChange[]
 
   @@index([status])
+}
+
+/// A screenshot or confirmation PDF saved when an invoice was marked
+/// uploaded or sent (INVOICE_TRACKING_PLAN.md Phase 1).
+model InvoiceDeliveryProof {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  deliveryId      String
+  delivery        InvoiceDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  filename        String
+  mimeType        String
+  data            Bytes
+  uploadedByEmail String?
+
+  @@index([deliveryId])
+}
+
+/// Someone chased an unpaid invoice (INVOICE_TRACKING_PLAN.md Phase 4).
+/// Keyed by invoice number, the one id the Overdue tab and the Invoices page
+/// share for HubSpot and QuickBooks invoices alike.
+model InvoiceFollowUp {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  /// Upper case, e.g. INV-1397
+  invoiceNumber String
+  /// EMAIL | PHONE | PORTAL | IN_PERSON | OTHER (lib/erp/invoiceFollowUpShared.ts)
+  method        String
+  /// Who we spoke to
+  contactName   String?
+  /// What they said
+  note          String
+  /// The day they said they'd pay by
+  promisedDate  DateTime? @db.Date
+  byEmail       String
+
+  @@index([invoiceNumber])
+}
+
+/// Why a client paid less than the invoice (INVOICE_TRACKING_PLAN.md Phase 6).
+/// One per invoice, keyed by number like InvoiceFollowUp; saving again replaces it.
+model InvoiceShortPay {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Upper case, e.g. INV-1397
+  invoiceNumber String  @unique
+  /// RETAINAGE | DISPUTED | BACK_CHARGE | OTHER (lib/erp/invoiceShortPayShared.ts)
+  reason        String
+  /// How much of the balance this explains; null means all of it
+  amountCents   Int?
+  note          String?
+  byEmail       String
+}
+
+/// Each portal status change on an uploaded invoice, for its history
+/// (INVOICE_TRACKING_PLAN.md Phase 2).
+model InvoiceDeliveryStatusChange {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  deliveryId      String
+  delivery        InvoiceDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  fromStatus      String?
+  toStatus        String
+  /// The sent-back reason, or a note
+  note            String?
+  /// The portal's number at a submit or resubmit
+  portalReference String?
+  byEmail         String
+
+  @@index([deliveryId])
 }
 
 /// Lost reasons set and deals marked lost from the pipeline board (PIPELINE_PLAN Phase 2).

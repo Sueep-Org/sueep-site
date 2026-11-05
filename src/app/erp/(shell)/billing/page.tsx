@@ -12,6 +12,7 @@ import type { BillingPreference } from "@/lib/erp/invoiceDestination";
 import { BILLING_METHOD_LABELS } from "@/lib/erp/clientCompanies";
 import { LIEN_STAGE_RANK, lienDecisionCloses } from "@/lib/erp/lienDeadline";
 import { normalizeBillingStatus } from "@/lib/erp/billingStatus";
+import { BillingStatusSelect } from "@/app/erp/components/BillingStatusSelect";
 import type { NotCompletedRow } from "@/app/api/erp/billing/not-completed/route";
 
 // ── Shared ────────────────────────────────────────────────────────────────────
@@ -22,13 +23,8 @@ const BILLING_OPTIONS = [
   { value: "NOT_BILLED", label: "Not Billed" },
   { value: "BILLED",     label: "Billed" },
   { value: "PAID",       label: "Paid" },
+  { value: "VOIDED",     label: "Voided" },
 ] as const;
-
-function billingBadgeCls(status: string): string {
-  if (status === "PAID")   return "bg-emerald-100 text-emerald-700";
-  if (status === "BILLED") return "bg-blue-100 text-blue-700";
-  return "bg-gray-100 text-gray-500";
-}
 
 function fmt(cents: number): string {
   return (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -46,6 +42,11 @@ function monthStartISO(): string {
 type StatusFilter = "ALL" | (typeof BILLING_OPTIONS)[number]["value"];
 /** Billing opens on unbilled work from all time. */
 const DEFAULT_STATUS: StatusFilter = "NOT_BILLED";
+
+/** Whether a line adds to the Total row: voided lines only when the Voided filter is on. */
+function inTotal(filter: StatusFilter) {
+  return (raw: string | null) => filter === "VOIDED" || normalizeBillingStatus(raw) !== "VOIDED";
+}
 
 /** An open invoice that's past its due date, same test the invoice chip uses. */
 function hasOverdueInvoice(invoices: UnitInvoiceChip[] | undefined): boolean {
@@ -336,6 +337,7 @@ type SOVItemRow = {
   description: string;
   scheduledValueCents: number;
   billingStatus: string;
+  voidReason: string | null;
   completedAt: string;
   /** HubSpot invoices linked to this SOV item */
   invoices: UnitInvoiceChip[];
@@ -347,6 +349,7 @@ type CORow = {
   title: string;
   contractValueCents: number;
   billingStatus: string;
+  voidReason: string | null;
   completedAt: string;
   /** HubSpot invoices linked to this change order (post-construction only) */
   invoices?: UnitInvoiceChip[];
@@ -356,6 +359,7 @@ type PostConProjectRow = {
   projectId: string;
   jobTitle: string;
   projectBillingStatus: string | null;
+  projectVoidReason: string | null;
   // Only meaningful when items/changeOrders are both empty — the
   // The project's flat contract, shown as its own line when it has no SOV
   // lines here (alone, or next to its change orders). Null otherwise.
@@ -724,11 +728,12 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
   const allItems = shownRows.flatMap((r) => r.items);
   const allCOs = shownRows.flatMap((r) => r.changeOrders ?? []);
   const wholeProjectRows = shownRows.filter((r) => r.contractValueCents != null);
-  const totalCents = allItems.reduce((s, i) => s + i.scheduledValueCents, 0)
-    + allCOs.reduce((s, c) => s + c.contractValueCents, 0)
-    + wholeProjectRows.reduce((s, r) => s + (r.contractValueCents ?? 0), 0);
+  const counted = inTotal(status);
+  const totalCents = allItems.reduce((s, i) => s + (counted(i.billingStatus) ? i.scheduledValueCents : 0), 0)
+    + allCOs.reduce((s, c) => s + (counted(c.billingStatus) ? c.contractValueCents : 0), 0)
+    + wholeProjectRows.reduce((s, r) => s + (counted(r.projectBillingStatus) ? (r.contractValueCents ?? 0) : 0), 0);
 
-  async function updateCOBillingStatus(projectId: string, coId: string, billingStatus: string) {
+  async function updateCOBillingStatus(projectId: string, coId: string, billingStatus: string, voidReason: string | null) {
     setData((prev) => {
       if (!prev) return prev;
       return {
@@ -737,7 +742,7 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
           row.projectId !== projectId ? row : {
             ...row,
             changeOrders: (row.changeOrders ?? []).map((co) =>
-              co.id === coId ? { ...co, billingStatus } : co,
+              co.id === coId ? { ...co, billingStatus, voidReason } : co,
             ),
           },
         ),
@@ -747,7 +752,7 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
       await fetch(`/api/erp/projects/${projectId}/change-orders/${coId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ billingStatus }),
+        body: JSON.stringify({ billingStatus, voidReason }),
       });
     } catch {
       fetch(billingUrl("/api/erp/billing/post-construction", start, end, search))
@@ -755,13 +760,13 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
     }
   }
 
-  async function updateProjectBillingStatus(projectId: string, billingStatus: string) {
+  async function updateProjectBillingStatus(projectId: string, billingStatus: string, voidReason: string | null) {
     setData((prev) => {
       if (!prev) return prev;
       return {
         ...prev,
         rows: prev.rows.map((row) =>
-          row.projectId !== projectId ? row : { ...row, projectBillingStatus: billingStatus },
+          row.projectId !== projectId ? row : { ...row, projectBillingStatus: billingStatus, projectVoidReason: voidReason },
         ),
       };
     });
@@ -769,7 +774,7 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
       await fetch(`/api/erp/projects/${projectId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ billingStatus }),
+        body: JSON.stringify({ billingStatus, voidReason }),
       });
     } catch {
       fetch(billingUrl("/api/erp/billing/post-construction", start, end, search))
@@ -777,7 +782,7 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
     }
   }
 
-  async function updateBillingStatus(projectId: string, itemId: string, billingStatus: string) {
+  async function updateBillingStatus(projectId: string, itemId: string, billingStatus: string, voidReason: string | null) {
     setData((prev) => {
       if (!prev) return prev;
       return {
@@ -785,7 +790,7 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
         rows: prev.rows.map((row) =>
           row.projectId !== projectId ? row : {
             ...row,
-            items: row.items.map((item) => item.id === itemId ? { ...item, billingStatus } : item),
+            items: row.items.map((item) => item.id === itemId ? { ...item, billingStatus, voidReason } : item),
           },
         ),
       };
@@ -794,7 +799,7 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
       await fetch(`/api/erp/projects/${projectId}/sov/items/${itemId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ billingStatus }),
+        body: JSON.stringify({ billingStatus, voidReason }),
       });
     } catch {
       fetch(billingUrl("/api/erp/billing/post-construction", start, end, search))
@@ -903,15 +908,11 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
                           {fmt(project.contractValueCents)}
                         </td>
                         <td className="px-3 py-2.5">
-                          <select
+                          <BillingStatusSelect
                             value={project.projectBillingStatus ?? "NOT_BILLED"}
-                            onChange={(e) => updateProjectBillingStatus(project.projectId, e.target.value)}
-                            className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold focus:outline-none cursor-pointer ${billingBadgeCls(project.projectBillingStatus ?? "NOT_BILLED")}`}
-                          >
-                            {BILLING_OPTIONS.map((o) => (
-                              <option key={o.value} value={o.value}>{o.label}</option>
-                            ))}
-                          </select>
+                            voidReason={project.projectVoidReason}
+                            onChange={(status, reason) => updateProjectBillingStatus(project.projectId, status, reason)}
+                          />
                         </td>
                         <td className="px-3 py-2.5">
                           <PostConInvoiceCell hs={hsFor(project.projectId)} />
@@ -960,35 +961,23 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
                       </td>
                       <td className="px-3 py-2.5">
                         {row.type === "contract" ? (
-                          <select
+                          <BillingStatusSelect
                             value={project.projectBillingStatus ?? "NOT_BILLED"}
-                            onChange={(e) => updateProjectBillingStatus(project.projectId, e.target.value)}
-                            className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold focus:outline-none cursor-pointer ${billingBadgeCls(project.projectBillingStatus ?? "NOT_BILLED")}`}
-                          >
-                            {BILLING_OPTIONS.map((o) => (
-                              <option key={o.value} value={o.value}>{o.label}</option>
-                            ))}
-                          </select>
+                            voidReason={project.projectVoidReason}
+                            onChange={(status, reason) => updateProjectBillingStatus(project.projectId, status, reason)}
+                          />
                         ) : row.type === "sov" ? (
-                          <select
+                          <BillingStatusSelect
                             value={row.item.billingStatus}
-                            onChange={(e) => updateBillingStatus(project.projectId, row.item.id, e.target.value)}
-                            className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold focus:outline-none cursor-pointer ${billingBadgeCls(row.item.billingStatus)}`}
-                          >
-                            {BILLING_OPTIONS.map((o) => (
-                              <option key={o.value} value={o.value}>{o.label}</option>
-                            ))}
-                          </select>
+                            voidReason={row.item.voidReason}
+                            onChange={(status, reason) => updateBillingStatus(project.projectId, row.item.id, status, reason)}
+                          />
                         ) : (
-                          <select
+                          <BillingStatusSelect
                             value={row.co.billingStatus}
-                            onChange={(e) => updateCOBillingStatus(project.projectId, row.co.id, e.target.value)}
-                            className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold focus:outline-none cursor-pointer ${billingBadgeCls(row.co.billingStatus)}`}
-                          >
-                            {BILLING_OPTIONS.map((o) => (
-                              <option key={o.value} value={o.value}>{o.label}</option>
-                            ))}
-                          </select>
+                            voidReason={row.co.voidReason}
+                            onChange={(status, reason) => updateCOBillingStatus(project.projectId, row.co.id, status, reason)}
+                          />
                         )}
                       </td>
                       <td className="px-3 py-2.5">
@@ -1039,6 +1028,7 @@ type JanCORow = {
   title: string;
   contractValueCents: number;
   billingStatus: string;
+  voidReason: string | null;
   completedAt: string;
   invoices?: UnitInvoiceChip[];
 };
@@ -1053,6 +1043,7 @@ type JanUnitRow = {
   completedAt: string;
   contractCents: number;
   billingStatus: string;
+  voidReason: string | null;
   scope: string;
   changeOrders: JanCORow[];
   invoices: UnitInvoiceChip[];
@@ -1174,10 +1165,11 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
 
   const allUnits = shownRows.flatMap((r) => r.units).filter((u) => !u.contextOnly);
   const allCOs = shownRows.flatMap((r) => r.units).flatMap((u) => u.changeOrders ?? []);
-  const totalCents = allUnits.reduce((s, u) => s + u.contractCents, 0)
-    + allCOs.reduce((s, c) => s + c.contractValueCents, 0);
+  const counted = inTotal(status);
+  const totalCents = allUnits.reduce((s, u) => s + (counted(u.billingStatus) ? u.contractCents : 0), 0)
+    + allCOs.reduce((s, c) => s + (counted(c.billingStatus) ? c.contractValueCents : 0), 0);
 
-  async function updateCOBillingStatus(projectId: string, coId: string, billingStatus: string) {
+  async function updateCOBillingStatus(projectId: string, coId: string, billingStatus: string, voidReason: string | null) {
     setData((prev) => {
       if (!prev) return prev;
       return {
@@ -1188,7 +1180,7 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
             u.projectId !== projectId ? u : {
               ...u,
               changeOrders: u.changeOrders.map((co) =>
-                co.id === coId ? { ...co, billingStatus } : co,
+                co.id === coId ? { ...co, billingStatus, voidReason } : co,
               ),
             },
           ),
@@ -1199,7 +1191,7 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
       await fetch(`/api/erp/projects/${projectId}/change-orders/${coId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ billingStatus }),
+        body: JSON.stringify({ billingStatus, voidReason }),
       });
     } catch {
       fetch(billingUrl("/api/erp/billing/janitorial", start, end, search))
@@ -1207,14 +1199,14 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
     }
   }
 
-  async function updateBillingStatus(unit: JanUnitRow, billingStatus: string) {
+  async function updateBillingStatus(unit: JanUnitRow, billingStatus: string, voidReason: string | null) {
     setData((prev) => {
       if (!prev) return prev;
       return {
         ...prev,
         rows: prev.rows.map((row) => ({
           ...row,
-          units: row.units.map((u) => u.projectId === unit.projectId ? { ...u, billingStatus } : u),
+          units: row.units.map((u) => u.projectId === unit.projectId ? { ...u, billingStatus, voidReason } : u),
         })),
       };
     });
@@ -1223,13 +1215,13 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
         await fetch(`/api/erp/turnover-requests/${unit.turnoverRequestId}`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ billingStatus }),
+          body: JSON.stringify({ billingStatus, voidReason }),
         });
       } else {
         await fetch(`/api/erp/projects/${unit.projectId}`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ billingStatus }),
+          body: JSON.stringify({ billingStatus, voidReason }),
         });
       }
     } catch {
@@ -1361,25 +1353,17 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
                       </td>
                       <td className="px-3 py-2.5">
                         {row.type === "unit" ? (
-                          <select
+                          <BillingStatusSelect
                             value={row.unit.billingStatus}
-                            onChange={(e) => updateBillingStatus(row.unit, e.target.value)}
-                            className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold focus:outline-none cursor-pointer ${billingBadgeCls(row.unit.billingStatus)}`}
-                          >
-                            {BILLING_OPTIONS.map((o) => (
-                              <option key={o.value} value={o.value}>{o.label}</option>
-                            ))}
-                          </select>
+                            voidReason={row.unit.voidReason}
+                            onChange={(status, reason) => updateBillingStatus(row.unit, status, reason)}
+                          />
                         ) : (
-                          <select
+                          <BillingStatusSelect
                             value={row.co.billingStatus}
-                            onChange={(e) => updateCOBillingStatus(row.co.projectId, row.co.id, e.target.value)}
-                            className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold focus:outline-none cursor-pointer ${billingBadgeCls(row.co.billingStatus)}`}
-                          >
-                            {BILLING_OPTIONS.map((o) => (
-                              <option key={o.value} value={o.value}>{o.label}</option>
-                            ))}
-                          </select>
+                            voidReason={row.co.voidReason}
+                            onChange={(status, reason) => updateCOBillingStatus(row.co.projectId, row.co.id, status, reason)}
+                          />
                         )}
                       </td>
                       <td className="px-3 py-2.5">
@@ -1478,6 +1462,7 @@ type RecurringPeriodRow = {
   totalCents: number;
   extras: string[];
   billingStatus: string;
+  voidReason: string | null;
   /** HubSpot invoices linked to this month */
   invoices?: UnitInvoiceChip[];
 };
@@ -1559,16 +1544,17 @@ function RecurringTab({ start, end, search }: { start: string; end: string; sear
   });
 
   const allPeriods = shownRows.flatMap((r) => r.periods);
-  const totalCents = allPeriods.reduce((s, p) => s + p.totalCents, 0);
+  const counted = inTotal(status);
+  const totalCents = allPeriods.reduce((s, p) => s + (counted(p.billingStatus) ? p.totalCents : 0), 0);
 
-  async function updateBillingStatus(period: RecurringPeriodRow, billingStatus: string) {
+  async function updateBillingStatus(period: RecurringPeriodRow, billingStatus: string, voidReason: string | null) {
     setData((prev) => {
       if (!prev) return prev;
       return {
         ...prev,
         rows: prev.rows.map((row) => ({
           ...row,
-          periods: row.periods.map((p) => p.periodId === period.periodId ? { ...p, billingStatus } : p),
+          periods: row.periods.map((p) => p.periodId === period.periodId ? { ...p, billingStatus, voidReason } : p),
         })),
       };
     });
@@ -1576,7 +1562,7 @@ function RecurringTab({ start, end, search }: { start: string; end: string; sear
       const res = await fetch(`/api/erp/janitorial/periods/${period.periodId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ billingStatus }),
+        body: JSON.stringify({ billingStatus, voidReason }),
       });
       if (!res.ok) throw new Error("update failed");
     } catch {
@@ -1670,15 +1656,11 @@ function RecurringTab({ start, end, search }: { start: string; end: string; sear
                         {fmt(period.totalCents)}
                       </td>
                       <td className="px-3 py-2.5">
-                        <select
+                        <BillingStatusSelect
                           value={period.billingStatus}
-                          onChange={(e) => updateBillingStatus(period, e.target.value)}
-                          className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold focus:outline-none cursor-pointer ${billingBadgeCls(period.billingStatus)}`}
-                        >
-                          {BILLING_OPTIONS.map((o) => (
-                            <option key={o.value} value={o.value}>{o.label}</option>
-                          ))}
-                        </select>
+                          voidReason={period.voidReason}
+                          onChange={(status, reason) => updateBillingStatus(period, status, reason)}
+                        />
                       </td>
                       <td className="px-3 py-2.5">
                         {(period.invoices ?? []).length > 0 ? (

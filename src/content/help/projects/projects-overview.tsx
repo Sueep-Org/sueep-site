@@ -56,7 +56,8 @@ export function ProjectsOverview() {
 
         <Step n={4} title="Financials tab">
           Next is the <strong>Financials</strong> tab, where you can edit contract value, percent
-          done, percent invoiced, and billing status, plus estimated and actual costs. Actual labor
+          done, percent invoiced, and billing status, plus estimated and actual costs. Billing status
+          includes <strong>Voided</strong> for a job that won&apos;t be billed or paid; it asks why. Actual labor
           and material costs are calculated from the project&apos;s own logs rather than typed in
           by hand.
           <Img src="/help/projects_overview/financials.png" alt="Expanded project row" />
@@ -64,7 +65,8 @@ export function ProjectsOverview() {
           breakdown used to track what&apos;s been billed against the contract. Each line shows the
           day it was done and the day it was paid, which the Finance dashboard uses to count it in
           the right month. To fix a date, open the line&apos;s menu, click <strong>Edit</strong>,
-          and pick the date. Keep the SOV total equal to the contract value, since each line counts
+          and pick the date. Each line has its own billing status, including <strong>Voided</strong>{" "}
+          (see <A href="/erp/help/billing/billing-overview">Project Billing: Billed and Paid Status</A>). Keep the SOV total equal to the contract value, since each line counts
           as its share of the contract.
           <br />
           <br />

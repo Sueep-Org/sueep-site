@@ -27,7 +27,8 @@ export function CompaniesOverview() {
         </Step>
         <Step n={3} title="Billing">
           Method, send to, cc, cutoff day, how often and payment terms. The cutoff day puts each of their active jobs on the
-          Management calendar&apos;s Billing cutoffs, with a reminder to the PM 5 days before.
+          Management calendar&apos;s Billing cutoffs, with a reminder to the PM 5 days before, and warns on Ready to send when an
+          approved invoice for them still hasn&apos;t been sent or uploaded close to it.
         </Step>
         <Step n={4} title="Contacts and logins">
           On the company page, add contacts. If they use a portal, save the login on Company Info &gt; Logins first, then use{" "}

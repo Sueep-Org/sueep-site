@@ -12,8 +12,30 @@ import { qboInvoiceUrl } from "./qboInvoiceDrafts";
 import { normalizeBillingStatus } from "./billingStatus";
 import { BILLING_DATA_START } from "./dashboardMoney";
 import { loadUnlinkedHubSpotInvoices } from "./unlinkedHubSpotInvoices";
+import { namesByEmail } from "./janitorialQualityChecks";
+import { BILLING_METHOD_LABELS } from "./clientCompanies";
+import { PORTAL_STATUS_LABELS, isPortalStatus, type PortalStatus } from "./portalStatus";
+import { loadFollowUps, summarizeFollowUps } from "./invoiceFollowUps";
+import { followUpNumber, type FollowUpSummary } from "./invoiceFollowUpShared";
+import { loadShortPays } from "./invoiceShortPays";
+import type { ShortPayInfo } from "./invoiceShortPayShared";
 
 export type InvoiceStatus = "PAID" | "PARTLY_PAID" | "OPEN" | "OVERDUE" | "NOT_IN_QBO";
+
+/** One line of an invoice's history on the Invoices page. */
+export type InvoiceEvent = {
+  /** "YYYY-MM-DD", Eastern */
+  day: string;
+  /** For ordering events on the same day */
+  sort: string;
+  what: string;
+  by: string | null;
+  detail: string | null;
+  proofs: { url: string; filename: string }[];
+  tone: "good" | "bad" | null;
+  /** Follow-up lines, so they can be removed */
+  followUpId?: string;
+};
 
 export type InvoiceListRow = {
   key: string;
@@ -37,8 +59,16 @@ export type InvoiceListRow = {
   daysLate: number;
   paidDate: string | null;
   payments: { date: string | null; cents: number; ref: string | null }[];
-  /** How it reached the client, when the ERP sent it */
-  sent: string | null;
+  /** How it reached the client, when the ERP sent it, and its history since Ready to send */
+  sent: {
+    deliveryId: string;
+    /** "Waiting to be uploaded" or "Waiting to be sent" while on Needs sending, else null */
+    waiting: string | null;
+    /** Uploads only: where the client's portal has it */
+    portal: { status: PortalStatus; label: string; method: string; at: string | null; reason: string | null } | null;
+    /** What happened to it after Ready to send, oldest first: approved, emailed or uploaded, portal status changes */
+    events: InvoiceEvent[];
+  } | null;
   /** Made by the ERP in QuickBooks (Ready to send), not through HubSpot */
   fromErp: boolean;
   /** Dated since the ERP tracks billing but not tied to any ERP work yet */
@@ -51,6 +81,12 @@ export type InvoiceListRow = {
   hubspotUrl: string | null;
   /** The invoice PDF: QuickBooks' (through the ERP, no QuickBooks login needed), else HubSpot's */
   pdfUrl: string | null;
+  /** Latest follow-up and promise to pay, by invoice number */
+  followUp: FollowUpSummary | null;
+  /** Follow-ups as history lines, oldest first */
+  followUps: InvoiceEvent[];
+  /** Why it was paid short, when someone said */
+  shortPay: ShortPayInfo | null;
 };
 
 const normNumber = (n: string | null | undefined) => (n ?? "").trim().toUpperCase() || null;
@@ -145,7 +181,29 @@ export async function loadInvoiceList(): Promise<InvoiceListRow[]> {
         period: { select: { billingStatus: true, periodStart: true, recurringContract: { select: { id: true, building: { select: { name: true, ...buildingCompanies } } } } } },
       },
     }),
-    prisma.invoiceDelivery.findMany({ select: { hubspotInvoiceId: true, qboInvoiceId: true, status: true, sentTo: true, emailedAt: true, doneAt: true } }),
+    prisma.invoiceDelivery.findMany({
+      select: {
+        id: true,
+        hubspotInvoiceId: true,
+        qboInvoiceId: true,
+        status: true,
+        method: true,
+        sentTo: true,
+        emailedAt: true,
+        doneAt: true,
+        doneAs: true,
+        doneByEmail: true,
+        portalReference: true,
+        doneNote: true,
+        portalStatus: true,
+        portalStatusAt: true,
+        sentBackReason: true,
+        createdAt: true,
+        approvedByEmail: true,
+        proofs: { select: { id: true, filename: true, createdAt: true }, orderBy: { createdAt: "asc" } },
+        statusChanges: { select: { createdAt: true, fromStatus: true, toStatus: true, note: true, portalReference: true, byEmail: true }, orderBy: { createdAt: "asc" } },
+      },
+    }),
     loadUnlinkedHubSpotInvoices(BILLING_DATA_START),
   ]);
 
@@ -255,12 +313,66 @@ export async function loadInvoiceList(): Promise<InvoiceListRow[]> {
     return { client: name, sub: null };
   };
 
-  const sentText = (d: (typeof deliveries)[number] | undefined): string | null => {
+  const doneNames = await namesByEmail([
+    ...new Set(deliveries.flatMap((d) => [d.doneByEmail, d.approvedByEmail, ...d.statusChanges.map((c) => c.byEmail)]).filter((e): e is string => !!e)),
+  ]);
+  const nameOf = (email: string | null) => (email ? (doneNames.get(email.toLowerCase()) ?? email.split("@")[0]!) : null);
+  const refText = (ref: string | null) => (ref ? `#${ref.replace(/^#/, "")}` : null);
+
+  /** A delivery's history. Proofs go on the event they were saved with (same transaction, so within seconds). */
+  const eventsOf = (d: (typeof deliveries)[number], method: string | null): InvoiceEvent[] => {
+    const proofs = d.proofs.map((p) => ({ at: p.createdAt.getTime(), url: `/api/erp/invoice-delivery-proofs/${p.id}`, filename: p.filename }));
+    const used = new Set<string>();
+    const proofsAt = (at: Date) => {
+      const near = proofs.filter((p) => !used.has(p.url) && Math.abs(p.at - at.getTime()) < 10_000);
+      near.forEach((p) => used.add(p.url));
+      return near.map(({ url, filename }) => ({ url, filename }));
+    };
+    const ev = (at: Date, e: Omit<InvoiceEvent, "day" | "sort" | "proofs">, withProofs = true): InvoiceEvent => ({
+      day: todayEasternKey(at),
+      sort: at.toISOString(),
+      proofs: withProofs ? proofsAt(at) : [],
+      ...e,
+    });
+    const portal = method ?? "the portal";
+    const out: InvoiceEvent[] = [ev(d.createdAt, { what: "Approved on Ready to send", by: nameOf(d.approvedByEmail), detail: null, tone: null }, false)];
+    if (d.emailedAt) out.push(ev(d.emailedAt, { what: `Emailed to ${d.sentTo.join(", ")}`, by: null, detail: null, tone: null }, false));
+    if (d.doneAt) {
+      const what = d.doneAs === "UPLOADED" ? `Uploaded to ${portal}` : d.doneAs === "SENT" ? "Sent by hand" : "Uploaded or sent by hand";
+      // Rows marked done before doneAs existed don't say which.
+      // A resubmit can replace portalReference, so the first upload's number comes from its Submitted row.
+      const submitted = d.statusChanges.find((c) => c.toStatus === "SUBMITTED");
+      const ref = refText(submitted ? submitted.portalReference : d.portalReference);
+      out.push(ev(d.doneAt, { what, by: nameOf(d.doneByEmail), detail: [ref, d.doneNote].filter(Boolean).join(" · ") || null, tone: null }));
+    }
+    for (const c of d.statusChanges) {
+      // Submitted is the upload itself, already listed.
+      if (c.toStatus === "SUBMITTED" || !isPortalStatus(c.toStatus)) continue;
+      out.push(
+        ev(c.createdAt, {
+          what: `${portal.replace(/^the portal$/, "Portal")}: ${PORTAL_STATUS_LABELS[c.toStatus]}`,
+          by: nameOf(c.byEmail),
+          detail: [refText(c.portalReference), c.note].filter(Boolean).join(" · ") || null,
+          tone: c.toStatus === "SENT_BACK" ? "bad" : c.toStatus === "APPROVED" ? "good" : null,
+        }),
+      );
+    }
+    // Any proof that didn't match an event still shows.
+    for (const p of proofs.filter((p) => !used.has(p.url))) {
+      const at = new Date(p.at);
+      out.push({ day: todayEasternKey(at), sort: at.toISOString(), what: "Proof added", by: null, detail: null, proofs: [{ url: p.url, filename: p.filename }], tone: null });
+    }
+    return out.sort((a, b) => a.sort.localeCompare(b.sort));
+  };
+  const sentInfo = (d: (typeof deliveries)[number] | undefined): InvoiceListRow["sent"] => {
     if (!d) return null;
-    const day = (x: Date | null) => (x ? x.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" }) : "");
-    if (d.status === "EMAILED") return `Emailed to ${d.sentTo.join(", ")} ${day(d.emailedAt)}`.trim();
-    if (d.status === "DONE") return `Uploaded or sent by hand ${day(d.doneAt)}`.trim();
-    return d.status === "NEEDS_UPLOAD" ? "Waiting to be uploaded" : "Waiting to be sent";
+    const method = d.method && d.method in BILLING_METHOD_LABELS ? BILLING_METHOD_LABELS[d.method as keyof typeof BILLING_METHOD_LABELS] : null;
+    const portal =
+      d.status === "DONE" && d.doneAs === "UPLOADED" && isPortalStatus(d.portalStatus)
+        ? { status: d.portalStatus, label: PORTAL_STATUS_LABELS[d.portalStatus], method: method ?? "Portal", at: d.portalStatusAt?.toISOString() ?? null, reason: d.sentBackReason }
+        : null;
+    const waiting = d.status === "NEEDS_UPLOAD" ? "Waiting to be uploaded" : d.status === "NEEDS_SENDING" ? "Waiting to be sent" : null;
+    return { deliveryId: d.id, waiting, portal, events: eventsOf(d, method) };
   };
   const deliveryByQbo = new Map(deliveries.filter((d) => d.qboInvoiceId).map((d) => [d.qboInvoiceId!, d]));
   const deliveryByHubSpot = new Map(deliveries.filter((d) => d.hubspotInvoiceId).map((d) => [d.hubspotInvoiceId!, d]));
@@ -318,7 +430,7 @@ export async function loadInvoiceList(): Promise<InvoiceListRow[]> {
       ...s,
       paidDate: s.status === "PAID" ? (pays.at(-1)?.date ?? g?.paidDate ?? null) : null,
       payments: pays,
-      sent: sentText(deliveryByQbo.get(q.qboId) ?? (g && !g.key.startsWith("qbo:") ? deliveryByHubSpot.get(g.key) : undefined)),
+      sent: sentInfo(deliveryByQbo.get(q.qboId) ?? (g && !g.key.startsWith("qbo:") ? deliveryByHubSpot.get(g.key) : undefined)),
       fromErp: g?.source === "QUICKBOOKS",
       needsLinking: !g && (q.txnDate ?? "") >= BILLING_DATA_START,
       linkTarget: g ? null : linkTargetFor(q.docNumber),
@@ -326,6 +438,9 @@ export async function loadInvoiceList(): Promise<InvoiceListRow[]> {
       qboUrl: qboInvoiceUrl("production", q.qboId),
       hubspotUrl: g && g.source !== "QUICKBOOKS" ? g.viewUrl : null,
       pdfUrl: qboPdfUrl(q.qboId),
+      followUp: null,
+      followUps: [],
+      shortPay: null,
     });
   }
 
@@ -362,7 +477,7 @@ export async function loadInvoiceList(): Promise<InvoiceListRow[]> {
         : { status: "NOT_IN_QBO" as const, daysLate: balance > 0 && g.dueDate ? Math.max(0, daysBetween(g.dueDate, todayKey)) : 0 }),
       paidDate: g.status === "paid" ? g.paidDate : null,
       payments: [],
-      sent: sentText(fromErp && g.qboInvoiceId ? deliveryByQbo.get(g.qboInvoiceId) : deliveryByHubSpot.get(g.key)),
+      sent: sentInfo(fromErp && g.qboInvoiceId ? deliveryByQbo.get(g.qboInvoiceId) : deliveryByHubSpot.get(g.key)),
       fromErp,
       needsLinking: false,
       linkTarget: null,
@@ -370,6 +485,9 @@ export async function loadInvoiceList(): Promise<InvoiceListRow[]> {
       qboUrl: fromErp && g.qboInvoiceId ? qboInvoiceUrl("production", g.qboInvoiceId) : null,
       hubspotUrl: fromErp ? null : g.viewUrl,
       pdfUrl: fromErp && g.qboInvoiceId ? qboPdfUrl(g.qboInvoiceId) : g.pdfUrl,
+      followUp: null,
+      followUps: [],
+      shortPay: null,
     });
   }
 
@@ -403,8 +521,31 @@ export async function loadInvoiceList(): Promise<InvoiceListRow[]> {
       qboUrl: null,
       hubspotUrl: null,
       pdfUrl: null,
+      followUp: null,
+      followUps: [],
+      shortPay: null,
     });
   }
 
+  const [followUps, shortPays] = await Promise.all([loadFollowUps(), loadShortPays()]);
+  for (const r of rows) {
+    const n = followUpNumber(r.number);
+    r.shortPay = (n && shortPays.get(n)) || null;
+    const list = n ? followUps.get(n) : undefined;
+    if (!list) continue;
+    r.followUp = summarizeFollowUps(list, r.balanceCents > 0, todayKey);
+    r.followUps = list.map((f) => ({
+      day: todayEasternKey(f.at),
+      sort: f.at.toISOString(),
+      what: `Followed up by ${f.method.toLowerCase()}${f.contactName ? ` with ${f.contactName}` : ""}`,
+      by: f.by,
+      detail: f.promisedDay
+        ? `${f.note} · promised by ${new Date(`${f.promisedDay}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}`
+        : f.note,
+      proofs: [],
+      tone: null,
+      followUpId: f.id,
+    }));
+  }
   return rows.sort((a, b) => (b.invoiceDate ?? "").localeCompare(a.invoiceDate ?? "") || (b.number ?? "").localeCompare(a.number ?? ""));
 }

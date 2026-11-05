@@ -55,6 +55,7 @@ export async function GET(req: Request) {
     totalCents: number;
     extras: string[];
     billingStatus: string;
+    voidReason: string | null;
     /** HubSpot invoices linked to this month on the building's Invoices & Quotes tab. */
     invoices: Array<{ id: string; invoiceNumber: string | null; status: string | null; dueDate: string | null; paidDate: string | null; amountCents: number; viewUrl: string | null }>;
   };
@@ -81,6 +82,7 @@ export async function GET(req: Request) {
       totalCents: periodTotalCents(period),
       extras: period.charges.map((c) => c.description),
       billingStatus: period.billingStatus,
+      voidReason: period.voidReason,
       invoices: period.hubspotInvoices.map((i) => ({
         id: i.id,
         invoiceNumber: i.invoiceNumber,
