@@ -5,14 +5,14 @@
  *
  * - Columns follow HubSpot's stage order, Deal Lost last.
  * - Open stages show every deal, except Lead. Lead, won and lost stages show
- *   deals created or active in the last CLOSED_DAYS unless "all" is picked.
+ *   deals created or active in the last closed days (Settings, Alerts) unless "all" is picked.
  * - Amounts are HubSpot's Amount, so column totals match HubSpot's board.
  * - GC from companyMatcher, stale from staleQuotes, price flags from
  *   quotePriceCheck, same rules as Win/Loss and the Estimation dashboard.
  *   Janitorial has no price flags (its benchmarks are post-con jobs).
  * - Days in stage from HubSpot's date entered for the current stage. Stuck:
  *   open and past its stage's limit (stuckLimitDays). Clean up: open and
- *   CLEANUP_DAYS or more in stage, usually a dead deal nobody closed out.
+ *   the Settings clean-up days or more in stage, usually a dead deal nobody closed out.
  * - The viewer's own deals: HubSpot owner email matched to the ERP login.
  * - Chance to win and the GC record for bid or skip: winChance.ts.
  * - GC Not Awarded losses: who won (DealLostWinner) and re-bids (dealRebids.ts).
@@ -22,6 +22,7 @@
  *   post-con no Area SQFT. Job Walk Date is never flagged (unused).
  */
 import { prisma } from "@/lib/prisma";
+import { loadAlertSettings } from "@/lib/erp/alertSettingsServer";
 import { requiredByStage } from "./dealStageRules";
 import type { Priority } from "./pipelineUi";
 import { todayEasternKey } from "./dates";
@@ -51,10 +52,8 @@ import { missingFrom, type MissingField } from "./pipelineMissing";
 export type { MissingField };
 
 const DAY_MS = 86_400_000;
-export const CLOSED_DAYS = 90;
 /** Company types that hire us directly, shown apart from GCs. */
 const CLIENT_KINDS = new Set(["PROPERTY_MANAGER", "OWNER"]);
-export const CLEANUP_DAYS = 180;
 
 /** Days an open stage can hold a deal before it's stuck. Quoting waits on the GC longer than early stages. */
 export function stuckLimitDays(stageLabel: string): number {
@@ -169,6 +168,7 @@ export async function loadPipelineBoard(
   now = new Date(),
   preloaded?: Bundle,
 ): Promise<PipelineBoard> {
+  const { dealsClosedDays, dealsCleanupDays } = await loadAlertSettings();
   const [cached, companies, winners, nextSteps, rebids] = await Promise.all([
     preloaded ?? (pipeline === "janitorial" ? loadJanitorialDealBundle() : loadDealBundle()),
     prisma.clientCompany.findMany({ select: { id: true, name: true, aliases: true, type: true } }),
@@ -195,7 +195,7 @@ export async function loadPipelineBoard(
   const order = [...bundle.stageOrder.filter((id) => !bundle.lost.includes(id)), ...bundle.stageOrder.filter((id) => bundle.lost.includes(id))];
   const windowed = new Set(order.filter((id) => outcomeOf(bundle, id) !== "open" || LEAD_LABEL.test(bundle.stageLabels[id] ?? "")));
   const hidden = new Map<string, number>();
-  const since = now.getTime() - CLOSED_DAYS * DAY_MS;
+  const since = now.getTime() - dealsClosedDays * DAY_MS;
   const cards: BoardCard[] = [];
   const expectsNext = nextStepStages(bundle);
   const required = await requiredByStage(pipeline, bundle);
@@ -255,7 +255,7 @@ export async function loadPipelineBoard(
       daysInStage,
       importedStage: d.stageEnteredAt?.startsWith(IMPORT_DAY) ?? false,
       stuck: limit != null && daysInStage != null && daysInStage > limit,
-      cleanup: limit != null && daysInStage != null && daysInStage >= CLEANUP_DAYS,
+      cleanup: limit != null && daysInStage != null && daysInStage >= dealsCleanupDays,
       perSqft: d.sqft && d.cents ? d.cents / 100 / d.sqft : null,
       priceFlag: flags.get(d.id) ?? null,
       lostReasons: splitReasons(d.lostReason),

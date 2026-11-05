@@ -16,7 +16,6 @@ import { HubSpotDocumentsSection } from "@/app/erp/components/HubSpotDocumentsSe
 
 type Props = {
   buildingId: string;
-  buildingName: string;
   initial: {
     name: string;
     builder: string | null;
@@ -54,7 +53,6 @@ type Props = {
 
 export function BuildingTabs({
   buildingId,
-  buildingName,
   initial,
   initialPackage,
   initialCoPackage = null,
@@ -139,7 +137,6 @@ export function BuildingTabs({
         <div className="max-w-4xl">
           <BuildingPricingPackageEditor
             buildingId={buildingId}
-            buildingName={buildingName}
             initialPackage={initialPackage}
             canEdit={canEditPricing}
           />

@@ -12,6 +12,7 @@ import { isPaidStatus } from "@/lib/erp/billingStatus";
 import type { CommissionDealRow, RecurringCommissionRow } from "@/app/erp/(shell)/commission/CommissionByRep";
 import type { UnitInvoiceChip } from "@/app/erp/components/UnitInvoiceChips";
 import { invoiceKey } from "./invoiceLinkSource";
+import { loadPayrollRules } from "./payrollRulesServer";
 
 export type CommissionDeal = CommissionDealRow & { ownerId: string | null; year: number };
 export type CommissionRecurring = RecurringCommissionRow & { ownerId: string | null; ownerName: string | null; year: number };
@@ -63,6 +64,7 @@ export async function loadCommissionRows(): Promise<{
   deals: CommissionDeal[];
   recurring: CommissionRecurring[];
 }> {
+  const rules = await loadPayrollRules();
   const [projects, employees, recurringPeriods] = await Promise.all([
     prisma.project.findMany({
       // Commission eligibility (is this project's own billing paid, AND is
@@ -209,12 +211,12 @@ export async function loadCommissionRows(): Promise<{
   const actuals = await computeProjectActualsWithChangeOrders(commissionProjects);
   const ownerIdByProject = new Map(commissionProjects.map((p) => [p.id, resolveCommissionEmployeeId(p, eligibleEmployees)]));
 
-  // Recurring janitorial contract commission: 5% of ACV months 1-12, 2%
-  // months 13-24, $0 after — a separate schedule from one-time deals, keyed
+  // Recurring janitorial contract commission: one percent for months 1-12,
+  // another for 13-24 (Settings, Commission), $0 after — a separate schedule from one-time deals, keyed
   // off each period's own snapshotted rate rather than margin. See
   // computeRecurringCommissionCents. Computed before the one-time-deal
   // commission calc below, since recurring revenue also counts toward the
-  // $1.5M cumulative threshold that unlocks the accelerator rate on deals.
+  // yearly cumulative threshold (Settings) that unlocks the accelerator rate on deals.
   // Only counts once that month's invoice is actually paid — mirrors the
   // one-time-deal gate above, and matches the Billing page's Recurring tab,
   // which is what marks a period paid. Commission is on the flat monthly
@@ -239,7 +241,7 @@ export async function loadCommissionRows(): Promise<{
         // No eligible salesperson means nobody earns commission on it (e.g.
         // a contract the owner sold himself), the same as a one-time deal
         // with no owner in computeCommissionCentsByDeal.
-        commissionCents: ownerId ? computeRecurringCommissionCents(period.amountCents, monthIndex) : 0,
+        commissionCents: ownerId ? computeRecurringCommissionCents(period.amountCents, monthIndex, period.periodStart.toISOString().slice(0, 10), rules) : 0,
         paidAt: period.commissionPaidAt ? period.commissionPaidAt.toISOString() : null,
         invoices: invoiceChips(period.hubspotInvoices),
         ownerId,
@@ -251,7 +253,7 @@ export async function loadCommissionRows(): Promise<{
 
   // Commission rate depends on margin % and is applied to contract value
   // (not margin dollars), plus an accelerator once a rep's cumulative
-  // revenue for the calendar year passes $1.5M — see computeCommissionCentsByDeal.
+  // revenue for the calendar year passes the Settings threshold, see computeCommissionCentsByDeal.
   // One event per project, combining its own value with every qualifying
   // change order's (already rolled into contractValueCents/marginCents by
   // computeProjectActualsWithChangeOrders above), since a project that
@@ -276,7 +278,7 @@ export async function loadCommissionRows(): Promise<{
     ownerId: r.ownerId,
     date: new Date(r.periodStart),
   }));
-  const commissionCentsByDeal = computeCommissionCentsByDeal(dealsForCalc, recurringRevenueForCalc);
+  const commissionCentsByDeal = computeCommissionCentsByDeal(dealsForCalc, recurringRevenueForCalc, rules);
   const yearByDeal = new Map(dealsForCalc.map((d) => [d.id, d.date.getUTCFullYear()]));
 
   // HubSpot invoices linked to each row's lines, the same links the Billing

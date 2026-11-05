@@ -4,6 +4,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { loadPricingSettings } from "@/lib/pricingSettingsServer";
 import { utcDateKey } from "./dates";
 import { deriveProjectLifecycle } from "./projectLifecycle";
 import { contractedTurnoverScope, parseCompletedScopeItems, turnoverScopeDisplayLabel } from "./turnoverScope";
@@ -68,6 +69,7 @@ export async function loadPropertyManagerCalendar(managerId: string): Promise<{
   /** Each unit's size and work from its last turnover, keyed by unitKey, so the booking form can fill them in */
   knownUnits: Record<string, KnownUnit>;
 }> {
+  const { turnoverPackage } = await loadPricingSettings();
   const links = await prisma.propertyManagerBuilding.findMany({
     where: { propertyManagerId: managerId },
     select: { building: { select: { id: true, name: true, address: true, pricingPackage: true } } },
@@ -77,7 +79,7 @@ export async function loadPropertyManagerCalendar(managerId: string): Promise<{
     id: b.id,
     name: b.name,
     address: b.address,
-    pricingPackage: getTurnoverPricingPackage(b.name, b.pricingPackage),
+    pricingPackage: getTurnoverPricingPackage(b.pricingPackage, turnoverPackage),
   }));
   const buildingIds = buildings.map((b) => b.id);
   if (!buildingIds.length) return { buildings, units: [], knownUnits: {} };

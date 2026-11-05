@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useAppLists } from "@/app/components/AppListsProvider";
 import { useRouter } from "next/navigation";
 import { Button, Modal, inputClass, labelClass, useToast } from "@/app/erp/components/ui";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
-import { HIRING_SOURCES, OFFICE_STAGES, officeStageMeta } from "@/lib/erp/officeHiring";
+import { OFFICE_STAGES, officeStageMeta } from "@/lib/erp/officeHiring";
 
 export async function patchCandidate(id: string, body: Record<string, unknown>): Promise<string | null> {
   const res = await fetch(`/api/erp/candidates/${id}`, {
@@ -88,6 +89,7 @@ export function ShortlistStar({ id, initial }: { id: string; initial: boolean })
 
 /** "+ Add candidate" for an opening page. */
 export function AddOfficeCandidateButton({ openingId }: { openingId: string }) {
+  const hiringSources = useAppLists().hiringSources;
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [source, setSource] = useState("");
@@ -171,7 +173,7 @@ export function AddOfficeCandidateButton({ openingId }: { openingId: string }) {
                   className="mt-1"
                   value={source}
                   onChange={setSource}
-                  options={HIRING_SOURCES.map((s) => ({ value: s.value, label: s.label }))}
+                  options={hiringSources.filter((s) => !s.hidden).map((s) => ({ value: s.value, label: s.label }))}
                   placeholder="Where they came from…"
                   allLabel="- None -"
                 />

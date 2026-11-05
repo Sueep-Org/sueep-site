@@ -19,6 +19,7 @@ import { ScheduleCalendarOverview } from "./schedule/calendar-overview";
 import { ManagementCalendar } from "./schedule/management-calendar";
 import { NotificationsOverview } from "./notifications/notifications-overview";
 import { MyNotifications } from "./notifications/my-notifications";
+import { SettingsOverview } from "./settings/settings-overview";
 import { CompensationOverview } from "./compensation/compensation-overview";
 import { QualityChecks } from "./projects/quality-checks";
 import { BillingOverview } from "./billing/billing-overview";
@@ -234,6 +235,15 @@ export const registry: ArticleEntry[] = [
     description: "Every ERP email sent to you in one list, with unread counts.",
     order: 2,
     component: MyNotifications,
+  },
+  {
+    slug: "settings/settings-overview",
+    title: "Settings",
+    category: "Team",
+    description: "Change prices, payroll and commission rules, payment terms, and see who changed what.",
+    order: 8,
+    component: SettingsOverview,
+    roles: ["ADMIN", "BUSINESS_MANAGER"],
   },
   {
     slug: "notifications/notifications-overview",

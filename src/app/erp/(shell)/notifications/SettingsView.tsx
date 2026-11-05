@@ -17,7 +17,10 @@ export type SettingRow = {
   toMode: ToMode | null;
   ccEditable: boolean;
   alwaysOn: boolean;
+  /** customized: different from the built-in list */
   setting: SettingValues & { customized: boolean };
+  /** Has a saved row, even if it matches the built-in list */
+  saved: boolean;
   defaults: SettingValues;
   lastSentAt: string | null;
   failedThisWeek: number;

@@ -146,7 +146,6 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
 
       <BuildingTabs
         buildingId={building.id}
-        buildingName={building.name}
         isSupervisor={isSupervisor || isEmployee}
         canEditPricing={auth ? canEditPricing(auth.role) : false}
         canAddUnit={auth ? canAddTurnoverUnit(auth.role) : false}

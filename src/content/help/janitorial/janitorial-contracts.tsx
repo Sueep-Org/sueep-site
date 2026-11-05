@@ -56,7 +56,7 @@ export function JanitorialContracts() {
           Cleaning staff aren&apos;t on the health plan, so there is no health cost.
         </LI>
         <LI>Turn on <strong>overtime</strong> (extra half-time) or <strong>paid holidays</strong> to include those costs.</LI>
-        <LI>Sales tax (6% by default) is taken from the monthly price. The summary shows payroll, tax, profit and margin.</LI>
+        <LI>Sales tax (starts at the percent set under Settings, Pricing) is taken from the monthly price. The summary shows payroll, tax, profit and margin.</LI>
         <LI>
           <strong>Override</strong> any line or the total to quote a round number; <strong>Use calculated</strong> goes back.
         </LI>

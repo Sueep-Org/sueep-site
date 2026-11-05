@@ -5,6 +5,7 @@ import { todayEasternKey } from "@/lib/erp/dates";
 import { prisma } from "@/lib/prisma";
 import { PmSignIn } from "./PmSignIn";
 import { PmCalendar } from "./PmCalendar";
+import { loadPricingSettings } from "@/lib/pricingSettingsServer";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -64,6 +65,7 @@ export default async function PropertyManagerPage({ params }: PageProps) {
       knownUnits={knownUnits}
       today={todayEasternKey()}
       contactEmail={contactEmail()}
+      nextDayPct={(await loadPricingSettings()).nextDayPct}
       sueepContact={{
         name: contact?.sueepContactName ?? null,
         phone: contact?.sueepContactPhone ?? null,

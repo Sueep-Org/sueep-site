@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { loadAlertSettings } from "@/lib/erp/alertSettingsServer";
 import { prisma } from "@/lib/prisma";
 import type { CardRow, DashboardCardData } from "@/app/erp/(shell)/_dashboard/DashboardCard";
 import { todayEasternAsUtcMidnight, todayEasternKey, utcDateKey } from "./dates";
@@ -11,7 +12,6 @@ import { confirmationIssues } from "./scheduleConfirmations";
  */
 
 /** A change order sitting in Draft or Submitted this long is waiting on someone. */
-const CO_STALE_DAYS = 3;
 /** How far ahead the sub insurance and crew checks look. */
 const LOOKAHEAD_DAYS = 14;
 const DAY_MS = 86_400_000;
@@ -71,7 +71,8 @@ async function loadScheduledWork(start: Date, end: Date) {
 
 export async function loadWaitingOnOthers(): Promise<DashboardCardData> {
   const { todayKey, start, end } = lookahead();
-  const staleCutoff = new Date(start.getTime() - CO_STALE_DAYS * DAY_MS);
+  const { coStaleDays } = await loadAlertSettings();
+  const staleCutoff = new Date(start.getTime() - coStaleDays * DAY_MS);
 
   const [pmRequests, pmChanges, changeOrders, work] = await Promise.all([
     prisma.propertyManagerRequest.findMany({
@@ -150,7 +151,7 @@ export async function loadWaitingOnOthers(): Promise<DashboardCardData> {
   return {
     sections: [
       { key: "pm", label: "Property managers", rows: pmRows, empty: "No requests or changes waiting for an answer.", href: "/erp/property-managers/requests" },
-      { key: "co", label: "Change orders", rows: coRows, empty: `No change order has sat in Draft or Submitted over ${CO_STALE_DAYS} days.` },
+      { key: "co", label: "Change orders", rows: coRows, empty: `No change order has sat in Draft or Submitted over ${coStaleDays} days.` },
       { key: "subs", label: "Subs", rows: subRows, alertCount: subRows.length, empty: `Every sub on the schedule in the next ${LOOKAHEAD_DAYS} days has insurance on file.`, href: "/erp/contractors" },
     ],
     alertCount: subRows.length,

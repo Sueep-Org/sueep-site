@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useAppLists } from "@/app/components/AppListsProvider";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
@@ -40,7 +41,8 @@ import { centsToDollars } from "@/lib/erp/money";
 import { addDaysKey, daysBetween } from "@/lib/erp/managementCalendar";
 import { AnswerMark, CoverageAnswer, answerUid, answersSummary, type Answers } from "./AnswerMark";
 import { RemoveDayModal } from "./RemoveDayModal";
-import { scheduleRemovalReasonLabel, type ScheduleDayRemovalRow, type ScheduleRemovalReason } from "@/lib/erp/scheduleRemovals";
+import type { ScheduleDayRemovalRow, ScheduleRemovalReason } from "@/lib/erp/scheduleRemovals";
+import { listLabel } from "@/lib/erp/appLists";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -619,6 +621,7 @@ export function SchedulePlanner({
   /** Planned days removed for a real reason, drawn grayed out (see scheduleRemovals.ts) */
   initialDayRemovals?: ScheduleDayRemovalRow[];
 }) {
+  const removalReasons = useAppLists().removalReasons;
   // Anchors the whole calendar (which month/day is "today") to Eastern time,
   // not the viewer's own device timezone — otherwise a viewer far enough
   // ahead of Eastern sees the month grid's "today" land on the wrong cell
@@ -4359,7 +4362,7 @@ export function SchedulePlanner({
                                   <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                                     <div className="font-semibold">{removedTitle}</div>
                                     {r.changeOrderId ? <div className="text-gray-300">{CHANGE_ORDER_LABEL} · Project: {project.jobTitle}</div> : null}
-                                    <div className="text-gray-300">Removed: {scheduleRemovalReasonLabel(r.reason)}</div>
+                                    <div className="text-gray-300">Removed: {listLabel(removalReasons, r.reason)}</div>
                                     {r.note ? <div className="line-clamp-3 text-gray-300">Note: {r.note}</div> : null}
                                     {r.coveredBy ? <div className="text-gray-300">Was covered by: {r.coveredBy}</div> : null}
                                     <div className="text-gray-400">

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { buildSafetyEscalationEmail, buildSafetyNoticeEmail, sendEmail } from "@/lib/email";
 import { dateLocale, parseLang, tr } from "@/lib/erp/language";
-import { SAFETY_VIOLATION_THRESHOLD } from "@/lib/erp/safetyConfig";
+import { loadPayrollRules } from "@/lib/erp/payrollRulesServer";
 
 export const runtime = "nodejs";
 
@@ -54,7 +54,8 @@ export async function PATCH(req: Request, { params }: Ctx) {
           });
 
       const violationCount = existingCount + 1;
-      const shouldEscalate = violationCount >= SAFETY_VIOLATION_THRESHOLD;
+      const { safetyViolationLimit } = await loadPayrollRules();
+      const shouldEscalate = violationCount >= safetyViolationLimit;
 
       const incident = await prisma.safetyIncident.create({
         data: {
@@ -95,7 +96,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
               checkDate: checkDateStr,
               violationCount,
               escalated: shouldEscalate,
-              threshold: SAFETY_VIOLATION_THRESHOLD,
+              threshold: safetyViolationLimit,
               lang,
             }),
           });

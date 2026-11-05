@@ -4,9 +4,9 @@ import {
   deriveChangeOrderSupervisorCount,
   getChangeOrderLaborRates,
   hasCustomChangeOrderLaborRate,
-  CHANGE_ORDER_ESTIMATE_DAY_HOURS,
 } from "@/lib/changeOrderLaborRates";
-import { NEXT_DAY_UPCHARGE_PERCENT, isNextDayStart, nextDayUpchargeCents, withNextDayUpcharge } from "@/lib/nextDayUpcharge";
+import { isNextDayStart, nextDayUpchargeCents, withNextDayUpcharge } from "@/lib/nextDayUpcharge";
+import { loadPricingSettings } from "@/lib/pricingSettingsServer";
 import { fillChangeOrderContractPdf } from "@/lib/contracts/fillChangeOrderPdf";
 
 const DEFAULT_PURCHASE_TERMS =
@@ -62,16 +62,17 @@ export async function generateChangeOrderContractPdf(
   }
 
   const supervisorCount = deriveChangeOrderSupervisorCount(cleanerCount);
-  const rates = getChangeOrderLaborRates(project.laborRateCard);
+  const pricing = await loadPricingSettings();
+  const rates = getChangeOrderLaborRates(project.laborRateCard, pricing.coPriceRates);
   const estimate = computeChangeOrderLaborEstimate(
-    { cleanerCount, supervisorCount, hours: CHANGE_ORDER_ESTIMATE_DAY_HOURS },
+    { cleanerCount, supervisorCount, hours: pricing.coDayHours },
     rates,
   );
 
   // Work starting today or tomorrow gets the next day upcharge, same as the form showed
   const nextDay = isNextDayStart(input.coEstimatedStartDate);
-  const totalCents = withNextDayUpcharge(estimate.totalCents, nextDay);
-  const scopeDescription = [input.coDescription ?? "", nextDay ? `Total includes a ${NEXT_DAY_UPCHARGE_PERCENT}% next day upcharge (${formatAmount(nextDayUpchargeCents(estimate.totalCents))}).` : ""]
+  const totalCents = withNextDayUpcharge(estimate.totalCents, nextDay, pricing.nextDayPct);
+  const scopeDescription = [input.coDescription ?? "", nextDay ? `Total includes a ${pricing.nextDayPct}% next day upcharge (${formatAmount(nextDayUpchargeCents(estimate.totalCents, pricing.nextDayPct))}).` : ""]
     .filter(Boolean)
     .join("\n\n");
 
@@ -94,7 +95,7 @@ export async function generateChangeOrderContractPdf(
       numCleaners: String(cleanerCount),
       numForemen: String(supervisorCount),
       // Every change order priced through this flow is a flat one-day
-      // estimate (see CHANGE_ORDER_ESTIMATE_DAY_HOURS /
+      // estimate (see PricingSettings.coDayHours /
       // computeChangeOrderLaborEstimate). There's no separate "days on
       // site" input to reflect here.
       numDays: "1",

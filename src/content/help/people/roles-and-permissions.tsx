@@ -68,7 +68,10 @@ export function RolesAndPermissions() {
         </LI>
         <LI>Use the <strong>QuickBooks</strong> page: Sync now, Invoice setup and the Money owed check.
         </LI>
-        <LI>Change the payment terms the dashboard&apos;s cash forecast uses (with Admins).</LI>
+        <LI>
+          Open <strong>Settings</strong> and change anything on it (with Admins), including employer tax rates, health
+          insurance and the payment terms the cash forecast uses.
+        </LI>
         <LI>
           See the dashboard&apos;s <strong>Overdue</strong> tab (with Admins): open invoices past their due date, and open
           invoices 30, 60 and 90+ days after the work was finished.

@@ -2780,6 +2780,21 @@ model AppSetting {
   value String
 }
 
+/// One edit to an AppSetting, for the Settings page History tab. Null
+/// oldValue = it was on the default; null newValue = reset to the default.
+model AppSettingChange {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  key       String
+  oldValue  String?
+  newValue  String?
+  /// Email of the ERP user who changed it
+  byEmail   String
+
+  @@index([key, createdAt])
+  @@index([createdAt])
+}
+
 model ProjectSOV {
   id        String           @id @default(cuid())
   projectId String           @unique

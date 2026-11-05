@@ -2,7 +2,7 @@
  * Auto-drafted janitorial invoices (DEALS_BILLING_PLAN Phase 3).
  *
  * For each contract with autoDraftInvoices on, a HubSpot draft invoice for
- * the month appears DRAFT_LEAD_DAYS before its billing day: one invoice per
+ * the month appears some days (Settings, Alerts) before its billing day: one invoice per
  * contract per month, the base amount as line 1 and each extra as its own
  * line. It is linked to the month right away (HubSpotContractInvoice), so
  * the deal invoice sync leaves it alone. Someone with canApproveInvoices
@@ -16,6 +16,7 @@
  * (qboInvoiceDrafts.ts) and needs no HubSpot deal.
  */
 import { prisma } from "@/lib/prisma";
+import { loadAlertSettings } from "@/lib/erp/alertSettingsServer";
 import { todayEasternKey, utcDateKey } from "./dates";
 import { addDaysKey } from "./manualHoursRepeat";
 import { loadBuildingInvoiceDestination, periodRecipients } from "./invoiceDestination";
@@ -34,7 +35,6 @@ import {
 } from "@/lib/hubspot/invoiceDrafts";
 import { createMonthDraft, draftsGoToQuickBooks, monthHasQboDraft } from "./qboInvoiceDrafts";
 
-export const DRAFT_LEAD_DAYS = 3;
 const CLAIM = "Drafting now";
 const CLAIM_MINUTES = 10;
 
@@ -166,11 +166,12 @@ function firstOfMonth(y: number, m: number): Date {
 
 /**
  * The daily run: every auto-draft contract's month whose billing day is
- * within DRAFT_LEAD_DAYS (this month and next). Creates the month early when
+ * within the Settings lead days (this month and next). Creates the month early when
  * needed, the same row the billing-day generation would make.
  */
 export async function draftDueJanitorialInvoices(onlyContractId?: string): Promise<DraftOutcome[]> {
   const todayKey = todayEasternKey();
+  const leadDays = (await loadAlertSettings()).janitorialDraftLeadDays;
   const [y, m] = todayKey.split("-").map(Number) as [number, number];
   const months = [firstOfMonth(y, m - 1), firstOfMonth(y, m)];
   const contracts = await prisma.recurringContract.findMany({
@@ -181,7 +182,7 @@ export async function draftDueJanitorialInvoices(onlyContractId?: string): Promi
   for (const c of contracts) {
     for (const periodStart of months) {
       const billingKey = billingDateKey(periodStart, c.billingDayOfMonth);
-      if (todayKey < addDaysKey(billingKey, -DRAFT_LEAD_DAYS)) continue;
+      if (todayKey < addDaysKey(billingKey, -leadDays)) continue;
       // Contract not running that month.
       if (c.startDate > new Date(`${billingKey}T23:59:59Z`)) continue;
       if (c.endDate && c.endDate < periodStart) continue;

@@ -45,7 +45,7 @@ export function CompensationOverview() {
               <strong>Janitorial Contract</strong> rows are paid from their janitorial hours (the
               same live numbers as <strong>Janitorial Contracts → Hours</strong>: clocked time, corrections,
               or their scheduled hours when they didn&apos;t clock in) plus any project hours, at
-              their hourly rate, with overtime past 40/week. Janitorial shifts of 6+ hours have a 30 minute unpaid break taken off. Click <strong>See janitorial shifts</strong> under someone&apos;s hours to open their shifts for that pay period on the Janitorial Hours tab. The janitorial schedule is the only source for
+              their hourly rate, with weekly overtime. Long janitorial shifts have an unpaid break taken off (both set under Settings, Payroll). Click <strong>See janitorial shifts</strong> under someone&apos;s hours to open their shifts for that pay period on the Janitorial Hours tab. The janitorial schedule is the only source for
               these hours: a Janitorial Contract employee with no janitorial shifts in the period gets no
               janitorial hours, and their row shows a red <strong>No janitorial schedule set</strong> warning. Any other employee who works janitorial shifts has those
               hours added to their hourly pay the same way.
@@ -97,8 +97,8 @@ export function CompensationOverview() {
               commission already paid are shown for the whole company, and again per rep.
             </LI>
             <LI>
-              Each rep panel has a progress bar toward the <strong>$1,500,000</strong> annual
-              accelerator threshold. Once a rep&apos;s closed revenue for the year passes that,
+              Each rep panel has a progress bar toward the yearly accelerator threshold (set under{" "}
+              <strong>Settings, Commission</strong>). Once a rep&apos;s closed revenue for the year passes that,
               the accelerator rate kicks in for the rest of the year (see the table below).
             </LI>
             <LI>
@@ -133,14 +133,16 @@ export function CompensationOverview() {
           <H3>How commission is calculated</H3>
           <P>
             Commission is a percentage of the deal&apos;s <strong>contract value</strong>{" "}
-            (not its margin dollars), based on the deal&apos;s margin percentage:
+            (not its margin dollars), based on the deal&apos;s margin percentage. The tiers, the yearly threshold and the
+            recurring rates are set under <strong>Settings, Commission</strong>, and each deal uses the rules in effect on the
+            day it finished. The starting rules are:
           </P>
           <Table>
             <THead>
               <tr>
                 <TH>Margin</TH>
                 <TH>Base rate</TH>
-                <TH>Accelerator rate (after $1.5M)</TH>
+                <TH>Accelerator rate (after $1.5M a year)</TH>
               </tr>
             </THead>
             <tbody>
@@ -151,14 +153,14 @@ export function CompensationOverview() {
             </tbody>
           </Table>
           <P>
-            If a deal straddles the $1.5M threshold, it&apos;s split automatically: the portion
+            If a deal straddles the yearly threshold, it&apos;s split automatically: the portion
             under the threshold earns the base rate, the portion over it earns the accelerator
-            rate. Revenue under the 10% margin cutoff still counts toward a rep&apos;s $1.5M total
+            rate. Revenue under the lowest tier still counts toward a rep&apos;s yearly total
             even though it earns no commission itself.
           </P>
           <P>
             Recurring janitorial contracts are commissioned on their own schedule instead, as a
-            percentage of the monthly billed rate:
+            percentage of the monthly billed rate (starting rates below):
           </P>
           <Table>
             <THead>

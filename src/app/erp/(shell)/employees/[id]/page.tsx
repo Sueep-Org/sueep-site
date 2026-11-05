@@ -20,6 +20,9 @@ import { LABOR_PAGE_SIZE } from "./laborPagination";
 import { loadEmployeeJanitorialLabor } from "@/lib/erp/employeeJanitorialLabor";
 import { getErpAuth, canEditPayInfo, canViewSsn, canManageJanitorial } from "@/lib/erpAuth";
 import { HEALTH_SHARE_SETTING_KEY, parseHealthSharePct } from "@/lib/erp/healthCost";
+import { loadPayrollRules } from "@/lib/erp/payrollRulesServer";
+import { valueOn } from "@/lib/erp/datedSettings";
+import { todayEasternKey } from "@/lib/erp/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -262,6 +265,7 @@ export default async function EmployeeDetailPage({ params }: PageProps) {
             <div className="space-y-4">
             <EmployeeProfileEditor
               employeeId={employee.id}
+              yearHours={valueOn((await loadPayrollRules()).yearHours, todayEasternKey())}
               canSeePay={canSeePay}
               payHistory={canSeePay ? employee.payRates.map((r) => ({
                 effectiveFrom: r.effectiveFrom.toISOString().slice(0, 10),

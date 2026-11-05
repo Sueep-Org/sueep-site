@@ -863,7 +863,6 @@ export default async function ProjectDetailPage({ params }: PageProps) {
               <div className="max-w-4xl">
                 <BuildingPricingPackageEditor
                   buildingId={project.building.id}
-                  buildingName={project.building.name}
                   initialPackage={project.building.pricingPackage}
                   canEdit={canEditPricingForRole}
                 />

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
+import { loadPricingSettings } from "@/lib/pricingSettingsServer";
 import { TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
 import { buildTurnoverRequestEmailHtml, sendEmail } from "@/lib/email";
 import { getNotificationSetting } from "@/lib/notificationSettings";
@@ -106,7 +107,10 @@ export async function POST(req: Request) {
   const sueepPmName = stringValue(body.sueepPmName);
   const sueepPmEmail = stringValue(body.sueepPmEmail);
 
+  const { nextDayPct, turnoverPackage } = await loadPricingSettings();
   const basePricing = computeTurnoverPricing({
+    nextDayPct,
+    standardPackage: turnoverPackage,
     requestType,
     buildingName: building.name,
     pricingPackage: building.pricingPackage,

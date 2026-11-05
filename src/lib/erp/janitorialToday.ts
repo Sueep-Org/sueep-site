@@ -3,7 +3,7 @@
  * (see janitorialHours.ts) into what needs attention right now. Pure.
  */
 
-import { easternWallToInstant, LATE_EARLY_FLAG_MINUTES, type ResolvedShiftHours } from "@/lib/erp/janitorialHours";
+import { easternWallToInstant, type ResolvedShiftHours } from "@/lib/erp/janitorialHours";
 
 export type TodayStatus =
   | "LATE" // should have started, hasn't clocked in
@@ -24,7 +24,8 @@ export type TodayItem = ResolvedShiftHours & {
   locationFlag: string | null;
 };
 
-export function classifyToday(rows: ResolvedShiftHours[], todayKey: string, now: Date): TodayItem[] {
+/** lateMinutes: PayrollRules.lateEarlyMinutes (Settings, Payroll). */
+export function classifyToday(rows: ResolvedShiftHours[], todayKey: string, now: Date, lateMinutes: number): TodayItem[] {
   const items: TodayItem[] = [];
   for (const r of rows) {
     const isToday = r.date === todayKey;
@@ -55,7 +56,7 @@ export function classifyToday(rows: ResolvedShiftHours[], todayKey: string, now:
       case "UPCOMING": {
         const startsAt = r.scheduledStart ? easternWallToInstant(r.date, r.scheduledStart) : null;
         const minutesLate = startsAt ? Math.floor((now.getTime() - startsAt.getTime()) / 60_000) : 0;
-        if (minutesLate > LATE_EARLY_FLAG_MINUTES) items.push({ ...base, status: "LATE", minutesLate });
+        if (minutesLate > lateMinutes) items.push({ ...base, status: "LATE", minutesLate });
         else items.push({ ...base, status: "UPCOMING" });
         break;
       }

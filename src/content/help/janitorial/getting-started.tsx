@@ -39,7 +39,7 @@ export function JanitorialGettingStarted() {
         </Step>
         <Step n={6} title="Each pay period: payroll">
           <strong>Compensation → Payroll</strong> pays the janitorial hours automatically at each janitor&apos;s hourly rate,
-          with overtime past 40 hours a week. See{" "}
+          with weekly overtime (Settings, Payroll). See{" "}
           <A href="/erp/help/compensation/compensation-overview">Compensation Overview</A>.
         </Step>
         <Step n={7} title="Each month: bill the client">

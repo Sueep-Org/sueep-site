@@ -12,6 +12,7 @@
  * (subCoRequestReview.ts).
  */
 import { prisma } from "@/lib/prisma";
+import { loadPricingSettings } from "@/lib/pricingSettingsServer";
 import { CO_ISSUE_PER_LABELS, coIssueLabel, getCoPricingPackage, type CoIssuePer } from "@/lib/coPricingPackage";
 import { parseLang, tr, type Lang } from "./language";
 import { todayEasternKey } from "./dates";
@@ -158,7 +159,7 @@ export type CoRequestView = {
 export async function loadCoRequestView(token: string): Promise<CoRequestView | null> {
   const a = await accessFor(token);
   if (!a) return null;
-  const pkg = getCoPricingPackage(a.project.building?.coPricingPackage ?? null);
+  const pkg = getCoPricingPackage(a.project.building?.coPricingPackage ?? null, (await loadPricingSettings()).coPackage, (await loadPricingSettings()).nextDayPct);
   const past = await prisma.subCoRequest.findMany({
     where: { projectId: a.project.id, contractorId: a.contractorId },
     orderBy: { createdAt: "desc" },
@@ -273,7 +274,7 @@ export async function submitCoRequest(token: string, input: CoRequestInput): Pro
   if (!rawLines.length) return bad("Pick at least one issue.", "Elige al menos un problema.");
   if (rawLines.length > MAX_LINES) return bad("Too many lines. Send two requests.", "Demasiadas líneas. Envía dos solicitudes.");
 
-  const pkg = getCoPricingPackage(a.project.building?.coPricingPackage ?? null);
+  const pkg = getCoPricingPackage(a.project.building?.coPricingPackage ?? null, (await loadPricingSettings()).coPackage, (await loadPricingSettings()).nextDayPct);
   const byId = new Map(pkg.issues.filter((i) => i.active).map((i) => [i.id, i]));
   const items: {
     issueId: string | null;

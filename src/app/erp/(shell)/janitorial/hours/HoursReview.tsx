@@ -246,7 +246,7 @@ export function HoursReview({
                             </td>
                             <td className="px-4 py-2.5 text-right font-medium tabular-nums">
                               {r.source === "UPCOMING" ? "" : r.hours.toFixed(2)}
-                              {r.breakDeducted && <p className="text-[11px] font-normal text-gray-400">after 30 min break</p>}
+                              {r.breakDeducted && <p className="text-[11px] font-normal text-gray-400">after unpaid break</p>}
                             </td>
                             <td className="px-4 py-2.5">
                               <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${badge.cls}`}>{badge.label}</span>

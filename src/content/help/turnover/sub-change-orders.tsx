@@ -61,13 +61,14 @@ export function SubChangeOrders() {
       <H2>Set the prices</H2>
       <P>
         Each building has its own <strong>CO pricing package</strong>. Open the building, go to the <strong>Pricing Package</strong>{" "}
-        tab, and scroll below the regular pricing package. Every building starts with the same 10 common issues, each with a{" "}
+        tab, and scroll below the regular pricing package. Every building starts with the standard list (Settings, Pricing,
+        Standard change order issues), each issue with a{" "}
         <strong>charge</strong> (what the property manager sees) and a <strong>sub pay</strong> (what the sub sees). You can
-        change prices, add issues, give them a Spanish name, turn them off, or reorder them. <strong>Reset to default</strong>{" "}
+        change prices, add issues, give them a Spanish name, turn them off, or reorder them. <strong>Use the standard list</strong>{" "}
         puts the building back on the standard list. The same roles that edit the regular pricing package can edit it.
       </P>
       <P>
-        <strong>Surcharges:</strong> Next day (+25%) and Weekend (+50%) to start, set per building. Only the office adds them, on
+        <strong>Surcharges:</strong> Next day (always the next day upcharge under Settings, Pricing) and Weekend (+50% to start, set per building). Only the office adds them, on
         a request. The percent goes on top of both the charge and the sub pay.
       </P>
       <Callout type="tip">Changing a building&apos;s prices only changes new requests. Requests already sent keep their prices.</Callout>

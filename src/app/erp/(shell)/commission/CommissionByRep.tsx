@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { centsToDollars } from "@/lib/erp/money";
-import { marginTierFor, recurringCommissionRateForMonth, ANNUAL_ACCELERATOR_THRESHOLD_CENTS } from "@/lib/erp/commission";
+import { DEFAULT_PAYROLL_RULES, marginTierOn, recurringRateOn, type PayrollRules } from "@/lib/erp/payrollRules";
+import { valueOn } from "@/lib/erp/datedSettings";
 import { calendarSegmentGroup, type CalendarSegmentGroup } from "@/lib/erp/projectSegments";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { Button, InfoTip, Modal } from "@/app/erp/components/ui";
@@ -95,8 +96,11 @@ function formatMonth(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
 }
 
-function recurringTierLabel(monthIndex: number): string {
-  const rate = recurringCommissionRateForMonth(monthIndex);
+/** Commission rules from Settings, with their start dates, for the labels below. */
+const RulesContext = createContext<{ rules: PayrollRules; yearEndKey: string }>({ rules: DEFAULT_PAYROLL_RULES, yearEndKey: "" });
+
+function recurringTierLabel(monthIndex: number, periodStart: string, rules: PayrollRules): string {
+  const rate = recurringRateOn(rules, periodStart.slice(0, 10), monthIndex);
   const yearLabel = monthIndex < 12 ? "Year 1" : monthIndex < 24 ? "Year 2" : "Year 3+";
   return `${yearLabel} · ${rate > 0 ? `${(rate * 100).toFixed(0)}%` : "$0"}`;
 }
@@ -347,8 +351,10 @@ function FilterPopover({
 }
 
 function RevenueLine({ revenueCents }: { revenueCents: number }) {
-  const overThreshold = revenueCents > ANNUAL_ACCELERATOR_THRESHOLD_CENTS;
-  const pct = Math.min(100, (revenueCents / ANNUAL_ACCELERATOR_THRESHOLD_CENTS) * 100);
+  const { rules, yearEndKey } = useContext(RulesContext);
+  const thresholdCents = valueOn(rules.acceleratorCents, yearEndKey);
+  const overThreshold = revenueCents > thresholdCents;
+  const pct = thresholdCents > 0 ? Math.min(100, (revenueCents / thresholdCents) * 100) : 100;
   return (
     <div>
       <div className="flex items-baseline justify-between">
@@ -356,7 +362,7 @@ function RevenueLine({ revenueCents }: { revenueCents: number }) {
         {overThreshold ? (
           <span className="text-xs font-semibold text-pink-600">Accelerator active</span>
         ) : (
-          <span className="text-xs tabular-nums text-gray-400">of {centsToDollars(ANNUAL_ACCELERATOR_THRESHOLD_CENTS)}</span>
+          <span className="text-xs tabular-nums text-gray-400">of {centsToDollars(thresholdCents)}</span>
         )}
       </div>
       <div className={`mt-1.5 h-2.5 w-full overflow-hidden rounded-full ${overThreshold ? "bg-pink-100" : "bg-gray-100"}`}>
@@ -543,10 +549,11 @@ function CombinedRowTr({
   onToggleRecurringPaid: (row: RecurringCommissionRow) => void;
   savingRecurringId: string | null;
 }) {
+  const { rules } = useContext(RulesContext);
   if (row.kind === "deal") {
     const d = row.deal;
     const marginPct = marginPercentOf(d);
-    const tier = marginPct == null ? null : marginTierFor(marginPct);
+    const tier = marginPct == null ? null : marginTierOn(rules, d.completedAt.slice(0, 10), marginPct);
     return (
       <tr key={d.projectId} className="border-t border-gray-100 hover:bg-gray-50">
         <td className="px-3 py-2">{buildingCell}</td>
@@ -608,7 +615,7 @@ function CombinedRowTr({
       <td className="px-3 py-2 text-right tabular-nums text-gray-500">{formatMonth(r.periodStart)}</td>
       <td className="px-3 py-2 text-right tabular-nums text-gray-700">{centsToDollars(r.monthlyRateCents)}</td>
       <td className="px-3 py-2 text-right tabular-nums text-gray-400">-</td>
-      <td className="px-3 py-2 text-right tabular-nums text-gray-500">{recurringTierLabel(r.monthIndex)}</td>
+      <td className="px-3 py-2 text-right tabular-nums text-gray-500">{recurringTierLabel(r.monthIndex, r.periodStart, rules)}</td>
       <td className="px-3 py-2 text-right tabular-nums font-medium text-gray-900">{centsToDollars(r.commissionCents)}</td>
       {showPaid && (
         <td className="px-3 py-2">
@@ -808,11 +815,14 @@ export function CommissionByRep({
   selectedYear,
   reps,
   payrollAnchor,
+  rules,
 }: {
   years: number[];
   selectedYear: number;
   reps: RepGroup[];
   payrollAnchor: string;
+  /** Commission rules from Settings (loadPayrollRules) */
+  rules: PayrollRules;
 }) {
   const [dealsByOwner, setDealsByOwner] = useState<Record<string, CommissionDealRow[]>>(() =>
     Object.fromEntries(reps.map((g) => [g.ownerId ?? "unassigned", g.deals]))
@@ -893,7 +903,9 @@ export function CommissionByRep({
   const totalCommission = reps.reduce((s, r) => s + r.totalCommissionCents, 0);
   const totalPaid = reps.reduce((s, r) => s + r.paidCommissionCents, 0);
 
+  const yearEndKey = `${selectedYear}-12-31` < todayEasternKey() ? `${selectedYear}-12-31` : todayEasternKey();
   return (
+    <RulesContext.Provider value={{ rules, yearEndKey }}>
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-4 text-sm text-gray-600">
@@ -942,5 +954,6 @@ export function CommissionByRep({
         }}
       />
     </div>
+    </RulesContext.Provider>
   );
 }

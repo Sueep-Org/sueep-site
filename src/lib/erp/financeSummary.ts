@@ -36,6 +36,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { loadAlertSettings } from "@/lib/erp/alertSettingsServer";
 import { changeOrderActuals, computeProjectActualsWithChangeOrders, isQualifyingChangeOrder } from "@/lib/erp/projectMargin";
 import { costJanitorialShifts, costLaborLogs, costManualHours, sumJanitorialByContract } from "@/lib/erp/laborCost";
 import { loadPayHistories, payRateOn } from "@/lib/erp/payRates";
@@ -46,7 +47,8 @@ import { normalizeBillingStatus } from "@/lib/erp/billingStatus";
 import { loadCommissionRows } from "@/lib/erp/commissionRows";
 import { insuranceCostForDays, termStartKey, type CostTerm } from "@/lib/erp/insuranceCost";
 import { policyTypeLabel } from "@/lib/erp/insurance";
-import { hiringSourceLabel } from "@/lib/erp/officeHiring";
+import { listLabel } from "@/lib/erp/appLists";
+import { loadAppLists } from "@/lib/erp/appListsServer";
 import { HEALTH_SHARE_SETTING_KEY, healthCompanyCostForDays, parseHealthSharePct } from "@/lib/erp/healthCost";
 import { employerTaxByDay } from "@/lib/erp/employerTaxRows";
 import { QBO_COST_SECTIONS, QBO_GROUPS, QBO_GROUP_LABELS, emptyQboGroups, qboGroupFor, type QboGroupCents } from "@/lib/erp/qboOverhead";
@@ -194,8 +196,6 @@ export type CommissionItem = { personId: string | null; personName: string | nul
 /** Something missing that affects the numbers, with where to fix it. */
 export type GapItem = { id: string; label: string; href: string; detail?: string };
 
-/** How far an SOV total can be from its contract value before it's flagged. */
-const SOV_MISMATCH_CENTS = 100_000;
 
 export type FinanceSummary = {
   months: FinanceMonth[];
@@ -275,11 +275,10 @@ const FUTURE_STATUSES = ["ACTIVE", "UPCOMING", "ON_HOLD"] as const;
 
 /** How long an Active project can go with no labor logged before it's
  * flagged for review. */
-const STALE_DAYS = 60;
 
 /** Why an open project looks finished or stale, or null when it looks fine:
  * its end date has passed, it's Upcoming but its start date has passed, or
- * it's Active with no work logged in STALE_DAYS days. */
+ * it's Active with no work logged in staleDays (Settings, Alerts). */
 function futureReviewReason(
   p: {
     status: string; projectDate: Date | null; projectEndDate: Date | null;
@@ -287,11 +286,12 @@ function futureReviewReason(
     changeOrders: { completedAt: Date | null; laborers: { workDate: Date }[] }[];
   },
   todayKey: string,
+  staleDays: number,
 ): string | null {
   if (p.projectEndDate && utcDateKey(p.projectEndDate) < todayKey) return "end date passed";
   if (p.status === "UPCOMING" && p.projectDate && utcDateKey(p.projectDate) < todayKey) return "start date passed";
   if (p.status === "ACTIVE") {
-    const staleBefore = utcDateKey(new Date(Date.parse(`${todayKey}T00:00:00.000Z`) - STALE_DAYS * 86_400_000));
+    const staleBefore = utcDateKey(new Date(Date.parse(`${todayKey}T00:00:00.000Z`) - staleDays * 86_400_000));
     // Work on the project or any of its change orders counts as activity.
     const workDays = [
       ...p.laborEntries.map((e) => e.workDate),
@@ -302,7 +302,7 @@ function futureReviewReason(
       return max == null || k > max ? k : max;
     }, null);
     const since = lastWork ?? (p.projectDate ? utcDateKey(p.projectDate) : null);
-    if (since && since < staleBefore) return lastWork ? `no work logged in ${STALE_DAYS}+ days` : "no work logged yet";
+    if (since && since < staleBefore) return lastWork ? `no work logged in ${staleDays}+ days` : "no work logged yet";
   }
   return null;
 }
@@ -386,6 +386,7 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
   const today = todayEasternAsUtcMidnight();
   const todayKey = utcDateKey(today);
   const currentMonthKey = utcMonthKey(today);
+  const alerts = await loadAlertSettings();
   const range = options.range ? { from: options.range.from, to: options.range.to < todayKey ? options.range.to : todayKey } : null;
   const startKey = range ? range.from.slice(0, 7) : (options.startKey ?? FINANCE_DATA_START);
   const dataStart = new Date(`${startKey}-01T00:00:00.000Z`);
@@ -595,7 +596,7 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
       // contract (or its own value when there's no contract value). Shares
       // are rounded so they add up to the contract exactly.
       const contractCents = p.contractValueCents ?? sovTotal;
-      if (Math.abs(contractCents - sovTotal) > SOV_MISMATCH_CENTS) {
+      if (Math.abs(contractCents - sovTotal) > alerts.sovMismatchDollars * 100) {
         const usd = (c: number) => `$${Math.round(c / 100).toLocaleString("en-US")}`;
         warnings.sovMismatch.push({ id: p.id, label: p.jobTitle, href: `/erp/projects/${p.id}`, detail: `SOV ${usd(sovTotal)}, contract ${usd(contractCents)}` });
       }
@@ -694,7 +695,7 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
           id: p.id, title: p.jobTitle, status: p.status as FutureJob["status"],
           startKey: p.projectDate ? utcDateKey(p.projectDate) : null,
           valueCents, changeOrderCents: futureChangeOrderCents,
-          reviewReason: futureReviewReason(p, todayKey),
+          reviewReason: futureReviewReason(p, todayKey, alerts.jobStaleDays),
         });
       }
     }
@@ -940,10 +941,11 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
 
   // Hiring ads: the whole cost in the month the ad was posted, like how
   // LinkedIn and Indeed charge for a post.
+  const { hiringSources } = await loadAppLists();
   for (const ad of jobAds) {
     const gap = {
       id: ad.id,
-      label: `${ad.jobOpening.title} (${hiringSourceLabel(ad.source)})`,
+      label: `${ad.jobOpening.title} (${listLabel(hiringSources, ad.source)})`,
       href: `/erp/candidates/openings/${ad.jobOpening.id}`,
     };
     if (!ad.postedAt) {

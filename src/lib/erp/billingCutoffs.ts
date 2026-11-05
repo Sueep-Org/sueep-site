@@ -4,19 +4,19 @@
  * or the job's own when it differs (Project.billingCutoffDay).
  *
  * - Calendar: each active job's cutoff on the Management calendar.
- * - Reminder: REMIND_DAYS before, the job's PM gets an email to update
+ * - Reminder: some days before (Settings, Alerts), the job's PM gets an email to update
  *   percent complete (billingCutoffReminders.ts).
  * - Missed: past this month's cutoff with no invoice for the job dated this
  *   month (linked HubSpot invoice or an ERP draft). Shown on the Money tab.
  */
 import { prisma } from "@/lib/prisma";
+import { loadAlertSettings } from "@/lib/erp/alertSettingsServer";
 import { todayEasternKey, utcDateKey } from "./dates";
 import { addDaysKey } from "./manualHoursRepeat";
 import { findEmployeeEmailByName } from "./createLaborEntry";
 import { getBackupPms } from "@/lib/notificationSettings";
 import { escapeHtml, sendEmail } from "@/lib/email";
 
-export const REMIND_DAYS = 5;
 
 export type CutoffJob = {
   projectId: string;
@@ -104,21 +104,22 @@ export async function loadCutoffStatus(todayKey: string = todayEasternKey()): Pr
   });
 }
 
-/** Jobs whose cutoff is exactly REMIND_DAYS from today (this month or next), for the PM reminder. */
+/** Jobs whose cutoff is exactly the Settings reminder days from today (this month or next), for the PM reminder. */
 export async function loadCutoffsToRemind(todayKey: string = todayEasternKey()): Promise<{ job: CutoffJob; day: string }[]> {
-  const target = addDaysKey(todayKey, REMIND_DAYS);
+  const target = addDaysKey(todayKey, (await loadAlertSettings()).billingCutoffRemindDays);
   return cutoffsBetween(await loadCutoffJobs(), target, target);
 }
 
 // ── PM reminder email ───────────────────────────────────────────────────────
 
 /**
- * REMIND_DAYS before a job's cutoff, emails the job's PM (matched to their
+ * The Settings reminder days before a job's cutoff, emails the job's PM (matched to their
  * employee email by name, backup PMs when there's no match) the jobs to
  * update percent complete on. Runs in the daily management-reminders cron;
  * the exact-day match means one email per job per month.
  */
 export async function sendBillingCutoffReminders(todayKey: string = todayEasternKey()): Promise<{ sent: number; jobs: number }> {
+  const remindDays = (await loadAlertSettings()).billingCutoffRemindDays;
   const due = await loadCutoffsToRemind(todayKey);
   if (!due.length) return { sent: 0, jobs: 0 };
   const backup = await getBackupPms();
@@ -134,12 +135,12 @@ export async function sendBillingCutoffReminders(todayKey: string = todayEastern
     const rows = list
       .map((d) => `<li><a href="${escapeHtml(`${appUrl}/erp/projects/${d.job.projectId}`)}">${escapeHtml(d.job.jobTitle)}</a>${d.job.companyName ? ` (${escapeHtml(d.job.companyName)})` : ""}: due ${escapeHtml(day(d.day))}</li>`)
       .join("");
-    const html = `<p>Billing cutoffs are coming up in ${REMIND_DAYS} days. Please update percent complete on these jobs so billing can go out on time:</p><ul>${rows}</ul>`;
+    const html = `<p>Billing cutoffs are coming up in ${remindDays} days. Please update percent complete on these jobs so billing can go out on time:</p><ul>${rows}</ul>`;
     try {
       await sendEmail({
         type: "BILLING_CUTOFF_REMINDER",
         to,
-        subject: list.length === 1 ? `Billing cutoff in ${REMIND_DAYS} days: ${list[0]!.job.jobTitle}` : `Billing cutoff in ${REMIND_DAYS} days: ${list.length} jobs`,
+        subject: list.length === 1 ? `Billing cutoff in ${remindDays} days: ${list[0]!.job.jobTitle}` : `Billing cutoff in ${remindDays} days: ${list.length} jobs`,
         html,
         link: `/erp/projects/${list[0]!.job.projectId}`,
       });
@@ -157,7 +158,7 @@ export type DeliveryCutoff = { day: string; state: "MISSED" | "SOON"; daysLeft: 
  * Cutoff warnings for invoices still on Needs sending (INVOICE_TRACKING_PLAN.md
  * Phase 5). The cutoff is the job's own day, else the client company's; the
  * one that counts is the first on or after the day the invoice was approved.
- * Missed once that day has passed, Soon within REMIND_DAYS of it. Invoices
+ * Missed once that day has passed, Soon within the Settings reminder days of it. Invoices
  * with no cutoff, or further off, aren't in the map.
  */
 export async function loadDeliveryCutoffs(
@@ -166,6 +167,7 @@ export async function loadDeliveryCutoffs(
 ): Promise<Map<string, DeliveryCutoff>> {
   const out = new Map<string, DeliveryCutoff>();
   if (!deliveries.length) return out;
+  const soonDays = (await loadAlertSettings()).billingCutoffRemindDays;
   const projectIds = deliveries.filter((d) => d.destType === "PROJECT").map((d) => d.destId);
   const companyIds = [...new Set(deliveries.map((d) => d.clientCompanyId).filter((x): x is string => !!x))];
   const [projects, companies] = await Promise.all([
@@ -176,20 +178,20 @@ export async function loadDeliveryCutoffs(
   const companyDay = new Map(companies.map((c) => [c.id, c.billingCutoffDay]));
   for (const d of deliveries) {
     const cutoffDay = (d.destType === "PROJECT" ? projectDay.get(d.destId) : null) ?? (d.clientCompanyId ? companyDay.get(d.clientCompanyId) : null);
-    const c = cutoffDay ? deliveryCutoffFor(cutoffDay, todayEasternKey(d.createdAt), todayKey) : null;
+    const c = cutoffDay ? deliveryCutoffFor(cutoffDay, todayEasternKey(d.createdAt), todayKey, soonDays) : null;
     if (c) out.set(d.id, c);
   }
   return out;
 }
 
-/** The first cutoff on or after the approval day, when it's missed or within REMIND_DAYS. */
-export function deliveryCutoffFor(cutoffDay: number, approvedKey: string, todayKey: string): DeliveryCutoff | null {
+/** The first cutoff on or after the approval day, when it's missed or within soonDays. */
+export function deliveryCutoffFor(cutoffDay: number, approvedKey: string, todayKey: string, soonDays: number): DeliveryCutoff | null {
   const [y, m] = approvedKey.split("-").map(Number) as [number, number];
   let day = cutoffKey(y, m - 1, cutoffDay);
   if (day < approvedKey) day = m === 12 ? cutoffKey(y + 1, 0, cutoffDay) : cutoffKey(y, m, cutoffDay);
   const daysLeft = Math.round((Date.parse(`${day}T00:00:00Z`) - Date.parse(`${todayKey}T00:00:00Z`)) / 86_400_000);
   if (daysLeft < 0) return { day, state: "MISSED", daysLeft };
-  if (daysLeft <= REMIND_DAYS) return { day, state: "SOON", daysLeft };
+  if (daysLeft <= soonDays) return { day, state: "SOON", daysLeft };
   return null;
 }
 

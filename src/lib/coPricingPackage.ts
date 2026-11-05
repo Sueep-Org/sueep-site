@@ -141,9 +141,14 @@ export function sanitizeCoPricingPackage(value: unknown): CoPricingPackage {
   };
 }
 
-/** The package a building uses: its own if saved, otherwise the default. */
-export function getCoPricingPackage(saved: unknown): CoPricingPackage {
-  return sanitizeCoPricingPackage(saved);
+/** The package a building uses: its own if saved, otherwise the standard one
+ * (PricingSettings.coPackage, set on the Settings page). The Next day
+ * surcharge is always the company next day upcharge (PricingSettings.nextDayPct),
+ * so a change order and a turnover never charge different next day percents. */
+export function getCoPricingPackage(saved: unknown, standard: CoPricingPackage, nextDayPct: number): CoPricingPackage {
+  const pkg = saved ? sanitizeCoPricingPackage(saved) : structuredClone(standard);
+  pkg.surcharges = pkg.surcharges.map((s) => (s.id === "next-day" ? { ...s, percent: nextDayPct } : s));
+  return pkg;
 }
 
 export function coIssueLabel(issue: Pick<CoIssue, "label" | "labelEs">, lang: "en" | "es"): string {

@@ -146,24 +146,25 @@ export function JanitorialSchedulingAndHours() {
         </LI>
       </UL>
       <P>
-        Shifts of 6 hours or more have a 30 minute unpaid break taken off (&quot;after 30 min break&quot;). Clocking in or
-        leaving more than 15 minutes off schedule, an unscheduled shift, a missing clock-out or a clock-in far from the
-        building shows under <strong>Needs review</strong>; tick <strong>Needs review only</strong> to see just those.
+        Long shifts have an unpaid break taken off (&quot;after unpaid break&quot;). Clocking in or leaving too far off
+        schedule, an unscheduled shift, a missing clock-out or a clock-in far from the
+        building shows under <strong>Needs review</strong>. The break, the minutes and the distance are set under{" "}
+        <strong>Settings, Payroll</strong> (6 hours, 30 minutes, 15 minutes and 400 meters to start). Tick <strong>Needs review only</strong> to see just those.
       </P>
       <P>
         Click <strong>Correct</strong> to set the real start and end, or mark it <strong>Didn&apos;t work</strong>.{" "}
         <strong>Undo correction</strong> puts it back. <strong>Download CSV</strong> exports the week.
       </P>
       <Callout type="info">
-        Payroll reads these hours live, at each janitor&apos;s hourly rate, with overtime past 40 hours a week (janitorial and
-        project hours together). Corrections show in Payroll right away. Under someone&apos;s hours on Payroll,{" "}
+        Payroll reads these hours live, at each janitor&apos;s hourly rate, with weekly overtime (janitorial and project hours
+        together, the hours are under Settings, Payroll). Corrections show in Payroll right away. Under someone&apos;s hours on Payroll,{" "}
         <strong>See janitorial shifts</strong> opens exactly which shifts make up the number, and a janitor with nothing
         scheduled shows <strong>No janitorial schedule set</strong>.
       </Callout>
 
       <H2>Clock-in location check</H2>
       <P>
-        A clock-in or clock-out more than about a quarter mile from the building is flagged on Today and under Needs review.
+        A clock-in or clock-out too far from the building (Settings, Payroll) is flagged on Today and under Needs review.
         Weak phone GPS gets some leeway.
       </P>
       <UL>

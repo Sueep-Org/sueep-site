@@ -6,7 +6,8 @@ import Link from "next/link";
 import { centsToDollars } from "@/lib/erp/money";
 import { isNextDayStart, nextDayCountInRange } from "@/lib/nextDayUpcharge";
 import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
-import { CHANGE_ORDER_ESTIMATE_DAY_HOURS, changeOrderDayCount, getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
+import { changeOrderDayCount, getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
+import { usePricingSettings } from "@/app/components/PricingSettingsProvider";
 import { ChangeOrderLaborEstimator } from "./ChangeOrderLaborEstimator";
 import { LaborRateCardEditor } from "./LaborRateCardEditor";
 
@@ -166,7 +167,7 @@ export function ProjectChangeOrdersSection({
   initialEntries: ProjectChangeOrderRow[];
   employees?: EmployeeNotifyOption[];
   /** This project's Labor rates override (see Project.laborRateCard) — falls
-   * back to DEFAULT_CHANGE_ORDER_LABOR_RATES via getChangeOrderLaborRates. */
+   * back to the Settings page rate via getChangeOrderLaborRates. */
   laborRateCard?: unknown;
   /** Hides the Labor rates editor — same restriction as everywhere else
    * financials are gated from Employee. */
@@ -174,7 +175,8 @@ export function ProjectChangeOrdersSection({
   canEditPricing?: boolean;
 }) {
   const router = useRouter();
-  const laborRates = getChangeOrderLaborRates(laborRateCard);
+  const { coPriceRates, coDayHours } = usePricingSettings();
+  const laborRates = getChangeOrderLaborRates(laborRateCard, coPriceRates);
   const [entries, setEntries] = useState(initialEntries);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -244,8 +246,8 @@ export function ProjectChangeOrdersSection({
           estSupervisors: estSupervisorCount.trim() || undefined,
           noCrewRequired: estNoCrewRequired,
           // No hours input anymore — every change order estimate assumes a
-          // flat 8-hour day per person (see CHANGE_ORDER_ESTIMATE_DAY_HOURS), times the days in the range.
-          estHours: String(CHANGE_ORDER_ESTIMATE_DAY_HOURS * days),
+          // flat day per person (Settings, Pricing), times the days in the range.
+          estHours: String(coDayHours * days),
           estimatedDays: startDate ? days : undefined,
           contractValue: contractValue.trim() || undefined,
           estLabor: estLabor.trim() || undefined,

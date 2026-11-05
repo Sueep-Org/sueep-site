@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePricingSettings } from "@/app/components/PricingSettingsProvider";
 import { useRouter } from "next/navigation";
 import { Button, useToast } from "@/app/erp/components/ui";
 import { centsToDollars } from "@/lib/erp/money";
@@ -22,9 +23,10 @@ export function ContractPricingEditor({
 }) {
   const router = useRouter();
   const toast = useToast();
+  const { janitorialSalesTaxPct } = usePricingSettings();
   // A contract priced by hand before the calculator starts with its current
   // rate as the override, so saving without changes keeps the same price.
-  const [start] = useState<ContractPricing>(() => initialPricing ?? { ...emptyPricing(), totalOverrideCents: currentMonthlyRateCents });
+  const [start] = useState<ContractPricing>(() => initialPricing ?? { ...emptyPricing(janitorialSalesTaxPct), totalOverrideCents: currentMonthlyRateCents });
   const [pricing, setPricing] = useState<ContractPricing>(start);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");

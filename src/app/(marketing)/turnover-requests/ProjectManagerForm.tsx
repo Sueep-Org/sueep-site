@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { NEXT_DAY_UPCHARGE_PERCENT, isNextDayStart } from "@/lib/nextDayUpcharge";
+import { isNextDayStart } from "@/lib/nextDayUpcharge";
 import { centsToDollars } from "@/lib/erp/money";
 import { deriveChangeOrderSupervisorCount } from "@/lib/changeOrderLaborRates";
 import { SignaturePadInput } from "@/components/SignaturePad";
@@ -61,9 +61,10 @@ function StepIndicator({ current, type, willSign }: { current: number; type: Req
 
 interface Props {
   onBack: () => void;
+  nextDayPct: number;
 }
 
-export function ProjectManagerForm({ onBack }: Props) {
+export function ProjectManagerForm({ onBack, nextDayPct }: Props) {
   const [step, setStep] = useState(1);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -621,7 +622,7 @@ export function ProjectManagerForm({ onBack }: Props) {
                   </p>
                 )}
                 {coPriceCents != null && isNextDayStart(coEstimatedStartDate) && (
-                  <p className="mt-1 text-xs text-amber-700">Includes a {NEXT_DAY_UPCHARGE_PERCENT}% next day upcharge for work starting today or tomorrow.</p>
+                  <p className="mt-1 text-xs text-amber-700">Includes a {nextDayPct}% next day upcharge for work starting today or tomorrow.</p>
                 )}
                 {coPriceCents != null && (
                   <div className="mt-4 grid gap-3 border-t border-gray-200 pt-4 sm:grid-cols-2">

@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useAppLists } from "@/app/components/AppListsProvider";
 import { centsToDollars } from "@/lib/erp/money";
 import { InfoTip } from "@/app/erp/components/ui";
 import type { EmployerTaxRates } from "@/lib/erp/employerTax";
 import {
-  ROLE_SUGGESTIONS,
   calculatePricing,
   newLine,
   type ContractPricing,
@@ -88,6 +88,7 @@ function OverrideInput({ cents, onChange, ariaLabel }: { cents: number | null; o
 export function PricingCalculator({
   value, onChange, taxRates,
 }: { value: ContractPricing; onChange: (next: ContractPricing) => void; taxRates: EmployerTaxRates }) {
+  const roleSuggestions = useAppLists().janitorialRoles.filter((i) => !i.hidden).map((i) => i.label);
   const result = calculatePricing(value, taxRates);
   const [overridingLine, setOverridingLine] = useState<Set<string>>(() => new Set(value.lines.filter((l) => l.monthlyOverrideCents != null).map((l) => l.id)));
   const [overridingTotal, setOverridingTotal] = useState(value.totalOverrideCents != null);
@@ -104,7 +105,7 @@ export function PricingCalculator({
   return (
     <div className="space-y-4">
       <datalist id="pricing-roles">
-        {ROLE_SUGGESTIONS.map((r) => (
+        {roleSuggestions.map((r) => (
           <option key={r} value={r} />
         ))}
       </datalist>

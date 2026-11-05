@@ -4,10 +4,12 @@ import type { Metadata } from "next";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { canManageNotifications, getErpAuth } from "@/lib/erpAuth";
-import { NOTIFICATIONS, isEmailType } from "@/lib/notificationTypes";
+import { NOTIFICATIONS, NOTIFICATION_GROUPS, isEmailType } from "@/lib/notificationTypes";
+import { easternWallToInstant } from "@/lib/erp/janitorialHours";
 import { NotificationsHeader } from "../NotificationsHeader";
 import { LogFilters } from "./LogFilters";
 import { STATUS_STYLE } from "./status";
+import { logHref, readLogFilters } from "./filters";
 
 export const metadata: Metadata = {
   title: "Email Log",
@@ -18,25 +20,65 @@ export const dynamic = "force-dynamic";
 const PAGE_SIZE = 50;
 const WEEK_MS = 7 * 86_400_000;
 
-type PageProps = { searchParams: Promise<{ type?: string; status?: string; q?: string; page?: string }> };
+type PageProps = { searchParams: Promise<Record<string, string | undefined>> };
+
+/** Ids of emails with a To, Cc or Bcc address containing `part`. Prisma can
+ * only match whole array entries, so this one is plain SQL. */
+async function idsSentTo(part: string): Promise<string[]> {
+  const like = `%${part.toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const rows = await prisma.$queryRaw<{ id: string }[]>`
+    SELECT id FROM "EmailLog"
+    WHERE lower(array_to_string("to" || "cc" || "bcc", ' ')) LIKE ${like}`;
+  return rows.map((r) => r.id);
+}
+
+/** Projects and buildings that have at least one email, for the "about" filter. */
+async function aboutOptions(): Promise<{ value: string; label: string }[]> {
+  const links = await prisma.emailLog.groupBy({ by: ["link"], where: { link: { startsWith: "/erp/" } } });
+  const projectIds = new Set<string>();
+  const buildingIds = new Set<string>();
+  for (const { link } of links) {
+    const m = link?.match(/^\/erp\/(projects|buildings)\/([\w-]+)/);
+    if (m) (m[1] === "projects" ? projectIds : buildingIds).add(m[2]);
+  }
+  const [projects, buildings] = await Promise.all([
+    prisma.project.findMany({ where: { id: { in: [...projectIds] } }, select: { id: true, jobTitle: true } }),
+    prisma.building.findMany({ where: { id: { in: [...buildingIds] } }, select: { id: true, name: true } }),
+  ]);
+  return [
+    ...buildings.map((b) => ({ value: `/erp/buildings/${b.id}`, label: `Building: ${b.name}` })),
+    ...projects.map((p) => ({ value: `/erp/projects/${p.id}`, label: `Project: ${p.jobTitle}` })),
+  ].sort((a, b) => a.label.localeCompare(b.label));
+}
 
 export default async function EmailLogPage({ searchParams }: PageProps) {
   const auth = await getErpAuth();
   if (!auth || !canManageNotifications(auth.role)) redirect("/erp");
 
-  const { type = "", status = "", q = "", page = "1" } = await searchParams;
-  const pageNum = Math.max(1, Number.parseInt(page, 10) || 1);
-  const search = q.trim();
+  const params = await searchParams;
+  const filters = readLogFilters(params);
+  const pageNum = Math.max(1, Number.parseInt(params.page ?? "1", 10) || 1);
 
+  const sentTo = filters.to ? await idsSentTo(filters.to) : null;
+  const createdAt: Prisma.DateTimeFilter = {
+    ...(filters.from ? { gte: easternWallToInstant(filters.from, "00:00") } : {}),
+    ...(filters.until ? { lt: new Date(easternWallToInstant(filters.until, "00:00").getTime() + 86_400_000) } : {}),
+  };
   const where: Prisma.EmailLogWhereInput = {
-    ...(isEmailType(type) ? { type } : {}),
-    ...(status in STATUS_STYLE ? { status } : {}),
-    ...(search
-      ? { OR: [{ subject: { contains: search, mode: "insensitive" } }, { to: { has: search.toLowerCase() } }, { to: { has: search } }] }
+    ...(isEmailType(filters.type) ? { type: filters.type } : {}),
+    ...(filters.status in STATUS_STYLE ? { status: filters.status } : {}),
+    ...(filters.q ? { subject: { contains: filters.q, mode: "insensitive" } } : {}),
+    ...(sentTo ? { id: { in: sentTo } } : {}),
+    ...(filters.from || filters.until ? { createdAt } : {}),
+    // A link can carry a tab or anchor after the id, e.g. /erp/projects/abc?tab=billing
+    ...(filters.about
+      ? { OR: [{ link: filters.about }, { link: { startsWith: `${filters.about}?` } }, { link: { startsWith: `${filters.about}#` } }, { link: { startsWith: `${filters.about}/` } }] }
       : {}),
+    ...(filters.attach ? { hasAttachments: true } : {}),
+    ...(filters.resent ? { resentFromId: { not: null } } : {}),
   };
 
-  const [logs, total, failedThisWeek] = await Promise.all([
+  const [logs, total, failedThisWeek, about] = await Promise.all([
     prisma.emailLog.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -46,28 +88,22 @@ export default async function EmailLogPage({ searchParams }: PageProps) {
     }),
     prisma.emailLog.count({ where }),
     prisma.emailLog.count({ where: { status: "FAILED", createdAt: { gte: new Date(Date.now() - WEEK_MS) } } }),
+    aboutOptions(),
   ]);
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const pageHref = (n: number) => {
-    const p = new URLSearchParams();
-    if (type) p.set("type", type);
-    if (status) p.set("status", status);
-    if (search) p.set("q", search);
-    if (n > 1) p.set("page", String(n));
-    const s = p.toString();
-    return `/erp/notifications/log${s ? `?${s}` : ""}`;
-  };
+  const pageHref = (n: number) => logHref(filters, n);
 
   return (
     <div className="space-y-6">
       <NotificationsHeader active="log" failedCount={failedThisWeek} />
       <LogFilters
-        type={type}
-        status={status}
-        q={search}
+        filters={filters}
+        total={total}
+        aboutOptions={about}
         typeOptions={Object.entries(NOTIFICATIONS)
-          .map(([value, d]) => ({ value, label: d.label }))
-          .sort((a, b) => a.label.localeCompare(b.label))}
+          .map(([value, d]) => ({ value, label: `${d.group}: ${d.label}`, order: NOTIFICATION_GROUPS.indexOf(d.group) }))
+          .sort((a, b) => a.order - b.order || a.label.localeCompare(b.label))
+          .map(({ value, label }) => ({ value, label }))}
       />
 
       <div className="overflow-x-auto rounded-lg border border-gray-200">

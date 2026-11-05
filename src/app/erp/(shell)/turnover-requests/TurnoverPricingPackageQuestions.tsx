@@ -1,6 +1,7 @@
 "use client";
 
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
+import { usePricingSettings } from "@/app/components/PricingSettingsProvider";
 import { CUSTOM_LINE_ITEMS_ENABLED, getTurnoverPricingPackage, TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
 
 const PARTIAL_TURN_LAYOUT_OPTIONS = TURNOVER_UNIT_LAYOUTS.filter((l) => l !== "common-area");
@@ -113,7 +114,8 @@ export function TurnoverPricingPackageQuestions({
   setOtherDescription = () => {},
   setOtherPrice = () => {},
 }: TurnoverPricingPackageQuestionsProps) {
-  const pricingPackage = getTurnoverPricingPackage(buildingName, storedPricingPackage);
+  const { nextDayPct, turnoverPackage } = usePricingSettings();
+  const pricingPackage = getTurnoverPricingPackage(storedPricingPackage, turnoverPackage);
   const n = (v: string | undefined) => Math.max(0, Math.round(Number((v ?? "0").replace(/[$,\s]/g, "")) || 0));
   const commonAreaPricingPackage = isCommonArea && commonAreaRates
     ? {
@@ -128,6 +130,8 @@ export function TurnoverPricingPackageQuestions({
       }
     : storedPricingPackage;
   const basePricing = computeTurnoverPricing({
+    nextDayPct,
+    standardPackage: turnoverPackage,
     requestType: "TURNOVER",
     buildingName,
     pricingPackage: commonAreaPricingPackage,

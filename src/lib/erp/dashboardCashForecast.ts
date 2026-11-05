@@ -1,10 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import type { ErpRole } from "../erpSession";
+import { loadAlertSettings } from "@/lib/erp/alertSettingsServer";
 import { todayEasternKey, utcDateKey } from "./dates";
 import { unstable_cache } from "next/cache";
 import { computeFinanceSummary, FINANCE_RANGE_KEY, sumMonths } from "./financeSummary";
 import { DEFAULT_PAYROLL_ANCHOR, payPeriodForDay } from "./payPeriods";
 import { loadOpenInvoices, loadReadyToBill } from "./dashboardMoney";
+import { CASH_FORECAST_TERMS_DEFAULT, CASH_FORECAST_TERMS_KEY, CASH_FORECAST_TERMS_MAX } from "./settingsRegistry";
 
 /**
  * Cash forecast card (DASHBOARDS_PLAN.md Phase 5): money in vs money out for
@@ -13,15 +15,13 @@ import { loadOpenInvoices, loadReadyToBill } from "./dashboardMoney";
  */
 
 export const FORECAST_WEEKS = 8;
-export const TERMS_SETTING_KEY = "cashForecastTermsDays";
-export const DEFAULT_TERMS_DAYS = 30;
-export const MAX_TERMS_DAYS = 120;
+export const TERMS_SETTING_KEY = CASH_FORECAST_TERMS_KEY;
+export const DEFAULT_TERMS_DAYS = CASH_FORECAST_TERMS_DEFAULT;
+export const MAX_TERMS_DAYS = CASH_FORECAST_TERMS_MAX;
 /** Recent costs are averaged over this many days for the run-rate lines. */
 const RUN_RATE_DAYS = 28;
 /** How long the 28-day cost averages are reused. */
 const RECENT_COSTS_SECONDS = 3600;
-/** Payroll is assumed paid this many days after its period ends (the Friday after a Sunday end). */
-const PAY_LAG_DAYS = 5;
 
 const DAY_MS = 86_400_000;
 
@@ -105,6 +105,8 @@ export async function loadCashForecast(role: ErpRole): Promise<CashForecast> {
   const firstWeek = mondayOf(todayKey);
   const lastDay = addDays(firstWeek, FORECAST_WEEKS * 7 - 1);
   const termsDays = await loadTermsDays();
+  // Payroll is assumed paid this many days after its period ends (Settings, Alerts)
+  const payLagDays = (await loadAlertSettings()).payrollLagDays;
 
   const weeks = Array.from({ length: FORECAST_WEEKS }, (_, i) => {
     const startKey = addDays(firstWeek, i * 7);
@@ -162,10 +164,10 @@ export async function loadCashForecast(role: ErpRole): Promise<CashForecast> {
 
   // Payroll in the week each pay period is paid.
   const anchor = anchorSetting?.value ?? DEFAULT_PAYROLL_ANCHOR;
-  let period = payPeriodForDay(addDays(firstWeek, -PAY_LAG_DAYS - 14), anchor);
+  let period = payPeriodForDay(addDays(firstWeek, -payLagDays - 14), anchor);
   let firstPayKey: string | null = null;
   for (let guard = 0; guard < 10; guard++) {
-    const payKey = addDays(utcDateKey(period.end), PAY_LAG_DAYS);
+    const payKey = addDays(utcDateKey(period.end), payLagDays);
     if (payKey > lastDay) break;
     if (payKey >= firstWeek) {
       add("outParts", payKey, "Payroll (recent rate)", Math.round(payrollPerDay * 14));
@@ -204,7 +206,7 @@ export async function loadCashForecast(role: ErpRole): Promise<CashForecast> {
     canEditTerms: canEditForecastTerms(role),
     assumptions: [
       `Unbilled work and janitorial months are paid ${termsDays} days after billing.`,
-      `Payroll, offshore, subcontractors, materials, reimbursements and insurance use the last ${RUN_RATE_DAYS} days' rate. Payroll lands ${PAY_LAG_DAYS} days after each pay period ends.`,
+      `Payroll, offshore, subcontractors, materials, reimbursements and insurance use the last ${RUN_RATE_DAYS} days' rate. Payroll lands ${payLagDays} days after each pay period ends.`,
       "Recent rates and commission owed refresh hourly; invoices and ready to bill are live.",
       "Running net starts at $0. It's what the ERP expects to come in minus go out, not a bank balance.",
       "Jobs not finished yet aren't counted as money in until they're ready to bill.",

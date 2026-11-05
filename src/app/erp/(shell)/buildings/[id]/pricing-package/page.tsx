@@ -42,7 +42,6 @@ export default async function BuildingPricingPackagePage({ params }: PageProps) 
       <div className="max-w-4xl">
         <BuildingPricingPackageEditor
           buildingId={building.id}
-          buildingName={building.name}
           initialPackage={building.pricingPackage}
           canEdit={auth ? canEditPricing(auth.role) : false}
         />

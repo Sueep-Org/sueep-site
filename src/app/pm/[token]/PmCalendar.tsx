@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
-import { NEXT_DAY_UPCHARGE_PERCENT, isNextDayStart } from "@/lib/nextDayUpcharge";
+import { isNextDayStart } from "@/lib/nextDayUpcharge";
 import type { KnownUnit, PmBuilding, PmUnit, PmUnitStatus } from "@/lib/erp/propertyManagerCalendar";
 import {
   REQUEST_LAYOUTS,
@@ -76,6 +76,7 @@ export function PmCalendar({
   today,
   contactEmail,
   sueepContact,
+  nextDayPct,
 }: {
   token: string;
   firstName: string;
@@ -86,6 +87,8 @@ export function PmCalendar({
   contactEmail: string;
   /** Who at Sueep to call, set by staff */
   sueepContact: { name: string | null; phone: string | null; email: string | null };
+  /** Next day upcharge percent from Settings */
+  nextDayPct: number;
 }) {
   const router = useRouter();
   const [buildingId, setBuildingId] = useState(buildings.length === 1 ? buildings[0].id : "");
@@ -292,6 +295,7 @@ export function PmCalendar({
           today={today}
           units={units}
           knownUnits={knownUnits}
+          nextDayPct={nextDayPct}
           onClose={() => setRequestDate(null)}
           onSent={(msg) => {
             setRequestDate(null);
@@ -914,6 +918,7 @@ function BookingForm({
   today,
   units,
   knownUnits,
+  nextDayPct,
   onClose,
   onSent,
 }: {
@@ -924,6 +929,7 @@ function BookingForm({
   today: string;
   units: PmUnit[];
   knownUnits: Record<string, KnownUnit>;
+  nextDayPct: number;
   onClose: () => void;
   onSent: (message: string) => void;
 }) {
@@ -961,7 +967,7 @@ function BookingForm({
     const layout = d.layoutPicked ? d.layout : (known?.layout ?? d.layout);
     const layoutDef = REQUEST_LAYOUTS.find((l) => l.value === layout);
     const nextDay = isNextDayStart(d.ownStart || start);
-    const estimate = building && layoutDef ? estimateRequestCents(building.pricingPackage, layoutDef.bedrooms, layoutDef.bathrooms, d.work, false, nextDay) : null;
+    const estimate = building && layoutDef ? estimateRequestCents(building.pricingPackage, layoutDef.bedrooms, layoutDef.bathrooms, d.work, false, nextDay, nextDayPct) : null;
     return { known, layout, layoutDef, estimate, nextDay };
   }
 
@@ -1268,7 +1274,7 @@ function BookingForm({
             </p>
             {building && anyNextDay && (
               <p className="mt-1 text-xs font-medium text-pink-700">
-                Includes a {NEXT_DAY_UPCHARGE_PERCENT}% next day upcharge for work starting today or tomorrow.
+                Includes a {nextDayPct}% next day upcharge for work starting today or tomorrow.
               </p>
             )}
           </div>

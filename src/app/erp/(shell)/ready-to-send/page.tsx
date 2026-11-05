@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
+import { loadAlertSettings } from "@/lib/erp/alertSettingsServer";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canApproveInvoices } from "@/lib/erpAuth";
 import { InfoTip } from "@/app/erp/components/ui";
@@ -14,7 +15,7 @@ import { DELIVERY_WAITING_WHERE } from "@/lib/erp/portalStatus";
 import { deliveryCutoffText, loadDeliveryCutoffs } from "@/lib/erp/billingCutoffs";
 import { loadPayApp } from "@/lib/erp/payAppLines";
 import { namesByEmail } from "@/lib/erp/janitorialQualityChecks";
-import { CLAIM_TEXT, DRAFT_LEAD_DAYS, billingDateKey, draftLines, linesTotal, monthLabel } from "@/lib/erp/janitorialInvoiceDrafts";
+import { CLAIM_TEXT, billingDateKey, draftLines, linesTotal, monthLabel } from "@/lib/erp/janitorialInvoiceDrafts";
 import { ReadyToSend, type BillableGroupRow, type ContractSetting, type DeliveryRow, type DraftRecipientsRow, type DraftRow, type MonthRow, type QboTestRow } from "./ReadyToSend";
 import { withHubSpotId } from "@/lib/erp/invoiceLinkSource";
 import { qboEnvironment } from "@/lib/erp/qboClient";
@@ -60,18 +61,19 @@ function recipientsRow(d: InvoiceDestination | null, groupType: string, contacts
 }
 
 /** Next month (this or next) whose billing day hasn't passed, and when its draft appears. */
-function nextDraftKey(todayKey: string, billingDay: number): string {
+function nextDraftKey(todayKey: string, billingDay: number, leadDays: number): string {
   const [y, m] = todayKey.split("-").map(Number) as [number, number];
   for (const start of [new Date(Date.UTC(y, m - 1, 1)), new Date(Date.UTC(y, m, 1))]) {
     const key = billingDateKey(start, billingDay);
-    if (key >= todayKey) return addDaysKey(key, -DRAFT_LEAD_DAYS);
+    if (key >= todayKey) return addDaysKey(key, -leadDays);
   }
-  return addDaysKey(billingDateKey(new Date(Date.UTC(y, m + 1, 1)), billingDay), -DRAFT_LEAD_DAYS);
+  return addDaysKey(billingDateKey(new Date(Date.UTC(y, m + 1, 1)), billingDay), -leadDays);
 }
 
 export default async function ReadyToSendPage() {
   const auth = await getErpAuth();
   if (!auth || !canApproveInvoices(auth.role)) redirect("/erp");
+  const leadDays = (await loadAlertSettings()).janitorialDraftLeadDays;
   const todayKey = todayEasternKey();
 
   const periodSelect = {
@@ -319,7 +321,7 @@ export default async function ReadyToSendPage() {
     monthlyRateCents: c.monthlyRateCents,
     // QuickBooks drafts don't need a deal.
     hasDeal: toQuickBooks || !!c.building.hubspotDealId,
-    nextDraftKey: nextDraftKey(todayKey, c.billingDayOfMonth),
+    nextDraftKey: nextDraftKey(todayKey, c.billingDayOfMonth, leadDays),
   }));
 
   return (
@@ -330,8 +332,8 @@ export default async function ReadyToSendPage() {
         <InfoTip
           text={
             toQuickBooks
-              ? `Invoices the ERP drafted: janitorial months ${DRAFT_LEAD_DAYS} days before each billing day, and finished work picked under Ready to bill. Drafts stay in the ERP. Approve creates the invoice in QuickBooks, marks the work Billed and sends it to the client.`
-              : `Invoices the ERP drafted in HubSpot: janitorial months ${DRAFT_LEAD_DAYS} days before each billing day, and finished work picked under Ready to bill. Drafts don't go to QuickBooks or the client. Approve opens the invoice in HubSpot, which sends it to QuickBooks, and marks the work Billed.`
+              ? `Invoices the ERP drafted: janitorial months ${leadDays} days before each billing day, and finished work picked under Ready to bill. Drafts stay in the ERP. Approve creates the invoice in QuickBooks, marks the work Billed and sends it to the client.`
+              : `Invoices the ERP drafted in HubSpot: janitorial months ${leadDays} days before each billing day, and finished work picked under Ready to bill. Drafts don't go to QuickBooks or the client. Approve opens the invoice in HubSpot, which sends it to QuickBooks, and marks the work Billed.`
           }
         />
       </h1>

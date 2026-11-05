@@ -12,10 +12,6 @@
 import { prisma, type TxClient } from "@/lib/prisma";
 import { todayEasternKey, utcDateKey } from "@/lib/erp/dates";
 
-/** A standard full-time year (40 hours x 52 weeks). A salaried or offshore
- * person's time on a job is costed at their yearly pay divided by this. */
-export const STANDARD_ANNUAL_HOURS = 2080;
-
 export type PayRate = {
   /** "YYYY-MM-DD" */
   effectiveFrom: string;
@@ -100,9 +96,12 @@ export function isFixedPay(rate: PayRate | null): boolean {
 }
 
 /** What an hour of a salaried or offshore person's time costs on a job. */
-export function fixedPayHourlyCostCents(rate: PayRate): number {
-  if (rate.isOffshore) return ((rate.offshoreMonthlyRateCents ?? 0) * 12) / STANDARD_ANNUAL_HOURS;
-  return (rate.annualSalaryCents ?? 0) / STANDARD_ANNUAL_HOURS;
+/** A salaried or offshore person's time on a job is costed at their yearly pay
+ * divided by the hours in a work year (PayrollRules.yearHours on that day,
+ * set on the Settings page, 2080 to start). */
+export function fixedPayHourlyCostCents(rate: PayRate, yearHours: number): number {
+  if (rate.isOffshore) return ((rate.offshoreMonthlyRateCents ?? 0) * 12) / yearHours;
+  return (rate.annualSalaryCents ?? 0) / yearHours;
 }
 
 export type PayValues = Omit<PayRate, "effectiveFrom">;

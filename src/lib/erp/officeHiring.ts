@@ -4,6 +4,8 @@
  * components can use it too.
  */
 
+import type { ListItem } from "./appLists";
+
 export type OfficeStage =
   | "NEW"
   | "CONTACTING"
@@ -61,17 +63,8 @@ export function statusForStage(stage: OfficeStage): string {
   }
 }
 
-export const HIRING_SOURCES = [
-  { value: "LINKEDIN", label: "LinkedIn" },
-  { value: "INDEED", label: "Indeed" },
-  { value: "REFERRAL", label: "Referral" },
-  { value: "WEBSITE", label: "Website" },
-  { value: "OTHER", label: "Other" },
-] as const;
-
-export function hiringSourceLabel(v: string | null | undefined): string {
-  return HIRING_SOURCES.find((s) => s.value === v)?.label ?? (v || "-");
-}
+// Hiring sources are an editable list on Settings, Lists (AppLists.hiringSources);
+// read labels with listLabel from appLists.ts.
 
 export const WORK_MODES = [
   { value: "ON_SITE", label: "On site" },
@@ -198,11 +191,12 @@ export type PostingInput = {
 export function parsePostingInput(
   body: Record<string, unknown>,
   requireSource: boolean,
+  sources: ListItem[],
 ): { data: PostingInput; error: string | null } {
   const data: PostingInput = {};
   if (body.source !== undefined || requireSource) {
-    const v = String(body.source ?? "").trim().toUpperCase();
-    if (!HIRING_SOURCES.some((s) => s.value === v)) return { data, error: "Pick where it was posted" };
+    const v = String(body.source ?? "").trim();
+    if (!sources.some((s) => s.value === v)) return { data, error: "Pick where it was posted" };
     data.source = v;
   }
   if (body.cost !== undefined) {

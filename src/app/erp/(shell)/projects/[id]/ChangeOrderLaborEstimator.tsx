@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { NEXT_DAY_UPCHARGE_LABEL, nextDayUpchargeCents } from "@/lib/nextDayUpcharge";
+import { nextDayUpchargeCents, nextDayUpchargeLabel } from "@/lib/nextDayUpcharge";
+import { usePricingSettings } from "@/app/components/PricingSettingsProvider";
 import { inputClass, labelClass } from "@/app/erp/components/ui";
 import { centsToDollars } from "@/lib/erp/money";
 import {
   computeChangeOrderLaborEstimate,
   deriveChangeOrderSupervisorCount,
-  ACTUAL_CHANGE_ORDER_LABOR_COST_RATES,
-  CHANGE_ORDER_ESTIMATE_DAY_HOURS,
   type ResolvedChangeOrderLaborRates,
 } from "@/lib/changeOrderLaborRates";
 
@@ -17,7 +16,7 @@ const label = labelClass.default;
 
 type Props = {
   /** Billing rate (project's Labor rates, falls back to
-   * DEFAULT_CHANGE_ORDER_LABOR_RATES) — drives the price/contract value
+   * the Settings page rate) — drives the price/contract value
    * calculation. Null while unknown (e.g. no project picked yet). */
   pricingRates: ResolvedChangeOrderLaborRates | null;
   cleanerCount: string;
@@ -48,10 +47,10 @@ type Props = {
 };
 
 /** "# cleaners / # supervisors" (hours are never entered — every estimate
- * assumes a flat CHANGE_ORDER_ESTIMATE_DAY_HOURS-hour day per person, see
+ * assumes a flat day per person (Settings, Pricing), see
  * that constant) → two different calculated numbers: a price (this
  * project's billing rate, has margin built in) and a labor cost
- * (ACTUAL_CHANGE_ORDER_LABOR_COST_RATES, the real wage we pay) — plus the
+ * (the Settings page wage, the real wage we pay) — plus the
  * manual price fields either can fill, which stay editable on their own so
  * a calculated number is always just a starting point, never a lock-in.
  * Used on both change order create forms and the CO detail page's Costs
@@ -77,6 +76,7 @@ export function ChangeOrderLaborEstimator({
   disabled,
 }: Props) {
   const crewDisabled = disabled || noCrewRequired;
+  const { coCostRates, coDayHours, nextDayPct } = usePricingSettings();
 
   function handleNoCrewRequiredChange(checked: boolean) {
     onNoCrewRequiredChange?.(checked);
@@ -91,16 +91,16 @@ export function ChangeOrderLaborEstimator({
   const counts = {
     cleanerCount: Number(cleanerCount) || 0,
     supervisorCount: Number(supervisorCount) || 0,
-    hours: CHANGE_ORDER_ESTIMATE_DAY_HOURS * Math.max(1, days),
+    hours: coDayHours * Math.max(1, days),
   };
   const priceEstimate = pricingRates ? computeChangeOrderLaborEstimate(counts, pricingRates) : null;
-  const costEstimate = computeChangeOrderLaborEstimate(counts, ACTUAL_CHANGE_ORDER_LABOR_COST_RATES);
+  const costEstimate = computeChangeOrderLaborEstimate(counts, coCostRates);
   // The upcharge is part of the price the client pays, never the labor cost.
   // Only the today/tomorrow days of the range get it, the rest are normal price.
   const dayCount = Math.max(1, days);
   const upchargeDays = Math.min(dayCount, Math.max(1, nextDayDays ?? 1));
   const upchargeShare = nextDayUpcharge ? upchargeDays / dayCount : 0;
-  const upchargeCents = priceEstimate ? Math.round(nextDayUpchargeCents(priceEstimate.totalCents) * upchargeShare) : 0;
+  const upchargeCents = priceEstimate ? Math.round(nextDayUpchargeCents(priceEstimate.totalCents, nextDayPct) * upchargeShare) : 0;
   const priceCents = priceEstimate ? priceEstimate.totalCents + upchargeCents : null;
 
   function useCalculatedNumbers() {
@@ -131,8 +131,8 @@ export function ChangeOrderLaborEstimator({
   const prevShareRef = useRef(upchargeShare);
   useEffect(() => {
     if (prevShareRef.current === upchargeShare) return;
-    const prevFactor = 1 + (nextDayUpchargeCents(10_000) / 10_000) * prevShareRef.current;
-    const nextFactor = 1 + (nextDayUpchargeCents(10_000) / 10_000) * upchargeShare;
+    const prevFactor = 1 + (nextDayUpchargeCents(10_000, nextDayPct) / 10_000) * prevShareRef.current;
+    const nextFactor = 1 + (nextDayUpchargeCents(10_000, nextDayPct) / 10_000) * upchargeShare;
     prevShareRef.current = upchargeShare;
     const typedCents = Math.round(Number(contractValue) * 100);
     if (!priceTouchedRef.current || !(typedCents > 0)) return;
@@ -210,7 +210,7 @@ export function ChangeOrderLaborEstimator({
       {onNextDayUpchargeChange ? (
         <label className="mt-3 flex items-center gap-2 text-sm text-gray-700">
           <input type="checkbox" checked={nextDayUpcharge} disabled={disabled} onChange={(e) => onNextDayUpchargeChange?.(e.target.checked)} />
-          {NEXT_DAY_UPCHARGE_LABEL}
+          {nextDayUpchargeLabel(nextDayPct)}
         </label>
       ) : null}
 
@@ -238,8 +238,8 @@ export function ChangeOrderLaborEstimator({
           <div>
             Labor cost: <span className="font-semibold text-gray-900">{centsToDollars(costEstimate.totalCents)}</span>
             <span className="ml-1 text-xs text-gray-400">
-              ({centsToDollars(ACTUAL_CHANGE_ORDER_LABOR_COST_RATES.cleanerHourlyRateCents)}/hr cleaner,{" "}
-              {centsToDollars(ACTUAL_CHANGE_ORDER_LABOR_COST_RATES.foremanHourlyRateCents)}/hr supervisor - actual pay)
+              ({centsToDollars(coCostRates.cleanerHourlyRateCents)}/hr cleaner,{" "}
+              {centsToDollars(coCostRates.foremanHourlyRateCents)}/hr supervisor - actual pay)
             </span>
           </div>
         </div>

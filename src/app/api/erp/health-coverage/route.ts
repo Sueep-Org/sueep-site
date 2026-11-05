@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canSeePayroll } from "@/lib/erpAuth";
 import { HEALTH_SHARE_SETTING_KEY, parseHealthSharePct } from "@/lib/erp/healthCost";
+import { saveSetting } from "@/lib/erp/settings";
 
 /**
  * People on the company health plan (see lib/erp/healthCost.ts). Anyone who
- * can see Payroll can view; only an Admin can change anything.
+ * can see Payroll can view; Admin and Business Manager can change things.
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -22,9 +23,11 @@ function parseCents(v: unknown): number | null {
   return Number.isFinite(n) && n > 0 && n < 100_000 ? Math.round(n * 100) : null;
 }
 
+const canEditHealth = (role: string | undefined) => role === "ADMIN" || role === "BUSINESS_MANAGER";
+
 async function adminOnly() {
   const auth = await getErpAuth();
-  return auth?.role === "ADMIN" ? null : NextResponse.json({ error: "Only an Admin can change health insurance" }, { status: 403 });
+  return canEditHealth(auth?.role) ? null : NextResponse.json({ error: "Only Admin and Business Manager can change health insurance" }, { status: 403 });
 }
 
 async function readBody(req: Request): Promise<Record<string, unknown> | null> {
@@ -63,7 +66,7 @@ export async function GET() {
       endDate: r.endDate ? r.endDate.toISOString().slice(0, 10) : null,
     })),
     sharePct: parseHealthSharePct(share?.value),
-    canEdit: auth.role === "ADMIN",
+    canEdit: canEditHealth(auth.role),
   });
 }
 
@@ -157,15 +160,12 @@ export async function DELETE(req: Request) {
 
 /** Sueep's share of every premium: { sharePct } */
 export async function PUT(req: Request) {
-  const denied = await adminOnly();
-  if (denied) return denied;
+  const auth = await getErpAuth();
+  if (!auth || !canEditHealth(auth.role)) return NextResponse.json({ error: "Only Admin and Business Manager can change health insurance" }, { status: 403 });
   const b = await readBody(req);
   const pct = Number(b?.sharePct);
   if (!Number.isFinite(pct) || pct < 0 || pct > 100) return NextResponse.json({ error: "Share must be 0 to 100%" }, { status: 400 });
-  await prisma.appSetting.upsert({
-    where: { key: HEALTH_SHARE_SETTING_KEY },
-    update: { value: String(pct) },
-    create: { key: HEALTH_SHARE_SETTING_KEY, value: String(pct) },
-  });
+  const result = await saveSetting(HEALTH_SHARE_SETTING_KEY, pct, auth.email);
+  if ("error" in result) return NextResponse.json(result, { status: 400 });
   return NextResponse.json({ sharePct: pct });
 }

@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { loadAlertSettings } from "@/lib/erp/alertSettingsServer";
 import { prisma } from "@/lib/prisma";
 import type { CardBadge, CardRow, DashboardCardData } from "@/app/erp/(shell)/_dashboard/DashboardCard";
 import { todayEasternAsUtcMidnight, todayEasternKey, utcDateKey } from "./dates";
@@ -21,7 +22,6 @@ import { loadCoiAlerts } from "./coiAlerts";
  */
 
 /** Share of the estimate used before a job shows on Over budget / goes amber. */
-const BUDGET_WATCH_PCT = 80;
 const LOG_WINDOW_DAYS = 14;
 const DAY_MS = 86_400_000;
 
@@ -57,6 +57,7 @@ export type JobStatus = {
 /** Every active job's lights. Shared by the board and the Jobs tab's red count. */
 export const loadJobStatuses = cache(async (): Promise<JobStatus[]> => {
   const todayKey = todayEasternKey();
+  const { budgetWatchPct } = await loadAlertSettings();
   const todayStart = todayEasternAsUtcMidnight();
   const logWindowStart = new Date(todayStart.getTime() - (LOG_WINDOW_DAYS - 1) * DAY_MS);
   const laborSelect = { id: true, employeeId: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true } as const;
@@ -117,7 +118,7 @@ export const loadJobStatuses = cache(async (): Promise<JobStatus[]> => {
     if (endKey && endKey < todayKey) lights.push(light(`Past end date (${shortDate(endKey)})`, "red", "The end date has passed and the job is still open"));
 
     // Budget
-    const budget = budgetOf(p, actuals.get(p.id));
+    const budget = budgetOf(p, actuals.get(p.id), budgetWatchPct);
     if (budget?.light) lights.push(budget.light);
 
     // Logs
@@ -168,7 +169,8 @@ type ProjectForBudget = {
 };
 
 /** How much of the job's budget is used, and its light, or null when it has no budget to compare with. */
-function budgetOf(p: ProjectForBudget, a: { actualLaborCents: number; actualMaterialCents: number; actualTravelCents: number } | undefined): Budget | null {
+/** watchPct: Settings, Alerts. Past it the job goes amber, past 100% red. */
+function budgetOf(p: ProjectForBudget, a: { actualLaborCents: number; actualMaterialCents: number; actualTravelCents: number } | undefined, watchPct: number): Budget | null {
   const hours = p.laborEntries.reduce((s, e) => s + e.hours, 0);
 
   // Turnovers: same tiers and labels as the Supervisor dashboard's badges.
@@ -206,16 +208,16 @@ function budgetOf(p: ProjectForBudget, a: { actualLaborCents: number; actualMate
   return {
     pct,
     used,
-    light: pct >= 100 ? light("Over estimate", "red", `${used} used`) : pct >= BUDGET_WATCH_PCT ? light(`${Math.round(pct)}% of estimate`, "amber", `${used} used`) : null,
+    light: pct >= 100 ? light("Over estimate", "red", `${used} used`) : pct >= watchPct ? light(`${Math.round(pct)}% of estimate`, "amber", `${used} used`) : null,
   };
 }
 
 export async function loadJobStatusBoard(): Promise<DashboardCardData> {
-  const jobs = await loadJobStatuses();
+  const [jobs, { budgetWatchPct }] = await Promise.all([loadJobStatuses(), loadAlertSettings()]);
   const byEnd = (a: JobStatus, b: JobStatus) => (a.endKey ?? "9999").localeCompare(b.endKey ?? "9999");
   const problems = jobs.filter((j) => j.worst > 0).sort((a, b) => b.worst - a.worst || b.redCount - a.redCount || byEnd(a, b));
   const all = [...jobs].sort((a, b) => b.worst - a.worst || byEnd(a, b));
-  const overBudget = jobs.filter((j) => j.budget && j.budget.pct >= BUDGET_WATCH_PCT).sort((a, b) => b.budget!.pct - a.budget!.pct);
+  const overBudget = jobs.filter((j) => j.budget && j.budget.pct >= budgetWatchPct).sort((a, b) => b.budget!.pct - a.budget!.pct);
   const redJobs = jobs.filter((j) => j.redCount > 0).length;
 
   return {
@@ -228,7 +230,7 @@ export async function loadJobStatusBoard(): Promise<DashboardCardData> {
     sections: [
       { key: "problems", label: "Problems", rows: problems.map((j) => j.row), empty: "Every active job is on track.", alertCount: redJobs },
       { key: "all", label: "All", rows: all.map((j) => j.row), empty: "No active jobs.", footer: `${jobs.length} active job${jobs.length === 1 ? "" : "s"}`, href: "/erp/projects" },
-      { key: "over-budget", label: "Over budget", rows: overBudget.map((j) => j.row), empty: `No active job has used ${BUDGET_WATCH_PCT}% of its budget.` },
+      { key: "over-budget", label: "Over budget", rows: overBudget.map((j) => j.row), empty: `No active job has used ${budgetWatchPct}% of its budget.` },
     ],
   };
 }

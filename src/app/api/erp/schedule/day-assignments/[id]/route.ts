@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { dayKey } from "@/lib/erp/schedule";
 import { notifyProjectCrew, sendDayInvite, sendSubLeadInvite } from "@/lib/erp/scheduleInvites";
 import { isScheduleRemovalReason } from "@/lib/erp/scheduleRemovals";
+import { loadAppLists } from "@/lib/erp/appListsServer";
 import { getErpAuth } from "@/lib/erpAuth";
 import { syncScheduleSubPay } from "@/lib/erp/subPay";
 
@@ -26,7 +27,7 @@ export async function DELETE(req: Request, ctx: Ctx) {
   // ScheduleDayRemoval on the calendar; no body (older callers) or MISTAKE
   // just deletes like before.
   const body = (await req.json().catch(() => null)) as { reason?: unknown; note?: unknown } | null;
-  const reason = isScheduleRemovalReason(body?.reason) ? body.reason : null;
+  const reason = isScheduleRemovalReason(body?.reason, (await loadAppLists()).removalReasons) ? body.reason : null;
   const note = typeof body?.note === "string" && body.note.trim() ? body.note.trim().slice(0, 500) : null;
 
   const existing = await prisma.projectDayAssignment.findUnique({

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePricingSettings } from "@/app/components/PricingSettingsProvider";
 import { useRouter } from "next/navigation";
 import { TurnoverPricingPackageQuestions } from "@/app/erp/(shell)/turnover-requests/TurnoverPricingPackageQuestions";
 import { formatUnitDisplay } from "@/lib/erp/unitDisplay";
@@ -66,6 +67,7 @@ export function UnitScopeEditor({
   moveOutDate,
   moveInDate,
 }: Props) {
+  const { turnoverPackage } = usePricingSettings();
   const router = useRouter();
   const [turnoverRequestId, setTurnoverRequestId] = useState(initialTurnoverRequestId);
   const [unitNumberVal, setUnitNumberVal] = useState(unitNumber ?? "");
@@ -90,7 +92,7 @@ export function UnitScopeEditor({
   const [moveOutDateVal, setMoveOutDate] = useState(moveOutDate ?? "");
   const [moveInDateVal, setMoveInDate] = useState(moveInDate ?? "");
   const [commonAreaRates, setCommonAreaRates] = useState(() => {
-    const pkg = getTurnoverPricingPackage(buildingName, pricingPackage);
+    const pkg = getTurnoverPricingPackage(pricingPackage, turnoverPackage);
     const d = (v: number | undefined) => String(v ?? 0);
     return {
       fullClean: d(pkg.cleaningLayoutRates?.["common-area"]),
@@ -107,7 +109,7 @@ export function UnitScopeEditor({
   const [success, setSuccess] = useState(false);
 
   function buildCommonAreaPricingPackage() {
-    const pkg = getTurnoverPricingPackage(buildingName, pricingPackage);
+    const pkg = getTurnoverPricingPackage(pricingPackage, turnoverPackage);
     const n = (v: string) => Math.max(0, Math.round(Number(v.replace(/[$,\s]/g, "")) || 0));
     return {
       ...pkg,

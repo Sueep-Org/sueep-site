@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { dayKey } from "@/lib/erp/schedule";
 import { isScheduleRemovalReason } from "@/lib/erp/scheduleRemovals";
+import { loadAppLists } from "@/lib/erp/appListsServer";
 import { getErpAuth } from "@/lib/erpAuth";
 
 // Takes a change order off one calendar day with a reason, the CO version of
@@ -16,7 +17,7 @@ export async function POST(req: Request) {
     | null;
   const changeOrderId = typeof body?.changeOrderId === "string" ? body.changeOrderId : "";
   const k = typeof body?.dateKey === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.dateKey) ? body.dateKey : "";
-  if (!changeOrderId || !k || !isScheduleRemovalReason(body?.reason)) {
+  if (!changeOrderId || !k || !isScheduleRemovalReason(body?.reason, (await loadAppLists()).removalReasons)) {
     return NextResponse.json({ error: "changeOrderId, dateKey and reason are required" }, { status: 400 });
   }
   const reason = body.reason;

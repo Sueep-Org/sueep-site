@@ -83,14 +83,15 @@ export function FinanceDashboard() {
         </LI>
         <LI>
           <strong>Hourly payroll</strong> is priced exactly the way Payroll pays it: each log at the rate on it. If a worker
-          passes 40 hours in a week (counting all their projects and janitorial shifts), each hour past 40 also costs half
-          of that week&apos;s average hourly rate. It also includes labor typed on a project that has no labor logs, and hours
+          passes the weekly overtime hours (counting all their projects and janitorial shifts, 40 to start), each hour past
+          that also costs the overtime extra (50% to start) of that week&apos;s average hourly rate. Both are under Settings,
+          Payroll. It also includes labor typed on a project that has no labor logs, and hours
           added by hand on the Payroll page (<strong>+ Add hours</strong>, for hourly work not on any project), which count as
           overhead since they aren&apos;t part of a job.
         </LI>
         <LI>
           <strong>Janitorial hours</strong> use an admin&apos;s correction if there is one, otherwise clock-in time,
-          otherwise the scheduled shift, with a 30 minute unpaid break taken off shifts of 6+ hours.
+          otherwise the scheduled shift, with the unpaid break (Settings, Payroll) taken off long shifts.
         </LI>
         <LI>
           <strong>Salaries</strong>: each salaried employee&apos;s yearly salary divided by 12, every month from their hire
@@ -110,11 +111,11 @@ export function FinanceDashboard() {
         <LI>
           <strong>Payroll taxes</strong>: what Sueep pays on top of employees&apos; pay (Social Security, Medicare, federal
           and PA unemployment), worked out the same way as the Employer Tax column on Payroll and spread over each pay
-          period&apos;s days. Contractors and offshore workers have none. Rates are under Payroll, gear icon, Employer tax rates.
+          period&apos;s days. Contractors and offshore workers have none. Rates are under Settings, Payroll tab, Employer tax rates (also Payroll, gear icon).
         </LI>
         <LI>
           <strong>Health insurance</strong>: Sueep&apos;s share of each person&apos;s health plan premium, spread over the
-          days of each month. Set under Payroll, gear icon, Health insurance.
+          days of each month. Set under Settings, Payroll tab, Health insurance (also Payroll, gear icon).
         </LI>
         <LI>
           <strong>Overhead from QuickBooks</strong> (rent, vehicles, office and software, supplies not on jobs, marketing,

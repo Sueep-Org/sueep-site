@@ -1,15 +1,23 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-
-const KEY = "payrollAnchor";
-const DEFAULT = "2024-01-01";
+import { canSeePayroll, getErpAuth } from "@/lib/erpAuth";
+import { saveSetting } from "@/lib/erp/settings";
+import { PAYROLL_ANCHOR_KEY } from "@/lib/erp/settingsRegistry";
+import { DEFAULT_PAYROLL_ANCHOR } from "@/lib/erp/payPeriods";
 
 export async function GET() {
-  const setting = await prisma.appSetting.findUnique({ where: { key: KEY } });
-  return NextResponse.json({ anchor: setting?.value ?? DEFAULT });
+  const auth = await getErpAuth();
+  if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const setting = await prisma.appSetting.findUnique({ where: { key: PAYROLL_ANCHOR_KEY } });
+  return NextResponse.json({ anchor: setting?.value ?? DEFAULT_PAYROLL_ANCHOR });
 }
 
+/** Also on the Settings page. Kept for the Payroll page's pay period editor. */
 export async function PUT(req: Request) {
+  const auth = await getErpAuth();
+  if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!canSeePayroll(auth.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
   let body: { anchor?: unknown };
   try {
     body = (await req.json()) as { anchor?: unknown };
@@ -18,23 +26,7 @@ export async function PUT(req: Request) {
   }
 
   const anchor = String(body.anchor ?? "").trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(anchor)) {
-    return NextResponse.json({ error: "anchor must be YYYY-MM-DD" }, { status: 400 });
-  }
-
-  const d = new Date(`${anchor}T00:00:00Z`);
-  if (isNaN(d.getTime())) {
-    return NextResponse.json({ error: "Invalid date" }, { status: 400 });
-  }
-  if (d.getUTCDay() !== 1) {
-    return NextResponse.json({ error: "Anchor must be a Monday" }, { status: 400 });
-  }
-
-  await prisma.appSetting.upsert({
-    where: { key: KEY },
-    update: { value: anchor },
-    create: { key: KEY, value: anchor },
-  });
-
+  const result = await saveSetting(PAYROLL_ANCHOR_KEY, anchor, auth.email);
+  if ("error" in result) return NextResponse.json({ error: result.error === "Pick a Monday" ? "Anchor must be a Monday" : result.error }, { status: 400 });
   return NextResponse.json({ anchor });
 }

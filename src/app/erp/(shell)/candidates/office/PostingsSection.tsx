@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useAppLists } from "@/app/components/AppListsProvider";
+import { listLabel } from "@/lib/erp/appLists";
 import { useRouter } from "next/navigation";
 import { Button, InfoTip, inputClass, useConfirm, useToast } from "@/app/erp/components/ui";
-import { HIRING_SOURCES, formatCost, hiringSourceLabel } from "@/lib/erp/officeHiring";
+import { formatCost } from "@/lib/erp/officeHiring";
 
 export type PostingRow = {
   id: string;
@@ -16,6 +18,7 @@ export type PostingRow = {
 
 /** Job ads for one opening: where it was posted, what it cost, how many applied. */
 export function PostingsSection({ openingId, postings }: { openingId: string; postings: PostingRow[] }) {
+  const hiringSources = useAppLists().hiringSources;
   const router = useRouter();
   const toast = useToast();
   const confirm = useConfirm();
@@ -62,7 +65,7 @@ export function PostingsSection({ openingId, postings }: { openingId: string; po
   }
 
   async function onDelete(p: PostingRow) {
-    if (!(await confirm({ message: `Remove the ${hiringSourceLabel(p.source)} posting?` }))) return;
+    if (!(await confirm({ message: `Remove the ${listLabel(hiringSources, p.source)} posting?` }))) return;
     const res = await fetch(`/api/erp/job-openings/${openingId}/postings/${p.id}`, { method: "DELETE" }).catch(() => null);
     if (!res?.ok) {
       toast("Could not remove it", "error");
@@ -116,7 +119,7 @@ export function PostingsSection({ openingId, postings }: { openingId: string; po
                 </tr>
               ) : (
                 <tr key={p.id} className="border-t border-gray-100">
-                  <td className="px-4 py-2 text-gray-900">{hiringSourceLabel(p.source)}</td>
+                  <td className="px-4 py-2 text-gray-900">{listLabel(hiringSources, p.source)}</td>
                   <td className="px-4 py-2 text-gray-600">
                     {p.postedAt ? new Date(p.postedAt).toLocaleDateString("en-US", { timeZone: "UTC" }) : "-"}
                   </td>
@@ -175,11 +178,12 @@ function PostingForm({
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
   onCancel: () => void;
 }) {
+  const hiringSources = useAppLists().hiringSources;
   return (
     <form onSubmit={onSubmit} className="grid gap-2 px-4 py-3 sm:grid-cols-6">
       <select name="source" required defaultValue={initial?.source ?? ""} aria-label="Source" className={inputClass.xs}>
         <option value="" disabled>Source…</option>
-        {HIRING_SOURCES.map((s) => (
+        {hiringSources.filter((s) => !s.hidden).map((s) => (
           <option key={s.value} value={s.value}>{s.label}</option>
         ))}
       </select>

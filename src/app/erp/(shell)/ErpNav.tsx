@@ -605,6 +605,12 @@ const employmentGroupItems: NavItem[] = [
 
 const adminGroupItems: NavItem[] = [
   {
+    href: "/erp/settings",
+    label: "Settings",
+    roles: ["ADMIN", "BUSINESS_MANAGER"],
+    icon: CogIcon,
+  },
+  {
     href: "/erp/users",
     label: "User Management",
     roles: ["ADMIN"],

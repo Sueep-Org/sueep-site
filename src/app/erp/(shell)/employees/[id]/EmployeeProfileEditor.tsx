@@ -35,6 +35,8 @@ function describePay(r: PayHistoryRow): string {
 type Props = {
   employeeId: string;
   canSeePay?: boolean;
+  /** Hours in a work year today (Settings, Payroll), for the salary hourly cost note */
+  yearHours: number;
   /** Pay over time, newest first (see lib/erp/payRates.ts). */
   payHistory?: PayHistoryRow[];
   /** Their weekly janitorial shifts (read-only; edited on the calendar). */
@@ -74,7 +76,7 @@ type Props = {
   };
 };
 
-export function EmployeeProfileEditor({ employeeId, canSeePay = true, payHistory = [], janitorialSchedule = [], initial }: Props) {
+export function EmployeeProfileEditor({ employeeId, canSeePay = true, yearHours, payHistory = [], janitorialSchedule = [], initial }: Props) {
   const router = useRouter();
   const todayKey = todayEasternKey();
   const confirm = useConfirm();
@@ -322,8 +324,8 @@ export function EmployeeProfileEditor({ employeeId, canSeePay = true, payHistory
           )}
           {canSeePay && payMode === "SALARY" && (
             <p className="sm:col-span-2 -mt-2 text-xs text-gray-500">
-              Hours they log on jobs cost their salary divided by 2,080 (a 40 hour week, all year)
-              {initial.annualSalaryCents ? `, currently ${((initial.annualSalaryCents / 2080) / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })}/hr` : ""}.
+              Hours they log on jobs cost their salary divided by {yearHours.toLocaleString("en-US")} (hours in a work year, set under Settings)
+              {initial.annualSalaryCents ? `, currently ${((initial.annualSalaryCents / yearHours) / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })}/hr` : ""}.
             </p>
           )}
           {canSeePay && payHistory.length > 0 && (

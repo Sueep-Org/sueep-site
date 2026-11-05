@@ -155,7 +155,7 @@ export function HealthInsuranceModal({
             Health insurance
             <InfoTip text="Each person's full monthly premium from the Independence Blue Cross bill. Sueep pays its share; the rest comes out of their check through ADP. Sueep's share counts on Finance and on their Payroll row." />
           </h2>
-          {!canEdit && rows ? <p className="mt-1 text-xs text-gray-500">Only an Admin can change these.</p> : null}
+          {!canEdit && rows ? <p className="mt-1 text-xs text-gray-500">Only Admin and Business Manager can change these.</p> : null}
         </div>
 
         {!rows ? (

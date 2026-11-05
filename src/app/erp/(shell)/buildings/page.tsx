@@ -2,12 +2,13 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getTurnoverPricingPackage, TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
 import { NewBuildingForm } from "./NewBuildingForm";
+import { loadPricingSettings } from "@/lib/pricingSettingsServer";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export default async function BuildingsPage() {
-  const buildings = await prisma.building.findMany({ orderBy: { name: "asc" } });
+  const [buildings, { turnoverPackage }] = await Promise.all([prisma.building.findMany({ orderBy: { name: "asc" } }), loadPricingSettings()]);
 
   return (
     <div className="space-y-6">
@@ -55,7 +56,7 @@ export default async function BuildingsPage() {
                     <td className="px-4 py-3 text-gray-900">{building.pmPhone || "-"}</td>
                     <td className="px-4 py-3 text-gray-900">
                       {(() => {
-                        const pricingPackage = getTurnoverPricingPackage(building.name, building.pricingPackage);
+                        const pricingPackage = getTurnoverPricingPackage(building.pricingPackage, turnoverPackage);
 
                         return (
                           <>

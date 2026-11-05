@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { SERVICE_TYPE_OPTIONS } from "@/lib/erp/serviceTypes";
+import { useAppLists } from "@/app/components/AppListsProvider";
 import { Button } from "@/app/erp/components/ui";
 import { EMPTY_CONTACT, formatPhone, parseContactsText, type WorkOrderContact } from "@/lib/erp/workOrderContacts";
 
@@ -68,12 +68,12 @@ function getDetailLine(description: string | null, label: string) {
   );
 }
 
-function extractServiceType(description: string | null): string {
+function extractServiceType(description: string | null, serviceTypes: string[]): string {
   if (!description) return "";
   const fromLabel = getDetailLine(description, "Service Type");
   if (fromLabel) return fromLabel;
   const trimmed = description.trim();
-  if ((SERVICE_TYPE_OPTIONS as readonly string[]).includes(trimmed)) return trimmed;
+  if (serviceTypes.includes(trimmed)) return trimmed;
   const lines = trimmed.split(/\r?\n/);
   if (lines.length === 1 && !lines[0].includes(":")) return lines[0];
   return "";
@@ -130,10 +130,10 @@ function ContactRowsEditor({ rows, onChange }: { rows: WorkOrderContact[]; onCha
 }
 
 
-function resolveServiceTypeState(st: string | null): { selected: string; custom: string } {
+function resolveServiceTypeState(st: string | null, serviceTypes: string[]): { selected: string; custom: string } {
   const val = st ?? "";
   if (!val) return { selected: "", custom: "" };
-  if ((SERVICE_TYPE_OPTIONS as readonly string[]).includes(val)) return { selected: val, custom: "" };
+  if (serviceTypes.includes(val)) return { selected: val, custom: "" };
   return { selected: "__other__", custom: val };
 }
 
@@ -242,6 +242,9 @@ export function ProjectWorkOrderNotifier({
   employees,
   savedRecord,
 }: Props) {
+  const serviceTypeLists = useAppLists().serviceTypes;
+  const serviceTypes = serviceTypeLists.map((i) => i.label);
+  const shownServiceTypes = serviceTypeLists.filter((i) => !i.hidden).map((i) => i.label);
   const isRealEstate = segment === "REAL_ESTATE";
 
   // Derive fallback values from project fields (used when no saved record exists)
@@ -253,7 +256,7 @@ export function ProjectWorkOrderNotifier({
     return buildingAddress || getDetailLine(description, "Address");
   }, [description, isRealEstate, buildingAddress]);
 
-  const fallbackServiceType = useMemo(() => extractServiceType(description), [description]);
+  const fallbackServiceType = useMemo(() => extractServiceType(description, serviceTypes), [description, serviceTypes]);
 
   const fallbackContacts = useMemo((): WorkOrderContact[] => {
     if (isRealEstate) {
@@ -281,7 +284,7 @@ export function ProjectWorkOrderNotifier({
   const initNotes = [savedRecord?.notes ?? "", ...(fromText?.other ?? []).map((l) => `Contact note: ${l}`)].filter(Boolean).join("\n");
 
   const { selected: initSelected, custom: initCustom } = useMemo(
-    () => resolveServiceTypeState(initServiceType),
+    () => resolveServiceTypeState(initServiceType, serviceTypes),
     [initServiceType],
   );
 
@@ -456,7 +459,7 @@ export function ProjectWorkOrderNotifier({
               onChange={(e) => setServiceTypeSelected(e.target.value)}
             >
               <option value="">- None -</option>
-              {SERVICE_TYPE_OPTIONS.map((opt) => (
+              {shownServiceTypes.map((opt) => (
                 <option key={opt} value={opt}>{opt}</option>
               ))}
               <option value="__other__">Other…</option>

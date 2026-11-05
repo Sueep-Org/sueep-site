@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { usePricingSettings } from "@/app/components/PricingSettingsProvider";
 import { useRouter } from "next/navigation";
 import {
   CUSTOM_LINE_ITEMS_ENABLED,
@@ -12,7 +13,7 @@ import {
   type CustomLineItemType,
   type TurnoverPricingPackage,
 } from "@/lib/turnoverPricingPackages";
-import { Button } from "@/app/erp/components/ui";
+import { Button, useConfirm } from "@/app/erp/components/ui";
 
 type CustomLineItemDraft = {
   id: string;
@@ -38,21 +39,24 @@ type Props = {
   /** Omit for a building that doesn't exist yet (New Project form): there is
    * no Save button and every change goes to onChange instead. */
   buildingId?: string;
-  buildingName: string;
   initialPackage: unknown;
   canEdit: boolean;
   onChange?: (pricingPackage: TurnoverPricingPackage) => void;
+  /** Settings page: edits the standard prices themselves. saved = changed from the built-in ones. */
+  standard?: { saved: boolean };
 };
 
 function dollars(value: number | undefined) {
   return String(value ?? 0);
 }
 
-export function BuildingPricingPackageEditor({ buildingId, buildingName, initialPackage, canEdit, onChange }: Props) {
+export function BuildingPricingPackageEditor({ buildingId, initialPackage, canEdit, onChange, standard }: Props) {
   const router = useRouter();
+  const confirm = useConfirm();
+  const { turnoverPackage } = usePricingSettings();
   const initial = useMemo(
-    () => getTurnoverPricingPackage(buildingName, initialPackage),
-    [buildingName, initialPackage]
+    () => getTurnoverPricingPackage(initialPackage, turnoverPackage),
+    [initialPackage, turnoverPackage]
   );
   const [label, setLabel] = useState(initial.label);
   const [cleaning, setCleaning] = useState<Record<string, string>>(() =>
@@ -151,22 +155,38 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
     setCustomLineItems((current) => current.filter((item) => item.id !== id));
   }
 
-  async function savePackage() {
+  async function savePackage(reset = false) {
+    if (reset && !(await confirm({ message: "Put the standard prices back to the built-in ones? Your changes here will be lost.", confirmLabel: "Reset" }))) return;
     setError("");
     setMessage("");
     setLoading(true);
     try {
-      const res = await fetch(`/api/erp/buildings/${buildingId}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ pricingPackage: packagePayload() }),
-      });
+      const res = standard
+        ? await fetch("/api/erp/settings/packages/turnover", {
+            method: reset ? "DELETE" : "PUT",
+            headers: { "content-type": "application/json" },
+            body: reset ? undefined : JSON.stringify({ value: packagePayload() }),
+          })
+        : await fetch(`/api/erp/buildings/${buildingId}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ pricingPackage: packagePayload() }),
+          });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(data.error || "Failed to save pricing package");
         return;
       }
-      setMessage("Pricing package saved. New turnover requests will use these rates.");
+      if (reset) {
+        // The built-in prices come back with the page refresh
+        window.location.reload();
+        return;
+      }
+      setMessage(
+        standard
+          ? "Standard prices saved. Buildings without their own prices use them for new turnovers."
+          : "Pricing package saved. New turnover requests will use these rates.",
+      );
       router.refresh();
     } catch {
       setError("Network error");
@@ -179,12 +199,18 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
     <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-gray-900">{buildingId ? "Pricing package" : "Prices for this building"}</h2>
+          <h2 className="text-sm font-semibold text-gray-900">
+            {standard ? "Standard turnover prices" : buildingId ? "Pricing package" : "Prices for this building"}
+          </h2>
           <p className="mt-1 text-xs text-gray-500">
-            {buildingId ? "Editable by Admin, Project Manager, or Estimation." : "Standard prices are filled in. Change any that are different for this building."}
+            {standard
+              ? "Used by buildings without their own prices, and filled in when a new building is added."
+              : buildingId
+                ? "Editable by Admin, Project Manager, or Estimation."
+                : "Standard prices are filled in. Change any that are different for this building."}
           </p>
         </div>
-        {buildingId ? (
+        {buildingId || standard ? (
           <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${canEdit ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>
             {canEdit ? "Editable" : "View only"}
           </span>
@@ -370,12 +396,17 @@ export function BuildingPricingPackageEditor({ buildingId, buildingName, initial
       {error ? <p className="mt-3 text-xs text-red-600" role="alert">{error}</p> : null}
       {message ? <p className="mt-3 text-xs text-emerald-700" role="status">{message}</p> : null}
 
-      {buildingId ? (
-        <Button size="md" className="mt-4" type="button"
-          onClick={savePackage}
-          disabled={!canEdit || loading}>
-          {loading ? "Saving..." : "Save pricing package"}
-        </Button>
+      {buildingId || standard ? (
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button size="md" type="button" onClick={() => savePackage()} disabled={!canEdit || loading}>
+            {loading ? "Saving..." : standard ? "Save standard prices" : "Save pricing package"}
+          </Button>
+          {standard?.saved && (
+            <Button variant="secondary" size="md" type="button" onClick={() => savePackage(true)} disabled={!canEdit || loading}>
+              Reset to built-in prices
+            </Button>
+          )}
+        </div>
       ) : null}
     </section>
   );
