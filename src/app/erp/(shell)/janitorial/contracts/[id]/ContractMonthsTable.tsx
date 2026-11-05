@@ -14,6 +14,7 @@ type Month = {
   periodStart: string;
   amountCents: number;
   billingStatus: string;
+  voidReason: string | null;
   commissionPaid: boolean;
   charges: Charge[];
   /** HubSpot invoices linked to this month on the building's Invoices & Quotes tab. */
@@ -298,7 +299,10 @@ export function ContractMonthsTable({
                       );
                     })()}
                     <td className="px-4 py-3">
-                      <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${billingBadgeCls(m.billingStatus)}`}>
+                      <span
+                        title={m.billingStatus === "VOIDED" ? `Voided: ${m.voidReason || "no reason saved"}` : undefined}
+                        className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${billingBadgeCls(m.billingStatus)}`}
+                      >
                         {PERIOD_BILLING_OPTIONS.find((o) => o.value === m.billingStatus)?.label ?? m.billingStatus}
                       </span>
                     </td>

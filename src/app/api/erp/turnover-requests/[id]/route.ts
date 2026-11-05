@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
 import { TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
 import { syncProjectBillingFromRequest } from "@/lib/sovSync";
+import { BILLING_STATUSES, voidReasonFor, type BillingStatus } from "@/lib/erp/billingStatus";
 import { matchUnitName } from "@/lib/erp/unitNames";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -134,9 +135,13 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
 
   if (body.billingStatus !== undefined) {
-    const VALID_BILLING = ["NOT_BILLED", "BILLED", "PAID"];
     const val = String(body.billingStatus).toUpperCase();
-    if (VALID_BILLING.includes(val)) data.billingStatus = val;
+    if ((BILLING_STATUSES as readonly string[]).includes(val)) {
+      const v = voidReasonFor(val as BillingStatus, body.voidReason);
+      if ("error" in v) return NextResponse.json({ error: v.error }, { status: 400 });
+      data.billingStatus = val;
+      data.voidReason = v.voidReason;
+    }
   }
 
   let pricingBuildingName = existing.building.name;
@@ -210,7 +215,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     });
 
     if (data.billingStatus) {
-      await syncProjectBillingFromRequest(id, String(data.billingStatus));
+      await syncProjectBillingFromRequest(id, String(data.billingStatus), null, data.voidReason as string | null);
     }
 
     return NextResponse.json(request);

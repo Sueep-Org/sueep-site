@@ -420,6 +420,14 @@ export const NOTIFICATIONS = {
     // An approved invoice must reach the client, so it can't be switched off.
     alwaysOn: true,
   }),
+  INVOICE_SENT_BACK: def({
+    label: "Invoice sent back",
+    group: "Billing",
+    when: "Someone marks an invoice uploaded to a client portal (Procore, Coupa...) as sent back by the client",
+    automatic: "The person who uploaded it",
+    toMode: "also",
+    ccEditable: true,
+  }),
 
   COI_REQUEST_RECEIVED: def({
     label: "COI request received",

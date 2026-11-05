@@ -61,10 +61,10 @@ export function coiWarningLabel(s: ProjectCoiStatus | null): string | null {
 }
 
 /**
- * Projects whose COIs still matter: not archived and not fully paid, since
+ * Projects whose COIs still matter: not archived, not fully paid or voided, since
  * a GC can hold payment on an expired COI right up until the last invoice.
  */
 export const COI_WATCH_PROJECT_WHERE = {
   status: { not: "ARCHIVED" },
-  OR: [{ billingStatus: null }, { billingStatus: { notIn: ["PAID", "INVOICE_PAID"] } }],
+  OR: [{ billingStatus: null }, { billingStatus: { notIn: ["PAID", "INVOICE_PAID", "VOIDED"] } }],
 };

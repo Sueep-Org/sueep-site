@@ -6,7 +6,7 @@ export function SendingInvoices() {
       <H2>What this covers</H2>
       <P>
         What happens to an invoice after you click Approve on Ready to send: who it is emailed to, how portal invoices are
-        handled, and the <strong>Needs sending</strong> tab. Drafting and approving are in{" "}
+        uploaded and tracked (proof, portal status, sent back), and the <strong>Needs sending</strong> tab. Drafting and approving are in{" "}
         <A href="/erp/help/billing/ready-to-send">Ready to Send: Drafting and Approving Invoices</A>. Admins and the Business
         Manager use these pages.
       </P>
@@ -35,7 +35,7 @@ export function SendingInvoices() {
             <TD>
               Not emailed. Goes on <strong>Needs sending</strong> marked for upload, with the portal link, PDF and amounts.
             </TD>
-            <TD>Upload it to the portal, then click Mark uploaded.</TD>
+            <TD>Upload it to the portal, then click Mark uploaded with the portal number or a screenshot.</TD>
           </tr>
           <tr>
             <TD>Other, or nothing set</TD>
@@ -63,7 +63,8 @@ export function SendingInvoices() {
         </LI>
         <LI>Replies go to whoever approved it.</LI>
         <LI>
-          It is logged in the Email Log, and the invoice on the Invoices page says &quot;Emailed to ...&quot; with the date.
+          It is logged in the Email Log, and the invoice&apos;s History on the Invoices page shows &quot;Emailed to ...&quot;
+          with the date.
         </LI>
         <LI>
           The ERP sends at most 100 emails a day, counting each To and Cc address. Past that, the invoice goes on Needs sending
@@ -120,10 +121,18 @@ export function SendingInvoices() {
       <H2>The Needs sending tab</H2>
       <P>
         Every approved invoice that the ERP couldn&apos;t deliver by itself waits here until someone finishes it, so nothing
-        is forgotten. The count also shows on the dashboard&apos;s Money tab. Each row shows the invoice number, client,
-        total and the reason. Click a row to see each line&apos;s amount and the portal login to use (saved on Company Info).
+        is forgotten, along with portal invoices the client sent back. The count also shows on the dashboard&apos;s Money
+        tab (Needs action, Ready to send). Each row shows the invoice number, client, total and the reason. Sent-back
+        invoices come first, then missed cutoffs, then cutoffs coming up, then the rest. Click a row to see each line&apos;s amount and the portal login to use (saved on Company Info).
         Its ... menu has the portal link (<strong>Open Procore</strong> and so on), <strong>Invoice PDF</strong>,{" "}
         <strong>Open in QuickBooks</strong>, the <strong>Client pay link</strong> and the <strong>Company page</strong>.
+      </P>
+      <P>
+        <strong>Cutoff warnings:</strong> when the job or its client company has a billing cutoff day, an invoice still here
+        within 5 days of it gets an amber &quot;Cutoff Nov 20, 3 days left&quot;, and a red &quot;Missed cutoff Nov 20&quot;
+        once it passes. The cutoff that counts is the first one on or after the day the invoice was approved. The same
+        warnings show on the dashboard&apos;s Money tab under Needs action, Ready to send. Set the cutoff day on the company
+        page, or on the job&apos;s Overview when it differs.
       </P>
       <H3>Portal uploads</H3>
       <Steps>
@@ -132,13 +141,44 @@ export function SendingInvoices() {
         </Step>
         <Step n={2} title="Upload the PDF">
           Download <strong>Invoice PDF</strong>. Type the amounts the portal asks for: click any amount in the open row to copy
-          it. Use the same invoice number (INV-...) so the payment can be matched later.
+          it. Use the same invoice number (INV-...) so the payment can be matched later. For a post-construction job, the open
+          row shows the whole job as a <strong>Pay app</strong>: every SOV line and change order in SOV order with Scheduled,
+          Previous (earlier invoices), This period (this invoice), To date, % and Balance, the way Procore asks for them.
+          Lines this invoice bills are shaded. If This period doesn&apos;t add up to the invoice, a note says so (part of the
+          invoice isn&apos;t linked to an SOV line).
         </Step>
-        <Step n={3} title="Mark uploaded">
-          The row leaves the list, and the invoice on the Invoices page says &quot;Uploaded or sent by hand&quot; with the
-          date.
+        <Step n={3} title="Take a screenshot">
+          Once it&apos;s submitted, screenshot the invoice in the portal or its confirmation, and note the number the portal
+          gave it (for Procore, the pay app or invoice number).
+        </Step>
+        <Step n={4} title="Mark uploaded">
+          Add the portal number, the screenshot or both (one is needed), and a note if useful. The row leaves the list, and
+          the invoice&apos;s History on the Invoices page shows who uploaded it, where, when and the portal number, with a{" "}
+          <strong>Proof</strong> link to the screenshot. If the client says they never got it, open the invoice there.
         </Step>
       </Steps>
+      <H3>After the upload: portal status</H3>
+      <P>
+        An uploaded invoice starts as <strong>Submitted</strong>. When you check the portal, open the invoice on the{" "}
+        <A href="/erp/invoices">Invoices</A> page and click what the portal shows: <strong>Under review</strong>,{" "}
+        <strong>Approved</strong> or <strong>Sent back</strong>. The invoice row shows it under the paid status (for example
+        &quot;Procore: Under review&quot;), and the Filter button&apos;s <strong>In portal, not approved</strong> lists every
+        unpaid upload the client hasn&apos;t approved yet. Paid still comes from QuickBooks.
+      </P>
+      <UL>
+        <LI>
+          <strong>Sent back</strong> asks why. The person who uploaded it gets an email (also in their inbox), and the invoice
+          goes back on Needs sending at the top, in red with the reason.
+        </LI>
+        <LI>
+          Fix it in the portal, then click <strong>Resubmit</strong>. Add the new portal number or a screenshot (one is
+          needed). It becomes <strong>Resubmitted</strong> and leaves the list.
+        </LI>
+        <LI>
+          Every change is saved with who made it and when, and shows in the invoice&apos;s History. Admins can add more people
+          to the &quot;Invoice sent back&quot; email on the <strong>Notifications</strong> page.
+        </LI>
+      </UL>
       <H3>Emails that couldn&apos;t be sent</H3>
       <P>The reason says what went wrong:</P>
       <UL>
@@ -157,7 +197,8 @@ export function SendingInvoices() {
         </LI>
       </UL>
       <P>
-        You can always send it yourself (download the PDF from the ... menu) and click <strong>Mark sent</strong>.
+        You can always send it yourself (download the PDF from the ... menu) and click <strong>Mark sent</strong>. Mark sent
+        can also take a file (the email you sent, a mailing receipt) and a note; neither is required.
       </P>
     </>
   );

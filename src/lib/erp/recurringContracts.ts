@@ -38,7 +38,7 @@ export function parseBillingDay(value: unknown): number | null {
   return Number.isInteger(n) && n >= 1 && n <= 28 ? n : null;
 }
 
-export const PERIOD_BILLING_STATUSES = ["NOT_BILLED", "BILLED", "PAID"] as const;
+export const PERIOD_BILLING_STATUSES = ["NOT_BILLED", "BILLED", "PAID", "VOIDED"] as const;
 
 /** A period's full billed total: the flat amount plus any one-off extras. */
 export function periodTotalCents(period: { amountCents: number; charges: { amountCents: number }[] }): number {

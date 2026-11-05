@@ -9,7 +9,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { isPaidStatus } from "./billingStatus";
+import { isOwedStatus } from "./billingStatus";
 import { todayEasternKey, utcDateKey } from "./dates";
 import { detectLienState, lienDeadline, lienReadiness, parseLienDecision, parseLienManualSteps, parseLienRole, parseLienState } from "./lienDeadline";
 import { loadLienWatch, type LienWatchRow, type LienWatchUnit } from "./lienWatch";
@@ -46,10 +46,10 @@ export async function loadBuildingLienWatch(opts: { buildingId?: string } = {}):
   for (const t of turns) {
     const tr = t.turnoverRequest!;
     let unpaid = 0;
-    if (t.status === "COMPLETE" && !isPaidStatus(tr.billingStatus ?? t.billingStatus)) {
+    if (t.status === "COMPLETE" && isOwedStatus(tr.billingStatus ?? t.billingStatus)) {
       unpaid += tr.approvedPriceCents ?? tr.priceCents ?? t.contractValueCents ?? 0;
     }
-    for (const co of t.changeOrders) if (!isPaidStatus(co.billingStatus)) unpaid += co.contractValueCents ?? 0;
+    for (const co of t.changeOrders) if (isOwedStatus(co.billingStatus)) unpaid += co.contractValueCents ?? 0;
     if (unpaid <= 0) continue;
     // The completed date is a moment in time, read as the Eastern day, same as Billing.
     const completedKey =

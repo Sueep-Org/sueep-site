@@ -199,13 +199,26 @@ function BillingCard({ parts, future }: { parts: { label: string; cents: number;
  * change orders, or only costs (work logged, nothing finished yet). */
 function jobIncludes(j: FinanceJob): string {
   if (!j.parts) return "contract month";
-  const { contract, sovLines, changeOrders } = j.parts;
+  const { contract, sovLines, changeOrders, voided } = j.parts;
   const bits = [
     contract && "contract",
     sovLines > 0 && `${sovLines} SOV line${sovLines === 1 ? "" : "s"}`,
     changeOrders > 0 && `${changeOrders} change order${changeOrders === 1 ? "" : "s"}`,
+    voided > 0 && `${voided} voided`,
   ].filter(Boolean);
   return bits.length ? bits.join(", ") : "costs only, nothing finished yet";
+}
+
+/** "32% margin": profit over revenue for all of a category's work added up,
+ * so bigger jobs weigh more. Red when it lost money. */
+function Margin({ revenueCents, costCents }: { revenueCents: number; costCents: number }) {
+  const margin = pct(revenueCents - costCents, revenueCents);
+  if (margin == null) return null;
+  return (
+    <span className={margin < 0 ? "text-red-600" : "text-gray-600"} title={`Profit ${money(revenueCents - costCents)} on ${money(revenueCents)}`}>
+      {margin}% margin
+    </span>
+  );
 }
 
 /** The jobs behind one category's revenue, hidden behind a small "i". */
@@ -225,12 +238,15 @@ function CategoryJobs({ label, jobs }: { label: string; jobs: FinanceJob[] }) {
       m.parts.contract ||= j.parts.contract;
       m.parts.sovLines += j.parts.sovLines;
       m.parts.changeOrders += j.parts.changeOrders;
+      m.parts.voided += j.parts.voided;
     }
   }
   if (merged.size === 0) return null;
   const sorted = [...merged.values()].sort((a, b) => b.revenueCents - a.revenueCents || b.costCents - a.costCents);
   return (
-    <details className="relative">
+    // Shared name: opening one category's list closes the others, so two
+    // lists never overlap and look like one.
+    <details name="finance-category-jobs" className="relative">
       <summary
         className="flex h-4 w-4 cursor-pointer list-none items-center justify-center rounded-full bg-gray-100 text-[10px] font-semibold text-gray-500 hover:bg-gray-200 hover:text-gray-800"
         title={`See the ${sorted.length} job${sorted.length === 1 ? "" : "s"} in ${label}`}
@@ -707,6 +723,7 @@ export async function FinanceTab({ period: periodParam, by }: { period: string |
               const profit = seg.revenueCents - seg.costCents;
               const unit = s === "JANITORIAL_CONTRACTS" ? "contract month" : "job";
               const contractCents = seg.revenueCents - seg.changeOrderCents;
+              const contractCostCents = seg.costCents - seg.changeOrderCostCents;
               const share = total.revenueCents > 0 ? (seg.revenueCents / total.revenueCents) * 100 : 0;
               return (
                 <li key={s}>
@@ -715,7 +732,8 @@ export async function FinanceTab({ period: periodParam, by }: { period: string |
                       className="text-gray-700"
                       title={[
                         `${money(seg.revenueCents)} from ${seg.jobs} ${unit}${seg.jobs === 1 ? "" : "s"}`,
-                        seg.changeOrderCents > 0 && `Contract ${money(contractCents)}, change orders ${money(seg.changeOrderCents)}`,
+                        seg.changeOrderCents > 0 && `Contract ${money(contractCents)}, job costs ${money(contractCostCents)} (${pctLabel(pct(contractCents - contractCostCents, contractCents))} margin)`,
+                        seg.changeOrderCents > 0 && `Change orders ${money(seg.changeOrderCents)}, job costs ${money(seg.changeOrderCostCents)} (${pctLabel(pct(seg.changeOrderCents - seg.changeOrderCostCents, seg.changeOrderCents))} margin)`,
                         `Job costs ${money(seg.costCents)}, profit ${money(profit)} (${pctLabel(pct(profit, seg.revenueCents))} margin)`,
                       ].filter(Boolean).join("\n")}
                     >
@@ -733,9 +751,15 @@ export async function FinanceTab({ period: periodParam, by }: { period: string |
                       {seg.changeOrderCents > 0 && <div className="h-full rounded-full" style={{ flexGrow: seg.changeOrderCents, backgroundColor: CHANGE_ORDER_COLOR }} />}
                     </div>
                   </div>
-                  {seg.changeOrderCents > 0 && (
+                  {/* Contract and change orders each with their own margin. */}
+                  {seg.changeOrderCents > 0 ? (
                     <p className="mt-1 text-xs tabular-nums text-gray-400">
-                      {short(contractCents)} contract, {short(seg.changeOrderCents)} change orders
+                      {short(contractCents)} contract <Margin revenueCents={contractCents} costCents={contractCostCents} />,{" "}
+                      {short(seg.changeOrderCents)} change orders <Margin revenueCents={seg.changeOrderCents} costCents={seg.changeOrderCostCents} />
+                    </p>
+                  ) : seg.revenueCents > 0 && (
+                    <p className="mt-1 text-xs tabular-nums text-gray-400">
+                      <Margin revenueCents={seg.revenueCents} costCents={seg.costCents} />
                     </p>
                   )}
                   {s === "JANITORIAL_CONTRACTS" && summary.activeContracts > 0 && (

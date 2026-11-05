@@ -25,7 +25,8 @@ export function HowInvoicingWorks() {
             <TD>ERP</TD>
             <TD>
               Knows what work is finished and what it costs. Drafts invoices, lets you check and edit them, creates them in
-              QuickBooks on Approve, emails them to the client or lists them for a portal upload, and tracks billed and paid.
+              QuickBooks on Approve, emails them to the client or lists them for a portal upload, and tracks everything after:
+              proof of upload, portal status, follow-ups, short pays, billed and paid.
             </TD>
           </tr>
           <tr>
@@ -66,11 +67,18 @@ export function HowInvoicingWorks() {
         </Step>
         <Step n={5} title="The client gets it">
           Email clients are emailed right away with the PDF. Portal clients (Procore, Coupa, vendor portals) go on{" "}
-          <strong>Needs sending</strong> so someone uploads the PDF to the portal.
+          <strong>Needs sending</strong> so someone uploads the PDF to the portal and clicks <strong>Mark uploaded</strong> with
+          the portal number or a screenshot as proof.
         </Step>
-        <Step n={6} title="The client pays">
+        <Step n={6} title="The portal reviews it (portal clients)">
+          Whoever checks the portal sets the invoice to <strong>Under review</strong>, <strong>Approved</strong> or{" "}
+          <strong>Sent back</strong> on the Invoices page. Sent back goes to the person who uploaded it to fix and{" "}
+          <strong>Resubmit</strong>.
+        </Step>
+        <Step n={7} title="The client pays">
           The payment is recorded in QuickBooks with <strong>Receive payment</strong>, applied to that invoice. The next morning
-          the ERP reads it and marks the work <strong>Paid</strong> with the payment date.
+          the ERP reads it and marks the work <strong>Paid</strong> with the payment date. If it&apos;s late, log each follow-up
+          on the invoice; if it&apos;s paid short, say why (retainage, dispute, back charge).
         </Step>
       </Steps>
 
@@ -104,14 +112,20 @@ export function HowInvoicingWorks() {
           </tr>
           <tr>
             <TD>Ready to send: Needs sending</TD>
-            <TD>Finish invoices that could not be emailed: portal uploads, missing addresses, failed emails.</TD>
+            <TD>
+              Finish invoices that could not be emailed: portal uploads (with proof), missing addresses, failed emails, and
+              portal invoices sent back to resubmit. Warns before a client&apos;s billing cutoff.
+            </TD>
             <TD>
               <A href="/erp/help/billing/sending-invoices">Sending Invoices: Email, Portals and Needs Sending</A>
             </TD>
           </tr>
           <tr>
             <TD>Invoices</TD>
-            <TD>Every invoice with its balance, payments and PDF. Find unpaid and overdue invoices. Fix mismatches.</TD>
+            <TD>
+              Every invoice with its balance, payments, PDF and full History. Set portal status, log follow-ups, explain short
+              pays. Find unpaid, overdue and missed-promise invoices. Fix mismatches.
+            </TD>
             <TD>
               <A href="/erp/help/billing/invoices-and-payments">Invoices Page and Getting Paid</A>
             </TD>
@@ -148,13 +162,17 @@ export function HowInvoicingWorks() {
           <tr>
             <TD>Business Manager</TD>
             <TD>
-              Ready to send (draft, edit, approve, discard, Needs sending), the QuickBooks page and Invoice setup, editing
-              company billing settings, the Overdue tab.
+              Ready to send (draft, edit, approve, discard, Needs sending, mark uploaded, resubmit), the QuickBooks page and
+              Invoice setup, editing company billing settings, the Overdue tab. On the Invoices page: set portal status, log
+              follow-ups and explain short pays.
             </TD>
           </tr>
           <tr>
             <TD>Project Manager</TD>
-            <TD>Project Billing and the Invoices page. Can change billing status by hand. Cannot approve invoices.</TD>
+            <TD>
+              Project Billing and the Invoices page, including each invoice&apos;s History. Can change billing status by hand.
+              Cannot approve invoices, change portal status, log follow-ups or explain short pays.
+            </TD>
           </tr>
           <tr>
             <TD>Sales</TD>
@@ -183,7 +201,10 @@ export function HowInvoicingWorks() {
       <H3>On the invoice (Invoices page)</H3>
       <UL>
         <LI>
-          <strong>Unpaid:</strong> money still owed, not yet past the due date.
+          <strong>Open:</strong> nothing paid yet, not yet past the due date.
+        </LI>
+        <LI>
+          <strong>Partly paid:</strong> some of it paid, not yet past the due date.
         </LI>
         <LI>
           <strong>Overdue:</strong> money still owed after the due date. The pill shows how many days late.

@@ -441,7 +441,7 @@ export async function markItemsBilled(
 ) {
   for (const u of units) {
     if (!u.turnoverRequestId) continue;
-    const { count } = await prisma.turnoverRequest.updateMany({ where: { id: u.turnoverRequestId, billingStatus: { notIn: ["BILLED", "PAID"] } }, data: { billingStatus: "BILLED" } });
+    const { count } = await prisma.turnoverRequest.updateMany({ where: { id: u.turnoverRequestId, billingStatus: { notIn: ["BILLED", "PAID", "VOIDED"] } }, data: { billingStatus: "BILLED" } });
     if (count) await syncProjectBillingFromRequest(u.turnoverRequestId, "BILLED");
   }
   const sovProjects = new Set<string>();

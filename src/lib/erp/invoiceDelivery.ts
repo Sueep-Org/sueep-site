@@ -18,12 +18,14 @@
  * Approve only emails the approver a test copy (emailSandboxTest).
  */
 import { prisma } from "@/lib/prisma";
-import { escapeHtml, sendEmail } from "@/lib/email";
+import { buildInvoiceSentBackEmail, escapeHtml, sendEmail } from "@/lib/email";
 import { DAILY_EMAIL_LIMIT, loadEmailQuota } from "./emailQuota";
 import { centsToDollars } from "./money";
 import { BILLING_METHOD_LABELS, PORTAL_METHODS, type BillingMethod } from "./clientCompanies";
 import { loadBuildingInvoiceDestination, loadProjectInvoiceDestination, withDraftRecipients, type DraftRecipients, type InvoiceDestination } from "./invoiceDestination";
 import { qboGetPdf } from "./qboClient";
+import { namesByEmail } from "./janitorialQualityChecks";
+import { PORTAL_PICKABLE, isPortalStatus, type PortalStatus } from "./portalStatus";
 
 export type DeliveryPlan =
   | { kind: "EMAIL"; to: string[]; cc: string[] }
@@ -240,13 +242,114 @@ export async function emailAgain(deliveryId: string, email: string, lines: Invoi
   return { ok: true, note: `Emailed to ${plan.to.join(", ")}.` };
 }
 
-/** Uploaded to the portal, or sent some other way by hand. */
-export async function markDeliveryDone(deliveryId: string, email: string): Promise<boolean> {
-  const { count } = await prisma.invoiceDelivery.updateMany({
-    where: { id: deliveryId, status: { in: ["NEEDS_UPLOAD", "NEEDS_SENDING"] } },
-    data: { status: "DONE", doneAt: new Date(), doneByEmail: email },
+export type DeliveryDoneDetails = {
+  portalReference: string | null;
+  note: string | null;
+  proof: { filename: string; mimeType: string; data: Buffer } | null;
+};
+
+/** Uploaded to the portal, or sent some other way by hand, with the portal's number, a note and a proof file. */
+export async function markDeliveryDone(deliveryId: string, email: string, details: DeliveryDoneDetails): Promise<{ ok: true } | { error: string }> {
+  const d = await prisma.invoiceDelivery.findUnique({ where: { id: deliveryId }, select: { status: true } });
+  if (!d || (d.status !== "NEEDS_UPLOAD" && d.status !== "NEEDS_SENDING")) return { error: "This one isn't waiting anymore." };
+  if (d.status === "NEEDS_UPLOAD" && !details.portalReference && !details.proof) {
+    return { error: "Add the portal's number or a screenshot, so there's proof it was uploaded." };
+  }
+  const uploaded = d.status === "NEEDS_UPLOAD";
+  const now = new Date();
+  const done = await prisma.$transaction(async (tx) => {
+    const { count } = await tx.invoiceDelivery.updateMany({
+      where: { id: deliveryId, status: d.status },
+      data: {
+        status: "DONE",
+        doneAs: uploaded ? "UPLOADED" : "SENT",
+        doneAt: now,
+        doneByEmail: email,
+        portalReference: details.portalReference,
+        doneNote: details.note,
+        ...(uploaded ? { portalStatus: "SUBMITTED", portalStatusAt: now } : {}),
+      },
+    });
+    if (count !== 1) return false;
+    if (details.proof) await tx.invoiceDeliveryProof.create({ data: { deliveryId, ...details.proof, uploadedByEmail: email } });
+    if (uploaded) {
+      await tx.invoiceDeliveryStatusChange.create({
+        data: { deliveryId, toStatus: "SUBMITTED", note: details.note, portalReference: details.portalReference, byEmail: email },
+      });
+    }
+    return true;
   });
-  return count === 1;
+  return done ? { ok: true } : { error: "This one isn't waiting anymore." };
+}
+
+/**
+ * Under review, Approved or Sent back, picked on the Invoices page after
+ * checking the portal. Sent back needs the reason and emails the uploader,
+ * and the invoice goes back on Ready to send to resubmit.
+ */
+export async function setPortalStatus(deliveryId: string, email: string, status: unknown, note: string | null): Promise<{ ok: true } | { error: string }> {
+  if (!isPortalStatus(status) || !PORTAL_PICKABLE.includes(status)) return { error: "Pick Under review, Approved or Sent back." };
+  if (status === "SENT_BACK" && !note) return { error: "Say why the client sent it back." };
+  const d = await prisma.invoiceDelivery.findUnique({
+    where: { id: deliveryId },
+    select: { doneAs: true, portalStatus: true, invoiceNumber: true, title: true, clientName: true, method: true, doneByEmail: true },
+  });
+  if (!d || d.doneAs !== "UPLOADED") return { error: "Only invoices uploaded to a portal have a portal status." };
+  if (d.portalStatus === status) return { ok: true };
+  const now = new Date();
+  await prisma.$transaction([
+    prisma.invoiceDelivery.update({
+      where: { id: deliveryId },
+      data: { portalStatus: status, portalStatusAt: now, sentBackReason: status === "SENT_BACK" ? note : null },
+    }),
+    prisma.invoiceDeliveryStatusChange.create({ data: { deliveryId, fromStatus: d.portalStatus, toStatus: status, note, byEmail: email } }),
+  ]);
+
+  if (status === "SENT_BACK") {
+    const names = await namesByEmail([email]);
+    const portal = d.method && d.method in BILLING_METHOD_LABELS ? BILLING_METHOD_LABELS[d.method as BillingMethod] : "the portal";
+    const link = "/erp/ready-to-send";
+    const invoice = d.invoiceNumber ? `${d.invoiceNumber}, ${d.title}` : d.title;
+    await sendEmail({
+      type: "INVOICE_SENT_BACK",
+      to: d.doneByEmail ?? [],
+      link,
+      subject: `Sent back in ${portal}: ${invoice}`,
+      html: buildInvoiceSentBackEmail({
+        invoice,
+        client: d.clientName,
+        portal,
+        reason: note!,
+        by: names.get(email.toLowerCase()) ?? email.split("@")[0]!,
+        url: `${(process.env.NEXT_PUBLIC_APP_URL?.trim() || "").replace(/\/$/, "")}${link}`,
+      }),
+    }).catch((e) => console.error("Invoice sent back email failed:", e));
+  }
+  return { ok: true };
+}
+
+/** Fixed and uploaded again after the client sent it back, with the new portal number or proof. */
+export async function resubmitDelivery(deliveryId: string, email: string, details: DeliveryDoneDetails): Promise<{ ok: true } | { error: string }> {
+  if (!details.portalReference && !details.proof) return { error: "Add the portal's number or a screenshot, so there's proof it was resubmitted." };
+  const now = new Date();
+  const done = await prisma.$transaction(async (tx) => {
+    const { count } = await tx.invoiceDelivery.updateMany({
+      where: { id: deliveryId, portalStatus: "SENT_BACK" },
+      data: {
+        portalStatus: "RESUBMITTED" satisfies PortalStatus,
+        portalStatusAt: now,
+        sentBackReason: null,
+        ...(details.portalReference ? { portalReference: details.portalReference } : {}),
+      },
+    });
+    if (count !== 1) return false;
+    if (details.proof) await tx.invoiceDeliveryProof.create({ data: { deliveryId, ...details.proof, uploadedByEmail: email } });
+    await tx.invoiceDeliveryStatusChange.create({
+      data: { deliveryId, fromStatus: "SENT_BACK", toStatus: "RESUBMITTED", note: details.note, portalReference: details.portalReference, byEmail: email },
+    });
+    return true;
+  });
+  return done ? { ok: true } : { error: "This one isn't sent back anymore." };
 }
 
 /** The invoice's lines and due date as the ERP has them, from whichever link table holds it. */

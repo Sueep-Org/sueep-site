@@ -41,7 +41,7 @@ export default async function JanitorialPage() {
       },
     }),
     prisma.recurringContractPeriod.findMany({
-      where: { billingStatus: { not: "PAID" } },
+      where: { billingStatus: { notIn: ["PAID", "VOIDED"] } },
       include: { charges: { select: { amountCents: true } } },
     }),
     laborCostByContract(lastMonth.start, lastMonth.end),

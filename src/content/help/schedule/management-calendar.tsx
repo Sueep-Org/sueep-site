@@ -127,6 +127,11 @@ export function ManagementCalendar() {
           Once the cutoff passes with no invoice for the job dated that month, it shows as <strong>Missed</strong> in red on the
           dashboard&apos;s Money tab (Needs action, Billing cutoffs), next to cutoffs coming up in the next week.
         </LI>
+        <LI>
+          An approved invoice still waiting on Ready to send&apos;s Needs sending gets an amber warning 5 days before the
+          cutoff and a red &quot;Missed cutoff&quot; after it. See{" "}
+          <A href="/erp/help/billing/sending-invoices">Sending Invoices: Email, Portals and Needs Sending</A>.
+        </LI>
       </UL>
     </>
   );

@@ -101,7 +101,9 @@ export function JanitorialContracts() {
         <LI>
           <strong>Add a month manually</strong> covers months the automatic step missed, like a contract entered late.{" "}
           <strong>Remove</strong> deletes a month that shouldn&apos;t be billed, and only shows while it is Not Billed with no
-          commission paid.
+          commission paid. To keep the month on record but not bill it (for example a month the client won&apos;t pay), set it
+          to <strong>Voided</strong> on Project Billing → Recurring instead. It asks why, the reason shows when you hover the
+          month, Auto-draft skips it, and it earns no commission.
         </LI>
       </UL>
       <H3>Invoicing a month</H3>

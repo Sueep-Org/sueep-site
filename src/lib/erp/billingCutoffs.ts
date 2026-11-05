@@ -150,3 +150,52 @@ export async function sendBillingCutoffReminders(todayKey: string = todayEastern
   }
   return { sent, jobs: due.length };
 }
+
+export type DeliveryCutoff = { day: string; state: "MISSED" | "SOON"; daysLeft: number };
+
+/**
+ * Cutoff warnings for invoices still on Needs sending (INVOICE_TRACKING_PLAN.md
+ * Phase 5). The cutoff is the job's own day, else the client company's; the
+ * one that counts is the first on or after the day the invoice was approved.
+ * Missed once that day has passed, Soon within REMIND_DAYS of it. Invoices
+ * with no cutoff, or further off, aren't in the map.
+ */
+export async function loadDeliveryCutoffs(
+  deliveries: { id: string; destType: string; destId: string; clientCompanyId: string | null; createdAt: Date }[],
+  todayKey: string = todayEasternKey(),
+): Promise<Map<string, DeliveryCutoff>> {
+  const out = new Map<string, DeliveryCutoff>();
+  if (!deliveries.length) return out;
+  const projectIds = deliveries.filter((d) => d.destType === "PROJECT").map((d) => d.destId);
+  const companyIds = [...new Set(deliveries.map((d) => d.clientCompanyId).filter((x): x is string => !!x))];
+  const [projects, companies] = await Promise.all([
+    projectIds.length ? prisma.project.findMany({ where: { id: { in: projectIds } }, select: { id: true, billingCutoffDay: true } }) : [],
+    companyIds.length ? prisma.clientCompany.findMany({ where: { id: { in: companyIds } }, select: { id: true, billingCutoffDay: true } }) : [],
+  ]);
+  const projectDay = new Map(projects.map((p) => [p.id, p.billingCutoffDay]));
+  const companyDay = new Map(companies.map((c) => [c.id, c.billingCutoffDay]));
+  for (const d of deliveries) {
+    const cutoffDay = (d.destType === "PROJECT" ? projectDay.get(d.destId) : null) ?? (d.clientCompanyId ? companyDay.get(d.clientCompanyId) : null);
+    const c = cutoffDay ? deliveryCutoffFor(cutoffDay, todayEasternKey(d.createdAt), todayKey) : null;
+    if (c) out.set(d.id, c);
+  }
+  return out;
+}
+
+/** The first cutoff on or after the approval day, when it's missed or within REMIND_DAYS. */
+export function deliveryCutoffFor(cutoffDay: number, approvedKey: string, todayKey: string): DeliveryCutoff | null {
+  const [y, m] = approvedKey.split("-").map(Number) as [number, number];
+  let day = cutoffKey(y, m - 1, cutoffDay);
+  if (day < approvedKey) day = m === 12 ? cutoffKey(y + 1, 0, cutoffDay) : cutoffKey(y, m, cutoffDay);
+  const daysLeft = Math.round((Date.parse(`${day}T00:00:00Z`) - Date.parse(`${todayKey}T00:00:00Z`)) / 86_400_000);
+  if (daysLeft < 0) return { day, state: "MISSED", daysLeft };
+  if (daysLeft <= REMIND_DAYS) return { day, state: "SOON", daysLeft };
+  return null;
+}
+
+/** "Missed cutoff Nov 20", or "Cutoff Nov 20, today" / "Cutoff Nov 20, 3 days left". */
+export function deliveryCutoffText(c: DeliveryCutoff): string {
+  const day = new Date(`${c.day}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  if (c.state === "MISSED") return `Missed cutoff ${day}`;
+  return `Cutoff ${day}, ${c.daysLeft === 0 ? "today" : `${c.daysLeft} day${c.daysLeft === 1 ? "" : "s"} left`}`;
+}

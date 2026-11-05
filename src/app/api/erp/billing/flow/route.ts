@@ -5,6 +5,7 @@ import { isPmLevel } from "@/lib/erpRoles";
 import { loadBillableGroups } from "@/lib/erp/itemInvoiceDrafts";
 import { loadInvoiceList } from "@/lib/erp/invoiceList";
 import { qboEnvironment } from "@/lib/erp/qboClient";
+import { DELIVERY_WAITING_WHERE } from "@/lib/erp/portalStatus";
 
 /**
  * The billing flow bar (Project Billing, Ready to send, Invoices): what this
@@ -21,7 +22,7 @@ export async function GET() {
     canBill ? prisma.hubSpotContractInvoice.count({ where: { draftedByErp: true, status: "draft" } }) : 0,
     canBill ? prisma.itemInvoiceDraft.count({ where: { status: "DRAFT" } }) : 0,
     canBill ? prisma.qboInvoiceDraft.count({ where: { status: "DRAFT", environment: qboEnvironment() } }) : 0,
-    canBill ? prisma.invoiceDelivery.count({ where: { status: { in: ["NEEDS_UPLOAD", "NEEDS_SENDING"] } } }) : 0,
+    canBill ? prisma.invoiceDelivery.count({ where: DELIVERY_WAITING_WHERE }) : 0,
     seeInvoices ? loadInvoiceList() : null,
   ]);
 

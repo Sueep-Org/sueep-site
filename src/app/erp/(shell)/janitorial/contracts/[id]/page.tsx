@@ -277,6 +277,7 @@ export default async function JanitorialContractPage({ params }: PageProps) {
                   periodStart: p.periodStart.toISOString(),
                   amountCents: p.amountCents,
                   billingStatus: p.billingStatus,
+                  voidReason: p.voidReason,
                   commissionPaid: p.commissionPaidAt != null,
                   charges: p.charges.map((c) => ({ id: c.id, description: c.description, amountCents: c.amountCents })),
                   invoices: p.hubspotInvoices.map((i) => ({

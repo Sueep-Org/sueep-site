@@ -66,6 +66,8 @@ export type SegmentTotals = {
   revenueCents: number;
   /** Part of revenueCents from change orders (the rest is the original contract). */
   changeOrderCents: number;
+  /** Part of costCents from change orders. */
+  changeOrderCostCents: number;
   costCents: number;
   jobs: number;
 };
@@ -182,7 +184,7 @@ export type FinanceJob = {
   /** What was counted for a project in this bucket (absent for a janitorial
    * contract month): its whole contract, how many SOV lines, how many change
    * orders. All zero/false means only costs landed here. */
-  parts?: { contract: boolean; sovLines: number; changeOrders: number };
+  parts?: { contract: boolean; sovLines: number; changeOrders: number; voided: number };
 };
 
 /** One commission amount for one person on one day (a deal, a contract
@@ -239,10 +241,10 @@ export type FinanceSummary = {
 
 function emptySegments(): Record<FinanceSegment, SegmentTotals> {
   return {
-    POST_CONSTRUCTION: { revenueCents: 0, changeOrderCents: 0, costCents: 0, jobs: 0 },
-    TURNOVERS: { revenueCents: 0, changeOrderCents: 0, costCents: 0, jobs: 0 },
-    JANITORIAL_CONTRACTS: { revenueCents: 0, changeOrderCents: 0, costCents: 0, jobs: 0 },
-    OTHER: { revenueCents: 0, changeOrderCents: 0, costCents: 0, jobs: 0 },
+    POST_CONSTRUCTION: { revenueCents: 0, changeOrderCents: 0, changeOrderCostCents: 0, costCents: 0, jobs: 0 },
+    TURNOVERS: { revenueCents: 0, changeOrderCents: 0, changeOrderCostCents: 0, costCents: 0, jobs: 0 },
+    JANITORIAL_CONTRACTS: { revenueCents: 0, changeOrderCents: 0, changeOrderCostCents: 0, costCents: 0, jobs: 0 },
+    OTHER: { revenueCents: 0, changeOrderCents: 0, changeOrderCostCents: 0, costCents: 0, jobs: 0 },
   };
 }
 
@@ -512,8 +514,11 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
     laborLogs: { id: string; employeeId: string | null }[];
     spent?: boolean;
   }) => {
-    const { project: p, valueCents } = piece;
+    const { project: p } = piece;
     const status = normalizeBillingStatus(piece.billingStatus);
+    // Voided work won't be paid: $0 revenue, its costs still count.
+    const voided = status === "VOIDED";
+    const valueCents = voided ? 0 : piece.valueCents;
 
     // Billing status buckets always sit on the completion day, whatever the anchor.
     const completedBucket = bucketOf(piece.completedDay);
@@ -525,9 +530,10 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
     }
 
     // Paid view: unpaid pieces aren't counted yet; one paid before its paid
-    // date was saved falls back to its completion day.
-    if (anchor === "paid" && status !== "PAID" && !piece.spent) return;
-    const anchorDay = anchor === "paid" && piece.paidDay && !piece.spent ? piece.paidDay : piece.completedDay;
+    // date was saved falls back to its completion day. Voided pieces never
+    // will be paid, so their costs count on the completion day.
+    if (anchor === "paid" && status !== "PAID" && !piece.spent && !voided) return;
+    const anchorDay = anchor === "paid" && piece.paidDay && !piece.spent && !voided ? piece.paidDay : piece.completedDay;
     const anchorKey = bucketOf(anchorDay);
     if (!anchorKey) return;
 
@@ -539,7 +545,10 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
     m.contractorCents += piece.contractorCents;
     m.materialCents += piece.materialCents;
     m.segments[segment].revenueCents += valueCents;
-    if (piece.isChangeOrder) m.segments[segment].changeOrderCents += valueCents;
+    if (piece.isChangeOrder) {
+      m.segments[segment].changeOrderCents += valueCents;
+      m.segments[segment].changeOrderCostCents += costCents;
+    }
     m.segments[segment].costCents += costCents;
 
     const rowKey = `${p.id}::${anchorKey}`;
@@ -547,7 +556,7 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
     if (!row) {
       row = {
         id: rowKey, href: `/erp/projects/${p.id}`, title: p.jobTitle, monthKey: anchorDay.slice(0, 7), segment,
-        revenueCents: 0, costCents: 0, profitCents: 0, parts: { contract: false, sovLines: 0, changeOrders: 0 },
+        revenueCents: 0, costCents: 0, profitCents: 0, parts: { contract: false, sovLines: 0, changeOrders: 0, voided: 0 },
       };
       jobRows.set(rowKey, row);
       m.segments[segment].jobs++;
@@ -555,7 +564,8 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
     row.revenueCents += valueCents;
     row.costCents += costCents;
     if (!piece.spent) {
-      if (piece.isChangeOrder) row.parts!.changeOrders++;
+      if (voided) row.parts!.voided++;
+      else if (piece.isChangeOrder) row.parts!.changeOrders++;
       else if (piece.isSovLine) row.parts!.sovLines++;
       else row.parts!.contract = true;
     }
@@ -741,7 +751,9 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
       // month is 10/31), to match its labor, which only counts up to today.
       share = Number(todayKey.slice(8)) / daysInMonth(key);
     }
-    const partCents = Math.round(fullCents * share);
+    // A voided month won't be paid: $0 revenue, its labor still counts.
+    const voided = status === "VOIDED";
+    const partCents = voided ? 0 : Math.round(fullCents * share);
 
     if (partCents > 0) {
       const sm = monthOf(range ? FINANCE_RANGE_KEY : key);
@@ -751,11 +763,11 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
     }
 
     // Paid view: a month paid before paidAt existed falls back to its own month.
-    if (anchor === "paid" && status !== "PAID") continue;
+    if (anchor === "paid" && status !== "PAID" && !voided) continue;
     let anchorKey: string | null;
     let revenueCents: number;
     let labor: ContractLabor | undefined;
-    if (anchor === "paid") {
+    if (anchor === "paid" && !voided) {
       anchorKey = bucketOf(period.paidAt ? todayEasternKey(period.paidAt) : monthFrom);
       revenueCents = fullCents;
       labor = anchorKey ? laborFor(monthFrom, monthTo).get(period.recurringContractId) : undefined;
@@ -1070,6 +1082,7 @@ export function sumMonths(key: string, list: FinanceMonth[]): FinanceMonth {
       total.segments[s].costCents += m.segments[s].costCents;
       total.segments[s].jobs += m.segments[s].jobs;
       total.segments[s].changeOrderCents += m.segments[s].changeOrderCents;
+      total.segments[s].changeOrderCostCents += m.segments[s].changeOrderCostCents;
     }
   }
   return total;

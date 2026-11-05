@@ -13,6 +13,7 @@ const turnoverRequestSelect = {
   priceCents: true,
   approvedPriceCents: true,
   billingStatus: true,
+  voidReason: true,
   building: { select: { id: true, name: true } },
   fullClean: true,
   fullPaint: true,
@@ -29,6 +30,7 @@ type ProjectForUnitRow = {
   jobTitle: string;
   buildingId: string | null;
   billingStatus: string | null;
+  voidReason: string | null;
   contractValueCents: number | null;
   turnoverCompletedAt: Date | null;
   projectEndDate: Date | null;
@@ -42,6 +44,7 @@ type ProjectForUnitRow = {
     priceCents: number | null;
     approvedPriceCents: number | null;
     billingStatus: string | null;
+    voidReason: string | null;
     building: { id: string; name: string } | null;
     fullClean: boolean;
     fullPaint: boolean;
@@ -75,6 +78,7 @@ function buildUnitRow(project: ProjectForUnitRow) {
     completedAt: (project.turnoverCompletedAt ?? project.projectEndDate ?? project.updatedAt).toISOString(),
     contractCents,
     billingStatus: normalizeBillingStatus(tr?.billingStatus ?? project.billingStatus),
+    voidReason: tr ? tr.voidReason : project.voidReason,
     scope,
     changeOrders: [] as CORow[],
     invoices: [] as InvoiceRow[],
@@ -102,6 +106,7 @@ type CORow = {
   title: string;
   contractValueCents: number;
   billingStatus: string;
+  voidReason: string | null;
   completedAt: string;
   invoices: InvoiceRow[];
 };
@@ -249,6 +254,7 @@ export async function GET(req: Request) {
       title: true,
       contractValueCents: true,
       billingStatus: true,
+      voidReason: true,
       completedAt: true,
       updatedAt: true,
       projectId: true,
@@ -259,6 +265,7 @@ export async function GET(req: Request) {
           jobTitle: true,
           buildingId: true,
           billingStatus: true,
+          voidReason: true,
           contractValueCents: true,
           turnoverCompletedAt: true,
           projectEndDate: true,
@@ -289,6 +296,7 @@ export async function GET(req: Request) {
       title: co.title,
       contractValueCents: co.contractValueCents ?? 0,
       billingStatus: normalizeBillingStatus(co.billingStatus),
+      voidReason: co.voidReason,
       completedAt: (co.completedAt ?? co.updatedAt).toISOString(),
       invoices: co.hubspotSovInvoices.map((i) => ({
         id: i.id,

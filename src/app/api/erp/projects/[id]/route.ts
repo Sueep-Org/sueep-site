@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { isBilledStatus, isPaidStatus, parseBillingStatus } from "@/lib/erp/billingStatus";
+import { isBilledStatus, isPaidStatus, parseBillingStatus, voidReasonFor } from "@/lib/erp/billingStatus";
 import { inputToCents } from "@/lib/erp/money";
 import { PROJECT_SEGMENTS, normalizeProjectSegment } from "@/lib/erp/projectSegments";
 import { getErpAuth, canOverrideQualityChecklist, canEditPricing } from "@/lib/erpAuth";
@@ -115,7 +115,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (body.billingStatus !== undefined) {
     // Old spellings are still accepted, but only the standard words are saved.
     const b = parseBillingStatus(body.billingStatus);
-    if (b) data.billingStatus = b;
+    if (b) {
+      const v = voidReasonFor(b, body.voidReason);
+      if ("error" in v) return NextResponse.json({ error: v.error }, { status: 400 });
+      data.billingStatus = b;
+      data.voidReason = v.voidReason;
+    }
   }
   if (body.percentInvoiced !== undefined) data.percentInvoiced = pct(body.percentInvoiced) ?? 0;
 
@@ -199,7 +204,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
   if (
     body.percentInvoiced === undefined &&
     typeof data.billingStatus === "string" &&
-    data.billingStatus !== "NOT_BILLED"
+    data.billingStatus !== "NOT_BILLED" &&
+    data.billingStatus !== "VOIDED"
   ) {
     data.percentInvoiced = 100;
   }

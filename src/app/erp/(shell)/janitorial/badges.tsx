@@ -2,11 +2,13 @@ export const PERIOD_BILLING_OPTIONS = [
   { value: "NOT_BILLED", label: "Not Billed" },
   { value: "BILLED", label: "Billed" },
   { value: "PAID", label: "Paid" },
+  { value: "VOIDED", label: "Voided" },
 ] as const;
 
 export function billingBadgeCls(status: string): string {
   if (status === "PAID") return "bg-emerald-100 text-emerald-700";
   if (status === "BILLED") return "bg-blue-100 text-blue-700";
+  if (status === "VOIDED") return "bg-red-50 text-red-700";
   return "bg-gray-100 text-gray-500";
 }
 

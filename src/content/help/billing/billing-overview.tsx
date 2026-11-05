@@ -6,7 +6,7 @@ export function BillingOverview() {
       <H2>What this page is</H2>
       <P>
         <strong>Project Billing</strong> (left menu, under Billing) lists every piece of finished work and whether it is{" "}
-        <strong>Not billed</strong>, <strong>Billed</strong> or <strong>Paid</strong>. It is the first of the billing steps:
+        <strong>Not billed</strong>, <strong>Billed</strong>, <strong>Paid</strong> or <strong>Voided</strong>. It is the first of the billing steps:
         Project Billing → Ready to send → Invoices. For how the steps fit together, read{" "}
         <A href="/erp/help/billing/how-invoicing-works">Start Here: How Billing Works</A>.
       </P>
@@ -39,10 +39,16 @@ export function BillingOverview() {
 
       <H2>Billing status</H2>
       <P>
-        Click the status pill on a row to change it between <strong>Not billed</strong>, <strong>Billed</strong> and{" "}
-        <strong>Paid</strong>. It saves right away and the total at the bottom updates.
+        Click the status pill on a row to change it between <strong>Not billed</strong>, <strong>Billed</strong>,{" "}
+        <strong>Paid</strong> and <strong>Voided</strong>. It saves right away and the total at the bottom updates.
       </P>
       <UL>
+        <LI>
+          <strong>Voided</strong> is for work that won&apos;t be billed or paid, for example the client refuses to pay or it
+          doesn&apos;t need an invoice. Picking it asks why, and the reason shows when you hover the pill. Voided work leaves
+          Not billed, Ready to send, lien warnings and the total, and counts as $0 revenue on the Finance dashboard (its costs
+          still count). Pick another status to undo it. See <strong>Voiding work or an invoice</strong> below.
+        </LI>
         <LI>
           Statuses normally move by themselves: <strong>Billed</strong> when an invoice for the work is approved on Ready to
           send, and <strong>Paid</strong> once every invoice linked to it is paid in QuickBooks. Draft and voided invoices
@@ -58,6 +64,27 @@ export function BillingOverview() {
         <LI>
           The same status can also be changed on a job&apos;s Financials or Change Orders tab, and on a janitorial
           contract&apos;s Billing tab. It is one status, so a change in either place shows in both.
+        </LI>
+      </UL>
+
+      <H3>Voiding work or an invoice</H3>
+      <P>Voiding the work and voiding the invoice are two different things.</P>
+      <UL>
+        <LI>
+          <strong>Voiding work</strong> (the status pill): the work won&apos;t be billed or paid. You can void it here, on a
+          project&apos;s <strong>Financials</strong> tab, on a line of its <strong>Schedule of Values</strong>, or on a janitorial
+          month (here, under Recurring). Each one asks why. A voided turn&apos;s project shows Voided too. Voided SOV lines
+          and change orders are left out of the pay app on Needs sending, and Auto-draft skips voided janitorial months.
+        </LI>
+        <LI>
+          <strong>Voiding work does not touch QuickBooks.</strong> If an invoice for it was already approved, that invoice
+          stays open in QuickBooks, and on the Invoices page it keeps counting as owed and will turn Overdue.
+        </LI>
+        <LI>
+          <strong>To cancel an invoice</strong>, void it in QuickBooks (the ERP never voids or deletes anything there). The
+          next morning the ERP sees it, and that invoice stops counting toward the work&apos;s Billed and Paid. Work whose only
+          invoice was voided shows again under <strong>Ready to bill</strong> so it can be invoiced again. Check its status
+          here and set it back to Not billed if needed, or void the work too if it won&apos;t be billed at all.
         </LI>
       </UL>
 
@@ -115,7 +142,7 @@ export function BillingOverview() {
       <H3>Filters</H3>
       <P>
         In the same menu, pick one billing status (<strong>All</strong>, <strong>Not Billed</strong>, <strong>Billed</strong>,{" "}
-        <strong>Paid</strong>) and any of the options under it. Rows must match everything picked, and the total follows.
+        <strong>Paid</strong>, <strong>Voided</strong>) and any of the options under it. Rows must match everything picked, and the total follows.
       </P>
       <UL>
         <LI>

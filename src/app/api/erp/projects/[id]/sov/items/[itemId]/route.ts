@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { notifyReadyToBill } from "@/lib/erp/notifyReadyToBill";
 import { syncSovPercentDone, syncProjectBillingFromSOV, sovItemDateChanges, parseSovItemDate, sovItemLastWorkDay } from "@/lib/sovSync";
+import { BILLING_STATUSES, voidReasonFor, type BillingStatus } from "@/lib/erp/billingStatus";
 
 type Ctx = { params: Promise<{ id: string; itemId: string }> };
 
@@ -31,10 +32,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
   if (body.completed !== undefined) data.completed = Boolean(body.completed);
   if (body.billingStatus !== undefined) {
-    const VALID_BILLING = ["NOT_BILLED", "BILLED", "PAID"];
     const val = String(body.billingStatus);
-    if (!VALID_BILLING.includes(val)) return NextResponse.json({ error: "Invalid billingStatus" }, { status: 400 });
+    if (!(BILLING_STATUSES as readonly string[]).includes(val)) return NextResponse.json({ error: "Invalid billingStatus" }, { status: 400 });
+    const v = voidReasonFor(val as BillingStatus, body.voidReason);
+    if ("error" in v) return NextResponse.json({ error: v.error }, { status: 400 });
     data.billingStatus = val;
+    data.voidReason = v.voidReason;
   }
   // Ticked done with no date typed: date it the last day the work was done,
   // not the day someone ticked the box.

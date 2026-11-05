@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState } from "react";
 import { BILLING_STATUS_OPTIONS, billingStatusLabel, normalizeBillingStatus } from "@/lib/erp/billingStatus";
-import { Button, InfoTip } from "@/app/erp/components/ui";
+import { Button, InfoTip, useAskText } from "@/app/erp/components/ui";
+import { voidTitle } from "@/app/erp/components/BillingStatusSelect";
 
 const inputCls =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500";
@@ -18,6 +19,7 @@ type Props = {
   percentDone: number;
   percentInvoiced: number;
   billingStatus: string | null;
+  voidReason: string | null;
   /** The Billing page filtered to this project, when its billing status is changed there (see projectBillingHref). Null keeps the dropdown here. */
   billingHref: string | null;
   estMaterialCents: number | null;
@@ -57,6 +59,7 @@ export function ProjectFinancialsEditor({
   percentDone,
   percentInvoiced,
   billingStatus,
+  voidReason,
   billingHref,
   estMaterialCents,
   estTravelCents,
@@ -88,6 +91,25 @@ export function ProjectFinancialsEditor({
   // billing status was set elsewhere (Billing page, SOV sync) since this
   // page loaded.
   const [billStatusTouched, setBillStatusTouched] = useState(false);
+  const [billVoidReason, setBillVoidReason] = useState<string | null>(voidReason);
+  const askText = useAskText();
+
+  /** Voided asks why first; cancelling leaves the status as it was. */
+  async function pickBillStatus(next: string) {
+    let reason: string | null = null;
+    if (next === "VOIDED") {
+      reason = await askText({
+        title: "Void this?",
+        message: "It comes off Not billed and counts as $0 revenue on the Finance tab. Set it back any time.",
+        placeholder: "Why it won't be billed or paid",
+        confirmLabel: "Void",
+      });
+      if (!reason) return;
+    }
+    setBillStatus(next);
+    setBillVoidReason(reason);
+    setBillStatusTouched(true);
+  }
   const [estMat, setEstMat] = useState(centsToInput(estMaterialCents));
   const [estTravel, setEstTravel] = useState(centsToInput(estTravelCents));
   const [estLab, setEstLab] = useState(centsToInput(estLaborCents));
@@ -112,7 +134,7 @@ export function ProjectFinancialsEditor({
           contractValue: contractValue === "" ? null : Number(contractValue),
           percentDone: pctDone === "" ? 0 : Number(pctDone),
           percentInvoiced: pctInvoiced === "" ? 0 : Number(pctInvoiced),
-          ...(billStatusTouched ? { billingStatus: billStatus || null } : {}),
+          ...(billStatusTouched ? { billingStatus: billStatus || null, voidReason: billVoidReason } : {}),
           estMaterial: estMat === "" ? null : Number(estMat),
           estTravel: estTravel === "" ? null : Number(estTravel),
           estLabor: estLab === "" ? null : Number(estLab),
@@ -166,14 +188,17 @@ export function ProjectFinancialsEditor({
               <label className={labelCls} htmlFor="fin-bill-status">Billing status</label>
               {billingHref ? (
                 <div className="mt-1 flex items-center gap-2 text-sm">
-                  <span className="font-medium text-gray-800">{billingStatusLabel(billingStatus)}</span>
+                  <span className="font-medium text-gray-800" title={voidTitle(billingStatus, voidReason)}>{billingStatusLabel(billingStatus)}</span>
                   <Link href={billingHref} className="text-xs text-pink-600 hover:underline">Change on Billing</Link>
                   <InfoTip text="Billing status is set on the Billing page, and from the HubSpot invoices linked to each line, so it's the same everywhere." />
                 </div>
               ) : (
-                <select id="fin-bill-status" className={inputCls} value={billStatus} onChange={(e) => { setBillStatus(e.target.value); setBillStatusTouched(true); }}>
+                <select id="fin-bill-status" className={inputCls} value={billStatus} title={voidTitle(billStatus, billVoidReason)} onChange={(e) => pickBillStatus(e.target.value)}>
                   {BILLING_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
+              )}
+              {billStatus === "VOIDED" && billVoidReason && !billingHref && (
+                <p className="mt-1 truncate text-xs text-gray-500" title={billVoidReason}>{billVoidReason}</p>
               )}
             </div>
           </div>
