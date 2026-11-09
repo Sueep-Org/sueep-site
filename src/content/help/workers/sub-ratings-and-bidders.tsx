@@ -21,7 +21,7 @@ export function SubRatingsAndBidders() {
           by hand.
         </LI>
         <LI>
-          <strong>Field:</strong> worked out from their days on their jobs page over the last 180 days (see below).
+          <strong>Field:</strong> worked out from their days on their jobs page over the last 180 days by default (see below).
         </LI>
         <LI>
           <strong>Overall:</strong> the average of Confidence, Pricing and Field, whichever they have. The Contractors list
@@ -59,8 +59,9 @@ export function SubRatingsAndBidders() {
       <H2>How the field score works</H2>
       <P>
         From the sub&apos;s days on their jobs page in the last 180 days. Each part needs at least 3 days (or offers) behind
-        it before it counts, and the score averages the parts that do. The profile&apos;s Ratings tab shows each part with
-        the counts.
+        it before it counts, and the score averages the parts that do. Both numbers can be changed on Settings, Subs. The
+        profile&apos;s Ratings tab shows each part with the counts. How subs use their page is in{" "}
+        <A href="/erp/help/workers/sub-portal">The Sub Portal</A>.
       </P>
       <UL>
         <LI>

@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Button, InfoTip, Modal, inputClass, labelClass, useConfirm, useToast } from "@/app/erp/components/ui";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { StarInput, Stars } from "@/app/erp/components/Stars";
-import { FIELD_MIN_SAMPLES, FIELD_SCORE_HELP, OVERALL_SCORE_HELP, PRICING_SCORE_HELP, RATING_KEYS, RATING_LABELS, type FieldPart, type RatingKey, type SubScores } from "@/lib/erp/subScores";
+import { fieldScoreHelp, OVERALL_SCORE_HELP, PRICING_SCORE_HELP, RATING_KEYS, RATING_LABELS, type FieldPart, type RatingKey, type SubScores } from "@/lib/erp/subScores";
 
 /** One part of the Field score: stars, or how many more it needs */
 function FieldRow({ label, part, counts }: { label: string; part: FieldPart | undefined; counts: string }) {
@@ -43,8 +43,11 @@ export function ContractorRatingsSection({
   ratings,
   projectOptions,
   override,
+  fieldRules,
 }: {
   contractorId: string;
+  /** Settings, Subs: Field score window and samples per part */
+  fieldRules: { days: number; minSamples: number };
   scores: SubScores | null;
   ratings: RatingRow[];
   projectOptions: { id: string; jobTitle: string }[];
@@ -214,7 +217,7 @@ export function ContractorRatingsSection({
         <div className="rounded-md border border-gray-200 p-3">
           <p className="flex items-center gap-1 text-xs text-gray-500">
             Field
-            <InfoTip text={FIELD_SCORE_HELP} wide />
+            <InfoTip text={fieldScoreHelp(fieldRules.days, fieldRules.minSamples)} wide />
           </p>
           <p className="mt-1">
             <Stars value={scores?.field ?? null} size="lg" emptyText="Not enough yet" />
@@ -225,7 +228,7 @@ export function ContractorRatingsSection({
             <FieldRow label="Passed first time" part={fr?.firstPass} counts={`${fr?.firstPass.good ?? 0} of ${fr?.firstPass.total ?? 0} days`} />
             <FieldRow label="Crew showed up" part={fr?.crew} counts={`${fr?.crew.good ?? 0} of ${fr?.crew.total ?? 0} people`} />
           </div>
-          <p className="mt-1 text-[11px] text-gray-400">From their jobs page, last 180 days. Each part needs {FIELD_MIN_SAMPLES} days or offers.</p>
+          <p className="mt-1 text-[11px] text-gray-400">From their jobs page, last {fieldRules.days} days. Each part needs {fieldRules.minSamples} days or offers.</p>
         </div>
       </div>
 

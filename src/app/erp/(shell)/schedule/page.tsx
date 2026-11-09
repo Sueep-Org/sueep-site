@@ -34,6 +34,7 @@ import { isPmLevel } from "@/lib/erpRoles";
 import { loadAllSubScoresCached } from "@/lib/erp/subBidStats";
 import type { SubScores } from "@/lib/erp/subScores";
 import { SubStaffProvider } from "./SubOfferBox";
+import { loadSubPortalSettings } from "@/lib/erp/subPortalSettingsServer";
 import { dayCheckInKey, loadDayCheckIns } from "@/lib/erp/subCheckIns";
 import { ScheduleCalendarTabs } from "./ScheduleCalendarTabs";
 import { JanitorialCalendar } from "./JanitorialCalendar";
@@ -92,6 +93,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
   const canSetSubPay = canSeeFinancials(auth?.role ?? "EMPLOYEE");
   const dayCheckInsLoad = loadDayCheckIns();
   // Offer picker sorts subs by Overall score; only for roles that see sub pay (scores include pricing)
+  const subPortalSettingsLoad = loadSubPortalSettings();
   const subScoresLoad = canSetSubPay ? loadAllSubScoresCached() : Promise.resolve(new Map<string, SubScores>());
 
   const [
@@ -330,7 +332,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
   // Pickers show an insurance warning next to the name, and adding them
   // asks for a confirm (warning only; scheduling isn't blocked). Calendar
   // labels keep the plain name.
-  const subScores = await subScoresLoad;
+  const [subScores, subPortalSettings] = await Promise.all([subScoresLoad, subPortalSettingsLoad]);
   const contractors = contractorRows.map((c) => {
     const w = insuranceWarning(c);
     return {
@@ -919,7 +921,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
       <ScheduleCalendarTabs active="projects" showManagement={showManagement} />
 
       {/* Project Schedule */}
-      <SubStaffProvider canWaivePhotos={isPmLevel(auth?.role)}>
+      <SubStaffProvider canWaivePhotos={isPmLevel(auth?.role)} offerAnswerHours={subPortalSettings.offerAnswerHours}>
       <SchedulePlanner
         answers={answers}
         projects={visibleProjects}

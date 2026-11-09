@@ -54,10 +54,10 @@ function localInput(d: Date): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-/** 24 hours from now, but no later than 2 PM the day before the job, and at least 2 hours from now. */
-function defaultAnswerBy(firstDayKey: string | null): string {
+/** Settings hours from now (24 by default), but no later than 2 PM the day before the job, and at least 2 hours from now. */
+function defaultAnswerBy(firstDayKey: string | null, hours: number): string {
   const now = Date.now();
-  let t = now + 24 * 3600e3;
+  let t = now + hours * 3600e3;
   if (firstDayKey) {
     const [y, m, d] = firstDayKey.split("-").map(Number);
     const dayBefore2pm = new Date(y!, m! - 1, d! - 1, 14, 0).getTime();
@@ -104,10 +104,19 @@ function placeFlags(offSite: boolean, distance: string | null, noLocation: boole
 }
 
 /** What the viewer may do with subs' check-ins. Set by the schedule page from the viewer's role. */
-const SubStaffContext = createContext({ canWaivePhotos: false });
+const SubStaffContext = createContext({ canWaivePhotos: false, offerAnswerHours: 24 });
 
-export function SubStaffProvider({ canWaivePhotos, children }: { canWaivePhotos: boolean; children: React.ReactNode }) {
-  return <SubStaffContext.Provider value={{ canWaivePhotos }}>{children}</SubStaffContext.Provider>;
+export function SubStaffProvider({
+  canWaivePhotos,
+  offerAnswerHours,
+  children,
+}: {
+  canWaivePhotos: boolean;
+  /** Settings, Subs: starting answer-by for a new offer */
+  offerAnswerHours: number;
+  children: React.ReactNode;
+}) {
+  return <SubStaffContext.Provider value={{ canWaivePhotos, offerAnswerHours }}>{children}</SubStaffContext.Provider>;
 }
 
 function countText(n: number, need: number): string {
@@ -267,6 +276,7 @@ export function SubOfferBox({
   const checkInsurance = useInsuranceCheck(contractors);
   const [offers, setOffers] = useState<DayOfferView[] | null>(null);
   const [offerable, setOfferable] = useState<string[]>([]);
+  const { offerAnswerHours } = useContext(SubStaffContext);
   const [form, setForm] = useState<null | { resendOf: string | null; contractorId: string; pay: string; answerBy: string; note: string }>(null);
   const [busy, setBusy] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -295,11 +305,11 @@ export function SubOfferBox({
   const name = (id: string) => contractors.find((c) => c.id === id)?.displayName ?? "the sub";
 
   function startNew() {
-    setForm({ resendOf: null, contractorId: "", pay: suggestedPayCents != null ? String(suggestedPayCents / 100) : "", answerBy: defaultAnswerBy(offerable[0] ?? null), note: "" });
+    setForm({ resendOf: null, contractorId: "", pay: suggestedPayCents != null ? String(suggestedPayCents / 100) : "", answerBy: defaultAnswerBy(offerable[0] ?? null, offerAnswerHours), note: "" });
   }
 
   function startResend(o: DayOfferView) {
-    setForm({ resendOf: o.id, contractorId: o.contractorId, pay: o.payCents != null ? String(o.payCents / 100) : "", answerBy: defaultAnswerBy(o.dateKeys[0] ?? null), note: o.note ?? "" });
+    setForm({ resendOf: o.id, contractorId: o.contractorId, pay: o.payCents != null ? String(o.payCents / 100) : "", answerBy: defaultAnswerBy(o.dateKeys[0] ?? null, offerAnswerHours), note: o.note ?? "" });
   }
 
   async function submit() {

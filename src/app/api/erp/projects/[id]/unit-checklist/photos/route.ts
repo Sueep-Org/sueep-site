@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { jpegName, processPhoto } from "@/lib/erp/photoProcessing";
 
 export const runtime = "nodejs";
 
@@ -57,15 +58,26 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
   const buffer = Buffer.from(await file.arrayBuffer());
 
+  // Re-encoded to a 1600px JPEG with a preview, EXIF and GPS dropped. Formats
+  // sharp can't read (HEIC) are kept as sent, with no preview.
+  let stored: { data: Buffer; thumb: Buffer | null; mimeType: string; filename: string };
+  try {
+    const img = await processPhoto(buffer);
+    stored = { data: img.full, thumb: img.thumb, mimeType: "image/jpeg", filename: jpegName(file.name) };
+  } catch {
+    stored = { data: buffer, thumb: null, mimeType, filename: file.name };
+  }
+
   const photo = await prisma.unitChecklistPhoto.create({
     data: {
       checklistId: checklist.id,
       sectionId,
       photoType,
-      filename: file.name,
-      mimeType,
-      size: file.size,
-      data: buffer,
+      filename: stored.filename,
+      mimeType: stored.mimeType,
+      size: stored.data.length,
+      data: stored.data,
+      thumb: stored.thumb,
     },
     select: { id: true },
   });

@@ -1,4 +1,5 @@
 import { unstable_cache } from "next/cache";
+import { SETTINGS_CACHE_TAG } from "@/lib/pricingSettingsServer";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { bidOurPriceCents, bidScopeKey, bidderKey, type SubBidStatus } from "@/lib/erp/subBids";
@@ -287,7 +288,8 @@ export const SUB_SCORES_TAG = "sub-scores";
  */
 const cachedAllSubScores = unstable_cache(async () => [...(await loadSubScores())], ["sub-scores-all-v2"], {
   revalidate: 600,
-  tags: [SUB_SCORES_TAG],
+  // Settings, Subs changes the Field score window
+  tags: [SUB_SCORES_TAG, SETTINGS_CACHE_TAG],
 });
 
 export async function loadAllSubScoresCached(): Promise<Map<string, SubScores>> {

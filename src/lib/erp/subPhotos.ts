@@ -6,16 +6,14 @@
  *   needs the Settings minimums (subPhotoRules.ts) to check out, unless a
  *   PM, Business Manager or Admin lets them check out without (waivePhotos).
  * - The phone shrinks and time-stamps each photo before upload. Here it is
- *   re-encoded anyway (turned upright, longest side 1600px, JPEG, all EXIF
- *   dropped, so the phone's GPS tags never get stored) and a 320px preview
- *   is made. Bytes go in SubJobPhotoData; everything else only reads ids.
+ *   re-encoded anyway (photoProcessing.ts: upright, 1600px JPEG, EXIF and
+ *   GPS dropped) and a 320px preview is made. Bytes go in SubJobPhotoData; everything else only reads ids.
  * - Where the phone was when the photo was sent is saved and compared to
  *   the job site like a check-in, flagged Off site past the Settings distance.
  *
  * Server only.
  */
 import { cache } from "react";
-import sharp from "sharp";
 import { prisma } from "@/lib/prisma";
 import { easternDateKey } from "@/lib/erp/janitorialHours";
 import { findJobDay, measure, siteCoordinates, tapTime, utcDay, type Position } from "@/lib/erp/subCheckIns";
@@ -23,36 +21,15 @@ import { loadSubPortalSettings } from "@/lib/erp/subPortalSettingsServer";
 import { photoNeeds, type PhotoCounts } from "@/lib/erp/subPhotoRules";
 import { parsePhotoArea, type PhotoKind } from "@/lib/erp/subPhotoAreas";
 import { tr } from "@/lib/erp/language";
+import { processPhoto, type ProcessedPhoto } from "@/lib/erp/photoProcessing";
 import type { LinkedSub } from "@/lib/erp/subPortalAccess";
 
 /** Vercel rejects bodies over ~4.5 MB before the route runs */
 export const MAX_PHOTO_UPLOAD_BYTES = 4 * 1024 * 1024;
 /** Per check-in, so a stuck phone can't fill the database */
 export const MAX_PHOTOS_PER_DAY = 40;
-const FULL_PX = 1600;
-const THUMB_PX = 320;
-/** Refuse images bigger than this many pixels before decoding (decompression bombs) */
-const MAX_INPUT_PIXELS = 50_000_000;
 
 export type PhotoErrorCode = "NOT_IN" | "ALREADY_OUT" | "TOO_MANY" | "BAD_IMAGE" | "TOO_BIG" | "NOT_FOUND" | "INVALID";
-
-export type ProcessedPhoto = { full: Buffer; thumb: Buffer; width: number; height: number };
-
-/** Upright, shrunk, metadata-free JPEGs. Throws when the bytes aren't an image sharp can read. */
-export async function processPhoto(input: Buffer): Promise<ProcessedPhoto> {
-  const base = sharp(input, { failOn: "error", limitInputPixels: MAX_INPUT_PIXELS }).rotate();
-  const full = await base
-    .clone()
-    .resize({ width: FULL_PX, height: FULL_PX, fit: "inside", withoutEnlargement: true })
-    .jpeg({ quality: 78, mozjpeg: true })
-    .toBuffer({ resolveWithObject: true });
-  const thumb = await base
-    .clone()
-    .resize({ width: THUMB_PX, height: THUMB_PX, fit: "inside", withoutEnlargement: true })
-    .jpeg({ quality: 62, mozjpeg: true })
-    .toBuffer();
-  return { full: full.data, thumb, width: full.info.width, height: full.info.height };
-}
 
 export function parsePhotoKind(v: unknown): PhotoKind | null {
   return v === "before" || v === "after" ? v : null;

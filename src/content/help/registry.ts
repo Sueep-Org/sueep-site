@@ -13,6 +13,7 @@ import { AddingEmployees } from "./workers/adding-employees";
 import { MaterialsLog } from "./projects/material-logs";
 import { SubProposals } from "./projects/sub-proposals";
 import { SubRatingsAndBidders } from "./workers/sub-ratings-and-bidders";
+import { SubPortal } from "./workers/sub-portal";
 import { AddingContractors } from "./workers/adding-contractors";
 import { LoggingContractors } from "./workers/logging-contractors";
 import { ScheduleCalendarOverview } from "./schedule/calendar-overview";
@@ -184,6 +185,15 @@ export const registry: ArticleEntry[] = [
     order: 5,
     component: SubRatingsAndBidders,
     roles: [...PM_LEVEL_ROLES, "SALES", "ESTIMATION"],
+  },
+  {
+    slug: "workers/sub-portal",
+    title: "The Sub Portal: Offers, Check-ins, Photos and Reviews",
+    category: "Team",
+    description: "Give a sub their jobs page, send job offers, what happens on the day (check-in, photos, check-out), reviewing their work, and the rules on Settings, Subs.",
+    order: 6,
+    component: SubPortal,
+    roles: [...PM_LEVEL_ROLES],
   },
   {
     slug: "people/roles-and-permissions",

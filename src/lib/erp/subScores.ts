@@ -48,6 +48,7 @@ export type FieldRecord = {
   crew: FieldPart;
 };
 
+/** Defaults; Settings, Subs can change both (subFieldScoreDays, subFieldScoreMinSamples) */
 export const FIELD_MIN_SAMPLES = 3;
 export const FIELD_DAYS = 180;
 
@@ -61,9 +62,9 @@ function stepScore(pct: number, steps: Steps): number {
   return steps.find(([min]) => Math.round(pct) >= min)?.[1] ?? 1;
 }
 
-/** One part: needs FIELD_MIN_SAMPLES (days or offers); crew counts days through `samples`. */
-export function fieldPart(kind: keyof FieldRecord, good: number, total: number, samples = total): FieldPart {
-  if (samples < FIELD_MIN_SAMPLES || total <= 0) return { score: null, good, total };
+/** One part: needs minSamples (days or offers); crew counts days through `samples`. */
+export function fieldPart(kind: keyof FieldRecord, good: number, total: number, samples = total, minSamples = FIELD_MIN_SAMPLES): FieldPart {
+  if (samples < minSamples || total <= 0) return { score: null, good, total };
   const steps = { onTime: ON_TIME_STEPS, offers: OFFER_STEPS, firstPass: FIRST_PASS_STEPS, crew: CREW_STEPS }[kind];
   return { score: stepScore((good / total) * 100, steps), good, total };
 }
@@ -80,8 +81,8 @@ export const EMPTY_FIELD_RECORD: FieldRecord = {
   crew: { score: null, good: 0, total: 0 },
 };
 
-export const FIELD_SCORE_HELP =
-  `From their days in the sub portal, last ${FIELD_DAYS} days. Averages the parts with at least ${FIELD_MIN_SAMPLES} days or offers behind them. On time: checked in by start time plus the grace window (95%+ 5, 85% 4, 70% 3, 50% 2, less 1). Offers accepted (80% 5, 65% 4, 50% 3, 35% 2). Passed review first time, no fix asked (90% 5, 75% 4, 60% 3, 40% 2). Crew showed up vs the crew they said (98% 5, 90% 4, 75% 3, 50% 2).`;
+export const fieldScoreHelp = (days = FIELD_DAYS, minSamples = FIELD_MIN_SAMPLES) =>
+  `From their days in the sub portal, last ${days} days. Averages the parts with at least ${minSamples} days or offers behind them (both set on Settings, Subs). On time: checked in by start time plus the grace window (95%+ 5, 85% 4, 70% 3, 50% 2, less 1). Offers accepted (80% 5, 65% 4, 50% 3, 35% 2). Passed review first time, no fix asked (90% 5, 75% 4, 60% 3, 40% 2). Crew showed up vs the crew they said (98% 5, 90% 4, 75% 3, 50% 2).`;
 
 export const OVERALL_SCORE_HELP = "Average of Confidence (your ratings), Pricing and Field, whichever they have.";
 

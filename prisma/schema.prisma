@@ -3129,7 +3129,10 @@ model UnitChecklistPhoto {
   filename  String
   mimeType  String
   size      Int
+  /// Full photo; new uploads are re-encoded to a 1600px JPEG (photoProcessing.ts)
   data      Bytes
+  /// 320px JPEG preview; null for photos sharp can't read (HEIC), which show full size
+  thumb     Bytes?
 }
 
 model AppSetting {
