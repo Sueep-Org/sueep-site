@@ -5,12 +5,12 @@ export function SubRatingsAndBidders() {
     <>
       <H2>What this is</H2>
       <P>
-        Every sub gets two star scores, so you can see at a glance who to trust and who prices well. Subs who bid but
+        Every sub gets star scores, so you can see at a glance who to trust, who prices well and who shows up. Subs who bid but
         we haven&apos;t worked with yet are kept on the <strong>Bidders</strong> tab with their bid history. Bids are logged
         on each project&apos;s Proposals tab (see <A href="/erp/help/projects/sub-proposals">Sub Bids (Proposals)</A>).
       </P>
 
-      <H2>The two scores</H2>
+      <H2>The scores</H2>
       <UL>
         <LI>
           <strong>Confidence:</strong> the average of everyone&apos;s ratings of the sub on quality, reliability and
@@ -20,7 +20,16 @@ export function SubRatingsAndBidders() {
           <strong>Pricing:</strong> worked out from their bids and the jobs we paid them on (see below), unless someone set it
           by hand.
         </LI>
+        <LI>
+          <strong>Field:</strong> worked out from their days on their jobs page over the last 180 days (see below).
+        </LI>
+        <LI>
+          <strong>Overall:</strong> the average of Confidence, Pricing and Field, whichever they have. The Contractors list
+          can sort by it (click a column title; click again to flip), and <strong>Offer to a sub</strong> on a day card lists
+          the best Overall first, with their stars next to the name.
+        </LI>
       </UL>
+      <Callout type="info">Scores and ratings are staff only. Subs never see them on their jobs page or in emails.</Callout>
       <P>
         Scores show as stars, part-filled for averages, with the exact number in small gray next to them, like 4.3. You see
         them at the top of the sub&apos;s profile, in the <strong>Confidence</strong> and <strong>Pricing</strong> columns on
@@ -28,6 +37,10 @@ export function SubRatingsAndBidders() {
       </P>
 
       <H2>Rating a sub</H2>
+      <P>
+        Most ratings now come from <strong>Sub Reviews</strong>: passing a sub&apos;s day asks for the three ratings, saved
+        with that job and day. You can still rate by hand from the profile:
+      </P>
       <Steps>
         <Step n={1} title="1. Open their Ratings tab">
           On the sub&apos;s profile, open <strong>Ratings</strong> and press <strong>Rate this sub</strong>.
@@ -42,6 +55,31 @@ export function SubRatingsAndBidders() {
         Every rating stays listed with who gave it, the job and the note (hover the i). Only the person who gave a rating, or
         an Admin, can delete it.
       </P>
+
+      <H2>How the field score works</H2>
+      <P>
+        From the sub&apos;s days on their jobs page in the last 180 days. Each part needs at least 3 days (or offers) behind
+        it before it counts, and the score averages the parts that do. The profile&apos;s Ratings tab shows each part with
+        the counts.
+      </P>
+      <UL>
+        <LI>
+          <strong>On time:</strong> days with a start time where they checked in by the start plus the grace window
+          (Settings, Subs). A missed check-in counts as late. 95% or more is 5 stars, 85% is 4, 70% is 3, 50% is 2, less is 1.
+        </LI>
+        <LI>
+          <strong>Offers accepted:</strong> of the job offers they answered or let run out. 80% is 5, 65% is 4, 50% is 3, 35%
+          is 2.
+        </LI>
+        <LI>
+          <strong>Passed first time:</strong> of their days that passed review, how many passed with no fix asked. 90% is
+          5, 75% is 4, 60% is 3, 40% is 2.
+        </LI>
+        <LI>
+          <strong>Crew showed up:</strong> the people they said they&apos;d bring vs the people they said came at check-in.
+          98% is 5, 90% is 4, 75% is 3, 50% is 2.
+        </LI>
+      </UL>
 
       <H2>How the pricing score works</H2>
       <P>It averages two parts. A sub with only one part gets that one.</P>

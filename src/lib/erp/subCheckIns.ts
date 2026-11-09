@@ -95,6 +95,8 @@ export type JobDay = {
   turnover: boolean;
   /** The day's PM, who reviews it */
   pmUserId: string | null;
+  /** Leads: the crew they said they'd bring, while it's still theirs */
+  plannedCrew: number | null;
 };
 
 /** Turnover units, same check as isTurnoverProject */
@@ -127,7 +129,7 @@ export async function findJobDay(contractorId: string, jobKey: string, dateKey: 
   if (kind === "p") {
     const day = await prisma.projectDayAssignment.findUnique({
       where: { projectId_date: { projectId: id, date } },
-      select: { supervisorContractorId: true, startTime: true, projectManagerUserId: true },
+      select: { supervisorContractorId: true, startTime: true, projectManagerUserId: true, subCrewCount: true, subCrewContractorId: true },
     });
     const lead = day?.supervisorContractorId === contractorId;
     const crew = lead
@@ -145,13 +147,14 @@ export async function findJobDay(contractorId: string, jobKey: string, dateKey: 
       site: siteOf(project),
       turnover: project.segment === TURNOVER_SEGMENT,
       pmUserId: day?.projectManagerUserId ?? null,
+      plannedCrew: lead && day?.subCrewContractorId === contractorId ? (day.subCrewCount ?? null) : null,
     };
   }
 
   if (kind === "co") {
     const day = await prisma.changeOrderDayAssignment.findUnique({
       where: { changeOrderId_date: { changeOrderId: id, date } },
-      select: { supervisorContractorId: true, startTime: true, projectManagerUserId: true },
+      select: { supervisorContractorId: true, startTime: true, projectManagerUserId: true, subCrewCount: true, subCrewContractorId: true },
     });
     const lead = day?.supervisorContractorId === contractorId;
     const crew = lead
@@ -169,6 +172,7 @@ export async function findJobDay(contractorId: string, jobKey: string, dateKey: 
       site: siteOf(co.project),
       turnover: co.project.segment === TURNOVER_SEGMENT,
       pmUserId: day?.projectManagerUserId ?? null,
+      plannedCrew: lead && day?.subCrewContractorId === contractorId ? (day.subCrewCount ?? null) : null,
     };
   }
   return null;
@@ -267,6 +271,8 @@ export async function recordCheckIn(
       inOffSite: m?.offSite ?? false,
       lateMinutes,
       crewCount,
+      startTime: job.startTime,
+      plannedCrew: job.plannedCrew,
     };
     const row = await prisma.subCheckIn.upsert({
       where,
@@ -519,7 +525,7 @@ export async function alertMissedCheckIns(now: Date = new Date()): Promise<{ ale
     // Claim the alert first, so two runs can't both send it
     const row = await prisma.subCheckIn.upsert({
       where: { contractorId_jobKey_date: { contractorId: d.contractorId, jobKey: d.jobKey, date } },
-      create: { contractorId: d.contractorId, jobKey: d.jobKey, projectId: d.projectId, changeOrderId: d.changeOrderId, date, role: "lead" },
+      create: { contractorId: d.contractorId, jobKey: d.jobKey, projectId: d.projectId, changeOrderId: d.changeOrderId, date, role: "lead", startTime: d.startTime },
       update: {},
       select: { id: true },
     });

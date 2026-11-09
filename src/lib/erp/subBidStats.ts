@@ -2,7 +2,8 @@ import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { bidOurPriceCents, bidScopeKey, bidderKey, type SubBidStatus } from "@/lib/erp/subBids";
-import { marginScoreFromPct, pricingScoreFromVsLowest, type PricingJob, type SubScores } from "@/lib/erp/subScores";
+import { EMPTY_FIELD_RECORD, fieldScore, marginScoreFromPct, overallScore, pricingScoreFromVsLowest, type PricingJob, type SubScores } from "@/lib/erp/subScores";
+import { loadFieldRecords } from "@/lib/erp/subFieldScores";
 import { computeProjectActualsWithChangeOrders } from "@/lib/erp/projectMargin";
 
 /**
@@ -209,7 +210,7 @@ export async function loadPaidJobMargins(contractorIds?: string[]): Promise<Map<
 /** Scores for these contractors (all of them when no ids are given). Only contractors with a rating, a bid or an override are in the map. */
 export async function loadSubScores(contractorIds?: string[]): Promise<Map<string, SubScores>> {
   const where = contractorIds ? { contractorId: { in: contractorIds } } : {};
-  const [lineMap, paidMap, ratingAvgs, overrides] = await Promise.all([
+  const [lineMap, paidMap, ratingAvgs, overrides, fieldMap] = await Promise.all([
     loadContractorBidLines(contractorIds),
     loadPaidJobMargins(contractorIds),
     prisma.contractorRating.groupBy({
@@ -222,10 +223,11 @@ export async function loadSubScores(contractorIds?: string[]): Promise<Map<strin
       where: { pricingScoreOverride: { not: null }, ...(contractorIds ? { id: { in: contractorIds } } : {}) },
       select: { id: true, pricingScoreOverride: true },
     }),
+    loadFieldRecords(contractorIds),
   ]);
   const ratingsById = new Map(ratingAvgs.map((r) => [r.contractorId, r]));
   const overrideById = new Map(overrides.map((o) => [o.id, o.pricingScoreOverride]));
-  const ids = new Set([...lineMap.keys(), ...paidMap.keys(), ...ratingsById.keys(), ...overrideById.keys()]);
+  const ids = new Set([...lineMap.keys(), ...paidMap.keys(), ...ratingsById.keys(), ...overrideById.keys(), ...fieldMap.keys()]);
 
   const out = new Map<string, SubScores>();
   for (const id of ids) {
@@ -248,11 +250,15 @@ export async function loadSubScores(contractorIds?: string[]): Promise<Map<strin
     const pricingAuto = parts.length ? avg(parts) : null;
     const pricingOverride = overrideById.get(id) ?? null;
     const three = r ? [r._avg.quality, r._avg.reliability, r._avg.communication].filter((v): v is number => v != null) : [];
+    const confidence = avg(three);
+    const pricing = pricingOverride ?? pricingAuto;
+    const fieldRecord = fieldMap.get(id) ?? EMPTY_FIELD_RECORD;
+    const field = fieldScore(fieldRecord);
     out.set(id, {
       quality: r?._avg.quality ?? null,
       reliability: r?._avg.reliability ?? null,
       communication: r?._avg.communication ?? null,
-      confidence: avg(three),
+      confidence,
       ratingCount: r?._count._all ?? 0,
       pricingAuto,
       vsOthersScore,
@@ -261,7 +267,10 @@ export async function loadSubScores(contractorIds?: string[]): Promise<Map<strin
       avgMarginPct,
       marginJobs,
       pricingOverride,
-      pricing: pricingOverride ?? pricingAuto,
+      pricing,
+      field,
+      fieldRecord,
+      overall: overallScore([confidence, pricing, field]),
     });
   }
   return out;
@@ -276,7 +285,7 @@ export const SUB_SCORES_TAG = "sub-scores";
  * and the Contractors list ask on each load. Job cost changes (labor logged)
  * show within the 10 minutes; bids, ratings and overrides clear it at once.
  */
-const cachedAllSubScores = unstable_cache(async () => [...(await loadSubScores())], ["sub-scores-all-v1"], {
+const cachedAllSubScores = unstable_cache(async () => [...(await loadSubScores())], ["sub-scores-all-v2"], {
   revalidate: 600,
   tags: [SUB_SCORES_TAG],
 });

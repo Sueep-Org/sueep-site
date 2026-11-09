@@ -2352,6 +2352,10 @@ model SubCheckIn {
   inOffSite   Boolean   @default(false)
   /// Minutes after the start time, only when past the grace window (Settings, Subs)
   lateMinutes Int?
+  /// The day's start time ("HH:MM") when they checked in; null = no start time, never late (subFieldScores.ts)
+  startTime   String?
+  /// Leads: the crew they said they'd bring (day's subCrewCount) when they checked in
+  plannedCrew Int?
   /// Leads: how many people actually came, to compare with subCrewCount
   crewCount   Int?
 
@@ -5022,6 +5026,9 @@ model ContractorRating {
   /// Email and name of who rated
   ratedBy     String
   ratedByName String?
+
+  /// Given when passing this sub review (subReviews.ts); one rating per review
+  reviewId String? @unique
 
   @@index([contractorId])
 }

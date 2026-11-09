@@ -6,7 +6,20 @@ import { useState } from "react";
 import { Button, InfoTip, Modal, inputClass, labelClass, useConfirm, useToast } from "@/app/erp/components/ui";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { StarInput, Stars } from "@/app/erp/components/Stars";
-import { PRICING_SCORE_HELP, RATING_KEYS, RATING_LABELS, type RatingKey, type SubScores } from "@/lib/erp/subScores";
+import { FIELD_MIN_SAMPLES, FIELD_SCORE_HELP, OVERALL_SCORE_HELP, PRICING_SCORE_HELP, RATING_KEYS, RATING_LABELS, type FieldPart, type RatingKey, type SubScores } from "@/lib/erp/subScores";
+
+/** One part of the Field score: stars, or how many more it needs */
+function FieldRow({ label, part, counts }: { label: string; part: FieldPart | undefined; counts: string }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span>{label}</span>
+      <span>
+        {part?.score != null ? <Stars value={part.score} size="xs" /> : <span className="text-gray-400">not enough yet</span>}
+        {part && part.total > 0 ? <span className="text-gray-400"> ({counts})</span> : null}
+      </span>
+    </div>
+  );
+}
 
 export type RatingRow = {
   id: string;
@@ -110,9 +123,18 @@ export function ContractorRatingsSection({
         : "No bids or paid jobs yet";
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
+  const fr = scores?.fieldRecord;
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="flex flex-wrap items-center gap-3 rounded-md border border-pink-100 bg-pink-50/40 px-3 py-2">
+        <span className="flex items-center gap-1 text-xs font-medium text-gray-700">
+          Overall
+          <InfoTip text={OVERALL_SCORE_HELP} />
+        </span>
+        <Stars value={scores?.overall ?? null} size="lg" emptyText="No score yet" />
+        <span className="text-[11px] text-gray-400">Staff only. Subs never see their scores.</span>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div className="rounded-md border border-gray-200 p-3">
           <p className="flex items-center gap-1 text-xs text-gray-500">
             Confidence
@@ -187,6 +209,23 @@ export function ContractorRatingsSection({
           <Button variant="ghost" size="xs" className="mt-1" onClick={openPricing}>
             {scores?.pricingOverride != null ? "Change" : "Set by hand"}
           </Button>
+        </div>
+
+        <div className="rounded-md border border-gray-200 p-3">
+          <p className="flex items-center gap-1 text-xs text-gray-500">
+            Field
+            <InfoTip text={FIELD_SCORE_HELP} wide />
+          </p>
+          <p className="mt-1">
+            <Stars value={scores?.field ?? null} size="lg" emptyText="Not enough yet" />
+          </p>
+          <div className="mt-1 space-y-0.5 text-xs text-gray-600">
+            <FieldRow label="On time" part={fr?.onTime} counts={`${fr?.onTime.good ?? 0} of ${fr?.onTime.total ?? 0} days`} />
+            <FieldRow label="Offers accepted" part={fr?.offers} counts={`${fr?.offers.good ?? 0} of ${fr?.offers.total ?? 0}`} />
+            <FieldRow label="Passed first time" part={fr?.firstPass} counts={`${fr?.firstPass.good ?? 0} of ${fr?.firstPass.total ?? 0} days`} />
+            <FieldRow label="Crew showed up" part={fr?.crew} counts={`${fr?.crew.good ?? 0} of ${fr?.crew.total ?? 0} people`} />
+          </div>
+          <p className="mt-1 text-[11px] text-gray-400">From their jobs page, last 180 days. Each part needs {FIELD_MIN_SAMPLES} days or offers.</p>
         </div>
       </div>
 

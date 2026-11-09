@@ -31,6 +31,8 @@ import {
 import { SchedulePlanner } from "./SchedulePlanner";
 import { crewOf } from "@/lib/erp/subCrew";
 import { isPmLevel } from "@/lib/erpRoles";
+import { loadAllSubScoresCached } from "@/lib/erp/subBidStats";
+import type { SubScores } from "@/lib/erp/subScores";
 import { SubStaffProvider } from "./SubOfferBox";
 import { dayCheckInKey, loadDayCheckIns } from "@/lib/erp/subCheckIns";
 import { ScheduleCalendarTabs } from "./ScheduleCalendarTabs";
@@ -89,6 +91,8 @@ export default async function SchedulePage({ searchParams }: PageProps) {
   const showSovPrices = canSeeJobCosts(auth?.role ?? "EMPLOYEE");
   const canSetSubPay = canSeeFinancials(auth?.role ?? "EMPLOYEE");
   const dayCheckInsLoad = loadDayCheckIns();
+  // Offer picker sorts subs by Overall score; only for roles that see sub pay (scores include pricing)
+  const subScoresLoad = canSetSubPay ? loadAllSubScoresCached() : Promise.resolve(new Map<string, SubScores>());
 
   const [
     projectRows,
@@ -326,6 +330,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
   // Pickers show an insurance warning next to the name, and adding them
   // asks for a confirm (warning only; scheduling isn't blocked). Calendar
   // labels keep the plain name.
+  const subScores = await subScoresLoad;
   const contractors = contractorRows.map((c) => {
     const w = insuranceWarning(c);
     return {
@@ -334,6 +339,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
       email: c.email,
       runsSolo: c.runsWithoutSupervisor,
       insuranceWarning: w ? `${c.name}: ${w.detail}.` : null,
+      score: subScores.get(c.id)?.overall ?? null,
     };
   });
   const contractorNameById = new Map(contractorRows.map((c) => [c.id, c.name]));

@@ -5,11 +5,20 @@ import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { InfoTip, useAskText, useToast } from "@/app/erp/components/ui";
 import { useInsuranceCheck } from "@/app/erp/components/useInsuranceCheck";
 import { centsToDollars } from "@/lib/erp/money";
+import { starsText } from "@/lib/erp/subScores";
 import type { DayOfferView, OfferKind } from "@/lib/erp/subOffers";
 import type { DayCheckIn } from "@/lib/erp/subCheckIns";
 import { todayEasternKey } from "@/lib/erp/dates";
 
-type Sub = { id: string; displayName: string; email: string | null; insuranceWarning?: string | null };
+type Sub = { id: string; displayName: string; email: string | null; insuranceWarning?: string | null; score?: number | null };
+
+/** Best Overall score first, unscored last, then by name */
+function byScore(a: Sub, b: Sub): number {
+  const x = a.score ?? null;
+  const y = b.score ?? null;
+  if (x == null || y == null) return x == null && y == null ? a.displayName.localeCompare(b.displayName) : x == null ? 1 : -1;
+  return y - x || a.displayName.localeCompare(b.displayName);
+}
 
 const REASON_LABEL: Record<string, string> = {
   PRICE: "Price is too low",
@@ -399,7 +408,10 @@ export function SubOfferBox({
               <SearchableSelect
                 value={form.contractorId}
                 onChange={(v) => setForm({ ...form, contractorId: v })}
-                options={contractors.filter((c) => c.email).map((c) => ({ value: c.id, label: c.displayName }))}
+                options={contractors
+                  .filter((c) => c.email)
+                  .sort(byScore)
+                  .map((c) => ({ value: c.id, label: c.score != null ? `${c.displayName} · ${starsText(c.score)}` : c.displayName }))}
                 placeholder="Search…"
                 allLabel="- Pick a sub -"
                 className="mt-0.5"
