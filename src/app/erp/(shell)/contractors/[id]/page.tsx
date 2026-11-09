@@ -397,11 +397,15 @@ export default async function ContractorDetailPage({ params }: PageProps) {
             {contractor.status === "ACTIVE" ? "Active" : "Inactive"}
           </span>
           {contractor.role && <span className="text-sm text-gray-500">{contractor.role}</span>}
-          {ratingsData?.scores && (ratingsData.scores.confidence != null || ratingsData.scores.pricing != null) ? (
+          {ratingsData?.scores && ratingsData.scores.overall != null ? (
             <a href="?tab=Ratings" className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-pink-600">
+              Overall <Stars value={ratingsData.scores.overall} size="sm" />
+              <span className="text-gray-300">·</span>
               Confidence <Stars value={ratingsData.scores.confidence} size="sm" />
               <span className="text-gray-300">·</span>
               Pricing <Stars value={ratingsData.scores.pricing} size="sm" />
+              <span className="text-gray-300">·</span>
+              Field <Stars value={ratingsData.scores.field} size="sm" />
             </a>
           ) : null}
         </div>

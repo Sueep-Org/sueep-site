@@ -177,7 +177,8 @@ export function ScheduleCalendarOverview() {
               for review&quot; on Email Settings). Open it to see the before and after photos side by side by room, then{" "}
               <strong>Pass</strong> or <strong>Needs fix</strong>. Needs fix sends the sub what to fix, your note and any
               photos, on their jobs page and by email in their language. They take fix photos and send them back, and it
-              comes back to Sub Reviews for another look, until it passes. Business Managers and Admins can review any
+              comes back to Sub Reviews for another look, until it passes. Passing asks you to rate the sub&apos;s quality,
+              reliability and communication (staff only, saved to their Ratings). Business Managers and Admins can review any
               day; a PM can review their own days and days with no PM. Tick <strong>I checked this on site</strong> to also
               save a quality check on the project. The day card shows <strong>Review</strong>,{" "}
               <strong>Fixes asked</strong> or <strong>Passed review</strong>.

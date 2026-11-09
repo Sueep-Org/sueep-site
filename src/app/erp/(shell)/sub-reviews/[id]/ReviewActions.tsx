@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, useToast } from "@/app/erp/components/ui";
 import { shrinkImage } from "@/lib/shrinkImage";
+import { StarInput } from "@/app/erp/components/Stars";
+import { RATING_KEYS, RATING_LABELS, type RatingKey } from "@/lib/erp/subScores";
 
 /** Pass or Needs fix for one sub's day (subReviews.ts). */
 export function ReviewActions({
@@ -29,6 +31,8 @@ export function ReviewActions({
   const [picked, setPicked] = useState<string[]>([]);
   const [typed, setTyped] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  const [stars, setStars] = useState<Record<RatingKey, number | null>>({ quality: null, reliability: null, communication: null });
+  const rated = RATING_KEYS.every((k) => stars[k] != null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -53,7 +57,7 @@ export function ReviewActions({
     const res = await fetch(`/api/erp/sub-reviews/${id}/pass`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ note, onSite }),
+      body: JSON.stringify({ note, onSite, ...stars }),
     }).catch(() => null);
     setBusy(false);
     if (!res?.ok) return setError(((await res?.json().catch(() => null)) as { error?: string } | null)?.error ?? "Couldn't save. Try again.");
@@ -98,11 +102,20 @@ export function ReviewActions({
 
       {mode === "pass" && (
         <div className="space-y-3">
-          <p className="text-sm font-medium text-gray-900">Pass this day</p>
+          <p className="text-sm font-medium text-gray-900">Pass this day and rate the sub</p>
+          <div className="space-y-1.5">
+            {RATING_KEYS.map((k) => (
+              <div key={k} className="flex items-center gap-3">
+                <span className="w-32 text-sm text-gray-700">{RATING_LABELS[k]}</span>
+                <StarInput value={stars[k]} onChange={(v) => setStars((s) => ({ ...s, [k]: v }))} size="md" />
+              </div>
+            ))}
+            <p className="text-[11px] text-gray-400">1 star is poor, 5 is great. Saved to their Ratings and never shown to the sub.</p>
+          </div>
           <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Note (optional)" className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm" />
           {onSiteBox}
           <div className="flex gap-2">
-            <Button disabled={busy} onClick={() => void pass()}>
+            <Button disabled={busy || !rated} onClick={() => void pass()}>
               {busy ? "Saving…" : "Pass"}
             </Button>
             <Button variant="ghost" disabled={busy} onClick={() => setMode("idle")}>

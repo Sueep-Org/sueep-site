@@ -8,6 +8,15 @@
  *    bid's margin; jobs they were paid on count with the job's labor margin
  *    (contract minus every sub's pay and employee labor, change orders
  *    included). A job with an awarded bid from them counts once, as the bid.
+ * Field, worked out from what happens on their days (sub portal, last 180
+ * days), averages whichever parts have at least FIELD_MIN_SAMPLES behind them:
+ *  - On time: check-ins on days with a start time that weren't late (a
+ *    missed check-in counts as late).
+ *  - Offers accepted: of the job offers they answered or let run out.
+ *  - Passed first time: of their days that passed review, how many with no
+ *    fix asked.
+ *  - Crew showed up: people who came vs the crew they said, per day.
+ * Overall averages Confidence, Pricing and Field, whichever they have.
  * Plain helpers, no server imports.
  */
 
@@ -28,6 +37,59 @@ export type PricingJob = {
   source: "bid" | "paid";
 };
 
+export type FieldPart = { score: number | null; good: number; total: number };
+
+/** Field record: each part's score (null under FIELD_MIN_SAMPLES) and the counts behind it. */
+export type FieldRecord = {
+  onTime: FieldPart;
+  offers: FieldPart;
+  firstPass: FieldPart;
+  /** good/total here are people who came / people planned, capped per day at the plan */
+  crew: FieldPart;
+};
+
+export const FIELD_MIN_SAMPLES = 3;
+export const FIELD_DAYS = 180;
+
+type Steps = [min: number, score: number][];
+const ON_TIME_STEPS: Steps = [[95, 5], [85, 4], [70, 3], [50, 2]];
+const OFFER_STEPS: Steps = [[80, 5], [65, 4], [50, 3], [35, 2]];
+const FIRST_PASS_STEPS: Steps = [[90, 5], [75, 4], [60, 3], [40, 2]];
+const CREW_STEPS: Steps = [[98, 5], [90, 4], [75, 3], [50, 2]];
+
+function stepScore(pct: number, steps: Steps): number {
+  return steps.find(([min]) => Math.round(pct) >= min)?.[1] ?? 1;
+}
+
+/** One part: needs FIELD_MIN_SAMPLES (days or offers); crew counts days through `samples`. */
+export function fieldPart(kind: keyof FieldRecord, good: number, total: number, samples = total): FieldPart {
+  if (samples < FIELD_MIN_SAMPLES || total <= 0) return { score: null, good, total };
+  const steps = { onTime: ON_TIME_STEPS, offers: OFFER_STEPS, firstPass: FIRST_PASS_STEPS, crew: CREW_STEPS }[kind];
+  return { score: stepScore((good / total) * 100, steps), good, total };
+}
+
+export function fieldScore(r: FieldRecord): number | null {
+  const parts = [r.onTime, r.offers, r.firstPass, r.crew].map((p) => p.score).filter((v): v is number => v != null);
+  return parts.length ? parts.reduce((a, b) => a + b, 0) / parts.length : null;
+}
+
+export const EMPTY_FIELD_RECORD: FieldRecord = {
+  onTime: { score: null, good: 0, total: 0 },
+  offers: { score: null, good: 0, total: 0 },
+  firstPass: { score: null, good: 0, total: 0 },
+  crew: { score: null, good: 0, total: 0 },
+};
+
+export const FIELD_SCORE_HELP =
+  `From their days in the sub portal, last ${FIELD_DAYS} days. Averages the parts with at least ${FIELD_MIN_SAMPLES} days or offers behind them. On time: checked in by start time plus the grace window (95%+ 5, 85% 4, 70% 3, 50% 2, less 1). Offers accepted (80% 5, 65% 4, 50% 3, 35% 2). Passed review first time, no fix asked (90% 5, 75% 4, 60% 3, 40% 2). Crew showed up vs the crew they said (98% 5, 90% 4, 75% 3, 50% 2).`;
+
+export const OVERALL_SCORE_HELP = "Average of Confidence (your ratings), Pricing and Field, whichever they have.";
+
+export function overallScore(parts: (number | null)[]): number | null {
+  const have = parts.filter((v): v is number => v != null);
+  return have.length ? have.reduce((a, b) => a + b, 0) / have.length : null;
+}
+
 export type SubScores = {
   quality: number | null;
   reliability: number | null;
@@ -47,6 +109,11 @@ export type SubScores = {
   pricingOverride: number | null;
   /** What to show: the override, else the worked-out one */
   pricing: number | null;
+  /** From their days in the sub portal */
+  field: number | null;
+  fieldRecord: FieldRecord;
+  /** Average of confidence, pricing and field */
+  overall: number | null;
 };
 
 /** Avg % over (+) or under (-) the cheapest other bid → 1-5. Lowest or tied is a 5. */

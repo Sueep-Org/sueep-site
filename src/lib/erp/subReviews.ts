@@ -151,10 +151,14 @@ async function saveOnSiteCheck(r: { projectId: string; contractor: { name: strin
   return qc.id;
 }
 
-export async function passReview(id: string, who: Reviewer, input: { note: string | null; onSite: boolean }): Promise<DecisionResult> {
+export type ReviewRating = { quality: number; reliability: number; communication: number };
+
+export async function passReview(id: string, who: Reviewer, input: { note: string | null; onSite: boolean; rating: ReviewRating | null }): Promise<DecisionResult> {
+  // Who may, and whether it's still open, before what they sent
   const found = await reviewFor(id, who);
   if (!found.review) return found.fail;
   const r = found.review;
+  if (!input.rating) return { error: "Rate quality, reliability and communication, 1 to 5.", status: 400 };
   const note = input.note?.trim().slice(0, MAX_NOTE) || null;
   const qualityCheckId = input.onSite ? await saveOnSiteCheck(r, who, true, note) : undefined;
   const done = await prisma.subReview.updateMany({
@@ -163,6 +167,13 @@ export async function passReview(id: string, who: Reviewer, input: { note: strin
   });
   if (done.count === 0) return { error: "Someone else just reviewed it. Refresh.", status: 409 };
   await prisma.subReviewEvent.create({ data: { reviewId: id, round: r.round, action: "PASSED", by: who.email, note, onSite: input.onSite } });
+  // The rating for this day, kept with the sub's other ratings (Ratings tab, Confidence score)
+  const name = (await namesByEmail([who.email])).get(who.email.toLowerCase()) ?? null;
+  await prisma.contractorRating.upsert({
+    where: { reviewId: id },
+    create: { contractorId: r.contractorId, projectId: r.projectId, reviewId: id, ...input.rating, note: note ? `Review of ${dayLabel(r.date)}: ${note}` : `Review of ${dayLabel(r.date)}`, ratedBy: who.email, ratedByName: name },
+    update: {},
+  });
   return { ok: true };
 }
 
