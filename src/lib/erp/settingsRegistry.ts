@@ -18,6 +18,7 @@ export const SETTINGS_TABS = [
   { id: "payroll", label: "Payroll" },
   { id: "commission", label: "Commission" },
   { id: "finance", label: "Finance" },
+  { id: "subs", label: "Subs" },
   { id: "alerts", label: "Alerts" },
   { id: "lists", label: "Lists" },
 ] as const;
@@ -44,6 +45,8 @@ export type NumberSettingDef = Base & {
   prefix?: string;
   /** Whole numbers only */
   integer: boolean;
+  /** An On/Off switch stored as 1/0 (min 0, max 1) */
+  toggle?: boolean;
   /** Changes pay or commission: keeps a dated history and asks, on save, whether
    * it starts from a date or applies to everything. appliesTo names what the
    * date is compared to, e.g. "Pay weeks starting"; many and one name the thing. */
@@ -117,6 +120,94 @@ const rate = (key: string, label: string, info: string, dflt: number): NumberSet
   unit: "/hr",
   integer: false,
 });
+
+/** Sub portal rules, read together by loadSubPortalSettings (subPortalSettingsServer.ts). */
+export const SUB_PORTAL_KEYS = {
+  checkInFarMeters: "subCheckInFarMeters",
+  checkInGraceMinutes: "subCheckInGraceMinutes",
+  turnoverBeforePhotos: "subPhotosBeforeTurnover",
+  turnoverAfterPhotos: "subPhotosAfterTurnover",
+  otherBeforePhotos: "subPhotosBeforeOther",
+  otherAfterPhotos: "subPhotosAfterOther",
+  qcBlocksBilling: "subQcBlocksBilling",
+} as const;
+
+const photoMin = (key: string, label: string, info: string): NumberSettingDef => ({
+  key,
+  tab: "subs",
+  section: "Before and after photos",
+  kind: "number",
+  label,
+  info,
+  default: 2,
+  min: 0,
+  max: 20,
+  unit: "photos",
+  integer: true,
+});
+
+const SUB_PORTAL_DEFS: NumberSettingDef[] = [
+  {
+    key: SUB_PORTAL_KEYS.checkInFarMeters,
+    tab: "subs",
+    section: "Check-in and check-out",
+    kind: "number",
+    label: "Flag check-ins farther than this from the job",
+    info: "A sub checking in or out this far from the job's address still saves, but shows Off site on the day card. 400 meters is about a quarter mile. The phone's own GPS accuracy is allowed for.",
+    default: 400,
+    min: 50,
+    max: 10000,
+    unit: "meters",
+    integer: true,
+  },
+  {
+    key: SUB_PORTAL_KEYS.checkInGraceMinutes,
+    tab: "subs",
+    section: "Check-in and check-out",
+    kind: "number",
+    label: "Grace window after the start time",
+    info: "A sub running a day who hasn't checked in this long after its start time gets the Sub hasn't checked in email to the day's PM. Checking in later than this shows Late on the day card. Days with no start time are never late.",
+    default: 15,
+    min: 0,
+    max: 240,
+    unit: "minutes",
+    integer: true,
+  },
+  photoMin(
+    SUB_PORTAL_KEYS.turnoverBeforePhotos,
+    "Turnovers: before photos needed to check out",
+    "The sub running a turnover day can't check out until they've taken this many before photos. A PM, Business Manager or Admin can let them check out without. 0 turns it off.",
+  ),
+  photoMin(
+    SUB_PORTAL_KEYS.turnoverAfterPhotos,
+    "Turnovers: after photos needed to check out",
+    "The sub running a turnover day can't check out until they've taken this many after photos. 0 turns it off.",
+  ),
+  photoMin(
+    SUB_PORTAL_KEYS.otherBeforePhotos,
+    "Post-construction and other jobs: before photos needed",
+    "Same rule for every job that isn't a turnover unit, change order days included. 0 turns it off.",
+  ),
+  {
+    key: SUB_PORTAL_KEYS.qcBlocksBilling,
+    tab: "subs",
+    section: "Quality check",
+    kind: "number",
+    toggle: true,
+    label: "Quality check must pass before billing",
+    info: "When on, a job can't be marked Billed while a sub's day on it is waiting for review or needs fixes (Sub Reviews). Off: billing never waits on it.",
+    default: 0,
+    min: 0,
+    max: 1,
+    unit: "",
+    integer: true,
+  },
+  photoMin(
+    SUB_PORTAL_KEYS.otherAfterPhotos,
+    "Post-construction and other jobs: after photos needed",
+    "Same rule for every job that isn't a turnover unit, change order days included. 0 turns it off.",
+  ),
+];
 
 /** Alert timing and dashboard limits, read together by loadAlertSettings (alertSettingsServer.ts). */
 export const ALERT_KEYS = {
@@ -398,6 +489,7 @@ export const SETTINGS: SettingDef[] = [
     dated: CONTRACT_MONTHS,
   }),
   ...ALERT_DEFS,
+  ...SUB_PORTAL_DEFS,
   {
     key: CASH_FORECAST_TERMS_KEY,
     tab: "finance",
@@ -522,6 +614,7 @@ export function formatSetting(def: SettingDef, value: string | number): string {
     const d = new Date(`${value}T00:00:00Z`);
     return isNaN(d.getTime()) ? String(value) : d.toLocaleDateString("en-US", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric", year: "numeric" });
   }
+  if (def.toggle) return Number(value) ? "On" : "Off";
   if (def.prefix === "$") {
     const digits = def.integer ? 0 : 2;
     return `$${Number(value).toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits })}${def.unit}`;

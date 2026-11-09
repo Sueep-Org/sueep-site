@@ -528,6 +528,7 @@ const projectGroupItems: NavItem[] = [
   // New projects are started from the Projects page's New project button.
   { href: "/erp/projects", label: "Projects", roles: ALL, icon: FolderIcon },
   { href: "/erp/schedule", label: "Schedule", roles: ALL, icon: CalendarIcon },
+  { href: "/erp/sub-reviews", label: "Sub Reviews", roles: PM_ADMIN, icon: ClipboardIcon },
   { href: "/erp/pipeline", label: "Deals", roles: PM_EST, icon: ColumnsIcon },
   { href: "/erp/janitorial", label: "Janitorial Contracts", roles: PM_SALES, icon: BroomIcon },
 ];

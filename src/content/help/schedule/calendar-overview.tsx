@@ -153,6 +153,36 @@ export function ScheduleCalendarOverview() {
               change emails the day&apos;s PM and the people set for &quot;Sub crew changed&quot; on Email Settings.
             </LI>
             <LI>
+              <strong>Check-in:</strong> on the day, a sub taps <strong>Check in</strong> when they get to the job and{" "}
+              <strong>Check out</strong> when they leave, from the Today tab of their jobs page. Their phone&apos;s location
+              is taken only at that moment, never all day. The card shows the times under their name, for example{" "}
+              <strong>In 8:12 AM, 22 min late · 2 people came (planned 3) · Out 4:05 PM</strong>. <strong>Off site</strong>{" "}
+              means they were farther from the job than the distance on Settings, Subs; it still saves. A sub running a
+              day who hasn&apos;t checked in by the start time plus the grace window (also on Settings, Subs) sets off an
+              email to the day&apos;s PM and the people set for &quot;Sub hasn&apos;t checked in&quot; on Email Settings.
+              That email only goes out for subs who have signed in to their jobs page, and only for days with a start
+              time.
+            </LI>
+            <LI>
+              <strong>Before and after photos:</strong> after checking in, the sub takes before and after photos from the
+              same card (camera only, stamped with the time). The sub running the day can&apos;t check out until they
+              have the number set on Settings, Subs. The card shows <strong>Photos: 1/2 before, 0/2 after</strong> and{" "}
+              <strong>View</strong> opens them on the project&apos;s Sub Photos tab (under Quality &amp; Safety; turnovers
+              also show them at the top of the Checklist tab). If they can&apos;t take them, a PM, Business Manager or
+              Admin can click <strong>Let them check out without</strong> and give a reason, which stays with the day.
+            </LI>
+            <LI>
+              <strong>Quality review:</strong> when the sub running a day checks out, the day goes to{" "}
+              <strong>Sub Reviews</strong> (left menu) for the day&apos;s PM, who also gets an email (&quot;Sub work ready
+              for review&quot; on Email Settings). Open it to see the before and after photos side by side by room, then{" "}
+              <strong>Pass</strong> or <strong>Needs fix</strong>. Needs fix sends the sub what to fix, your note and any
+              photos, on their jobs page and by email in their language. They take fix photos and send them back, and it
+              comes back to Sub Reviews for another look, until it passes. Business Managers and Admins can review any
+              day; a PM can review their own days and days with no PM. Tick <strong>I checked this on site</strong> to also
+              save a quality check on the project. The day card shows <strong>Review</strong>,{" "}
+              <strong>Fixes asked</strong> or <strong>Passed review</strong>.
+            </LI>
+            <LI>
               <strong>Invites for a date range:</strong> when one Save covers several days, each person gets one
               email listing every day, with the pay shown once. Each day still has its own Confirm button and its
               own calendar event. Days saved one at a time still send one email each.

@@ -30,6 +30,9 @@ import {
 } from "@/lib/erpAuth";
 import { SchedulePlanner } from "./SchedulePlanner";
 import { crewOf } from "@/lib/erp/subCrew";
+import { isPmLevel } from "@/lib/erpRoles";
+import { SubStaffProvider } from "./SubOfferBox";
+import { dayCheckInKey, loadDayCheckIns } from "@/lib/erp/subCheckIns";
 import { ScheduleCalendarTabs } from "./ScheduleCalendarTabs";
 import { JanitorialCalendar } from "./JanitorialCalendar";
 import { ManagementCalendar } from "./ManagementCalendar";
@@ -85,6 +88,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
   const canFilterBySupervisor = canFilterScheduleBySupervisor(auth?.role ?? "EMPLOYEE");
   const showSovPrices = canSeeJobCosts(auth?.role ?? "EMPLOYEE");
   const canSetSubPay = canSeeFinancials(auth?.role ?? "EMPLOYEE");
+  const dayCheckInsLoad = loadDayCheckIns();
 
   const [
     projectRows,
@@ -347,6 +351,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     plannedWorkersByProject.set(a.projectId, byDay);
   }
 
+  const dayCheckIns = await dayCheckInsLoad;
   const dayAssignments: ScheduleDayAssignment[] = dayAssignmentRows.map((a) => ({
     id: a.id,
     projectId: a.projectId,
@@ -365,6 +370,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     requesterName: a.requesterName,
     requesterEmail: a.requesterEmail,
     subCrew: crewOf(a),
+    subCheckIn: a.supervisorContractorId ? (dayCheckIns.get(dayCheckInKey(`p:${a.projectId}`, dayKey(a.date), a.supervisorContractorId)) ?? null) : null,
   }));
 
   // Calendar day cells are driven by actual logged work, not a project's full
@@ -606,6 +612,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     comment: a.comment,
     internalNote: a.internalNote,
     subCrew: crewOf(a),
+    subCheckIn: a.supervisorContractorId ? (dayCheckIns.get(dayCheckInKey(`co:${a.changeOrderId}`, dayKey(a.date), a.supervisorContractorId)) ?? null) : null,
   }));
 
   const coWorkerAssignments: ScheduleCoWorkerAssignment[] = coWorkerAssignmentRows.map((a) => ({
@@ -906,6 +913,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
       <ScheduleCalendarTabs active="projects" showManagement={showManagement} />
 
       {/* Project Schedule */}
+      <SubStaffProvider canWaivePhotos={isPmLevel(auth?.role)}>
       <SchedulePlanner
         answers={answers}
         projects={visibleProjects}
@@ -923,6 +931,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
         canSetSubPay={canSetSubPay}
         initialDayRemovals={dayRemovals.filter((r) => visibleProjects.some((p) => p.id === r.projectId))}
       />
+      </SubStaffProvider>
 
       <ProjectGantt
         projects={visibleProjects}

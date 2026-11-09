@@ -20,7 +20,7 @@ import { useFloatingMenu } from "@/app/erp/components/useFloatingMenu";
 import { centsToDollars } from "@/lib/erp/money";
 import { addDaysKey, daysBetween } from "@/lib/erp/managementCalendar";
 import { AnswerMark, CoverageAnswer, answerUid, type Answers } from "./AnswerMark";
-import { SubOfferBox, SubCrewLine } from "./SubOfferBox";
+import { SubOfferBox, SubCrewLine, SubCheckInLine, checkInChipText } from "./SubOfferBox";
 import { RemoveDayModal } from "./RemoveDayModal";
 import type { ScheduleDayRemovalRow, ScheduleRemovalReason } from "@/lib/erp/scheduleRemovals";
 
@@ -428,6 +428,7 @@ export function CoDayPopover({
                   <p className="mt-1 text-[11px] text-gray-600">
                     Contractor: {contractorName}
                     {assignment?.subCrew ? ` · crew of ${assignment.subCrew.count}` : ""}
+                    {checkInChipText(assignment?.subCheckIn)}
                     <AnswerMark status={contractorAnswer} />
                   </p>
                 ) : null}
@@ -509,6 +510,7 @@ export function CoDayPopover({
               <CoverageAnswer name={supervisorName} status={supervisorAnswer} />
               <CoverageAnswer name={contractorName} status={contractorAnswer} />
               {assignment?.supervisorContractorId ? <SubCrewLine crew={assignment.subCrew ?? null} /> : null}
+              {assignment?.supervisorContractorId ? <SubCheckInLine checkIn={assignment.subCheckIn ?? null} dateKey={assignment.dateKey} plannedCrew={assignment.subCrew?.count ?? null} /> : null}
               <div className="mt-1.5 flex items-center gap-1.5">
                 <input
                   type="time"

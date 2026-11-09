@@ -94,6 +94,21 @@ export function SettingField({ def, value, saved, changedBy, changedAt, history 
       <div className="flex items-center gap-2">
         <label className="flex items-center gap-1.5 text-sm text-gray-600">
           {def.kind === "number" && def.prefix && <span>{def.prefix}</span>}
+          {def.kind === "number" && def.toggle ? (
+            <select
+              className={`${inputClass.sm} w-24`}
+              value={draft}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                setError("");
+              }}
+              aria-label={def.label}
+              disabled={busy}
+            >
+              <option value="0">Off</option>
+              <option value="1">On</option>
+            </select>
+          ) : (
           <input
             type={def.kind === "date" ? "date" : "number"}
             className={`${inputClass.sm} ${def.kind === "date" ? "w-40" : "w-24 text-right"}`}
@@ -106,7 +121,8 @@ export function SettingField({ def, value, saved, changedBy, changedAt, history 
             aria-label={def.label}
             disabled={busy}
           />
-          {def.kind === "number" && <span>{def.unit}</span>}
+          )}
+          {def.kind === "number" && !def.toggle && <span>{def.unit}</span>}
         </label>
         {dirty ? (
           <>

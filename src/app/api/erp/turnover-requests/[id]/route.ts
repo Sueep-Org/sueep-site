@@ -5,6 +5,7 @@ import { loadPricingSettings } from "@/lib/pricingSettingsServer";
 import { TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
 import { syncProjectBillingFromRequest } from "@/lib/sovSync";
 import { BILLING_STATUSES, voidReasonFor, type BillingStatus } from "@/lib/erp/billingStatus";
+import { billingBlockedBySubReview } from "@/lib/erp/subReviews";
 import { matchUnitName } from "@/lib/erp/unitNames";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -140,6 +141,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if ((BILLING_STATUSES as readonly string[]).includes(val)) {
       const v = voidReasonFor(val as BillingStatus, body.voidReason);
       if ("error" in v) return NextResponse.json({ error: v.error }, { status: 400 });
+      if (val === "BILLED" && String(existing.billingStatus ?? "").toUpperCase() !== "BILLED") {
+        for (const p of await prisma.project.findMany({ where: { turnoverRequestId: id }, select: { id: true } })) {
+          const blocked = await billingBlockedBySubReview(p.id);
+          if (blocked) return NextResponse.json({ error: blocked }, { status: 409 });
+        }
+      }
       data.billingStatus = val;
       data.voidReason = v.voidReason;
     }

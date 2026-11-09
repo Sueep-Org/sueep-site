@@ -3,6 +3,9 @@ import { findSubByToken, isDeviceSignedIn } from "@/lib/erp/subPortalAccess";
 import { maskEmail } from "@/lib/erp/propertyManagerAccess";
 import { loadSubJobs } from "@/lib/erp/subPortalJobs";
 import { DECLINE_REASONS, portalOffers } from "@/lib/erp/subOffers";
+import { loadTodayCheckIns } from "@/lib/erp/subCheckIns";
+import { portalFixes, portalReviewResults } from "@/lib/erp/subReviews";
+import { todayEasternKey } from "@/lib/erp/dates";
 import { SubSignIn } from "./SubSignIn";
 import { SubPortal } from "./SubPortal";
 
@@ -49,13 +52,22 @@ export default async function SubPortalPage({ params }: PageProps) {
     return <SubSignIn token={token} firstName={firstName} maskedEmail={maskEmail(sub.email)} profileLang={sub.lang} />;
   }
 
-  const [jobs, offers] = await Promise.all([loadSubJobs(sub.id, sub.lang), portalOffers(sub.id)]);
+  const [jobs, offers, checkIns, fixes, reviewResults] = await Promise.all([
+    loadSubJobs(sub.id, sub.lang),
+    portalOffers(sub.id),
+    loadTodayCheckIns(sub.id, todayEasternKey()),
+    portalFixes(sub.id),
+    portalReviewResults(sub.id),
+  ]);
   return (
     <SubPortal
       token={token}
       firstName={firstName}
       jobs={jobs}
       offers={offers}
+      checkIns={checkIns}
+      fixes={fixes}
+      reviewResults={reviewResults}
       declineReasons={DECLINE_REASONS}
       profileLang={sub.lang}
       contactEmail={contactEmail()}

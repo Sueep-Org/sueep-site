@@ -41,7 +41,7 @@ import { centsToDollars } from "@/lib/erp/money";
 import { addDaysKey, daysBetween } from "@/lib/erp/managementCalendar";
 import { AnswerMark, CoverageAnswer, answerUid, answersSummary, type Answers } from "./AnswerMark";
 import { RemoveDayModal } from "./RemoveDayModal";
-import { SubOfferBox, SubCrewLine } from "./SubOfferBox";
+import { SubOfferBox, SubCrewLine, SubCheckInLine, checkInChipText } from "./SubOfferBox";
 import type { ScheduleDayRemovalRow, ScheduleRemovalReason } from "@/lib/erp/scheduleRemovals";
 import { listLabel } from "@/lib/erp/appLists";
 
@@ -2353,6 +2353,9 @@ export function SchedulePlanner({
             />
           ) : null}
           {eventDayAssignment?.supervisorContractorId ? <SubCrewLine crew={eventDayAssignment.subCrew ?? null} /> : null}
+          {eventDayAssignment?.supervisorContractorId ? (
+            <SubCheckInLine checkIn={eventDayAssignment.subCheckIn ?? null} dateKey={eventDayAssignment.dateKey} plannedCrew={eventDayAssignment.subCrew?.count ?? null} />
+          ) : null}
           {showSubPay(p, eventDaySupervisorContractorId) && subPaySetElsewhere(p, eventDaySupervisorContractorId, k) != null ? (
             <div className="mt-1.5 flex items-center gap-1 text-[10px] text-gray-500">
               Contractor pay {centsToDollars(subPaySetElsewhere(p, eventDaySupervisorContractorId, k)!)}, set in the project&apos;s Contractors tab
@@ -3705,6 +3708,7 @@ export function SchedulePlanner({
                             <div className="mt-1 text-gray-300">
                               Contractor: {coContractor.displayName}
                               {coAssignment?.subCrew ? ` · crew of ${coAssignment.subCrew.count}` : ""}
+                              {checkInChipText(coAssignment?.subCheckIn)}
                               {coAssignment?.supervisorContractorId ? <AnswerMark dark status={answers[answerUid.coDaySub(coAssignment.id, coAssignment.supervisorContractorId)]} /> : null}
                             </div>
                           ) : needsSupervisor ? (
@@ -4035,6 +4039,7 @@ export function SchedulePlanner({
                           <div className="text-gray-300">
                             Contractor: {contractor.displayName}
                             {assignment.subCrew ? ` · crew of ${assignment.subCrew.count}` : ""}
+                            {checkInChipText(assignment.subCheckIn)}
                             {assignment.supervisorContractorId ? <AnswerMark dark status={answers[answerUid.daySub(assignment.id, assignment.supervisorContractorId)]} /> : null}
                           </div>
                         ) : (

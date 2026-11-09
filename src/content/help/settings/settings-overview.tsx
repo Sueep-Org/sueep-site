@@ -14,7 +14,7 @@ export function SettingsOverview() {
       <Steps>
         <Step n={1} title="Pick a tab">
           Settings are grouped by area: <strong>Pricing</strong>, <strong>Payroll</strong>, <strong>Commission</strong>,{" "}
-          <strong>Finance</strong>, <strong>Alerts</strong> and <strong>Lists</strong>.
+          <strong>Finance</strong>, <strong>Subs</strong>, <strong>Alerts</strong> and <strong>Lists</strong>.
           Hover the{" "}
           <strong>i</strong> next to a setting to see what it changes.
         </Step>
@@ -80,6 +80,18 @@ export function SettingsOverview() {
       <P>
         The late/early flag, far-from-building distance, auto inactive months and safety limit only raise flags, so they
         apply right away without asking.
+      </P>
+
+      <H2>Subs tab</H2>
+      <P>
+        Rules for the sub portal. <strong>Flag check-ins farther than this from the job</strong>: a sub checking in or out
+        farther than this still saves, but the day card says Off site. <strong>Grace window after the start time</strong>:
+        how long after a day&apos;s start time a sub running it can check in before it counts as late, and before the
+        day&apos;s PM gets the &quot;Sub hasn&apos;t checked in&quot; email. <strong>Before and after photos needed</strong>:
+        how many photos of each the sub running a day must take before they can check out, one pair of numbers for
+        turnovers and one for everything else. 0 turns it off. <strong>Quality check must pass before billing</strong>{" "}
+        (off by default): when on, a job can&apos;t be marked Billed while a sub&apos;s day on it is waiting for review
+        or needs fixes. All of these apply right away.
       </P>
 
       <H2>Alerts tab</H2>
