@@ -4,6 +4,7 @@ import { NewContractorForm } from "./NewContractorForm";
 import { subCoverage, type CoverageItem } from "@/lib/erp/subCoverage";
 import { getErpAuth } from "@/lib/erpAuth";
 import { canSeeProposals } from "@/lib/erp/subBids";
+import { loadSubPortalSettings } from "@/lib/erp/subPortalSettingsServer";
 import { loadAllSubScoresCached, loadBidderBidLines, loadContractorBidLines, summarizeBids } from "@/lib/erp/subBidStats";
 import { loadPastBidders } from "@/lib/erp/subBidLinks";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
@@ -11,7 +12,7 @@ import { BiddersTab, type BidderRow } from "./BiddersTab";
 import { ReviewsTab } from "./ReviewsTab";
 import { isPmLevel } from "@/lib/erpRoles";
 import { loadReviewList } from "@/lib/erp/subReviews";
-import { FIELD_SCORE_HELP, OVERALL_SCORE_HELP, PRICING_SCORE_HELP, type SubScores } from "@/lib/erp/subScores";
+import { fieldScoreHelp, OVERALL_SCORE_HELP, PRICING_SCORE_HELP, type SubScores } from "@/lib/erp/subScores";
 import { Stars } from "@/app/erp/components/Stars";
 
 const SHORT_DATE: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" };
@@ -66,6 +67,8 @@ export default async function ContractorsPage({ searchParams }: PageProps) {
   const [bidLines, scores, pastBidders, bidderLines] = showBids
     ? await Promise.all([loadContractorBidLines(), loadAllSubScoresCached(), loadPastBidders(), loadBidderBidLines()])
     : [new Map(), new Map(), [], new Map()];
+  const subSettings = showBids ? await loadSubPortalSettings() : null;
+  const fieldHelp = subSettings ? fieldScoreHelp(subSettings.fieldScoreDays, subSettings.fieldScoreMinSamples) : fieldScoreHelp();
   // Scores sort best first; contractors with no score always go last
   const sort: SortKey = showBids && SCORE_SORTS.includes(sp.sort as SortKey) ? (sp.sort as SortKey) : "name";
   const dir: "asc" | "desc" = sp.dir === "asc" || sp.dir === "desc" ? sp.dir : sort === "name" ? "asc" : "desc";
@@ -107,7 +110,7 @@ export default async function ContractorsPage({ searchParams }: PageProps) {
                     <th className="px-4 py-2 text-right">Avg margin</th>
                     <SortTh label="Confidence" sortKey="confidence" sort={sort} dir={dir} title="Average of the quality, reliability and communication ratings, out of 5" />
                     <SortTh label="Pricing" sortKey="pricing" sort={sort} dir={dir} title={PRICING_SCORE_HELP} />
-                    <SortTh label="Field" sortKey="field" sort={sort} dir={dir} title={FIELD_SCORE_HELP} />
+                    <SortTh label="Field" sortKey="field" sort={sort} dir={dir} title={fieldHelp} />
                     <SortTh label="Overall" sortKey="overall" sort={sort} dir={dir} title={OVERALL_SCORE_HELP} />
                   </>
                 ) : null}

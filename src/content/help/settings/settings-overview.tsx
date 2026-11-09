@@ -1,4 +1,4 @@
-import { Callout, H2, P, Steps, Step, UL, LI } from "@/app/erp/components/help/HelpComponents";
+import { A, Callout, H2, P, Steps, Step, UL, LI } from "@/app/erp/components/help/HelpComponents";
 
 export function SettingsOverview() {
   return (
@@ -91,7 +91,10 @@ export function SettingsOverview() {
         how many photos of each the sub running a day must take before they can check out, one pair of numbers for
         turnovers and one for everything else. 0 turns it off. <strong>Quality check must pass before billing</strong>{" "}
         (off by default): when on, a job can&apos;t be marked Billed while a sub&apos;s day on it is waiting for review
-        or needs fixes. All of these apply right away.
+        or needs fixes. <strong>Time subs get to answer an offer</strong> (24 hours): the starting answer-by on a new
+        offer from the Schedule, never later than 2 PM the day before the job. <strong>Field score</strong>: how many
+        days back it looks (180) and how many days or offers each part needs before it counts (3). All of these apply
+        right away. More in <A href="/erp/help/workers/sub-portal">The Sub Portal</A>.
       </P>
 
       <H2>Alerts tab</H2>

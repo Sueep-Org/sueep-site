@@ -1,9 +1,10 @@
 /**
  * Field records for sub scores (subScores.ts): what happened on their days
- * in the sub portal over the last FIELD_DAYS. Server only.
+ * in the sub portal over the Settings window (subFieldScoreDays). Server only.
  */
 import { prisma } from "@/lib/prisma";
-import { FIELD_DAYS, fieldPart, type FieldRecord } from "./subScores";
+import { fieldPart, type FieldRecord } from "./subScores";
+import { loadSubPortalSettings } from "./subPortalSettingsServer";
 
 type Tally = { onTime: number; timed: number; offersYes: number; offers: number; firstPass: number; passed: number; came: number; planned: number; crewDays: number };
 
@@ -11,7 +12,8 @@ const blank = (): Tally => ({ onTime: 0, timed: 0, offersYes: 0, offers: 0, firs
 
 /** Field records for these contractors (all with any portal history when no ids are given). */
 export async function loadFieldRecords(contractorIds?: string[]): Promise<Map<string, FieldRecord>> {
-  const since = new Date(Date.now() - FIELD_DAYS * 86_400_000);
+  const { fieldScoreDays, fieldScoreMinSamples: min } = await loadSubPortalSettings();
+  const since = new Date(Date.now() - fieldScoreDays * 86_400_000);
   const who = contractorIds ? { contractorId: { in: contractorIds } } : {};
   const [checkIns, offers, reviews] = await Promise.all([
     prisma.subCheckIn.findMany({
@@ -58,10 +60,10 @@ export async function loadFieldRecords(contractorIds?: string[]): Promise<Map<st
   const out = new Map<string, FieldRecord>();
   for (const [id, x] of tallies) {
     out.set(id, {
-      onTime: fieldPart("onTime", x.onTime, x.timed),
-      offers: fieldPart("offers", x.offersYes, x.offers),
-      firstPass: fieldPart("firstPass", x.firstPass, x.passed),
-      crew: fieldPart("crew", x.came, x.planned, x.crewDays),
+      onTime: fieldPart("onTime", x.onTime, x.timed, x.timed, min),
+      offers: fieldPart("offers", x.offersYes, x.offers, x.offers, min),
+      firstPass: fieldPart("firstPass", x.firstPass, x.passed, x.passed, min),
+      crew: fieldPart("crew", x.came, x.planned, x.crewDays, min),
     });
   }
   return out;

@@ -107,20 +107,23 @@ function PhotoUploadArea({
           )}
         </button>
         {photos.map((url, i) => (
-          <div key={url} className="flex items-center gap-1">
+          <div key={url} className="relative">
             <a
               href={url}
               target="_blank"
               rel="noreferrer"
-              className="text-xs text-pink-600 hover:underline"
+              className="block h-16 w-16 overflow-hidden rounded-md border border-gray-200 bg-gray-100"
+              title={`Photo ${i + 1}`}
             >
-              Photo {i + 1}
+              {/* Small preview; the full photo opens on tap */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`${url}?size=thumb`} alt={`${label} photo ${i + 1}`} loading="lazy" className="h-full w-full object-cover" />
             </a>
             <button
               type="button"
               onClick={() => onDelete(url)}
-              className="text-gray-400 hover:text-red-500 text-xs leading-none"
-              aria-label="Delete photo"
+              className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-gray-200 bg-white text-xs leading-none text-gray-500 shadow-sm hover:text-red-500"
+              aria-label={`Delete ${label.toLowerCase()} photo ${i + 1}`}
             >
               ×
             </button>

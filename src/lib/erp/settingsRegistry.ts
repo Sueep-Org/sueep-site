@@ -130,6 +130,9 @@ export const SUB_PORTAL_KEYS = {
   otherBeforePhotos: "subPhotosBeforeOther",
   otherAfterPhotos: "subPhotosAfterOther",
   qcBlocksBilling: "subQcBlocksBilling",
+  offerAnswerHours: "subOfferAnswerHours",
+  fieldScoreDays: "subFieldScoreDays",
+  fieldScoreMinSamples: "subFieldScoreMinSamples",
 } as const;
 
 const photoMin = (key: string, label: string, info: string): NumberSettingDef => ({
@@ -147,6 +150,19 @@ const photoMin = (key: string, label: string, info: string): NumberSettingDef =>
 });
 
 const SUB_PORTAL_DEFS: NumberSettingDef[] = [
+  {
+    key: SUB_PORTAL_KEYS.offerAnswerHours,
+    tab: "subs",
+    section: "Offers",
+    kind: "number",
+    label: "Time subs get to answer an offer",
+    info: "Starting answer-by when you send an offer from the Schedule: this many hours from now, but no later than 2 PM the day before the job and at least 2 hours out. You can still change it on each offer. No answer by then marks the offer expired and emails the team.",
+    default: 24,
+    min: 2,
+    max: 168,
+    unit: "hours",
+    integer: true,
+  },
   {
     key: SUB_PORTAL_KEYS.checkInFarMeters,
     tab: "subs",
@@ -188,6 +204,11 @@ const SUB_PORTAL_DEFS: NumberSettingDef[] = [
     "Post-construction and other jobs: before photos needed",
     "Same rule for every job that isn't a turnover unit, change order days included. 0 turns it off.",
   ),
+  photoMin(
+    SUB_PORTAL_KEYS.otherAfterPhotos,
+    "Post-construction and other jobs: after photos needed",
+    "Same rule for every job that isn't a turnover unit, change order days included. 0 turns it off.",
+  ),
   {
     key: SUB_PORTAL_KEYS.qcBlocksBilling,
     tab: "subs",
@@ -202,11 +223,32 @@ const SUB_PORTAL_DEFS: NumberSettingDef[] = [
     unit: "",
     integer: true,
   },
-  photoMin(
-    SUB_PORTAL_KEYS.otherAfterPhotos,
-    "Post-construction and other jobs: after photos needed",
-    "Same rule for every job that isn't a turnover unit, change order days included. 0 turns it off.",
-  ),
+  {
+    key: SUB_PORTAL_KEYS.fieldScoreDays,
+    tab: "subs",
+    section: "Field score",
+    kind: "number",
+    label: "Days of history the Field score uses",
+    info: "The Field score on the Contractors page counts the sub's portal days, offers and reviews from this many days back. Shorter reacts faster to a sub getting better or worse; longer is steadier.",
+    default: 180,
+    min: 30,
+    max: 730,
+    unit: "days",
+    integer: true,
+  },
+  {
+    key: SUB_PORTAL_KEYS.fieldScoreMinSamples,
+    tab: "subs",
+    section: "Field score",
+    kind: "number",
+    label: "Days or offers needed before a part counts",
+    info: "Each part of the Field score (on time, offers accepted, passed first time, crew showed up) only counts once it has this many days or offers behind it, so one bad day doesn't sink a new sub.",
+    default: 3,
+    min: 1,
+    max: 30,
+    unit: "",
+    integer: true,
+  },
 ];
 
 /** Alert timing and dashboard limits, read together by loadAlertSettings (alertSettingsServer.ts). */

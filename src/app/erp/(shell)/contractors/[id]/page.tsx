@@ -28,6 +28,7 @@ import { CONTRACTOR_LABOR_PAGE_SIZE } from "./laborPagination";
 import { ContractorDeleteButton } from "./ContractorDeleteButton";
 import { ContractorBidsSection } from "./ContractorBidsSection";
 import { canSeeProposals } from "@/lib/erp/subBids";
+import { loadSubPortalSettings } from "@/lib/erp/subPortalSettingsServer";
 import { loadAllSubScoresCached, loadContractorBidLines, summarizeBids } from "@/lib/erp/subBidStats";
 import { Stars } from "@/app/erp/components/Stars";
 import { ContractorRatingsSection, type RatingRow } from "./ContractorRatingsSection";
@@ -160,6 +161,7 @@ export default async function ContractorDetailPage({ params }: PageProps) {
           orderBy: { createdAt: "desc" },
           include: { project: { select: { jobTitle: true } } },
         }),
+        loadSubPortalSettings(),
       ])
     : Promise.resolve(null);
   const viewerRolePromise = auth ? erpRoleForEmail(contractor.email) : Promise.resolve(null);
@@ -281,7 +283,7 @@ export default async function ContractorDetailPage({ params }: PageProps) {
   const ratingsRaw = await ratingsPromise;
   const ratingsData = bidLines && ratingsRaw
     ? (() => {
-        const [scores, ratings] = ratingsRaw;
+        const [scores, ratings, subSettings] = ratingsRaw;
         const projectOptions = new Map(laborProjects.map((p) => [p.id, p.jobTitle]));
         for (const l of bidLines) projectOptions.set(l.projectId, l.projectTitle);
         const rows: RatingRow[] = ratings.map((r) => ({
@@ -299,6 +301,7 @@ export default async function ContractorDetailPage({ params }: PageProps) {
         return {
           scores: scores.get(contractor.id) ?? null,
           rows,
+          fieldRules: { days: subSettings.fieldScoreDays, minSamples: subSettings.fieldScoreMinSamples },
           projectOptions: [...projectOptions].map(([id, jobTitle]) => ({ id, jobTitle })).sort((x, y) => x.jobTitle.localeCompare(y.jobTitle)),
         };
       })()
@@ -694,6 +697,7 @@ export default async function ContractorDetailPage({ params }: PageProps) {
                     scores={ratingsData.scores}
                     ratings={ratingsData.rows}
                     projectOptions={ratingsData.projectOptions}
+                    fieldRules={ratingsData.fieldRules}
                     override={{
                       note: contractor.pricingScoreOverrideNote,
                       by: contractor.pricingScoreOverrideBy,

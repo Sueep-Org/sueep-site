@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { dateLocale, tr, type Lang } from "@/lib/erp/language";
+import { SubHowTo } from "./SubHowTo";
 import type { SubJob, SubJobDay, SubJobs } from "@/lib/erp/subPortalJobs";
 import type { DeclineReason, PortalOffer } from "@/lib/erp/subOffers";
 import type { TodayCheckIn } from "@/lib/erp/subCheckIns";
@@ -503,6 +504,8 @@ export function SubPortal({
             ))}
           </ul>
         )}
+
+        <SubHowTo lang={lang} contactEmail={contactEmail} />
 
         <footer className="flex items-center justify-between pt-2 text-xs text-gray-500">
           <a href={`mailto:${contactEmail}`} className="hover:text-pink-600">
