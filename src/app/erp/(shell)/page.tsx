@@ -6,7 +6,7 @@ import { computeProjectActualsWithChangeOrders } from "@/lib/erp/projectMargin";
 import { utcDateKey, todayEasternAsUtcMidnight } from "@/lib/erp/dates";
 import { evaluateEmployeeCompliance } from "@/lib/erp/employees";
 import { projectSegmentLabel } from "@/lib/erp/projectSegments";
-import { getErpAuth, canSeeFinancials, canSeeFinanceDashboard, isPmLevel, canManageInsurance, canManagePropertyManagers } from "@/lib/erpAuth";
+import { getErpAuth, canSeeJobCosts, canSeeFinanceDashboard, isPmLevel, canManageInsurance, canManagePropertyManagers } from "@/lib/erpAuth";
 import { loadCoiAlerts } from "@/lib/erp/coiAlerts";
 import { getSupervisorProjectScope } from "@/lib/erp/supervisorScope";
 import { turnoverTotalHoursBudget, turnoverImpliedMarginPct, turnoverMarginSeverity, type TurnoverMarginSeverity } from "@/lib/erp/turnoverHoursBudget";
@@ -145,7 +145,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
     const auth = await getErpAuth();
     const role = auth?.role ?? "EMPLOYEE";
     const email = auth?.email ?? "";
-    const showFinancials = canSeeFinancials(role);
+    const showFinancials = canSeeJobCosts(role);
 
     // Try to match logged-in user to an employee record for their name
     const employeeRecord = email

@@ -75,6 +75,10 @@
     {
       "path": "/api/cron/deal-stage-steps",
       "schedule": "50 * * * *"
+    },
+    {
+      "path": "/api/cron/sub-offers",
+      "schedule": "10 * * * *"
     }
   ]
 }

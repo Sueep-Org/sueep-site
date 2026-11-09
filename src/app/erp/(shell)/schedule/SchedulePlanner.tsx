@@ -41,6 +41,7 @@ import { centsToDollars } from "@/lib/erp/money";
 import { addDaysKey, daysBetween } from "@/lib/erp/managementCalendar";
 import { AnswerMark, CoverageAnswer, answerUid, answersSummary, type Answers } from "./AnswerMark";
 import { RemoveDayModal } from "./RemoveDayModal";
+import { SubOfferBox, SubCrewLine } from "./SubOfferBox";
 import type { ScheduleDayRemovalRow, ScheduleRemovalReason } from "@/lib/erp/scheduleRemovals";
 import { listLabel } from "@/lib/erp/appLists";
 
@@ -2351,6 +2352,7 @@ export function SchedulePlanner({
               status={answers[answerUid.daySub(eventDayAssignment.id, eventDayAssignment.supervisorContractorId)]}
             />
           ) : null}
+          {eventDayAssignment?.supervisorContractorId ? <SubCrewLine crew={eventDayAssignment.subCrew ?? null} /> : null}
           {showSubPay(p, eventDaySupervisorContractorId) && subPaySetElsewhere(p, eventDaySupervisorContractorId, k) != null ? (
             <div className="mt-1.5 flex items-center gap-1 text-[10px] text-gray-500">
               Contractor pay {centsToDollars(subPaySetElsewhere(p, eventDaySupervisorContractorId, k)!)}, set in the project&apos;s Contractors tab
@@ -2398,6 +2400,19 @@ export function SchedulePlanner({
                 )}
               </div>
             </div>
+          ) : null}
+
+          {canSetSubPay && eventKind === "planned" && hasCalendarSubPay(p.segment) ? (
+            <SubOfferBox
+              key={`${p.id}:${k}:${eventDayAssignment?.id ?? ""}`}
+              kind="day"
+              ownerId={p.id}
+              dayId={eventDayAssignment?.id ?? null}
+              dateKey={k}
+              hasSub={!!eventDayAssignment?.supervisorContractorId}
+              contractors={contractors}
+              suggestedPayCents={p.contractValueCents && isTurnover ? Math.round(p.contractValueCents / 2) : null}
+            />
           ) : null}
 
           {calendarSegmentGroup(p.segment) === "POST_CONSTRUCTION" || p.sovItems.length > 0 ? (
@@ -3689,6 +3704,7 @@ export function SchedulePlanner({
                           ) : coContractor ? (
                             <div className="mt-1 text-gray-300">
                               Contractor: {coContractor.displayName}
+                              {coAssignment?.subCrew ? ` · crew of ${coAssignment.subCrew.count}` : ""}
                               {coAssignment?.supervisorContractorId ? <AnswerMark dark status={answers[answerUid.coDaySub(coAssignment.id, coAssignment.supervisorContractorId)]} /> : null}
                             </div>
                           ) : needsSupervisor ? (
@@ -4018,6 +4034,7 @@ export function SchedulePlanner({
                         ) : contractor ? (
                           <div className="text-gray-300">
                             Contractor: {contractor.displayName}
+                            {assignment.subCrew ? ` · crew of ${assignment.subCrew.count}` : ""}
                             {assignment.supervisorContractorId ? <AnswerMark dark status={answers[answerUid.daySub(assignment.id, assignment.supervisorContractorId)]} /> : null}
                           </div>
                         ) : (

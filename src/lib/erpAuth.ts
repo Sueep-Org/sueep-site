@@ -24,6 +24,15 @@ export function canSeeFinancials(role: ErpRole): boolean {
   return isPmLevel(role) || role === "SALES";
 }
 
+/** Job-level cost visibility: contract value, labor/material costs and
+ * margins on projects, the dashboard and the schedule's SOV prices.
+ * Everyone with canSeeFinancials plus ESTIMATION, who need actual costs to
+ * price future bids. Deliberately narrower than canSeeFinancials: no payroll,
+ * employee pay, commission, reimbursements, invoices or setting sub pay. */
+export function canSeeJobCosts(role: ErpRole): boolean {
+  return canSeeFinancials(role) || role === "ESTIMATION";
+}
+
 /** Gates pay-info fields (bank account, salary/rate, commission) for both
  * Employee and Contractor, same pattern as canViewSsn. Sales keeps this,
  * they just can't see Payroll or Offshore Payroll (see canSeePayroll below). */

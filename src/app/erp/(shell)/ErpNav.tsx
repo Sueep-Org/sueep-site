@@ -613,7 +613,7 @@ const adminGroupItems: NavItem[] = [
   {
     href: "/erp/users",
     label: "User Management",
-    roles: ["ADMIN"],
+    roles: PM_ADMIN,
     icon: IdCardIcon,
   },
   {

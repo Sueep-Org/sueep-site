@@ -189,6 +189,13 @@ export function PropertyManagerLinks() {
             </TD>
           </tr>
           <tr>
+            <TD>You want to see what they did on their page, or turn it off with a reason</TD>
+            <TD>
+              Go to <strong>User Management</strong>, <strong>Property managers</strong> tab. Click their row for their activity.{" "}
+              <strong>Turn off page</strong> there does the same as unchecking Link on, and keeps the reason.
+            </TD>
+          </tr>
+          <tr>
             <TD>They manage a new building, or stopped managing one</TD>
             <TD>Open their row and check or uncheck the building.</TD>
           </tr>

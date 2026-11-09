@@ -54,10 +54,14 @@ export function NotificationsOverview() {
         </Step>
 
         <Step n={5} title="The Email Log">
-          The <strong>Email Log</strong> tab lists every email sent in the last 180 days, newest first. Filters:
+          The <strong>Email Log</strong> tab lists every email sent in the last 180 days, newest first. Type in the search box and press
+          Enter to search subjects. Click <strong>Filter</strong> for everything else:
           <UL>
             <LI>
-              <strong>Email type:</strong> search by name or area, e.g. type &quot;Billing&quot; to see every billing email.
+              <strong>Status:</strong> Sent, Failed, Turned off or Not set up.
+            </LI>
+            <LI>
+              <strong>Email:</strong> search by name or area, e.g. type &quot;Billing&quot; to see every billing email.
             </LI>
             <LI>
               <strong>Project or building:</strong> every email about one job or building.
@@ -66,13 +70,14 @@ export function NotificationsOverview() {
               <strong>Recipient:</strong> type part of an address, e.g. &quot;jennifer&quot;. Matches To, Cc and Bcc.
             </LI>
             <LI>
-              <strong>Subject contains:</strong> words in the subject line. Press Enter to search.
+              <strong>Sent:</strong> Today, Last 7 days, This month, Last month, or pick your own dates.
             </LI>
             <LI>
-              <strong>From / To dates</strong>, <strong>Has attachments</strong> and <strong>Resent</strong>.
+              <strong>Only:</strong> Has attachments or Resent.
             </LI>
           </UL>
-          The count on the right shows how many emails match. <strong>Clear filters</strong> starts over. The page
+          Each filter you use shows as a chip next to the button; click its <strong>×</strong> to remove it, or{" "}
+          <strong>Clear all</strong>. The count on the right shows how many emails match. The page
           address keeps your filters, so you can bookmark it or send the link to someone. Statuses:
           <UL>
             <LI>

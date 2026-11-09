@@ -137,6 +137,22 @@ export function ScheduleCalendarOverview() {
               it blank and no pay line goes on the invite.
             </LI>
             <LI>
+              <strong>Job offer</strong> (turnover and post-construction days, roles that see prices only): instead of
+              picking a sub, click <strong>Offer to a sub</strong>. It covers this visit&apos;s saved upcoming days that
+              don&apos;t have a sub yet. Pick the sub, their pay, and when they have to answer by. They get an email
+              and see it on their jobs page, where they tap Accept or Decline with a reason. Accept puts them on those
+              days with that pay and sends the normal invite, already confirmed. A decline or no answer emails you and
+              the people set for &quot;Sub job offer declined&quot; on Email Settings. If they declined over price, open
+              the day and click <strong>Resend at new price</strong>. Every round stays under{" "}
+              <strong>Show offer history</strong>.
+            </LI>
+            <LI>
+              <strong>Crew size:</strong> a sub running a day says how many people they&apos;re bringing (names are
+              optional) when they accept an offer, or on their jobs page. It shows under their name on the card as{" "}
+              <strong>Crew of 3</strong>, and in the chip&apos;s hover. They can change it until the day before. A
+              change emails the day&apos;s PM and the people set for &quot;Sub crew changed&quot; on Email Settings.
+            </LI>
+            <LI>
               <strong>Invites for a date range:</strong> when one Save covers several days, each person gets one
               email listing every day, with the pay shown once. Each day still has its own Confirm button and its
               own calendar event. Days saved one at a time still send one email each.

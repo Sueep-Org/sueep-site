@@ -231,6 +231,8 @@ export type ScheduleCoDayAssignment = {
   comment: string | null;
   /** Staff-only note, never sent in invites. */
   internalNote: string | null;
+  /** The crew the sub running this day said they're bringing (see subCrew.ts) */
+  subCrew?: { count: number; names: string[] } | null;
 };
 
 /** A worker (Employee or Contractor) planned onto a change order's work on a
@@ -297,6 +299,8 @@ export type ScheduleDayAssignment = {
   /** The client who asked for this day, emailed once everyone confirms (see scheduleRequester.ts) */
   requesterName: string | null;
   requesterEmail: string | null;
+  /** The crew the sub running this day said they're bringing (see subCrew.ts) */
+  subCrew?: { count: number; names: string[] } | null;
 };
 
 /** A worker (Employee or Contractor) planned to be on a project on a future
