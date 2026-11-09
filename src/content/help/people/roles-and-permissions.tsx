@@ -38,7 +38,7 @@ export function RolesAndPermissions() {
           </tr>
           <tr>
             <TD>Estimation</TD>
-            <TD>Projects, pricing and the AI Estimator.</TD>
+            <TD>Projects, pricing and the AI Estimator. Sees job costs (contract value, labor and material costs, margins) on projects, the dashboard and the schedule, but not payroll, pay info, commission or reimbursements.</TD>
           </tr>
           <tr>
             <TD>Supervisor</TD>
@@ -88,6 +88,26 @@ export function RolesAndPermissions() {
         Admins, Project Managers and the Business Manager approve time off. Time off for a Project Manager, the Business
         Manager or an Admin needs an Admin to approve it, and nobody approves their own.
       </P>
+
+      <H2>Subs and property managers on User Management</H2>
+      <P>
+        Admins, Project Managers and the Business Manager see two more tabs on <strong>User Management</strong>. The{" "}
+        <strong>Staff</strong> tab (ERP roles) stays Admin only.
+      </P>
+      <UL>
+        <LI>
+          <strong>Subs:</strong> every active sub and their jobs page. <strong>Property managers:</strong> everyone with a
+          turnover page.
+        </LI>
+        <LI>
+          Each row shows whether they use it (Using it, Never opened, Turned off, No link), when they last opened it, signed-in
+          phones, and how much they did in the last 30 days. Click a row to see what they did and who changed their page.
+        </LI>
+        <LI>
+          <strong>Turn off page</strong> asks why, stops their link right away and signs out their phones. Nothing is deleted.{" "}
+          <strong>Turn back on</strong> makes a new link and emails it. <strong>Send link</strong> gives a sub their first link.
+        </LI>
+      </UL>
 
       <Callout type="info">
         The Finance role was removed. What it covered is now part of the Business Manager role.

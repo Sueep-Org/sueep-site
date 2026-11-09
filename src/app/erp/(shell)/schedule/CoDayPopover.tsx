@@ -20,6 +20,7 @@ import { useFloatingMenu } from "@/app/erp/components/useFloatingMenu";
 import { centsToDollars } from "@/lib/erp/money";
 import { addDaysKey, daysBetween } from "@/lib/erp/managementCalendar";
 import { AnswerMark, CoverageAnswer, answerUid, type Answers } from "./AnswerMark";
+import { SubOfferBox, SubCrewLine } from "./SubOfferBox";
 import { RemoveDayModal } from "./RemoveDayModal";
 import type { ScheduleDayRemovalRow, ScheduleRemovalReason } from "@/lib/erp/scheduleRemovals";
 
@@ -423,7 +424,13 @@ export function CoDayPopover({
                 <label className="block text-[10px] font-medium text-gray-500">Coverage</label>
                 {supervisorName ? <p className="mt-1 text-[11px] text-gray-600">Supervisor: {supervisorName}<AnswerMark status={supervisorAnswer} /></p> : null}
                 {pmName ? <p className="mt-1 text-[11px] text-gray-600">PM: {pmName}</p> : null}
-                {contractorName ? <p className="mt-1 text-[11px] text-gray-600">Contractor: {contractorName}<AnswerMark status={contractorAnswer} /></p> : null}
+                {contractorName ? (
+                  <p className="mt-1 text-[11px] text-gray-600">
+                    Contractor: {contractorName}
+                    {assignment?.subCrew ? ` · crew of ${assignment.subCrew.count}` : ""}
+                    <AnswerMark status={contractorAnswer} />
+                  </p>
+                ) : null}
                 {assignment.startTime && assignment.endTime ? (
                   <p className="mt-1 text-[11px] text-gray-600">
                     {assignment.startTime} to {assignment.endTime}
@@ -501,6 +508,7 @@ export function CoDayPopover({
               </div>
               <CoverageAnswer name={supervisorName} status={supervisorAnswer} />
               <CoverageAnswer name={contractorName} status={contractorAnswer} />
+              {assignment?.supervisorContractorId ? <SubCrewLine crew={assignment.subCrew ?? null} /> : null}
               <div className="mt-1.5 flex items-center gap-1.5">
                 <input
                   type="time"
@@ -545,6 +553,18 @@ export function CoDayPopover({
                     )}
                   </div>
                 </div>
+              ) : null}
+              {canSetSubPay ? (
+                <SubOfferBox
+                  key={`${co.id}:${dateKey}:${assignment?.id ?? ""}`}
+                  kind="co-day"
+                  ownerId={co.id}
+                  dayId={assignment?.id ?? null}
+                  dateKey={dateKey}
+                  hasSub={!!assignment?.supervisorContractorId}
+                  contractors={contractors}
+                  suggestedPayCents={null}
+                />
               ) : null}
               <textarea
                 value={comment}

@@ -26,8 +26,10 @@ import {
   canRescheduleOnTimeline,
   canSeeFinancials,
   getErpAuth,
+  canSeeJobCosts,
 } from "@/lib/erpAuth";
 import { SchedulePlanner } from "./SchedulePlanner";
+import { crewOf } from "@/lib/erp/subCrew";
 import { ScheduleCalendarTabs } from "./ScheduleCalendarTabs";
 import { JanitorialCalendar } from "./JanitorialCalendar";
 import { ManagementCalendar } from "./ManagementCalendar";
@@ -81,7 +83,8 @@ export default async function SchedulePage({ searchParams }: PageProps) {
   }
 
   const canFilterBySupervisor = canFilterScheduleBySupervisor(auth?.role ?? "EMPLOYEE");
-  const showSovPrices = canSeeFinancials(auth?.role ?? "EMPLOYEE");
+  const showSovPrices = canSeeJobCosts(auth?.role ?? "EMPLOYEE");
+  const canSetSubPay = canSeeFinancials(auth?.role ?? "EMPLOYEE");
 
   const [
     projectRows,
@@ -205,6 +208,9 @@ export default async function SchedulePage({ searchParams }: PageProps) {
         requesterName: true,
         requesterEmail: true,
         subPayAssignment: { select: { contractorId: true, costCents: true } },
+        subCrewContractorId: true,
+        subCrewCount: true,
+        subCrewNames: true,
       },
     }),
     prisma.projectWorkerDayAssignment.findMany({
@@ -242,6 +248,9 @@ export default async function SchedulePage({ searchParams }: PageProps) {
         comment: true,
         internalNote: true,
         subPayAssignment: { select: { contractorId: true, costCents: true } },
+        subCrewContractorId: true,
+        subCrewCount: true,
+        subCrewNames: true,
       },
     }),
     prisma.changeOrderWorkerDayAssignment.findMany({
@@ -355,6 +364,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     internalNote: a.internalNote,
     requesterName: a.requesterName,
     requesterEmail: a.requesterEmail,
+    subCrew: crewOf(a),
   }));
 
   // Calendar day cells are driven by actual logged work, not a project's full
@@ -595,6 +605,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     endTime: a.endTime,
     comment: a.comment,
     internalNote: a.internalNote,
+    subCrew: crewOf(a),
   }));
 
   const coWorkerAssignments: ScheduleCoWorkerAssignment[] = coWorkerAssignmentRows.map((a) => ({
@@ -909,7 +920,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
         initialWorkerAssignments={visibleWorkerAssignments}
         initialCoDayAssignments={visibleCoDayAssignments}
         initialCoWorkerAssignments={visibleCoWorkerAssignments}
-        canSetSubPay={showSovPrices}
+        canSetSubPay={canSetSubPay}
         initialDayRemovals={dayRemovals.filter((r) => visibleProjects.some((p) => p.id === r.projectId))}
       />
 

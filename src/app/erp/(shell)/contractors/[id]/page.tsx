@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getErpAuth, canViewSsn, canEditPayInfo } from "@/lib/erpAuth";
+import { getErpAuth, canViewSsn, canEditPayInfo, isPmLevel } from "@/lib/erpAuth";
 import { CONTRACTOR_MANUAL_SECTIONS, CONTRACTOR_PROFILE_EXTRA_SECTIONS, subFieldName } from "@/lib/erp/subcontractorQuestionnaire";
 import { backgroundCheckLabel } from "@/lib/erp/employees";
 import { maskAccountNumber } from "@/lib/erp/maskAccountNumber";
@@ -11,6 +11,7 @@ import { ContractSigningSection } from "@/app/erp/components/ContractSigningSect
 import { ContractorProfileEditor } from "./ContractorProfileEditor";
 import { ContractorPaperworkPanel } from "./ContractorPaperworkPanel";
 import { ContractorInfoLinkSection } from "./ContractorInfoLinkSection";
+import { ContractorPortalSection } from "./ContractorPortalSection";
 import { ContractorContactInfoSection } from "./ContractorContactInfoSection";
 import { ContractorBankAccountSection } from "./ContractorBankAccountSection";
 import { ContractorInsuranceSection } from "./ContractorInsuranceSection";
@@ -57,6 +58,7 @@ export default async function ContractorDetailPage({ params }: PageProps) {
       },
       // What a delete would take with it, for the Delete contractor window.
       _count: { select: { assignments: true, changeOrderAssignments: true, workerDayAssignments: true, coWorkerDayAssignments: true, documents: true } },
+      portalDevices: { select: { id: true } },
     },
   });
   if (!contractor) notFound();
@@ -446,6 +448,23 @@ export default async function ContractorDetailPage({ params }: PageProps) {
                     status: contractor.status,
                     runsWithoutSupervisor: contractor.runsWithoutSupervisor,
                   }}
+                />
+              </CollapsibleSection>
+
+              <CollapsibleSection
+                title="Sub portal"
+                status={contractor.portalTurnedOffAt ? "Turned off" : contractor.portalToken ? (contractor.portalLastSeenAt ? "Using it" : "Link sent, not opened") : "Not set up"}
+                tone={contractor.portalTurnedOffAt ? "neutral" : contractor.portalToken ? (contractor.portalLastSeenAt ? "complete" : "warning") : "empty"}
+              >
+                <ContractorPortalSection
+                  id={contractor.id}
+                  email={contractor.email}
+                  active={contractor.status === "ACTIVE"}
+                  portalUrl={contractor.portalToken ? `${siteUrl}/sub/${contractor.portalToken}` : null}
+                  lastSeenAt={contractor.portalLastSeenAt?.toISOString() ?? null}
+                  devices={contractor.portalDevices.length}
+                  turnedOff={!!contractor.portalTurnedOffAt}
+                  canManage={isPmLevel(auth?.role)}
                 />
               </CollapsibleSection>
 

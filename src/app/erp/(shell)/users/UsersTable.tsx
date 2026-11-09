@@ -32,7 +32,8 @@ const PERMISSION_ROWS: { label: string; roles: ErpRole[] }[] = [
   { label: "Labor assignments", roles: FIELD },
   { label: "Quality checks", roles: FIELD },
   { label: "Contractor assignments", roles: PM_UP },
-  { label: "View financials (contract value, costs)", roles: PM_UP },
+  { label: "View job costs (contract value, costs, margins)", roles: PM_EST },
+  { label: "Set contractor pay on the schedule", roles: PM_UP },
   { label: "Employees", roles: PM_UP },
   // Payroll/Offshore Payroll: same set as canSeePayroll in src/lib/erpAuth.ts,
   // the one place Sales is cut out of the money pages.
@@ -57,6 +58,7 @@ const PERMISSION_ROWS: { label: string; roles: ErpRole[] }[] = [
   { label: "Management calendar", roles: PM_LEVEL },
   { label: "Company info", roles: PM_LEVEL },
   { label: "Notification settings", roles: PM_LEVEL },
+  { label: "Sub and property manager pages (turn off, activity)", roles: PM_LEVEL },
   { label: "Listed as PM on the schedule", roles: ["PROJECT_MANAGER"] },
   { label: "Janitorial quality checks (doing them)", roles: ["ADMIN", "PROJECT_MANAGER"] },
   { label: "User management", roles: ["ADMIN"] },

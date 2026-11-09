@@ -1138,6 +1138,43 @@ export function buildPropertyManagerCodeEmail(params: { firstName: string; code:
   `;
 }
 
+/** To a sub: the code for their portal on a new device. */
+export function buildSubPortalCodeEmail(params: { firstName: string; code: string; lang: Lang }) {
+  const es = params.lang === "es";
+  return `
+    <h2 style="margin:0 0 12px;color:#E73C6E">${es ? "Tu código para entrar" : "Your sign-in code"}</h2>
+    <p>${es ? "Hola" : "Hi"} ${escapeHtml(params.firstName)},</p>
+    <p>${es ? "Escribe este código en tu página de trabajos de Sueep:" : "Enter this code on your Sueep jobs page:"}</p>
+    <p style="margin:20px 0;font-size:28px;font-weight:bold;letter-spacing:6px;color:#111827">${escapeHtml(params.code)}</p>
+    <p>${es ? "Sirve por 15 minutos. Solo necesitas un código una vez en cada teléfono o computadora." : "It works for 15 minutes. You'll only need a code once on each phone or computer."}</p>
+    <p style="font-size:12px;color:#555">${es ? "¿No lo pediste? Puedes ignorar este correo." : "Didn't ask for this? You can ignore this email."}</p>
+  `;
+}
+
+/** To a sub: their portal, what it shows and how to open it. */
+export function buildSubPortalWelcomeEmail(params: { firstName: string; url: string; lang: Lang }) {
+  const es = params.lang === "es";
+  return `
+    <h2 style="margin:0 0 12px;color:#E73C6E">${es ? "Tu página de trabajos de Sueep" : "Your Sueep jobs page"}</h2>
+    <p>${es ? "Hola" : "Hi"} ${escapeHtml(params.firstName)},</p>
+    <p>${
+      es
+        ? "Hicimos una página donde puedes ver tus trabajos con Sueep: fechas, dirección, trabajo y pago. No necesitas contraseña."
+        : "We set up a page where you can see your jobs with Sueep: dates, address, scope and pay. No password needed."
+    }</p>
+    <ol style="padding-left:20px;line-height:1.7">
+      <li>${es ? "Toca el botón para abrir tu página." : "Tap the button below to open your page."}</li>
+      <li>${es ? "Guárdala en la pantalla de inicio de tu teléfono." : "Save it to your phone's home screen."}</li>
+    </ol>
+    <p style="margin:20px 0"><a href="${escapeHtml(params.url)}" style="${BUTTON_STYLE}">${es ? "Ver mis trabajos" : "See my jobs"}</a></p>
+    <p style="font-size:12px;color:#555">${
+      es
+        ? "Si la página te pide un código, te lo enviamos por correo. No reenvíes este correo, porque el botón inicia tu sesión."
+        : "If your page ever asks for a code, we&#39;ll email you one. Please don&#39;t forward this email, since the button signs you in."
+    }</p>
+  `;
+}
+
 /** To staff: a new turnover request, one or more units at one building. */
 export function buildPropertyManagerRequestEmail(params: {
   requester: string;

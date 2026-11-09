@@ -11,7 +11,7 @@ import type { ErpAuthContext } from "@/lib/erpAuth";
 import { NOTIFICATIONS, type NotificationGroup } from "@/lib/notificationTypes";
 
 /** Never listed: sign-in codes are one-time and shouldn't sit on a page. */
-const HIDDEN_TYPES = ["PROPERTY_MANAGER_SIGN_IN_CODE"];
+const HIDDEN_TYPES = ["PROPERTY_MANAGER_SIGN_IN_CODE", "SUB_PORTAL_SIGN_IN_CODE"];
 
 export function inboxEmail(auth: ErpAuthContext): string {
   return auth.email.trim().toLowerCase();

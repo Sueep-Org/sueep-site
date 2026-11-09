@@ -2,7 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { deriveProjectLifecycle, hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
-import { getErpAuth, canSeeFinancials as checkFinancials, canSeeMarginOnly as checkMarginOnly } from "@/lib/erpAuth";
+import { getErpAuth, canSeeJobCosts as checkFinancials, canSeeMarginOnly as checkMarginOnly } from "@/lib/erpAuth";
 import { getSupervisorProjectScope } from "@/lib/erp/supervisorScope";
 import { costLaborLogs, sumLineCosts } from "@/lib/erp/laborCost";
 import { computeProjectActualsWithChangeOrders } from "@/lib/erp/projectMargin";

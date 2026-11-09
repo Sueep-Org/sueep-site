@@ -23,6 +23,7 @@ export async function PUT(req: Request, ctx: Ctx) {
   const { buildingIds, ...data } = parsed.data;
 
   const existing = await prisma.propertyManager.findUnique({ where: { email: data.email }, select: { id: true, name: true } });
+  const before = await prisma.propertyManager.findUnique({ where: { id }, select: { active: true } });
   if (existing && existing.id !== id) {
     return NextResponse.json({ error: `${existing.name} already uses this email.` }, { status: 409 });
   }
@@ -32,6 +33,10 @@ export async function PUT(req: Request, ctx: Ctx) {
       prisma.propertyManager.update({ where: { id }, data }),
       prisma.propertyManagerBuilding.deleteMany({ where: { propertyManagerId: id } }),
       prisma.propertyManagerBuilding.createMany({ data: buildingIds.map((buildingId) => ({ propertyManagerId: id, buildingId })) }),
+      // Shows on the Users page's Property managers tab
+      ...(before && before.active !== data.active
+        ? [prisma.portalAccessEvent.create({ data: { propertyManagerId: id, action: data.active ? "TURNED_ON" : "TURNED_OFF", by: auth.email } })]
+        : []),
     ]);
   } catch {
     return NextResponse.json({ error: "Not found" }, { status: 404 });

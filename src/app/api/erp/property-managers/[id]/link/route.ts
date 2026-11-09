@@ -18,6 +18,7 @@ export async function POST(_req: Request, ctx: Ctx) {
       prisma.propertyManager.update({ where: { id }, data: { token } }),
       prisma.propertyManagerDevice.deleteMany({ where: { propertyManagerId: id } }),
       prisma.propertyManagerSignInLink.deleteMany({ where: { propertyManagerId: id } }),
+      prisma.portalAccessEvent.create({ data: { propertyManagerId: id, action: "NEW_LINK", by: auth.email } }),
     ]);
   } catch {
     return NextResponse.json({ error: "Not found" }, { status: 404 });

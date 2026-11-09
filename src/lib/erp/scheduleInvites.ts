@@ -13,6 +13,7 @@ import { cancelConfirmation, markInviteSent, parseInviteUid, prepareConfirmation
 import { dateLocale, tr, type Lang } from "@/lib/erp/language";
 import { languageForEmail } from "@/lib/erp/languageLookup";
 import { coRequestUrl, isTurnoverProject } from "@/lib/erp/subCoRequests";
+import { subEmailButtonUrlForEmail } from "@/lib/erp/subPortalAccess";
 
 /** Shared "you're on the schedule" notification path — used by both the
  * supervisor day-assignment routes and the crew (employee/contractor)
@@ -122,6 +123,8 @@ function inviteHtml(params: {
   coRequestUrl?: string | null;
   /** The day's note and the property manager's request notes (inviteNotes) */
   notes?: string | null;
+  /** Subs with a portal: the button that opens it (subPortalAccess.ts) */
+  portalUrl?: string | null;
   lang: Lang;
 }): string {
   const lang = params.lang;
@@ -145,6 +148,7 @@ function inviteHtml(params: {
     !params.cancelled && params.notes ? `<p><strong>${tr(lang, { en: "Notes", es: "Notas" })}:</strong><br>${escapeHtml(params.notes).replace(/\n/g, "<br>")}</p>` : "",
     !params.cancelled && params.respondUrl ? responseButtonsHtml(params.respondUrl, lang) : "",
     !params.cancelled && params.coRequestUrl ? coRequestButtonHtml(params.coRequestUrl, lang) : "",
+    !params.cancelled && params.portalUrl ? portalButtonHtml(params.portalUrl, lang) : "",
     !params.cancelled ? `<p>${tr(lang, { en: "Add the attached invite to your calendar.", es: "Agrega la invitación adjunta a tu calendario." })}</p>` : "",
   ];
   return lines.filter(Boolean).join("");
@@ -157,6 +161,16 @@ function coRequestButtonHtml(url: string, lang: Lang): string {
   })}</p><p><a href="${escapeHtml(url)}" style="display:inline-block;padding:10px 18px;border-radius:6px;background:#E73C6E;color:#fff;text-decoration:none;font-weight:600">${tr(lang, {
     en: "Request a change order",
     es: "Solicitar una orden de cambio",
+  })}</a></p>`;
+}
+
+function portalButtonHtml(url: string, lang: Lang): string {
+  return `<p style="margin:16px 0 4px">${tr(lang, {
+    en: "All your Sueep jobs, dates and pay in one place:",
+    es: "Todos tus trabajos, fechas y pagos de Sueep en un solo lugar:",
+  })}</p><p><a href="${escapeHtml(url)}" style="display:inline-block;padding:10px 18px;border-radius:6px;background:#111827;color:#fff;text-decoration:none;font-weight:600">${tr(lang, {
+    en: "Open my Sueep page",
+    es: "Abrir mi página de Sueep",
   })}</a></p>`;
 }
 
@@ -378,7 +392,8 @@ async function sendDayInvites(list: DayInviteParams[]): Promise<void> {
     [...groups.values()].map(async (group) => {
       group.sort((a, b) => a.params.dateKey.localeCompare(b.params.dateKey));
       try {
-        const result = group.length === 1 ? await sendOneDay(group[0]!) : await sendManyDays(group);
+        const portalUrl = group[0]!.params.cancelled ? null : await subEmailButtonUrlForEmail(group[0]!.params.to).catch(() => null);
+        const result = group.length === 1 ? await sendOneDay(group[0]!, portalUrl) : await sendManyDays(group, portalUrl);
         await Promise.all(group.map((p) => recordDayInvite(p, result)));
       } catch (e) {
         console.error("Failed to send schedule invite", { uids: group.map((p) => p.params.uid), cancelled: group[0]!.params.cancelled }, e);
@@ -387,14 +402,14 @@ async function sendDayInvites(list: DayInviteParams[]): Promise<void> {
   );
 }
 
-async function sendOneDay(p: PreparedInvite) {
+async function sendOneDay(p: PreparedInvite, portalUrl: string | null) {
   const { params, lang, when } = p;
   return sendEmail({
     type: "SCHEDULE_INVITE",
     link: params.url ? new URL(params.url, "https://x").pathname : undefined,
     to: params.to,
     subject: `${params.cancelled ? tr(lang, { en: "Cancelled", es: "Cancelado" }) : tr(lang, { en: "You're scheduled", es: "Estás programado" })}: ${params.title}, ${when}`,
-    html: inviteHtml({ ...params, when, respondUrl: p.respondUrl, coRequestUrl: p.coUrl, notes: p.notes, lang }),
+    html: inviteHtml({ ...params, when, respondUrl: p.respondUrl, coRequestUrl: p.coUrl, notes: p.notes, portalUrl, lang }),
     lang,
     attachments: [{ filename: "invite.ics", content: Buffer.from(p.ics) }],
   });
@@ -411,7 +426,7 @@ function shared<T>(group: PreparedInvite[], pick: (p: PreparedInvite) => T): T |
   return group.every((p) => pick(p) === first) ? first : null;
 }
 
-async function sendManyDays(group: PreparedInvite[]) {
+async function sendManyDays(group: PreparedInvite[], portalUrl: string | null) {
   const first = group[0]!;
   const { params, lang } = first;
   const cancelled = !!params.cancelled;
@@ -465,6 +480,7 @@ async function sendManyDays(group: PreparedInvite[]) {
     !cancelled && group.some((p) => p.respondUrl) ? `<p style="margin:16px 0 4px">${tr(lang, { en: "Can you make each day?", es: "¿Puedes ir cada día?" })}</p>` : "",
     `<ul style="padding-left:18px">${dayRows}</ul>`,
     !cancelled && first.coUrl ? coRequestButtonHtml(first.coUrl, lang) : "",
+    !cancelled && portalUrl ? portalButtonHtml(portalUrl, lang) : "",
     !cancelled ? `<p>${tr(lang, { en: "Add the attached invites to your calendar, one per day.", es: "Agrega las invitaciones adjuntas a tu calendario, una por día." })}</p>` : "",
   ];
 
