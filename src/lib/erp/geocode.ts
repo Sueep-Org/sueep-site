@@ -90,3 +90,29 @@ export async function ensureBuildingCoordinates(
   });
   return result;
 }
+
+/**
+ * Coordinates for any address (job sites with no Building row), cached in
+ * GeocodeCache by the address text. With lookUp false only the cache is
+ * read, so callers on a request path don't wait on the geocoder.
+ */
+export async function coordinatesForAddress(
+  address: string,
+  options: { lookUp: boolean },
+): Promise<{ latitude: number; longitude: number } | null> {
+  const key = address.trim().replace(/\s+/g, " ");
+  if (!key) return null;
+  const cached = await prisma.geocodeCache.findUnique({ where: { address: key } });
+  if (cached) return cached.latitude != null && cached.longitude != null ? { latitude: cached.latitude, longitude: cached.longitude } : null;
+  if (!options.lookUp) return null;
+
+  const result = await geocodeAddress(key);
+  if (result === "ERROR") return null;
+  const found = result !== "NOT_FOUND";
+  await prisma.geocodeCache.upsert({
+    where: { address: key },
+    create: { address: key, status: found ? "OK" : "NOT_FOUND", latitude: found ? result.latitude : null, longitude: found ? result.longitude : null },
+    update: {},
+  });
+  return found ? result : null;
+}

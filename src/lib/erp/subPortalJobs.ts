@@ -40,6 +40,8 @@ export type SubJobDay = {
 
 export type SubJob = {
   key: string;
+  /** "p:<projectId>" or "co:<changeOrderId>", what check-ins are saved against */
+  jobKey: string;
   title: string;
   /** "Running the job" (in charge that day) or "Crew" */
   role: "lead" | "crew";
@@ -401,6 +403,7 @@ export async function loadSubJobs(contractorId: string, lang: Lang): Promise<Sub
       }
       return {
         key: `${first.group}|${first.role}|${first.dateKey}`,
+        jobKey: first.group,
         title: first.title,
         role: first.role,
         address: first.address,

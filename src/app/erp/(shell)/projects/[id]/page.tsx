@@ -34,6 +34,7 @@ import { ProjectWorkOrderNotifier } from "./ProjectWorkOrderNotifier";
 import { cleanContactList } from "@/lib/erp/workOrderContacts";
 import { ProjectChecklistSection } from "./ProjectChecklistSection";
 import { ProjectUnitTurnoverChecklist } from "./ProjectUnitTurnoverChecklist";
+import { SubPhotosPanel } from "./SubPhotosPanel";
 import { BuildingPricingPackageEditor } from "@/app/erp/(shell)/buildings/BuildingPricingPackageEditor";
 import { UnitScopeCard } from "./UnitScopeCard";
 import { UnitInvoiceChips } from "@/app/erp/components/UnitInvoiceChips";
@@ -80,7 +81,7 @@ const PROJECT_TAB_GROUPS: { label: string; members: Record<string, string> }[] =
     members: { Financials: "Summary", Materials: "Materials", "Pricing Package": "Pricing Package", "Invoices & Quotes": "Invoices & Quotes", Proposals: "Proposals", Liens: "Liens" },
   },
   { label: "Labor", members: { Labor: "Hourly", Contractors: "Contractors" } },
-  { label: "Quality & Safety", members: { Checklist: "Checklist", "Safety Checklist": "Safety Checklist", "Quality Checks": "Quality Checks" } },
+  { label: "Quality & Safety", members: { Checklist: "Checklist", "Sub Photos": "Sub Photos", "Safety Checklist": "Safety Checklist", "Quality Checks": "Quality Checks" } },
 ];
 
 /** Folds the flat tab list into PROJECT_TAB_GROUPS, each group sitting where its first tab was. */
@@ -831,6 +832,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             label: "Checklist",
             content: project.segment === "JANITORIAL_TURNOVER_REQUESTS" ? (
               <div className="space-y-6">
+                <SubPhotosPanel projectId={project.id} hideWhenEmpty />
                 <UnitScopeChecklist
                   projectId={project.id}
                   contractedScopeItems={contractedScopeItems}
@@ -886,6 +888,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           },
         ]
       : []),
+    { label: "Sub Photos", content: <SubPhotosPanel projectId={project.id} /> },
     ...(isPostConstruction
       ? [
           {

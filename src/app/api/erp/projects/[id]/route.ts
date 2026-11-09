@@ -7,6 +7,7 @@ import { getErpAuth, canOverrideQualityChecklist, canEditPricing } from "@/lib/e
 import { ALL_CHECKLIST_ITEM_IDS } from "@/lib/erp/unitTurnoverChecklistTemplate";
 import { notifyProjectRescheduled } from "@/lib/erp/notifyReschedule";
 import { notifyReadyToBill } from "@/lib/erp/notifyReadyToBill";
+import { billingBlockedBySubReview } from "@/lib/erp/subReviews";
 import { contractedTurnoverScope } from "@/lib/erp/turnoverScope";
 import { sanitizeChangeOrderLaborRateCard } from "@/lib/changeOrderLaborRates";
 import { resolveCommissionEmployeeId } from "@/lib/erp/commission";
@@ -118,6 +119,10 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if (b) {
       const v = voidReasonFor(b, body.voidReason);
       if ("error" in v) return NextResponse.json({ error: v.error }, { status: 400 });
+      if (b === "BILLED" && !isBilledStatus(existing.billingStatus)) {
+        const blocked = await billingBlockedBySubReview(id);
+        if (blocked) return NextResponse.json({ error: blocked }, { status: 409 });
+      }
       data.billingStatus = b;
       data.voidReason = v.voidReason;
     }

@@ -1,6 +1,8 @@
 /** Pure date helpers for ERP schedule / Gantt (no external deps beyond
  * dates.ts, itself dependency-free). */
 
+import type { DayCheckIn } from "./subCheckIns";
+
 // A plain `text.includes(query)` requires the whole typed phrase to appear
 // contiguously and in order, which fails for a very common search pattern:
 // "<project name> <unit number>", where the unit number sits at the end of
@@ -233,6 +235,8 @@ export type ScheduleCoDayAssignment = {
   internalNote: string | null;
   /** The crew the sub running this day said they're bringing (see subCrew.ts) */
   subCrew?: { count: number; names: string[] } | null;
+  /** The sub running this day checking in and out from their portal (see subCheckIns.ts) */
+  subCheckIn?: DayCheckIn | null;
 };
 
 /** A worker (Employee or Contractor) planned onto a change order's work on a
@@ -301,6 +305,8 @@ export type ScheduleDayAssignment = {
   requesterEmail: string | null;
   /** The crew the sub running this day said they're bringing (see subCrew.ts) */
   subCrew?: { count: number; names: string[] } | null;
+  /** The sub running this day checking in and out from their portal (see subCheckIns.ts) */
+  subCheckIn?: DayCheckIn | null;
 };
 
 /** A worker (Employee or Contractor) planned to be on a project on a future

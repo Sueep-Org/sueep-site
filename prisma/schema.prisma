@@ -178,6 +178,8 @@ model Project {
   contractorAssignments ContractorAssignment[]
   subCoRequests         SubCoRequest[]
   subJobOffers          SubJobOffer[]
+  subCheckIns           SubCheckIn[]
+  subReviews            SubReview[]
   subBids               SubBid[]
   contractorRatings     ContractorRating[]
   laborAssignments      ProjectLaborAssignment[]
@@ -1105,6 +1107,8 @@ model ProjectChangeOrder {
   /// The sub's request this change order came from (see SubCoRequest)
   subCoRequests SubCoRequest[]
   subJobOffers  SubJobOffer[]
+  subCheckIns   SubCheckIn[]
+  subReviews    SubReview[]
 }
 
 /// A planned supervisor/PM coverage of a ProjectChangeOrder on a specific
@@ -2235,6 +2239,8 @@ model Contractor {
   portalTurnedOffAt   DateTime?
   portalAccessEvents  PortalAccessEvent[]
   jobOffers           SubJobOffer[]
+  checkIns            SubCheckIn[]
+  subReviews          SubReview[]
 
   /// Pricing score (1-5) typed in by hand, used instead of the one worked out
   /// from their bids (see src/lib/erp/subScores.ts). Null means use the bids.
@@ -2314,6 +2320,203 @@ model SubJobOffer {
 /// Staff turning a sub's or property manager's page off or on, signing out
 /// their phones, or making a new link (Users page, Subs and Property
 /// managers tabs). Exactly one of contractorId / propertyManagerId is set.
+/// A sub checking in and out of a job day from their portal (subCheckIns.ts).
+/// Location is taken only at the moment they tap, never tracked. One row per
+/// sub, job and day; a row with no checkInAt only records a missed check-in alert.
+model SubCheckIn {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contractorId String
+  contractor   Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+
+  /// "p:<projectId>" or "co:<changeOrderId>", same as the portal's job groups
+  jobKey        String
+  projectId     String
+  project       Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  changeOrderId String?
+  changeOrder   ProjectChangeOrder? @relation(fields: [changeOrderId], references: [id], onDelete: Cascade)
+  /// The job day (midnight UTC, like the day rows)
+  date          DateTime
+  /// lead (running the day) | crew
+  role          String
+
+  checkInAt   DateTime?
+  inLatitude  Float?
+  inLongitude Float?
+  /// The phone's own accuracy, meters
+  inAccuracy  Float?
+  /// Straight-line meters from the job site, when both places are known
+  inMeters    Float?
+  inOffSite   Boolean   @default(false)
+  /// Minutes after the start time, only when past the grace window (Settings, Subs)
+  lateMinutes Int?
+  /// Leads: how many people actually came, to compare with subCrewCount
+  crewCount   Int?
+
+  checkOutAt   DateTime?
+  outLatitude  Float?
+  outLongitude Float?
+  outAccuracy  Float?
+  outMeters    Float?
+  outOffSite   Boolean   @default(false)
+
+  /// When the PM was told this sub hadn't checked in by the start time plus grace
+  missedAlertAt DateTime?
+
+  /// Before/after photos from the portal (subPhotos.ts)
+  photos             SubJobPhoto[]
+  /// A PM, Business Manager or Admin let them check out without the minimum photos
+  photosWaivedAt     DateTime?
+  /// Email of who did it
+  photosWaivedBy     String?
+  photosWaivedReason String?
+
+  /// The PM's quality review of this day's work (subReviews.ts), made at check-out
+  review SubReview?
+
+  @@unique([contractorId, jobKey, date])
+  @@index([projectId, date])
+  @@index([changeOrderId, date])
+  @@index([date])
+}
+
+/// A before or after photo a sub took from their portal (subPhotos.ts). The
+/// image bytes are in SubJobPhotoData so job, schedule and list queries never
+/// load them. Shrunk on the phone, then re-encoded here (1600px JPEG, no EXIF).
+model SubJobPhoto {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  checkInId String
+  checkIn   SubCheckIn @relation(fields: [checkInId], references: [id], onDelete: Cascade)
+
+  /// Copied from the check-in, so a project's photos are one query
+  contractorId String
+  projectId    String
+  /// The job day (midnight UTC)
+  date         DateTime
+
+  /// before | after (taken at the job), fix (the sub's photos answering a fix
+  /// request), issue (staff photos showing what to fix)
+  kind    String
+  /// fix and issue photos: the review round they belong to (SubReview.round)
+  reviewRound Int?
+  /// issue photos: email of the ERP user who took it
+  uploadedBy  String?
+  /// Turnovers: a checklist section id (e.g. "kitchen"). Others: what they typed. Null = whole job.
+  area    String?
+  /// When it was taken on the phone (a photo sent later keeps its own time)
+  takenAt DateTime
+
+  latitude  Float?
+  longitude Float?
+  accuracy  Float?
+  /// Straight-line meters from the job site, when both places are known
+  meters    Float?
+  offSite   Boolean @default(false)
+
+  width     Int
+  height    Int
+  /// Bytes of the full image and the small preview
+  size      Int
+  thumbSize Int
+
+  data SubJobPhotoData?
+
+  @@index([checkInId])
+  @@index([projectId, date])
+  @@index([contractorId, createdAt])
+}
+
+model SubJobPhotoData {
+  photoId String      @id
+  photo   SubJobPhoto @relation(fields: [photoId], references: [id], onDelete: Cascade)
+  /// JPEG, longest side 1600px
+  full    Bytes
+  /// JPEG, longest side 320px
+  thumb   Bytes
+}
+
+/// Quality review of a sub's day (subReviews.ts). Made when the sub running
+/// the day checks out; the day's PM (or a Business Manager or Admin) looks at
+/// the before/after photos and passes it or asks for fixes, until it passes.
+model SubReview {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  checkInId String     @unique
+  checkIn   SubCheckIn @relation(fields: [checkInId], references: [id], onDelete: Cascade)
+
+  /// Copied from the check-in, for lists
+  contractorId  String
+  contractor    Contractor          @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+  projectId     String
+  project       Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  changeOrderId String?
+  changeOrder   ProjectChangeOrder? @relation(fields: [changeOrderId], references: [id], onDelete: Cascade)
+  date          DateTime
+
+  /// The day's PM at check-out. They review it; Business Managers and Admins can review any.
+  pmUserId String?
+
+  /// PENDING (waiting for staff) | NEEDS_FIX (waiting for the sub) | PASSED
+  status String @default("PENDING")
+  /// Counts from 1; goes up each time the sub sends fix photos back
+  round  Int    @default(1)
+
+  /// The open fix request: what to fix (turnovers: checklist section ids; others: text) and the note
+  fixItems String[] @default([])
+  fixNote  String?
+
+  passedAt DateTime?
+  passedBy String?
+
+  /// Last on-site check saved for it (QualityCheck), when the reviewer was there
+  qualityCheckId String?
+
+  events SubReviewEvent[]
+
+  @@index([status, createdAt])
+  @@index([projectId])
+  @@index([contractorId, status])
+  @@index([pmUserId, status])
+}
+
+/// One step in a review: sent for review, fix asked, fix sent, passed.
+model SubReviewEvent {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  reviewId String
+  review   SubReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  round  Int
+  /// SUBMITTED | NEEDS_FIX | FIX_SENT | PASSED
+  action String
+  /// Staff email, or "sub"
+  by     String
+  note   String?
+  items  String[] @default([])
+  /// The reviewer was at the job
+  onSite Boolean  @default(false)
+
+  @@index([reviewId, createdAt])
+}
+
+/// Address -> coordinates, for job sites with no Building row (post-construction
+/// site addresses). Keyed by the address text, so a changed address is looked up again.
+model GeocodeCache {
+  address   String   @id
+  latitude  Float?
+  longitude Float?
+  /// OK | NOT_FOUND
+  status    String
+  createdAt DateTime @default(now())
+}
+
 model PortalAccessEvent {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())

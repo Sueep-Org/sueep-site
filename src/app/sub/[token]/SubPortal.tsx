@@ -5,9 +5,13 @@ import { useRouter } from "next/navigation";
 import { dateLocale, tr, type Lang } from "@/lib/erp/language";
 import type { SubJob, SubJobDay, SubJobs } from "@/lib/erp/subPortalJobs";
 import type { DeclineReason, PortalOffer } from "@/lib/erp/subOffers";
+import type { TodayCheckIn } from "@/lib/erp/subCheckIns";
+import type { PortalFix, ReviewStatus } from "@/lib/erp/subReviews";
+import { FixCards } from "./FixCards";
 import { LangToggle, useSubLang } from "./useSubLang";
+import { TodayTab } from "./TodayTab";
 
-type Tab = "offers" | "upcoming" | "past";
+type Tab = "offers" | "today" | "upcoming" | "past";
 
 type ReasonOption = { value: DeclineReason; en: string; es: string };
 
@@ -136,7 +140,18 @@ function CrewSection({ token, job, lang }: { token: string; job: SubJob; lang: L
   );
 }
 
-function JobCard({ token, job, lang, past }: { token: string; job: SubJob; lang: Lang; past: boolean }) {
+function ReviewChip({ status, lang }: { status: ReviewStatus | undefined; lang: Lang }) {
+  if (!status) return null;
+  const look =
+    status === "PASSED"
+      ? { text: tr(lang, { en: "Passed check", es: "Revisión aprobada" }), cls: "bg-emerald-50 text-emerald-700" }
+      : status === "NEEDS_FIX"
+        ? { text: tr(lang, { en: "Fixes needed", es: "Arreglos pendientes" }), cls: "bg-red-50 text-red-700" }
+        : { text: tr(lang, { en: "Being checked", es: "En revisión" }), cls: "bg-gray-100 text-gray-600" };
+  return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${look.cls}`}>{look.text}</span>;
+}
+
+function JobCard({ token, job, lang, past, reviewResults }: { token: string; job: SubJob; lang: Lang; past: boolean; reviewResults: Record<string, ReviewStatus> }) {
   const first = job.days[0]!.dateKey;
   const last = job.days[job.days.length - 1]!.dateKey;
   const range = first === last ? dayLabel(first, lang) : `${dayLabel(first, lang)} - ${dayLabel(last, lang)}`;
@@ -202,6 +217,7 @@ function JobCard({ token, job, lang, past }: { token: string; job: SubJob; lang:
               )}
             </span>
             <span className="flex items-center gap-2">
+              <ReviewChip status={reviewResults[`${job.jobKey}|${d.dateKey}`]} lang={lang} />
               <StatusChip day={d} lang={lang} past={past} />
               {!past && d.respondPath && (
                 <a href={d.respondPath} className="text-xs font-medium text-pink-600 hover:underline">
@@ -380,6 +396,9 @@ export function SubPortal({
   firstName,
   jobs,
   offers,
+  checkIns,
+  fixes,
+  reviewResults,
   declineReasons,
   profileLang,
   contactEmail,
@@ -388,13 +407,17 @@ export function SubPortal({
   firstName: string;
   jobs: SubJobs;
   offers: PortalOffer[];
+  checkIns: Record<string, TodayCheckIn>;
+  fixes: PortalFix[];
+  reviewResults: Record<string, ReviewStatus>;
   declineReasons: ReasonOption[];
   profileLang: Lang;
   contactEmail: string;
 }) {
   const router = useRouter();
   const [lang, setLang] = useSubLang(profileLang);
-  const [tab, setTab] = useState<Tab>(offers.length > 0 ? "offers" : "upcoming");
+  const todayJobs = jobs.upcoming.filter((j) => j.days.some((d) => d.dateKey === jobs.today));
+  const [tab, setTab] = useState<Tab>(offers.length > 0 ? "offers" : todayJobs.length > 0 ? "today" : "upcoming");
   const [flash, setFlash] = useState("");
   const list = tab === "upcoming" ? jobs.upcoming : jobs.past;
 
@@ -405,6 +428,7 @@ export function SubPortal({
 
   const tabs: { id: Tab; label: string; count: number }[] = [
     { id: "offers", label: tr(lang, { en: "Offers", es: "Ofertas" }), count: offers.length },
+    { id: "today", label: tr(lang, { en: "Today", es: "Hoy" }), count: todayJobs.length },
     { id: "upcoming", label: tr(lang, { en: "Upcoming", es: "Próximos" }), count: jobs.upcoming.length },
     { id: "past", label: tr(lang, { en: "Past", es: "Pasados" }), count: jobs.past.length },
   ];
@@ -424,7 +448,9 @@ export function SubPortal({
 
         {flash && <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{flash}</p>}
 
-        <div className="grid grid-cols-3 gap-1 rounded-lg bg-gray-200 p-1" role="tablist">
+        <FixCards token={token} fixes={fixes} lang={lang} />
+
+        <div className="grid grid-cols-4 gap-1 rounded-lg bg-gray-200 p-1" role="tablist">
           {tabs.map((t) => (
             <button
               key={t.id}
@@ -432,7 +458,7 @@ export function SubPortal({
               role="tab"
               aria-selected={tab === t.id}
               onClick={() => setTab(t.id)}
-              className={`rounded-md px-3 py-2 text-sm font-medium ${tab === t.id ? "bg-white text-gray-900 shadow-sm" : "text-gray-600"}`}
+              className={`rounded-md px-1 py-2 text-sm font-medium ${tab === t.id ? "bg-white text-gray-900 shadow-sm" : "text-gray-600"}`}
             >
               {t.label}{" "}
               <span className={t.id === "offers" && t.count > 0 ? "rounded-full bg-pink-600 px-1.5 text-xs text-white" : "text-gray-400"}>{t.count}</span>
@@ -440,7 +466,9 @@ export function SubPortal({
           ))}
         </div>
 
-        {tab === "offers" ? (
+        {tab === "today" ? (
+          <TodayTab token={token} jobs={todayJobs} today={jobs.today} checkIns={checkIns} lang={lang} />
+        ) : tab === "offers" ? (
           offers.length === 0 ? (
             <p className="rounded-lg border border-dashed border-gray-300 bg-white px-4 py-8 text-center text-sm text-gray-500">
               {tr(lang, { en: "No job offers right now. We'll email you when there's one.", es: "No hay ofertas ahora. Te enviaremos un correo cuando haya una." })}
@@ -471,7 +499,7 @@ export function SubPortal({
         ) : (
           <ul className="space-y-3">
             {list.map((j) => (
-              <JobCard key={j.key} token={token} job={j} lang={lang} past={tab === "past"} />
+              <JobCard key={j.key} token={token} job={j} lang={lang} past={tab === "past"} reviewResults={reviewResults} />
             ))}
           </ul>
         )}

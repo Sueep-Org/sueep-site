@@ -193,7 +193,7 @@ const LIMIT = 40;
 export async function loadSubActivity(contractorId: string): Promise<ActivityItem[]> {
   const c = await prisma.contractor.findUnique({ where: { id: contractorId }, select: { email: true } });
   if (!c) return [];
-  const [devices, answers, coRequests, events, emails] = await Promise.all([
+  const [devices, answers, coRequests, events, emails, checkIns, reviewEvents] = await Promise.all([
     prisma.contractorPortalDevice.findMany({ where: { contractorId }, orderBy: { createdAt: "desc" }, take: LIMIT, select: { createdAt: true, userAgent: true } }),
     c.email
       ? prisma.scheduleConfirmation.findMany({
@@ -218,8 +218,48 @@ export async function loadSubActivity(contractorId: string): Promise<ActivityIte
           select: { createdAt: true },
         })
       : [],
+    prisma.subCheckIn.findMany({
+      where: { contractorId, checkInAt: { not: null } },
+      orderBy: { checkInAt: "desc" },
+      take: LIMIT,
+      select: {
+        checkInAt: true,
+        checkOutAt: true,
+        inOffSite: true,
+        outOffSite: true,
+        lateMinutes: true,
+        project: { select: { jobTitle: true } },
+        changeOrder: { select: { title: true } },
+        _count: { select: { photos: true } },
+      },
+    }),
+    prisma.subReviewEvent.findMany({
+      where: { review: { contractorId }, action: { in: ["NEEDS_FIX", "FIX_SENT", "PASSED"] } },
+      orderBy: { createdAt: "desc" },
+      take: LIMIT,
+      select: { createdAt: true, action: true, by: true, review: { select: { project: { select: { jobTitle: true } } } } },
+    }),
   ]);
+  const checkInJob = (c: (typeof checkIns)[number]) => (c.changeOrder ? `${c.changeOrder.title} (${c.project.jobTitle})` : c.project.jobTitle);
   const items: { at: Date; text: string }[] = [
+    ...reviewEvents.map((e) => ({
+      at: e.createdAt,
+      text:
+        e.action === "FIX_SENT"
+          ? `Sent fix photos: ${e.review.project.jobTitle}`
+          : e.action === "NEEDS_FIX"
+            ? `Asked for fixes by ${e.by}: ${e.review.project.jobTitle}`
+            : `Passed review by ${e.by}: ${e.review.project.jobTitle}`,
+    })),
+    ...checkIns.map((c) => ({
+      at: c.checkInAt!,
+      text: `Checked in: ${checkInJob(c)}${[c.lateMinutes != null ? `${c.lateMinutes} min late` : "", c.inOffSite ? "off site" : ""].filter(Boolean).map((f) => `, ${f}`).join("")}`,
+    })),
+    ...checkIns.flatMap((c) =>
+      c.checkOutAt
+        ? [{ at: c.checkOutAt, text: `Checked out: ${checkInJob(c)}${c.outOffSite ? ", off site" : ""}${c._count.photos ? `, ${c._count.photos} photo${c._count.photos === 1 ? "" : "s"}` : ""}` }]
+        : [],
+    ),
     ...devices.map((d) => ({ at: d.createdAt, text: `Signed in on ${phoneName(d.userAgent)}` })),
     ...answers.map((a) => ({
       at: a.respondedAt!,
