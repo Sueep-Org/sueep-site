@@ -370,15 +370,19 @@ export type ReviewListRow = {
 };
 
 /** Reviews for the Sub Reviews page. `mine` limits a PM to their own days and days with no PM. */
-export async function loadReviewList(who: Reviewer, opts: { status: ReviewStatus; mine: boolean }): Promise<ReviewListRow[]> {
+export async function loadReviewList(who: Reviewer, opts: { status: ReviewStatus | ReviewStatus[]; mine: boolean }): Promise<ReviewListRow[]> {
   const since = new Date(Date.now() - 60 * 86_400_000);
+  const statuses = Array.isArray(opts.status) ? opts.status : [opts.status];
   const rows = await prisma.subReview.findMany({
     where: {
-      status: opts.status,
-      ...(opts.status === "PASSED" ? { passedAt: { gte: since } } : {}),
-      ...(opts.mine ? { OR: [{ pmUserId: who.uid }, { pmUserId: null }] } : {}),
+      status: { in: statuses },
+      AND: [
+        // Passed ones only from the last 60 days
+        ...(statuses.includes("PASSED") ? [{ OR: [{ status: { not: "PASSED" } }, { passedAt: { gte: since } }] }] : []),
+        ...(opts.mine ? [{ OR: [{ pmUserId: who.uid }, { pmUserId: null }] }] : []),
+      ],
     },
-    orderBy: opts.status === "PASSED" ? { passedAt: "desc" } : { updatedAt: "asc" },
+    orderBy: statuses.length === 1 && statuses[0] === "PASSED" ? { passedAt: "desc" } : { updatedAt: "asc" },
     take: 200,
     select: { id: true, status: true, round: true, date: true, projectId: true, changeOrderId: true, pmUserId: true, updatedAt: true, contractor: { select: { name: true } } },
   });

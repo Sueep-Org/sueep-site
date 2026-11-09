@@ -8,6 +8,9 @@ import { loadAllSubScoresCached, loadBidderBidLines, loadContractorBidLines, sum
 import { loadPastBidders } from "@/lib/erp/subBidLinks";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { BiddersTab, type BidderRow } from "./BiddersTab";
+import { ReviewsTab } from "./ReviewsTab";
+import { isPmLevel } from "@/lib/erpRoles";
+import { loadReviewList } from "@/lib/erp/subReviews";
 import { PRICING_SCORE_HELP } from "@/lib/erp/subScores";
 import { Stars } from "@/app/erp/components/Stars";
 
@@ -38,6 +41,8 @@ export default async function ContractorsPage() {
   });
   const auth = await getErpAuth();
   const showBids = canSeeProposals(auth?.role);
+  // Every PM's open reviews; the review page itself still checks who can act on each
+  const reviews = auth && isPmLevel(auth.role) ? await loadReviewList(auth, { status: ["PENDING", "NEEDS_FIX"], mine: false }) : null;
   const [bidLines, scores, pastBidders, bidderLines] = showBids
     ? await Promise.all([loadContractorBidLines(), loadAllSubScoresCached(), loadPastBidders(), loadBidderBidLines()])
     : [new Map(), new Map(), [], new Map()];
@@ -139,11 +144,12 @@ export default async function ContractorsPage() {
     <div className="space-y-6">
       <NewContractorForm title={<h1 className="text-2xl font-semibold text-gray-900">Contractor Verification</h1>} />
       
-      {showBids ? (
+      {showBids || reviews ? (
         <DetailTabs
           tabs={[
             { label: "Contractors", content: contractorList },
-            { label: "Bidders", content: <BiddersTab bidders={bidders} /> },
+            ...(showBids ? [{ label: "Bidders", content: <BiddersTab bidders={bidders} /> }] : []),
+            ...(reviews ? [{ label: "Reviews", content: <ReviewsTab reviews={reviews} /> }] : []),
           ]}
         />
       ) : (
