@@ -810,6 +810,17 @@ export function ProjectManagerForm({ onBack, nextDayPct }: Props) {
               </div>
             )}
 
+            <div>
+              <label className={label} htmlFor="sov-comments">What do you need done? *</label>
+              <textarea
+                id="sov-comments"
+                rows={3}
+                className={input}
+                value={comments}
+                onChange={(e) => setComments(e.target.value)}
+                placeholder={sovItems.length > 0 ? "Which SOVs above you need, plus areas or floors, how many people, access or special instructions…" : "Which areas or floors, what work, how many people, access or special instructions…"}
+              />
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className={label} htmlFor="sov-date">Start date *</label>
@@ -843,17 +854,6 @@ export function ProjectManagerForm({ onBack, nextDayPct }: Props) {
                 Work requested for today or tomorrow has a {nextDayPct}% next day upcharge.
               </p>
             ) : null}
-            <div>
-              <label className={label} htmlFor="sov-comments">What do you need done? *</label>
-              <textarea
-                id="sov-comments"
-                rows={3}
-                className={input}
-                value={comments}
-                onChange={(e) => setComments(e.target.value)}
-                placeholder={sovItems.length > 0 ? "Which SOVs above you need, plus areas or floors, how many people, access or special instructions…" : "Which areas or floors, what work, how many people, access or special instructions…"}
-              />
-            </div>
             <div className="grid gap-4 sm:grid-cols-2 border-t border-gray-100 pt-4">
               <div>
                 <label className={label} htmlFor="sov-pm-name">Your name *</label>
