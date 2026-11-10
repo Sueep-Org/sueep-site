@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { dayKey, monthLabel, monthMatrix, startOfMonth } from "@/lib/erp/schedule";
 import { todayEasternAsUtcMidnight } from "@/lib/erp/dates";
-import { holidayOn } from "@/lib/erp/holidays";
+import { useHolidays } from "@/app/components/HolidaysProvider";
 import { WEEKDAY_SHORT, type JanitorialShift } from "@/lib/erp/janitorialSchedule";
 import { categoryColor, type ManagementCategoryDto, type ManagementItem } from "@/lib/erp/managementCalendar";
 import { calendarSegmentGroup, type CalendarSegmentGroup } from "@/lib/erp/projectSegments";
@@ -66,6 +66,7 @@ async function fetchJson<T>(url: string): Promise<T> {
 }
 
 export function MasterCalendar({ projects, showManagement }: { projects: MasterProject[]; showManagement: boolean }) {
+  const { holidayOn } = useHolidays();
   const todayKey = dayKey(todayEasternAsUtcMidnight());
   const [cursor, setCursor] = useState(() => startOfMonth(todayEasternAsUtcMidnight()));
   const [shifts, setShifts] = useState<(JanitorialShift & { logged?: boolean })[]>([]);

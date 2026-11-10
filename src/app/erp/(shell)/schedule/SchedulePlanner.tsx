@@ -12,7 +12,7 @@ import { MiniCalendarPicker, dayAfter } from "./MiniCalendarPicker";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { useFloatingMenu } from "@/app/erp/components/useFloatingMenu";
 import { InfoTip, useConfirm } from "@/app/erp/components/ui";
-import { holidayConfirm, holidayOn } from "@/lib/erp/holidays";
+import { useHolidays } from "@/app/components/HolidaysProvider";
 import { RequestToChangeOrder } from "./RequestToChangeOrder";
 import { usePricingSettings } from "@/app/components/PricingSettingsProvider";
 import { useInsuranceCheck } from "@/app/erp/components/useInsuranceCheck";
@@ -424,6 +424,7 @@ function DuplicateToMoreDaysSection({
     sovItemIds.length > 0 ||
     scopeItems.length > 0 ||
     changeOrderIds.length > 0;
+  const { holidayOn } = useHolidays();
   const confirm = useConfirm();
   const sortedKeys = [...pickedKeys].sort();
 
@@ -697,6 +698,7 @@ export function SchedulePlanner({
   // pre-filled with that project, instead of landing on the bare calendar.
   const router = useRouter();
   const { nextDayPct } = usePricingSettings();
+  const { holidayConfirm, holidayOn } = useHolidays();
   const confirm = useConfirm();
   const checkInsurance = useInsuranceCheck(contractors);
   const searchParams = useSearchParams();
