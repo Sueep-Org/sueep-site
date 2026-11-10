@@ -137,6 +137,10 @@ export type ProjectChangeOrderRow = {
   estimatedDays: number | null;
   reason: string | null;
   resolutionNotes: string | null;
+  /** Why it was rejected or voided, who wrote it (email), and when (ISO). */
+  statusNote?: string | null;
+  statusNoteBy?: string | null;
+  statusNoteAt?: string | null;
   contractValueCents: number | null;
   estMaterialCents: number | null;
   estTravelCents: number | null;
@@ -150,6 +154,20 @@ export type ProjectChangeOrderRow = {
 
 
 const STATUSES: ProjectChangeOrderRow["status"][] = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID", "BILLING", "COMPLETED"];
+/** Statuses that need a written reason (the API enforces it too). */
+const NOTE_STATUSES: ProjectChangeOrderRow["status"][] = ["REJECTED", "VOID"];
+
+/** "Rejected Nov 12 by anna@sueep.com: Customer said no" style line under a rejected or voided change order. */
+export function StatusNoteLine({ status, note, by, at }: { status: string; note?: string | null; by?: string | null; at?: string | null }) {
+  if (!note || !NOTE_STATUSES.includes(status as ProjectChangeOrderRow["status"])) return null;
+  const when = at ? new Date(at).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : null;
+  const who = [status === "VOID" ? "Voided" : "Rejected", when, by ? `by ${by.split("@")[0]}` : null].filter(Boolean).join(" ");
+  return (
+    <p className={`rounded px-2 py-1 text-xs ${status === "VOID" ? "bg-amber-50 text-amber-800" : "bg-red-50 text-red-700"}`}>
+      <span className="font-medium">{who}:</span> {note}
+    </p>
+  );
+}
 
 
 const input = inputClass.md;
@@ -313,14 +331,14 @@ export function ProjectChangeOrdersSection({
     }
   }
 
-  async function onSave(id: string, status: ProjectChangeOrderRow["status"]) {
+  async function onSave(id: string, status: ProjectChangeOrderRow["status"], statusNote?: string) {
     setSavingId(id);
     setError("");
     try {
       const res = await fetch(`/api/erp/projects/${projectId}/change-orders/${id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, ...(statusNote ? { statusNote } : {}) }),
       });
       const data = (await res.json()) as ProjectChangeOrderRow & { error?: string };
       if (!res.ok) {
@@ -374,7 +392,7 @@ export function ProjectChangeOrdersSection({
               Status
             </label>
             <select id="co-status" name="status" defaultValue="DRAFT" className={input}>
-              {STATUSES.map((status) => (
+              {STATUSES.filter((s) => !NOTE_STATUSES.includes(s)).map((status) => (
                 <option key={status} value={status}>
                   {status}
                 </option>
@@ -551,13 +569,16 @@ function ChangeOrderEditor({
   row: ProjectChangeOrderRow;
   projectId: string;
   saving: boolean;
-  onSave: (id: string, status: ProjectChangeOrderRow["status"]) => void;
+  onSave: (id: string, status: ProjectChangeOrderRow["status"], statusNote?: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<ProjectChangeOrderRow["status"]>(row.status);
+  const [statusNote, setStatusNote] = useState("");
+  const needsNote = NOTE_STATUSES.includes(status) && status !== row.status;
 
   useEffect(() => {
     setStatus(row.status);
+    setStatusNote("");
   }, [row.status]);
 
   return (
@@ -576,7 +597,14 @@ function ChangeOrderEditor({
               No crew
             </span>
           ) : null}
-          <span className="truncate text-sm font-medium text-gray-900" title={row.title}>{row.title}</span>
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-medium text-gray-900" title={row.title}>{row.title}</span>
+            {row.statusNote && NOTE_STATUSES.includes(row.status) ? (
+              <span className="block truncate text-xs text-gray-500" title={row.statusNote}>
+                {row.status === "VOID" ? "Voided" : "Rejected"}: {row.statusNote}
+              </span>
+            ) : null}
+          </span>
         </div>
         <div className="flex shrink-0 items-center gap-4">
           <span className="text-xs text-gray-500">
@@ -619,15 +647,33 @@ function ChangeOrderEditor({
                 ))}
               </select>
             </div>
+            {needsNote ? (
+              <div className="min-w-[16rem] flex-1">
+                <label className={label} htmlFor={`co-status-note-${row.id}`}>
+                  Why is it being {status === "VOID" ? "voided" : "rejected"}? *
+                </label>
+                <input
+                  id={`co-status-note-${row.id}`}
+                  className={input}
+                  value={statusNote}
+                  maxLength={1000}
+                  autoFocus
+                  placeholder={status === "VOID" ? "Entered twice, replaced by CO #12…" : "Customer declined the price…"}
+                  onChange={(e) => setStatusNote(e.target.value)}
+                />
+              </div>
+            ) : null}
             <button
               type="button"
-              disabled={saving || status === row.status}
-              onClick={() => onSave(row.id, status)}
+              disabled={saving || status === row.status || (needsNote && !statusNote.trim())}
+              onClick={() => onSave(row.id, status, needsNote ? statusNote.trim() : undefined)}
               className="rounded-md bg-pink-600 px-3 py-2 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
             >
               {saving ? "Saving…" : "Save"}
             </button>
           </div>
+
+          <StatusNoteLine status={row.status} note={row.statusNote} by={row.statusNoteBy} at={row.statusNoteAt} />
 
           {/* Cost breakdown */}
           <div className="rounded-md border border-gray-100 bg-gray-50 p-3">

@@ -4,6 +4,7 @@ import { FinanceDateRange } from "./FinanceDateRange";
 import { QuickBooksCompare } from "./QuickBooksCompare";
 import { InfoTip } from "@/app/erp/components/ui";
 import { todayEasternKey } from "@/lib/erp/dates";
+import { metaSpendBetween } from "@/lib/erp/metaAds";
 import { JobTabs, type JobTabRow } from "./JobTabs";
 import {
   costBreakdown,
@@ -592,6 +593,13 @@ export async function FinanceTab({ period: periodParam, by }: { period: string |
     : isAll ? dayKey >= dataStartDay && dayKey <= summary.todayKey
     : dayKey.startsWith(selected) && dayKey >= dataStartDay && dayKey <= summary.todayKey;
 
+  // Meta ad spend for the same dates, shown as a note only: QuickBooks already
+  // has these card charges under Marketing or Recruiting, so it is never added.
+  const metaFrom = isRange ? range.from : isMonth ? `${month}-01` : isAll ? dataStartDay : `${selected}-01-01` < dataStartDay ? dataStartDay : `${selected}-01-01`;
+  const monthEnd = (m: string) => new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 0)).toISOString().slice(0, 10);
+  const metaTo = isRange ? range.to : isMonth ? monthEnd(month) : isAll ? summary.todayKey : `${selected}-12-31`;
+  const metaCents = await metaSpendBetween(metaFrom, metaTo < metaFrom ? metaFrom : metaTo > summary.todayKey ? summary.todayKey : metaTo);
+
   return (
     <div className="space-y-4">
       {/* Controls: dates on the left, what to count and the extras on the right */}
@@ -780,7 +788,10 @@ export async function FinanceTab({ period: periodParam, by }: { period: string |
         <div className={cardCls}>
           <div className="flex items-center justify-between gap-2">
             <h3 className={cardTitleCls}>Where the money went</h3>
-            <Link href="/erp/overhead" className="text-xs font-medium text-pink-600 hover:underline">Overhead details</Link>
+            <span className="flex gap-3">
+              <Link href="/erp/ads" className="text-xs font-medium text-pink-600 hover:underline">Ad spend</Link>
+              <Link href="/erp/overhead" className="text-xs font-medium text-pink-600 hover:underline">Overhead details</Link>
+            </span>
           </div>
           {costs.length === 0 ? (
             <p className="pt-3 text-sm text-gray-400">No costs in {periodLabel}.</p>
@@ -830,6 +841,12 @@ export async function FinanceTab({ period: periodParam, by }: { period: string |
                 : `Includes QuickBooks costs${bookedThrough ? ` through ${bookedThrough}` : ""}.`}
             </p>
           )}
+          {metaCents ? (
+            <p className="mt-1 text-xs text-gray-400" title={`${money(metaCents)} from Meta. QuickBooks has these card charges, so they're already in the costs above.`}>
+              Meta ads: {short(metaCents)} in {periodLabel}, already inside Marketing and Recruiting above, not added again.{" "}
+              <Link href="/erp/ads" className="font-medium text-pink-600 hover:underline">By campaign</Link>
+            </p>
+          ) : null}
         </div>
       </div>
 

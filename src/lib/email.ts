@@ -546,6 +546,8 @@ export function buildProjectRequestEmail(params: {
   sovDescriptions?: string[];
   desiredDate?: string;
   comments?: string;
+  /** Days asked for today or tomorrow ("Nov 12, Nov 13") and the upcharge percent. */
+  nextDay?: { days: string; pct: number };
   projectUrl: string | null;
 }) {
   const typeLabel = params.type === "change-order" ? "Change Order Request" : "SOV Work Scheduling Request";
@@ -572,7 +574,8 @@ export function buildProjectRequestEmail(params: {
       : `
         ${sovItemsHtml(params.sovDescriptions)}
         ${params.desiredDate ? `<p><strong>Desired Date:</strong> ${escapeHtml(params.desiredDate)}</p>` : ""}
-        ${params.comments ? `<p><strong>Comments:</strong> ${escapeHtml(params.comments)}</p>` : ""}
+        ${params.comments ? `<p><strong>What they need:</strong> ${escapeHtml(params.comments)}</p>` : ""}
+        ${params.nextDay ? `<p style="color:#b45309"><strong>Next day:</strong> ${escapeHtml(params.nextDay.days)} ${params.nextDay.days.includes(",") ? "were" : "was"} asked for today or tomorrow, so a ${params.nextDay.pct}% upcharge applies. It's added when you assign an SOV line or change order to the day on the schedule.</p>` : ""}
       `;
 
   const ctaLabel = params.type === "change-order" ? "View change order in ERP" : "View project in ERP";
@@ -611,6 +614,8 @@ export function buildProjectRequestConfirmationEmail(params: {
   coQuotedPriceCents?: number;
   sovDescriptions?: string[];
   desiredDate?: string;
+  /** Days asked for today or tomorrow and the upcharge percent. */
+  nextDay?: { days: string; pct: number };
 }) {
   const typeLabel = params.type === "change-order" ? "change order request" : "scheduling request";
   const detail =
@@ -622,6 +627,7 @@ export function buildProjectRequestConfirmationEmail(params: {
       : `
           ${sovItemsHtml(params.sovDescriptions)}
           ${params.desiredDate ? `<p><strong>Desired Date:</strong> ${escapeHtml(params.desiredDate)}</p>` : ""}
+          ${params.nextDay ? `<p><strong>Next day upcharge:</strong> work on ${escapeHtml(params.nextDay.days)} was requested for today or tomorrow, so a ${params.nextDay.pct}% next day upcharge applies to it.</p>` : ""}
         `;
 
   return `

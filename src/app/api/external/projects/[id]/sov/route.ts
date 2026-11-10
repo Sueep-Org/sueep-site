@@ -8,9 +8,18 @@ type Ctx = { params: Promise<{ id: string }> };
 export async function GET(_req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
 
+  // Shown to outside project managers as "still to be scheduled", read only:
+  // lines not done yet and not on any calendar day. A line on the calendar
+  // but not finished is left out too, so it isn't asked for twice.
   const sov = await prisma.projectSOV.findUnique({
     where: { projectId: id },
-    include: { items: { orderBy: [{ order: "asc" }, { createdAt: "asc" }] } },
+    include: {
+      items: {
+        where: { completed: false, dayAssignments: { none: {} } },
+        orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+        select: { id: true, description: true },
+      },
+    },
   });
 
   // Verify project exists with an eligible segment. Includes the legacy raw
@@ -26,12 +35,6 @@ export async function GET(_req: Request, ctx: Ctx) {
 
   if (!sov) return NextResponse.json({ items: [] });
 
-  return NextResponse.json({
-    items: sov.items.map((item) => ({
-      id: item.id,
-      description: item.description,
-      completed: item.completed,
-      billingStatus: item.billingStatus,
-    })),
-  });
+  // Names only: no ids to pick by, no prices or billing.
+  return NextResponse.json({ items: sov.items.map((item) => ({ description: item.description })) });
 }

@@ -90,7 +90,12 @@ async function createChangeOrder(r: Loaded): Promise<string> {
 async function voidChangeOrder(r: Loaded): Promise<boolean> {
   if (!r.changeOrder || r.changeOrder.status === "VOID") return false;
   await prisma.$transaction([
-    prisma.projectChangeOrder.update({ where: { id: r.changeOrder.id }, data: { status: "VOID" } }),
+    prisma.projectChangeOrder.update({ where: { id: r.changeOrder.id }, data: {
+        status: "VOID",
+        statusNote: r.pmDenyReason ? `Property manager denied the sub's request: ${r.pmDenyReason}` : "The sub's change order request was denied.",
+        statusNoteBy: "Sueep",
+        statusNoteAt: new Date(),
+      } }),
     prisma.changeOrderContractorAssignment.deleteMany({ where: { changeOrderId: r.changeOrder.id, contractorId: r.contractor.id } }),
   ]);
   return true;

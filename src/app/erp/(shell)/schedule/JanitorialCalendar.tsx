@@ -6,6 +6,7 @@ import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { Button, Modal, inputClass, labelClass, useConfirm } from "@/app/erp/components/ui";
 import { dayCellLabelWithYear, dayKey, formatHours, formatShortDate, monthLabel, monthMatrix, startOfMonth } from "@/lib/erp/schedule";
 import { todayEasternAsUtcMidnight } from "@/lib/erp/dates";
+import { holidayConfirm, holidayOn } from "@/lib/erp/holidays";
 import {
   WEEKDAY_SHORT,
   formatTime12,
@@ -61,6 +62,7 @@ function useChipClass(): (contractId: string) => string {
 }
 
 export function JanitorialCalendar({ initialContractId = "" }: { initialContractId?: string }) {
+  const confirmHoliday = useConfirm();
   const [cursor, setCursor] = useState(() => startOfMonth(todayEasternAsUtcMidnight()));
   const [data, setData] = useState<ScheduleResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -158,6 +160,8 @@ export function JanitorialCalendar({ initialContractId = "" }: { initialContract
     setDragging(null);
     setDragOverDay(null);
     if (!d || d.fromDate === toDate) return;
+    const holiday = holidayConfirm(toDate);
+    if (holiday && !(await confirmHoliday(holiday))) return;
     setDragError(null);
     const err = await sendJson("/api/erp/janitorial/shift-exceptions/move", "POST", { shiftKey: d.shiftKey, toDate });
     if (err) setDragError(`Couldn't move ${d.label}: ${err}`);
@@ -331,6 +335,7 @@ export function JanitorialCalendar({ initialContractId = "" }: { initialContract
                 const isNearRightEdge = i % 7 >= 5;
                 const tooltipPositionClass = `${isLastRow ? "bottom-full mb-1" : "top-full mt-1"} ${isNearRightEdge ? "right-0" : "left-0"}`;
                 const dayShifts = shiftsByDay.get(k) ?? [];
+                const holiday = holidayOn(k);
                 return (
                   <div
                     key={k}
@@ -347,7 +352,7 @@ export function JanitorialCalendar({ initialContractId = "" }: { initialContract
                       e.preventDefault();
                       void dropOnDay(k);
                     }}
-                    className={`relative min-h-[92px] bg-white p-1.5 text-left ${isToday ? "ring-1 ring-inset ring-pink-400 bg-pink-50/40" : ""} ${
+                    className={`relative min-h-[92px] p-1.5 text-left ${holiday ? "bg-slate-100" : "bg-white"} ${isToday ? "ring-1 ring-inset ring-pink-400 bg-pink-50/40" : ""} ${
                       dragOverDay === k ? "ring-2 ring-inset ring-pink-500 bg-pink-50" : ""
                     }`}
                   >
@@ -373,10 +378,22 @@ export function JanitorialCalendar({ initialContractId = "" }: { initialContract
                             {cell.getUTCDate()}
                           </div>
                         )}
+                        {holiday ? (
+                          <span
+                            className="min-w-0 flex-1 truncate px-1 text-[10px] font-semibold text-slate-600"
+                            title={`${holiday}, company holiday.${dayShifts.some((s) => s.patternId && s.status !== "CANCELLED") ? " Weekly shifts still show: click the date to skip them." : ""}`}
+                          >
+                            {holiday}
+                          </span>
+                        ) : null}
                         {canEdit && isFutureOrToday ? (
                           <button
                             type="button"
-                            onClick={() => setEditing({ kind: "new", date: k, startTime: DEFAULT_START_TIME })}
+                            onClick={async () => {
+                              const ask = holidayConfirm(k);
+                              if (ask && !(await confirmHoliday(ask))) return;
+                              setEditing({ kind: "new", date: k, startTime: DEFAULT_START_TIME });
+                            }}
                             title="Add a janitor shift on this day"
                             className="flex h-6 w-6 items-center justify-center rounded-full border border-dashed border-gray-300 text-base font-bold leading-none text-gray-400 hover:border-pink-400 hover:bg-pink-50 hover:text-pink-500"
                           >

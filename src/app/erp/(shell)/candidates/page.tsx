@@ -24,7 +24,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Recruitment</h1>
+          <RecruitmentTitle />
           <TrackTabs office />
         </div>
         <OfficeTab search={search} showAll={sp.openings === "all"} />
@@ -105,7 +105,7 @@ export default async function CandidatesPage({ searchParams }: PageProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Recruitment</h1>
+        <RecruitmentTitle />
         {officeAllowed ? <TrackTabs office={false} /> : null}
 
         <div className="mt-3 flex items-center justify-between gap-4">
@@ -229,5 +229,24 @@ function TrackTabs({ office }: { office: boolean }) {
       <Link href="/erp/candidates" className={tab(!office)}>Field</Link>
       <Link href="/erp/candidates?track=office" className={tab(office)}>Office</Link>
     </nav>
+  );
+}
+
+/** Page title, with Ad spend (hiring ads on Facebook and Instagram) opening in a new tab. */
+function RecruitmentTitle() {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <h1 className="text-2xl font-semibold text-gray-900">Recruitment</h1>
+      <a
+        href="/erp/ads"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:border-pink-300 hover:text-pink-600"
+        title="What we spend on Facebook and Instagram ads, and cost per lead. Opens in a new tab."
+      >
+        Ad spend
+        <span aria-hidden>↗</span>
+      </a>
+    </div>
   );
 }

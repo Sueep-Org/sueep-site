@@ -37,6 +37,25 @@ export function BillingOverview() {
         </Step>
       </Steps>
 
+      <H2>Next day upcharge</H2>
+      <P>
+        Work booked to start today or tomorrow costs more (the percent is on the Settings page, Pricing; 20% today). A
+        turnover or change order with the upcharge shows <strong>Next day +20%: $X</strong> under its price. It&apos;s already
+        inside the price, so don&apos;t add it again; it&apos;s there so whoever invoices knows what the extra is. Hover it for
+        details.
+      </P>
+      <UL>
+        <LI>
+          A rush SOV request from a project manager gets its surcharge as its own change order, named{" "}
+          <strong>Next day surcharge: &lt;SOV line&gt; (date)</strong>, worth 20% of that SOV line. It shows here like any
+          other change order. See the schedule help for how it&apos;s made.
+        </LI>
+        <LI>
+          The amount is worked out with today&apos;s percent, so it can be a little off if the percent changed since the job
+          was priced.
+        </LI>
+      </UL>
+
       <H2>Billing status</H2>
       <P>
         Click the status pill on a row to change it between <strong>Not billed</strong>, <strong>Billed</strong>,{" "}

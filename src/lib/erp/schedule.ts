@@ -300,6 +300,8 @@ export type ScheduleDayAssignment = {
   comment: string | null;
   /** Staff-only note, never sent in invites. */
   internalNote: string | null;
+  /** A project manager asked for it today or tomorrow: assigning an SOV line or change order adds the surcharge (nextDaySurcharge.ts). */
+  nextDayUpcharge?: boolean;
   /** The client who asked for this day, emailed once everyone confirms (see scheduleRequester.ts) */
   requesterName: string | null;
   requesterEmail: string | null;

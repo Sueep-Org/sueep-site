@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { addDays, dayKey, monthLabel, monthMatrix, startOfMonth } from "@/lib/erp/schedule";
+import { holidayOn } from "@/lib/erp/holidays";
 
 const WEEKDAY_HEADS = ["S", "M", "T", "W", "T", "F", "S"];
 
@@ -62,16 +63,19 @@ export function MiniCalendarPicker({
           const inMonth = cell.getUTCMonth() === cursor.getUTCMonth();
           const disabled = !!minDateKey && k < minDateKey;
           const selected = selectedKeys.has(k);
+          const holiday = holidayOn(k);
           return (
             <button
               key={i}
               type="button"
               disabled={disabled}
               onClick={() => onToggle(k)}
-              title={k}
+              title={holiday ? `${k}: ${holiday}, company holiday` : k}
               className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-medium ${
                 selected
                   ? "bg-pink-600 text-white"
+                  : holiday && !disabled
+                  ? "bg-slate-200 text-slate-500 line-through hover:bg-pink-50"
                   : disabled
                   ? "text-gray-300"
                   : inMonth

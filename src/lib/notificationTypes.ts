@@ -100,6 +100,14 @@ export const NOTIFICATIONS = {
     ccEditable: true,
     sender: "sueep",
   }),
+  SCHEDULE_REQUEST_MADE_CO: def({
+    label: "Client request turned into a change order",
+    group: "Projects & schedule",
+    when: "The office turns a client's scheduling request into a change order and chooses to tell them",
+    automatic: "The client who asked",
+    ccEditable: true,
+    sender: "sueep",
+  }),
   SCHEDULE_REQUESTER_CONFIRMED: def({
     label: "Client's day confirmed",
     group: "Projects & schedule",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { HolidayHint } from "@/app/erp/components/HolidayHint";
 import { useMemo, useRef, useState } from "react";
 import { deriveProjectLifecycle, type ProjectLifecycle } from "@/lib/erp/projectLifecycle";
 import { PROJECT_SEGMENT_OPTIONS } from "@/lib/erp/projectSegments";
@@ -286,6 +287,7 @@ export function ProjectSetupEditor({
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
             />
+            <HolidayHint value={startDate} />
           </div>
           <div>
             <label className={label} htmlFor="ps-end">End date</label>
@@ -296,6 +298,7 @@ export function ProjectSetupEditor({
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
             />
+            <HolidayHint value={endDate} />
           </div>
         </div>
       </div>

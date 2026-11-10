@@ -9,6 +9,8 @@ import { ChangeOrderMaterialsSection, type CoMaterialRow } from "./ChangeOrderMa
 import { ChangeOrderContractorsSection, type ContractorRow, type ContractorOption } from "./ChangeOrderContractorsSection";
 import { ProjectSafetySection } from "../../ProjectSafetySection";
 import type { SafetyCheck } from "../../ProjectSafetySection";
+import { StatusNoteLine } from "../../ProjectChangeOrdersSection";
+import { HolidayHint } from "@/app/erp/components/HolidayHint";
 import { centsToDollars } from "@/lib/erp/money";
 import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
 import { computeChangeOrderLaborEstimate, deriveChangeOrderSupervisorCount, getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
@@ -43,6 +45,10 @@ export type ChangeOrderDetailData = {
   supervisor: string | null;
   status: Status;
   billingStatus: string | null;
+  /** Why it was rejected or voided, who wrote it (email), and when (ISO). */
+  statusNote: string | null;
+  statusNoteBy: string | null;
+  statusNoteAt: string | null;
   percentInvoiced: number;
   estimatedCostCents: number | null;
   estimatedDays: number | null;
@@ -275,6 +281,9 @@ export function ChangeOrderDetailEditor({
 
   const [title, setTitle] = useState(data.title);
   const [status, setStatus] = useState<Status>(data.status);
+  // Rejecting or voiding asks why; the API refuses the change without it.
+  const [statusNote, setStatusNote] = useState("");
+  const needsNote = (status === "REJECTED" || status === "VOID") && status !== data.status;
   const [requestedDate, setRequestedDate] = useState(
     data.requestedDate ? data.requestedDate.slice(0, 10) : "",
   );
@@ -370,6 +379,7 @@ export function ChangeOrderDetailEditor({
 
   async function handleSave() {
     if (!title.trim()) { setError("Title is required."); return; }
+    if (needsNote && !statusNote.trim()) { setError(`Write why this change order is being ${status === "VOID" ? "voided" : "rejected"}.`); return; }
     setSaving(true);
     setError("");
     try {
@@ -379,6 +389,7 @@ export function ChangeOrderDetailEditor({
         body: JSON.stringify({
           title: title.trim(),
           status,
+          ...(needsNote ? { statusNote: statusNote.trim() } : {}),
           requestedDate: requestedDate || null,
           startDate: startDate || null,
           endDate: endDate || null,
@@ -498,6 +509,25 @@ export function ChangeOrderDetailEditor({
                     {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
+                {needsNote ? (
+                  <div className="sm:col-span-2 lg:col-span-3">
+                    <label className={label} htmlFor="co-status-note">Why is it being {status === "VOID" ? "voided" : "rejected"}? *</label>
+                    <textarea
+                      id="co-status-note"
+                      className={input}
+                      rows={2}
+                      maxLength={1000}
+                      autoFocus
+                      value={statusNote}
+                      placeholder={status === "VOID" ? "Entered twice, replaced by another change order…" : "Customer declined the price…"}
+                      onChange={(e) => setStatusNote(e.target.value)}
+                    />
+                  </div>
+                ) : data.statusNote && (data.status === "REJECTED" || data.status === "VOID") && status === data.status ? (
+                  <div className="sm:col-span-2 lg:col-span-3">
+                    <StatusNoteLine status={data.status} note={data.statusNote} by={data.statusNoteBy} at={data.statusNoteAt} />
+                  </div>
+                ) : null}
                 <div>
                   <label className={label} htmlFor="co-requested-date">Requested date</label>
                   <input
@@ -519,6 +549,7 @@ export function ChangeOrderDetailEditor({
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
                   />
+                  <HolidayHint value={startDate} />
                 </div>
                 <div className="flex flex-col gap-2">
                   <label className={label} htmlFor="co-end-date">
@@ -569,6 +600,7 @@ export function ChangeOrderDetailEditor({
                       </span>
                     )}
                   </div>
+                  <HolidayHint value={endDate} />
                 </div>
                 <div>
                   <label className={label} htmlFor="co-requested-by">Requested by</label>
