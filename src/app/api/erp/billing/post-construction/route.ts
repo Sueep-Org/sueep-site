@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { loadPricingSettings } from "@/lib/pricingSettingsServer";
+import { upchargeInPriceCents } from "@/lib/nextDayUpcharge";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { normalizeBillingStatus } from "@/lib/erp/billingStatus";
 import { coiWarningLabel, projectCoiStatus } from "@/lib/erp/projectCois";
 import { loadProjectBillingPreferences } from "@/lib/erp/invoiceDestination";
 
 export async function GET(req: Request) {
+  const { nextDayPct } = await loadPricingSettings();
   const { searchParams } = new URL(req.url);
   const startParam = searchParams.get("start");
   const endParam = searchParams.get("end");
@@ -91,6 +94,7 @@ export async function GET(req: Request) {
       id: true,
       title: true,
       contractValueCents: true,
+      nextDayUpcharge: true,
       billingStatus: true,
       voidReason: true,
       completedAt: true,
@@ -129,7 +133,7 @@ export async function GET(req: Request) {
       }));
 
   type SOVItemRow = { id: string; description: string; scheduledValueCents: number; billingStatus: string; voidReason: string | null; completedAt: string; invoices: InvoiceChip[] };
-  type CORow = { id: string; projectId: string; title: string; contractValueCents: number; billingStatus: string; voidReason: string | null; completedAt: string; invoices: InvoiceChip[] };
+  type CORow = { id: string; projectId: string; title: string; contractValueCents: number; upchargeCents: number; upchargePct: number; billingStatus: string; voidReason: string | null; completedAt: string; invoices: InvoiceChip[] };
 
   type ProjectRow = {
     projectId: string;
@@ -191,6 +195,8 @@ export async function GET(req: Request) {
       projectId: co.projectId,
       title: co.title,
       contractValueCents: co.contractValueCents ?? 0,
+      upchargeCents: co.nextDayUpcharge ? upchargeInPriceCents(co.contractValueCents ?? 0, nextDayPct) : 0,
+      upchargePct: nextDayPct,
       billingStatus: normalizeBillingStatus(co.billingStatus),
       voidReason: co.voidReason,
       completedAt: (co.completedAt ?? co.updatedAt).toISOString(),

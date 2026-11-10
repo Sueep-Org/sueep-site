@@ -12,6 +12,7 @@ import { MiniCalendarPicker, dayAfter } from "./MiniCalendarPicker";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { useFloatingMenu } from "@/app/erp/components/useFloatingMenu";
 import { InfoTip, useConfirm } from "@/app/erp/components/ui";
+import { holidayConfirm, holidayOn } from "@/lib/erp/holidays";
 import { useInsuranceCheck } from "@/app/erp/components/useInsuranceCheck";
 import {
   coIsComplete,
@@ -421,6 +422,7 @@ function DuplicateToMoreDaysSection({
     sovItemIds.length > 0 ||
     scopeItems.length > 0 ||
     changeOrderIds.length > 0;
+  const confirm = useConfirm();
   const sortedKeys = [...pickedKeys].sort();
 
   function togglePicked(k: string) {
@@ -441,6 +443,16 @@ function DuplicateToMoreDaysSection({
     if (!hasCoverage) {
       setError("Pick a supervisor to duplicate with");
       return;
+    }
+    const holidays = sortedKeys.filter((k) => holidayOn(k));
+    if (holidays.length > 0) {
+      const ok = await confirm({
+        title: holidays.length === 1 ? `${holidays[0]} is ${holidayOn(holidays[0])}` : `${holidays.length} of these days are company holidays`,
+        message: `${holidays.map((k) => `${k}: ${holidayOn(k)}`).join(", ")}. Nobody should be working then. Duplicate onto ${holidays.length === 1 ? "it" : "them"} anyway?`,
+        confirmLabel: "Duplicate anyway",
+        danger: false,
+      });
+      if (!ok) return;
     }
     const isBatch = sortedKeys.length > 1;
     setSaving(true);
@@ -1441,6 +1453,9 @@ export function SchedulePlanner({
     setDraggingChip(null);
     setDragOverDayKey(null);
     if (!chip || toKey === chip.fromKey) return;
+    // Moving work onto a company holiday asks first.
+    const holiday = holidayConfirm(toKey);
+    if (holiday && !(await confirm(holiday))) return;
     setDragError(null);
     if (chip.kind === "needsSupervisor") {
       try {
@@ -3547,6 +3562,7 @@ export function SchedulePlanner({
                 const inMonth = sameMonth(cell, cursor);
                 const isToday = k === todayKey;
                 const isFutureOrToday = k >= todayKey;
+                const holiday = holidayOn(k);
                 // The grid sits in an overflow-x-auto wrapper, which per the
                 // CSS spec also clips overflow on both axes — so a tooltip
                 // that opens downward off the last row, or rightward off a
@@ -4218,7 +4234,7 @@ export function SchedulePlanner({
                       e.preventDefault();
                       handleDropOnDay(k);
                     }}
-                    className={`relative min-h-[92px] bg-white p-1.5 text-left ${isToday ? "ring-1 ring-inset ring-pink-400 bg-pink-50/40" : ""} ${dragOverDayKey === k ? "ring-2 ring-inset ring-pink-500 bg-pink-50" : ""}`}
+                    className={`relative min-h-[92px] p-1.5 text-left ${holiday ? "bg-slate-100" : "bg-white"} ${isToday ? "ring-1 ring-inset ring-pink-400 bg-pink-50/40" : ""} ${dragOverDayKey === k ? "ring-2 ring-inset ring-pink-500 bg-pink-50" : ""}`}
                   >
                   <div className={inMonth ? "" : "opacity-40"}>
                     {/* Fixed height: past days have no + button, and a shorter
@@ -4231,10 +4247,17 @@ export function SchedulePlanner({
                       >
                         {cell.getUTCDate()}
                       </div>
+                      {holiday ? (
+                        <span className="min-w-0 flex-1 truncate px-1 text-[10px] font-semibold text-slate-600" title={`${holiday}, company holiday`}>
+                          {holiday}
+                        </span>
+                      ) : null}
                       {isFutureOrToday ? (
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={async () => {
+                            const ask = holidayConfirm(k);
+                            if (ask && !(await confirm(ask))) return;
                             setOpenDayKey(k);
                             setOpenDayInitialProjectId(null);
                           }}

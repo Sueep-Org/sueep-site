@@ -4,6 +4,8 @@ import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { contractedTurnoverScope, turnoverScopeLabel } from "@/lib/erp/turnoverScope";
 import { JANITORIAL_BILLING_SEGMENTS as JANITORIAL_SEGMENTS, normalizeBillingStatus } from "@/lib/erp/billingStatus";
 import { loadProjectBillingPreferences, type BillingPreference } from "@/lib/erp/invoiceDestination";
+import { loadPricingSettings } from "@/lib/pricingSettingsServer";
+import { upchargeInPriceCents } from "@/lib/nextDayUpcharge";
 
 const turnoverRequestSelect = {
   id: true,
@@ -23,6 +25,7 @@ const turnoverRequestSelect = {
   materialsAdditional: true,
   compounding: true,
   otherWork: true,
+  nextDayUpcharge: true,
 } as const;
 
 type ProjectForUnitRow = {
@@ -54,6 +57,7 @@ type ProjectForUnitRow = {
     materialsAdditional: boolean;
     compounding: number | null;
     otherWork: boolean;
+    nextDayUpcharge: boolean;
   } | null;
 };
 
@@ -63,7 +67,7 @@ function buildingKeyFor(project: { id: string; buildingId: string | null; buildi
   return { buildingId, buildingName };
 }
 
-function buildUnitRow(project: ProjectForUnitRow) {
+function buildUnitRow(project: ProjectForUnitRow, nextDayPct: number) {
   const tr = project.turnoverRequest;
   const contractCents = tr?.approvedPriceCents ?? tr?.priceCents ?? project.contractValueCents ?? 0;
   const scope = tr ? contractedTurnoverScope(tr).map(turnoverScopeLabel).join(", ") : "";
@@ -80,6 +84,9 @@ function buildUnitRow(project: ProjectForUnitRow) {
     billingStatus: normalizeBillingStatus(tr?.billingStatus ?? project.billingStatus),
     voidReason: tr ? tr.voidReason : project.voidReason,
     scope,
+    /** Next day upcharge already inside contractCents (0 when none), and the percent used. */
+    upchargeCents: tr?.nextDayUpcharge ? upchargeInPriceCents(contractCents, nextDayPct) : 0,
+    upchargePct: nextDayPct,
     changeOrders: [] as CORow[],
     invoices: [] as InvoiceRow[],
     billing: null as BillingPreference | null,
@@ -105,6 +112,9 @@ type CORow = {
   projectId: string;
   title: string;
   contractValueCents: number;
+  /** Next day upcharge already inside contractValueCents (0 when none). */
+  upchargeCents: number;
+  upchargePct: number;
   billingStatus: string;
   voidReason: string | null;
   completedAt: string;
@@ -118,6 +128,7 @@ type BuildingRow = {
 };
 
 export async function GET(req: Request) {
+  const { nextDayPct } = await loadPricingSettings();
   const { searchParams } = new URL(req.url);
   const startParam = searchParams.get("start");
   const endParam = searchParams.get("end");
@@ -216,7 +227,7 @@ export async function GET(req: Request) {
     if (!buildingMap.has(buildingId)) {
       buildingMap.set(buildingId, { buildingId, buildingName, units: [] });
     }
-    const unit = buildUnitRow(project);
+    const unit = buildUnitRow(project, nextDayPct);
     buildingMap.get(buildingId)!.units.push(unit);
     unitByProjectId.set(project.id, unit);
   }
@@ -253,6 +264,7 @@ export async function GET(req: Request) {
       id: true,
       title: true,
       contractValueCents: true,
+      nextDayUpcharge: true,
       billingStatus: true,
       voidReason: true,
       completedAt: true,
@@ -285,7 +297,7 @@ export async function GET(req: Request) {
       if (!buildingMap.has(buildingId)) {
         buildingMap.set(buildingId, { buildingId, buildingName, units: [] });
       }
-      unit = buildUnitRow(co.project);
+      unit = buildUnitRow(co.project, nextDayPct);
       buildingMap.get(buildingId)!.units.push(unit);
       unitByProjectId.set(co.projectId, unit);
     }
@@ -295,6 +307,8 @@ export async function GET(req: Request) {
       projectId: co.projectId,
       title: co.title,
       contractValueCents: co.contractValueCents ?? 0,
+      upchargeCents: co.nextDayUpcharge ? upchargeInPriceCents(co.contractValueCents ?? 0, nextDayPct) : 0,
+      upchargePct: nextDayPct,
       billingStatus: normalizeBillingStatus(co.billingStatus),
       voidReason: co.voidReason,
       completedAt: (co.completedAt ?? co.updatedAt).toISOString(),

@@ -14,6 +14,7 @@ import { computeTurnoverPricing } from "@/lib/turnoverPricing";
 import { parseBuildingNameFromDealName, parseAddressFromDealName } from "@/lib/hubspot/dealNaming";
 import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
+import { HolidayHint } from "@/app/erp/components/HolidayHint";
 import { changeOrderDayCount, getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
 import { usePricingSettings } from "@/app/components/PricingSettingsProvider";
 import { isNextDayStart, nextDayCountInRange, nextDayUpchargeLabel } from "@/lib/nextDayUpcharge";
@@ -637,6 +638,9 @@ export function NewProjectForm({
   // Next day upcharge, added on top of the price (see nextDayUpcharge.ts). One for a change order, one for all the units.
   const [coNextDayUpcharge, setCoNextDayUpcharge] = useState(false);
   const [coStartDate, setCoStartDate] = useState("");
+  // Only for the holiday note; the start/end inputs stay uncontrolled.
+  const [projectDateHint, setProjectDateHint] = useState("");
+  const [projectEndDateHint, setProjectEndDateHint] = useState("");
   const [coEndDate, setCoEndDate] = useState("");
   const coDays = changeOrderDayCount(coStartDate, coEndDate);
   const [nextDayUpcharge, setNextDayUpcharge] = useState(false);
@@ -1336,10 +1340,12 @@ export function NewProjectForm({
                 if (coEndDate && e.target.value && coEndDate < e.target.value) setCoEndDate(e.target.value);
               }}
             />
+            <HolidayHint value={coStartDate} />
           </div>
           <div>
             <label className={label} htmlFor="co-end-date">End date</label>
             <input id="co-end-date" type="date" className={input} value={coEndDate} min={coStartDate || undefined} onChange={(e) => setCoEndDate(e.target.value)} />
+            <HolidayHint value={coEndDate} />
           </div>
           <div className="sm:col-span-3">
             <label className={label} htmlFor="co-comments">Comments</label>
@@ -1446,7 +1452,9 @@ export function NewProjectForm({
                 type="date"
                 required
                 className={input}
+                onChange={(e) => setProjectDateHint(e.target.value)}
               />
+              <HolidayHint value={projectDateHint} />
             </div>
             <div className="min-w-0">
               <label className={label} htmlFor="projectEndDate">
@@ -1457,7 +1465,9 @@ export function NewProjectForm({
                 name="projectEndDate"
                 type="date"
                 className={input}
+                onChange={(e) => setProjectEndDateHint(e.target.value)}
               />
+              <HolidayHint value={projectEndDateHint} />
             </div>
           </>
         )}
@@ -1724,6 +1734,7 @@ export function NewProjectForm({
                         value={unit.startDate}
                         onChange={(e) => updateUnitScope(unit.id, { startDate: e.target.value })}
                       />
+                      <HolidayHint value={unit.startDate} />
                     </div>
                     <div className="min-w-0">
                       <label className={label} htmlFor={`end-date-${unit.id}`}>
@@ -1736,6 +1747,7 @@ export function NewProjectForm({
                         value={unit.endDate}
                         onChange={(e) => updateUnitScope(unit.id, { endDate: e.target.value })}
                       />
+                      <HolidayHint value={unit.endDate} />
                     </div>
                     <div className={isMultiStep ? "min-w-0 sm:col-span-2 lg:col-span-1" : "min-w-0 md:col-span-2 xl:col-span-1"}>
                       <label className={label} htmlFor={`quality-${unit.id}`}>
@@ -1899,6 +1911,7 @@ export function NewProjectForm({
                         value={unit.paintDate}
                         onChange={(e) => updateUnitScope(unit.id, { paintDate: e.target.value })}
                       />
+                      <HolidayHint value={unit.paintDate} />
                     </div>
                     <div className="min-w-0">
                       <label className={label} htmlFor={`clean-date-${unit.id}`}>
@@ -1911,6 +1924,7 @@ export function NewProjectForm({
                         value={unit.cleanDate}
                         onChange={(e) => updateUnitScope(unit.id, { cleanDate: e.target.value })}
                       />
+                      <HolidayHint value={unit.cleanDate} />
                     </div>
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

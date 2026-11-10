@@ -7,6 +7,7 @@ import { centsToDollars } from "@/lib/erp/money";
 import { notifyProjectRescheduled } from "@/lib/erp/notifyReschedule";
 import { notifyReadyToBill } from "@/lib/erp/notifyReadyToBill";
 import { paidDayToTimestamp } from "@/lib/erp/payPeriods";
+import { getErpAuth } from "@/lib/erpAuth";
 
 type Ctx = { params: Promise<{ id: string; changeOrderId: string }> };
 
@@ -46,6 +47,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     }
     data.status = statusRaw;
+    // Rejecting or voiding needs a reason, so the team knows why later.
+    const needsNote = (statusRaw === "REJECTED" || statusRaw === "VOID") && existing.status !== statusRaw;
+    const note = typeof body.statusNote === "string" ? body.statusNote.trim().slice(0, 1000) : "";
+    if (needsNote && !note) {
+      return NextResponse.json({ error: `Write why this change order is being ${statusRaw === "REJECTED" ? "rejected" : "voided"}.` }, { status: 400 });
+    }
     // Auto-set completedAt when marking as complete for the first time —
     // skipped when this same request already supplies endDate too (the
     // editor's "Mark complete" button sends one explicitly; the sync block
@@ -61,6 +68,17 @@ export async function PATCH(req: Request, ctx: Ctx) {
       (body.endDate === undefined || body.endDate === null || body.endDate === "")
     ) {
       data.completedAt = new Date();
+    }
+  }
+  // The reason for a rejection or void: set with the status change, or
+  // corrected later while it's still rejected or voided.
+  if (typeof body.statusNote === "string" && body.statusNote.trim()) {
+    const finalStatus = (data.status as string | undefined) ?? existing.status;
+    if (finalStatus === "REJECTED" || finalStatus === "VOID") {
+      const auth = await getErpAuth();
+      data.statusNote = body.statusNote.trim().slice(0, 1000);
+      data.statusNoteBy = auth?.email ?? null;
+      data.statusNoteAt = new Date();
     }
   }
   if (body.completedAt !== undefined) {

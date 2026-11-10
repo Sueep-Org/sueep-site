@@ -343,11 +343,31 @@ type SOVItemRow = {
   invoices: UnitInvoiceChip[];
 };
 
+/**
+ * The next day upcharge inside a price (work that started today or
+ * tomorrow when it was booked). Already included, shown so whoever invoices
+ * knows what the extra is.
+ */
+function UpchargeBadge({ cents, pct }: { cents?: number; pct?: number }) {
+  if (!cents) return null;
+  return (
+    <span
+      className="mt-0.5 block text-[11px] font-medium text-amber-700"
+      title={`Next day upcharge: work booked to start today or tomorrow costs ${pct}% more. ${fmt(cents)} of this price is the upcharge, already included. Worked out with today's ${pct}%.`}
+    >
+      Next day +{pct}%: {fmt(cents)}
+    </span>
+  );
+}
+
 type CORow = {
   id: string;
   projectId: string;
   title: string;
   contractValueCents: number;
+  /** Next day upcharge already inside contractValueCents (0 when none). */
+  upchargeCents?: number;
+  upchargePct?: number;
   billingStatus: string;
   voidReason: string | null;
   completedAt: string;
@@ -958,6 +978,7 @@ function PostConstructionTab({ start, end, search }: { start: string; end: strin
                       </td>
                       <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums font-medium text-gray-900">
                         {row.type === "sov" ? fmt(row.item.scheduledValueCents) : row.type === "co" ? fmt(row.co.contractValueCents) : fmt(row.valueCents)}
+                        {row.type === "co" ? <UpchargeBadge cents={row.co.upchargeCents} pct={row.co.upchargePct} /> : null}
                       </td>
                       <td className="px-3 py-2.5">
                         {row.type === "contract" ? (
@@ -1027,6 +1048,8 @@ type JanCORow = {
   projectId: string;
   title: string;
   contractValueCents: number;
+  upchargeCents?: number;
+  upchargePct?: number;
   billingStatus: string;
   voidReason: string | null;
   completedAt: string;
@@ -1042,6 +1065,9 @@ type JanUnitRow = {
   bathrooms: number | null;
   completedAt: string;
   contractCents: number;
+  /** Next day upcharge already inside contractCents (0 when none). */
+  upchargeCents?: number;
+  upchargePct?: number;
   billingStatus: string;
   voidReason: string | null;
   scope: string;
@@ -1350,6 +1376,11 @@ function JanitorialTab({ start, end, search }: { start: string; end: string; sea
                         {row.type === "unit"
                           ? (row.unit.contractCents > 0 ? fmt(row.unit.contractCents) : <span className="text-gray-400">-</span>)
                           : fmt(row.co.contractValueCents)}
+                        {row.type === "unit" ? (
+                          <UpchargeBadge cents={row.unit.upchargeCents} pct={row.unit.upchargePct} />
+                        ) : (
+                          <UpchargeBadge cents={row.co.upchargeCents} pct={row.co.upchargePct} />
+                        )}
                       </td>
                       <td className="px-3 py-2.5">
                         {row.type === "unit" ? (

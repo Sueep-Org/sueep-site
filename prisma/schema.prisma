@@ -1052,6 +1052,12 @@ model ProjectChangeOrder {
   estimatedDays       Int?
   reason              String?
   resolutionNotes     String?
+  /// Why it was set to REJECTED or VOID, required by the API then. Kept when
+  /// the status moves on, so the history stays; replaced on the next one.
+  statusNote          String?
+  /// Who wrote statusNote (ErpUser email, or "Sueep" for automatic voids) and when.
+  statusNoteBy        String?
+  statusNoteAt        DateTime?
   contractValueCents  Int?
   estMaterialCents    Int?
   estTravelCents      Int?

@@ -16,6 +16,8 @@ import { useInsuranceCheck } from "@/app/erp/components/useInsuranceCheck";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { centsToDollars } from "@/lib/erp/money";
 import { MiniCalendarPicker } from "./MiniCalendarPicker";
+import { holidayOn } from "@/lib/erp/holidays";
+import { useConfirm } from "@/app/erp/components/ui";
 import { AnswerMark, answerUid, type Answers } from "./AnswerMark";
 import { useFloatingMenu } from "@/app/erp/components/useFloatingMenu";
 
@@ -284,6 +286,19 @@ export function DayAssignmentModal({
     : contractors;
 
   const allDateKeys = pickedKeys.size > 0 ? [...new Set([dateKey, ...pickedKeys])].sort() : null;
+  const confirmHoliday = useConfirm();
+  // The day the modal opened on was already confirmed on the calendar; extra
+  // days picked here ask before anything lands on a company holiday.
+  async function okForExtraHolidays(): Promise<boolean> {
+    const holidays = [...pickedKeys].filter((k) => k !== dateKey && holidayOn(k)).sort();
+    if (holidays.length === 0) return true;
+    return confirmHoliday({
+      title: holidays.length === 1 ? `${holidays[0]} is ${holidayOn(holidays[0])}` : `${holidays.length} of the days are company holidays`,
+      message: `${holidays.map((k) => `${k}: ${holidayOn(k)}`).join(", ")}. Nobody should be working then. Schedule ${holidays.length === 1 ? "it" : "them"} anyway?`,
+      confirmLabel: "Schedule anyway",
+      danger: false,
+    });
+  }
 
   // Whether there's anything to show under "Task details" at all for the
   // current project — same three cases (SOV items, turnover scope, tagged
@@ -341,6 +356,7 @@ export function DayAssignmentModal({
       setError("Pick a project");
       return;
     }
+    if (!(await okForExtraHolidays())) return;
     // Supervisor/PM/SOV/scope/CO/comment are all optional. Saving with none
     // of them still puts the project on the calendar for this day, just
     // flagged with a "no supervisor assigned" warning until one's added.
@@ -455,6 +471,7 @@ export function DayAssignmentModal({
       setError("Pick a change order");
       return;
     }
+    if (!(await okForExtraHolidays())) return;
     if ((startTime && !endTime) || (endTime && !startTime)) {
       setError("Set both a start and end time, or leave both blank for an all-day event");
       return;

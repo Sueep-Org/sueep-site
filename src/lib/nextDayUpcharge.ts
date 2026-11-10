@@ -33,6 +33,16 @@ export function nextDayCountInRange(startKey: string | null | undefined, endKey:
   return Math.round(ms / 86_400_000) + 1;
 }
 
+/**
+ * The upcharge already inside a price that includes it, in cents: a $1,200
+ * price at 20% holds $200 of upcharge (base $1,000 + $200). Uses today's
+ * percent, so it's approximate if the percent changed since the job was priced.
+ */
+export function upchargeInPriceCents(priceCents: number, pct: number): number {
+  if (priceCents <= 0 || pct <= 0) return 0;
+  return Math.round((priceCents * pct) / (100 + pct));
+}
+
 /** The upcharge on a price, in cents. */
 export function nextDayUpchargeCents(cents: number, pct: number): number {
   return Math.round((cents * pct) / 100);

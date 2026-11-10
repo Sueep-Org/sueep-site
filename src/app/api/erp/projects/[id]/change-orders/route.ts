@@ -35,6 +35,9 @@ export async function POST(req: Request, ctx: Ctx) {
   if (!title) return NextResponse.json({ error: "title is required" }, { status: 400 });
 
   const statusRaw = String(body.status || "DRAFT").toUpperCase();
+  if (statusRaw === "REJECTED" || statusRaw === "VOID") {
+    return NextResponse.json({ error: "Create the change order first, then reject or void it with a reason." }, { status: 400 });
+  }
   const status = STATUSES.includes(statusRaw as (typeof STATUSES)[number]) ? statusRaw : "DRAFT";
 
   const estimatedDays =

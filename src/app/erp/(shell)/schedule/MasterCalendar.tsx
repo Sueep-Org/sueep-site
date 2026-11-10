@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { dayKey, monthLabel, monthMatrix, startOfMonth } from "@/lib/erp/schedule";
 import { todayEasternAsUtcMidnight } from "@/lib/erp/dates";
+import { holidayOn } from "@/lib/erp/holidays";
 import { WEEKDAY_SHORT, type JanitorialShift } from "@/lib/erp/janitorialSchedule";
 import { categoryColor, type ManagementCategoryDto, type ManagementItem } from "@/lib/erp/managementCalendar";
 import { calendarSegmentGroup, type CalendarSegmentGroup } from "@/lib/erp/projectSegments";
@@ -301,15 +302,23 @@ export function MasterCalendar({ projects, showManagement }: { projects: MasterP
               const expanded = expandedDays.has(k);
               const shown = expanded ? chips : chips.slice(0, MAX_CHIPS_PER_DAY);
               const more = chips.length - shown.length;
+              const holiday = holidayOn(k);
               return (
-                <div key={k} className={`min-h-[96px] bg-white p-1.5 ${isToday ? "bg-pink-50/40 ring-1 ring-inset ring-pink-400" : ""}`}>
+                <div key={k} className={`min-h-[96px] p-1.5 ${holiday ? "bg-slate-100" : "bg-white"} ${isToday ? "bg-pink-50/40 ring-1 ring-inset ring-pink-400" : ""}`}>
                   <div className={inMonth ? "" : "opacity-40"}>
-                    <div
-                      className={`flex h-5 w-5 items-center justify-center rounded-full text-xs font-medium ${
-                        isToday ? "bg-pink-600 text-white" : "text-gray-500"
-                      }`}
-                    >
-                      {cell.getUTCDate()}
+                    <div className="flex items-center gap-1">
+                      <div
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-medium ${
+                          isToday ? "bg-pink-600 text-white" : "text-gray-500"
+                        }`}
+                      >
+                        {cell.getUTCDate()}
+                      </div>
+                      {holiday ? (
+                        <span className="min-w-0 truncate text-[10px] font-semibold text-slate-600" title={`${holiday}, company holiday`}>
+                          {holiday}
+                        </span>
+                      ) : null}
                     </div>
                     {shown.length > 0 && (
                       <ul className="mt-1 space-y-1">

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { InfoTip, useConfirm, useToast } from "@/app/erp/components/ui";
+import { holidayOn } from "@/lib/erp/holidays";
 import {
   addDays,
   dayKey,
@@ -513,8 +514,11 @@ export function ProjectGantt({
   const grid = useMemo(() => {
     const months: { left: number; label: string }[] = [];
     const days: { left: number; label: string; weekend: boolean }[] = [];
+    const holidays: { left: number; name: string }[] = [];
     for (let i = 0; i < totalDays; i++) {
       const d = addDays(range.start, i);
+      const holiday = holidayOn(dayKey(d));
+      if (holiday) holidays.push({ left: i * pxPerDay, name: holiday });
       // The first column gets a label only when there's room before the next
       // month's, so the two don't print on top of each other.
       if ((i === 0 && d.getUTCDate() <= 20) || d.getUTCDate() === 1) {
@@ -532,7 +536,7 @@ export function ProjectGantt({
         days.push({ left: i * pxPerDay, label: String(d.getUTCDate()), weekend: wd === 0 || wd === 6 });
       }
     }
-    return { months, days };
+    return { months, days, holidays };
   }, [range.start, totalDays, pxPerDay, zoom]);
 
   function toggleSection(k: GanttSection) {
@@ -885,6 +889,10 @@ export function ProjectGantt({
                       {grid.months.map((m) => (
                         <div key={m.left} className="absolute inset-y-0 border-l border-gray-200" style={{ left: m.left }} />
                       ))}
+                      {/* Company holidays: a shaded column (named in the header on hover). */}
+                      {grid.holidays.map((h) => (
+                        <div key={`hol-${h.left}`} className="absolute inset-y-0 bg-slate-200/70" style={{ left: h.left, width: Math.max(pxPerDay, 2) }} />
+                      ))}
                       {todayInRange && zoom !== "quarter" ? (
                         <div className="absolute inset-y-0 bg-pink-50/70" style={{ left: todayOffsetPx, width: pxPerDay }} />
                       ) : null}
@@ -902,6 +910,14 @@ export function ProjectGantt({
                         <span key={m.left} className="absolute top-1.5 whitespace-nowrap pl-1.5 font-semibold text-gray-700" style={{ left: m.left }}>
                           {m.label}
                         </span>
+                      ))}
+                      {grid.holidays.map((h) => (
+                        <span
+                          key={`hol-${h.left}`}
+                          title={`${h.name}, company holiday`}
+                          className="absolute inset-y-0 cursor-help"
+                          style={{ left: h.left, width: Math.max(pxPerDay, 6) }}
+                        />
                       ))}
                       {grid.days.map((d) => (
                         <span
