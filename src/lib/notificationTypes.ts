@@ -112,7 +112,7 @@ export const NOTIFICATIONS = {
     label: "Client approved or denied a change order",
     group: "Projects & schedule",
     when: "A client presses Approve or Deny on a change order made from their scheduling request",
-    toMode: "also",
+    toMode: "recipients",
     ccEditable: true,
     defaultTo: () => [env("DOCUSEAL_SUEEP_SIGNER_EMAIL", "david@sueep.com"), "jennifer@sueep.com"],
   }),
