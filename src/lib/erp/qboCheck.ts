@@ -4,6 +4,7 @@ import { loadOpenInvoices } from "./dashboardMoney";
 import { FINANCE_DATA_START, type FinanceMonth } from "./financeSummary";
 import { cachedFinanceSummary } from "./financeSummaryCached";
 import { HEALTH_SHARE_SETTING_KEY, parseHealthSharePct } from "./healthCost";
+import { metaSpendByMonth, type MetaMonth } from "./metaAds";
 
 /**
  * The QuickBooks check page (QUICKBOOKS_PLAN.md Phase 3): the ERP next to
@@ -256,7 +257,7 @@ export async function loadMoneyOwedCheck(): Promise<MoneyOwedCheck> {
 
 // ── Monthly totals ─────────────────────────────────────────────────────────
 
-export const CHECK_LINES = ["REVENUE", "PAYROLL", "OFFSHORE", "INSURANCE", "HEALTH", "RECRUITING"] as const;
+export const CHECK_LINES = ["REVENUE", "PAYROLL", "OFFSHORE", "INSURANCE", "HEALTH", "RECRUITING", "META_ADS"] as const;
 export type CheckLine = (typeof CHECK_LINES)[number];
 
 export const CHECK_LINE_LABELS: Record<CheckLine, { label: string; erp: string; qbo: string; reasons: string }> = {
@@ -281,7 +282,18 @@ export const CHECK_LINE_LABELS: Record<CheckLine, { label: string; erp: string; 
   },
   HEALTH: { label: "Health insurance", erp: "Sueep's share of premiums", qbo: "Employee Health Benefits", reasons: "QuickBooks has the full IBX bill; the ERP counts only Sueep's share." },
   RECRUITING: { label: "Recruiting", erp: "Hiring ads", qbo: "HR Recruiting", reasons: "QuickBooks also has background checks and other recruiting costs." },
+  META_ADS: {
+    label: "Meta ads",
+    erp: "Facebook and Instagram ad spend as Meta reports it (from the Ad spend page). Not an ERP cost: QuickBooks already has these charges",
+    qbo: "Charges from Meta or Facebook in any account. Until QuickBooks' transaction detail syncs, the whole Advertising & Marketing account",
+    reasons: "Meta charges the card when spend reaches a billing limit, so a charge can land in the next month. Sales tax and card fees also differ. Hiring ads may be booked under HR Recruiting.",
+  },
 };
+
+/** A QuickBooks transaction paid to Meta / Facebook, by payee or memo. */
+const META_TXN = /facebook|\bmeta\b|meta platforms|\bfb\.me\b|\bfacebk\b/i;
+/** The account Meta charges usually land in, for months without transaction detail. */
+const ADS_ACCOUNT = /advertis|marketing/i;
 
 export type CheckStatus = "MATCH" | "KNOWN" | "LOOK";
 
@@ -325,6 +337,9 @@ function erpLine(m: FinanceMonth, line: CheckLine): number {
       return m.healthCents;
     case "RECRUITING":
       return m.hiringAdsCents;
+    case "META_ADS":
+      // Filled from Meta in loadMonthlyCheck, not from the ERP's own numbers.
+      return 0;
   }
 }
 
@@ -425,7 +440,7 @@ function revenueGroups(
 }
 
 /** Non-revenue lines: QuickBooks' transactions for the line, by payee, and the ERP's pieces. */
-function costGroups(line: CheckLine, txns: Txn[], m: FinanceMonth | undefined): DetailGroup[] {
+function costGroups(line: CheckLine, txns: Txn[], m: FinanceMonth | undefined, meta?: MetaMonth): DetailGroup[] {
   const qboItems: DetailItem[] = txns
     .slice()
     .sort((a, b) => a.date.localeCompare(b.date))
@@ -446,6 +461,7 @@ function costGroups(line: CheckLine, txns: Txn[], m: FinanceMonth | undefined): 
     if (line === "HEALTH") add("Sueep's share of health premiums", m.healthCents);
     if (line === "RECRUITING") add("Hiring ads", m.hiringAdsCents, "Job ads on office openings, in the month posted");
   }
+  if (line === "META_ADS") for (const c of meta?.campaigns ?? []) add(c.name, c.spendCents, "Meta campaign spend this month");
   return [
     group("qbo", "In QuickBooks", "Every QuickBooks transaction behind this line this month, by date. On cash basis each one is the day the money moved.", qboItems),
     group("erp", "In the ERP", "How the ERP builds this number. It counts by the day of the work or spreads costs over time, so compare the totals, then look for the QuickBooks payments that don't fit.", erpItems),
@@ -459,14 +475,17 @@ function costGroups(line: CheckLine, txns: Txn[], m: FinanceMonth | undefined): 
  */
 export async function loadMonthlyCheck(): Promise<MonthCheck[]> {
   const currentMonth = todayEasternKey().slice(0, 7);
-  const [qboLines, shareSetting, txns] = await Promise.all([
+  const [qboLines, shareSetting, txns, metaMonths] = await Promise.all([
     prisma.qboPnlLine.findMany({ where: { month: { gte: FINANCE_DATA_START, lt: currentMonth } }, select: { month: true, section: true, account: true, parent: true, amountCents: true } }),
     prisma.appSetting.findUnique({ where: { key: HEALTH_SHARE_SETTING_KEY } }),
     prisma.qboPnlTxn.findMany({
       where: { month: { gte: FINANCE_DATA_START } },
       select: { month: true, date: true, section: true, account: true, parent: true, txnType: true, docNum: true, name: true, memo: true, amountCents: true },
     }),
+    metaSpendByMonth(FINANCE_DATA_START),
   ]);
+  // Meta not connected (or not answering): leave its line out rather than show $0.
+  const lines = CHECK_LINES.filter((l) => l !== "META_ADS" || metaMonths);
   const months = [...new Set(qboLines.map((l) => l.month))].sort().reverse();
   if (!months.length) return [];
   const summary = await cachedFinanceSummary("paid", { startKey: FINANCE_DATA_START });
@@ -510,11 +529,17 @@ export async function loadMonthlyCheck(): Promise<MonthCheck[]> {
     }
     const monthTxns = txns.filter((t) => t.month === month);
     const detailSynced = monthTxns.length > 0;
+    const isExpense = (section: string) => section !== "INCOME" && section !== "OTHER_INCOME";
+    const metaTxns = monthTxns.filter((t) => isExpense(t.section) && (META_TXN.test(t.name ?? "") || META_TXN.test(t.memo ?? "")));
+    qbo.META_ADS = detailSynced
+      ? metaTxns.reduce((s, t) => s + t.amountCents, 0)
+      : qboLines.filter((l) => l.month === month && isExpense(l.section) && ADS_ACCOUNT.test(`${l.parent} ${l.account}`)).reduce((s, l) => s + l.amountCents, 0);
+    const metaMonth = metaMonths?.get(month);
     return {
       month,
       detailSynced,
-      lines: CHECK_LINES.map((line) => {
-        const erpCents = erpMonth ? erpLine(erpMonth, line) : 0;
+      lines: lines.map((line) => {
+        const erpCents = line === "META_ADS" ? (metaMonth?.spendCents ?? 0) : erpMonth ? erpLine(erpMonth, line) : 0;
         const qboCents = qbo[line];
         let status: CheckStatus = close(erpCents, qboCents) ? "MATCH" : "LOOK";
         let note: string | null = null;
@@ -523,12 +548,18 @@ export async function loadMonthlyCheck(): Promise<MonthCheck[]> {
           status = "KNOWN";
           note = `QuickBooks has the full bill; the ERP counts Sueep's ${Math.round(share * 100)}%.`;
         }
+        if (line === "META_ADS" && !detailSynced) {
+          note = "QuickBooks' transaction detail isn't synced for this month, so this compares against the whole Advertising & Marketing account, which can hold other ads too.";
+          if (status === "LOOK" && qboCents > erpCents) status = "KNOWN";
+        }
         // Without QuickBooks' detail every item would look "ERP only", so show nothing instead.
         const groups = !detailSynced
           ? []
           : line === "REVENUE"
             ? revenueGroups(month, incomeTxns, summary.jobs, invoicesByJob)
-            : costGroups(line, monthTxns.filter((t) => qboLineFor(t.section, t.account, t.parent) === line), erpMonth);
+            : line === "META_ADS"
+              ? costGroups(line, metaTxns, erpMonth, metaMonth)
+              : costGroups(line, monthTxns.filter((t) => qboLineFor(t.section, t.account, t.parent) === line), erpMonth);
         return { line, erpCents, qboCents, status, note, groups };
       }),
     };

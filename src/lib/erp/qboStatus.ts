@@ -31,6 +31,7 @@ const LINE_WORDS: Record<CheckLine, string> = {
   INSURANCE: "insurance",
   HEALTH: "health insurance",
   RECRUITING: "recruiting",
+  META_ADS: "Meta ads",
 };
 
 function list(words: string[]): string {
