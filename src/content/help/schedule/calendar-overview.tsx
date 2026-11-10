@@ -453,7 +453,10 @@ export function ScheduleCalendarOverview() {
             <LI>On a Next day day, 20% is added to the price you type.</LI>
             <LI>
               Tick <strong>Email &lt;name&gt; that it&apos;s a change order</strong> to tell them, with an optional message. They
-              get the title, the price if set, and your message; their reply comes to you.
+              get the title, the price if set, and your message; their reply comes to you. <strong>With a price</strong>, the
+              email has <strong>Approve / Deny</strong> buttons: Approve moves the change order to Approved, Deny to Rejected
+              with their reason, and the office gets an email either way (who gets it is on Email Settings, &quot;Client
+              approved or denied a change order&quot;). Without a price there are no buttons; follow up with them.
             </LI>
             <LI>
               The change order is made for that day as <strong>Submitted</strong> (waiting for their OK) and put on the day.

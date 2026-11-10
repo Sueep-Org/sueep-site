@@ -1061,6 +1061,12 @@ model ProjectChangeOrder {
   /// Set on the "Next day surcharge" change order made for one SOV line on
   /// one next-day calendar day ("dayAssignmentId:sovItemId"), so it's only made once.
   surchargeKey        String?   @unique
+  /// Key in the Approve / Deny link emailed to the client when the office turns
+  /// their scheduling request into a change order (to-change-order route).
+  /// Opens /co-approve/[token]; only works while the change order is SUBMITTED.
+  clientApprovalToken String?   @unique
+  /// When the client pressed Approve or Deny on that page.
+  clientAnsweredAt    DateTime?
   contractValueCents  Int?
   estMaterialCents    Int?
   estTravelCents      Int?

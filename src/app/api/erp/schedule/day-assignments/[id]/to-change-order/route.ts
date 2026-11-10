@@ -5,6 +5,7 @@ import { loadPricingSettings } from "@/lib/pricingSettingsServer";
 import { withNextDayUpcharge } from "@/lib/nextDayUpcharge";
 import { applyNextDaySurcharge } from "@/lib/erp/nextDaySurcharge";
 import { escapeHtml, formatUsd, sendEmail } from "@/lib/email";
+import { clientApprovalButtonsHtml, newClientApprovalToken } from "@/lib/erp/clientCoApproval";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -54,6 +55,8 @@ export async function POST(req: Request, ctx: Ctx) {
   const { nextDayPct } = await loadPricingSettings();
   const priceCents = baseCents == null ? null : withNextDayUpcharge(baseCents, day.nextDayUpcharge, nextDayPct);
   const requestedBy = day.requesterEmail ? `${day.requesterName?.trim() || day.requesterEmail} <${day.requesterEmail}>` : null;
+  // With a price and an email going out, the client gets Approve / Deny buttons.
+  const approvalToken = notify && priceCents ? newClientApprovalToken() : null;
 
   const co = await prisma.$transaction(async (tx) => {
     const created = await tx.projectChangeOrder.create({
@@ -68,6 +71,7 @@ export async function POST(req: Request, ctx: Ctx) {
         endDate: day.date,
         contractValueCents: priceCents,
         nextDayUpcharge: day.nextDayUpcharge,
+        clientApprovalToken: approvalToken,
       },
       select: { id: true, title: true },
     });
@@ -93,7 +97,8 @@ export async function POST(req: Request, ctx: Ctx) {
         ${priceCents != null ? `<p><strong>Price:</strong> ${formatUsd(priceCents)}${day.nextDayUpcharge ? ` (includes the ${nextDayPct}% next day upcharge)` : ""}</p>` : ""}
         ${day.comment ? `<p><strong>What you asked for:</strong> ${escapeHtml(day.comment)}</p>` : ""}
         ${message ? `<p>${escapeHtml(message).replace(/\n/g, "<br>")}</p>` : ""}
-        <p>We'll follow up to confirm it with you. Reply to this email with any questions.</p>
+        ${approvalToken ? clientApprovalButtonsHtml(approvalToken) : `<p>We'll follow up to confirm it with you.</p>`}
+        <p>Reply to this email with any questions.</p>
         <p style="margin-top:24px;font-size:13px;color:#6b7280">The Sueep Team</p>
       </div>`;
     const result = await sendEmail({
