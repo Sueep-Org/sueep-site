@@ -403,7 +403,9 @@ export function ScheduleCalendarOverview() {
             <LI>
               Weekly janitorial shifts still show on holidays. Click the date number on the Janitorial calendar to skip them.
             </LI>
-            <LI>The holiday list is set by the tech team each year (2026 and New Year&apos;s Day 2027 are in).</LI>
+            <LI>
+              Admins add and change holidays on <A href="/erp/help/settings/settings-overview">Settings, Holidays tab</A>.
+            </LI>
           </UL>
         </Step>
 

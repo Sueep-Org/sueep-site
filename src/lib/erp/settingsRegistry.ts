@@ -597,6 +597,7 @@ export const OTHER_SETTING_LABELS: Record<string, string> = {
   "list.removalReasons": "Schedule removal reasons list",
   "list.hiringSources": "Hiring sources list",
   "list.janitorialRoles": "Janitorial roles list",
+  companyHolidays: "Company holidays",
 };
 
 export function settingDef(key: string): SettingDef | undefined {
