@@ -432,6 +432,11 @@ export function ScheduleCalendarOverview() {
               already billed). Dragging the day to another date keeps the Next day tag and moves the surcharge to the new date.
             </LI>
             <LI>
+              <strong>Rush jobs that come in by phone:</strong> open the day and tick <strong>Next day</strong> (roles that see
+              prices). It works the same as a request from the form. Unticking it voids the surcharge change orders; change
+              orders that already got the 20% keep their price, so fix those by hand if needed.
+            </LI>
+            <LI>
               When you attach a <strong>change order</strong> to a Next day day, its next day upcharge box is ticked and 20% is
               added to its price, once.
             </LI>

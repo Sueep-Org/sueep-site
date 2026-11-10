@@ -14,6 +14,7 @@ import { useFloatingMenu } from "@/app/erp/components/useFloatingMenu";
 import { InfoTip, useConfirm } from "@/app/erp/components/ui";
 import { useHolidays } from "@/app/components/HolidaysProvider";
 import { RequestToChangeOrder } from "./RequestToChangeOrder";
+import { NextDayToggle } from "./NextDayToggle";
 import { usePricingSettings } from "@/app/components/PricingSettingsProvider";
 import { useInsuranceCheck } from "@/app/erp/components/useInsuranceCheck";
 import {
@@ -2593,6 +2594,15 @@ export function SchedulePlanner({
                 className="mt-0.5"
               />
             )}
+            {eventDayAssignment && canSetSubPay ? (
+              <NextDayToggle
+                key={`nd-${eventDayAssignment.id}`}
+                dayAssignmentId={eventDayAssignment.id}
+                on={!!eventDayAssignment.nextDayUpcharge}
+                pct={nextDayPct}
+                onChanged={(on) => setDayAssignments((prev) => prev.map((a) => (a.id === eventDayAssignment.id ? { ...a, nextDayUpcharge: on } : a)))}
+              />
+            ) : null}
             {eventDayAssignment && canSetSubPay ? (
               <RequestToChangeOrder
                 key={eventDayAssignment.id}
