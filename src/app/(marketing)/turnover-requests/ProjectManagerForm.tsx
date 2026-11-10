@@ -5,6 +5,7 @@ import { isNextDayStart } from "@/lib/nextDayUpcharge";
 import { centsToDollars } from "@/lib/erp/money";
 import { deriveChangeOrderSupervisorCount } from "@/lib/changeOrderLaborRates";
 import { SignaturePadInput } from "@/components/SignaturePad";
+import { InfoTip } from "@/app/erp/components/ui/InfoTip";
 
 const input =
   "mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#E73C6E] focus:outline-none focus:ring-1 focus:ring-[#E73C6E]";
@@ -766,15 +767,43 @@ export function ProjectManagerForm({ onBack, nextDayPct }: Props) {
 
             {!sovLoading && sovItems.length > 0 && (
               <div>
-                <p className={label}>Still to be scheduled</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-medium text-gray-700">SOVs (view only)</p>
+                  <InfoTip
+                    wide
+                    text={
+                      "Why can't I select these?\nWe match your request to the right SOV line when we schedule it. When a line could be picked here, the same work was sometimes requested twice and its budget was used up before the work was done.\nTell us which ones you need in the notes below and we'll take it from there."
+                    }
+                  />
+                </div>
                 <p className="mt-0.5 text-xs text-gray-500">
-                  Work on this project that isn&apos;t on our calendar or finished yet. For reference only: tell us what you need in the notes below and we&apos;ll match it.
+                  Work on your contract that isn&apos;t scheduled or finished yet.{" "}
+                  <span className="font-medium text-gray-700">Mention the ones you need in the notes below.</span>
                 </p>
-                <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-pink-50 px-2 py-0.5 text-[11px] font-medium text-[#E73C6E] ring-1 ring-inset ring-pink-200">
+                    <svg aria-hidden viewBox="0 0 20 20" fill="currentColor" className="h-3 w-3">
+                      <path fillRule="evenodd" d="M5.75 2a.75.75 0 0 1 .75.75V4h7V2.75a.75.75 0 0 1 1.5 0V4h.25A2.75 2.75 0 0 1 18 6.75v8.5A2.75 2.75 0 0 1 15.25 18H4.75A2.75 2.75 0 0 1 2 15.25v-8.5A2.75 2.75 0 0 1 4.75 4H5V2.75A.75.75 0 0 1 5.75 2Zm-1 5.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h10.5c.69 0 1.25-.56 1.25-1.25v-6.5c0-.69-.56-1.25-1.25-1.25H4.75Z" clipRule="evenodd" />
+                    </svg>
+                    Not attached to a calendar day
+                  </span>
+                  <span className="text-[11px] text-gray-400">
+                    {sovItems.length} line{sovItems.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+                <ul className="mt-2 grid max-h-72 gap-2 overflow-y-auto pr-1 sm:grid-cols-2" aria-label="SOV lines not attached to a calendar day, view only">
                   {sovItems.map((item, i) => (
-                    <li key={i} className="flex gap-2">
-                      <span aria-hidden className="text-gray-400">•</span>
-                      <span>{item.description}</span>
+                    <li
+                      key={i}
+                      className="flex items-start gap-2.5 rounded-md border border-gray-200 bg-white px-3 py-2.5 shadow-sm"
+                    >
+                      <span aria-hidden className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded bg-gray-100 text-[10px] font-semibold text-gray-500">
+                        {i + 1}
+                      </span>
+                      <span className="min-w-0 flex-1 text-sm text-gray-800">{item.description}</span>
+                      <svg aria-label="View only" viewBox="0 0 20 20" fill="currentColor" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-300">
+                        <path fillRule="evenodd" d="M10 1a4.5 4.5 0 0 0-4.5 4.5V9H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-.5V5.5A4.5 4.5 0 0 0 10 1Zm3 8V5.5a3 3 0 1 0-6 0V9h6Z" clipRule="evenodd" />
+                      </svg>
                     </li>
                   ))}
                 </ul>
@@ -822,7 +851,7 @@ export function ProjectManagerForm({ onBack, nextDayPct }: Props) {
                 className={input}
                 value={comments}
                 onChange={(e) => setComments(e.target.value)}
-                placeholder="Which areas or floors, what work, how many people, access or special instructions…"
+                placeholder={sovItems.length > 0 ? "Which SOVs above you need, plus areas or floors, how many people, access or special instructions…" : "Which areas or floors, what work, how many people, access or special instructions…"}
               />
             </div>
             <div className="grid gap-4 sm:grid-cols-2 border-t border-gray-100 pt-4">
