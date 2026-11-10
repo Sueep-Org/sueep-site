@@ -13,6 +13,8 @@ import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { useFloatingMenu } from "@/app/erp/components/useFloatingMenu";
 import { InfoTip, useConfirm } from "@/app/erp/components/ui";
 import { holidayConfirm, holidayOn } from "@/lib/erp/holidays";
+import { RequestToChangeOrder } from "./RequestToChangeOrder";
+import { usePricingSettings } from "@/app/components/PricingSettingsProvider";
 import { useInsuranceCheck } from "@/app/erp/components/useInsuranceCheck";
 import {
   coIsComplete,
@@ -694,6 +696,7 @@ export function SchedulePlanner({
   // email) — ?scheduleProjectId=<id> opens today's assign-a-supervisor modal
   // pre-filled with that project, instead of landing on the bare calendar.
   const router = useRouter();
+  const { nextDayPct } = usePricingSettings();
   const confirm = useConfirm();
   const checkInsurance = useInsuranceCheck(contractors);
   const searchParams = useSearchParams();
@@ -2588,6 +2591,17 @@ export function SchedulePlanner({
                 className="mt-0.5"
               />
             )}
+            {eventDayAssignment && canSetSubPay ? (
+              <RequestToChangeOrder
+                key={eventDayAssignment.id}
+                dayAssignmentId={eventDayAssignment.id}
+                requestNotes={eventDayAssignment.comment}
+                requesterName={eventDayAssignment.requesterName}
+                requesterEmail={eventDayAssignment.requesterEmail}
+                nextDay={!!eventDayAssignment.nextDayUpcharge}
+                nextDayPct={nextDayPct}
+              />
+            ) : null}
           </div>
         </div>
 
@@ -3995,6 +4009,14 @@ export function SchedulePlanner({
                         <span aria-hidden title="No supervisor assigned" className="shrink-0 text-amber-950">⚠</span>
                       ) : null}
                       <CompletionStatusIcon complete={project.status === "COMPLETE"} />
+                      {assignment.nextDayUpcharge ? (
+                        <span
+                          className="shrink-0 rounded bg-amber-200 px-1 text-[9px] font-bold text-amber-900"
+                          title="Asked for next day by the project manager. Assigning an SOV line or change order adds the next day surcharge."
+                        >
+                          ND
+                        </span>
+                      ) : null}
                       <span className="truncate">{compactLabel ?? project.jobTitle}</span>
                     </>
                   );

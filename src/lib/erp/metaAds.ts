@@ -11,18 +11,52 @@
 
 const GRAPH = "https://graph.facebook.com/v21.0";
 
+/** Quick picks next to the date picker. */
 export const META_PERIODS = [
   { key: "this_month", label: "This month" },
   { key: "last_month", label: "Last month" },
-  { key: "last_30d", label: "Last 30 days" },
-  { key: "last_90d", label: "Last 90 days" },
-  { key: "this_year", label: "This year" },
-  { key: "maximum", label: "All time" },
 ] as const;
-export type MetaPeriod = (typeof META_PERIODS)[number]["key"];
+export type MetaPeriodKey = (typeof META_PERIODS)[number]["key"] | "custom";
 
-export function parseMetaPeriod(v: string | undefined): MetaPeriod {
-  return (META_PERIODS.find((p) => p.key === v)?.key ?? "last_30d") as MetaPeriod;
+/** Days to report on, inclusive ("YYYY-MM-DD"), and which pick they came from. */
+export type MetaRange = { since: string; until: string; key: MetaPeriodKey };
+
+/** Meta keeps about 37 months of insights; older days come back as an error. */
+const OLDEST_MONTHS = 37;
+
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function todayKey(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * The page's dates from its search params: `from`/`to` for a custom range
+ * (either order, the future cut to today), else `period` (this_month or
+ * last_month), else this month.
+ */
+export function resolveMetaRange(params: { period?: string; from?: string; to?: string }): MetaRange {
+  const today = todayKey();
+  const from = params.from && DAY_RE.test(params.from) ? params.from : null;
+  const to = params.to && DAY_RE.test(params.to) ? params.to : null;
+  if (from || to) {
+    let a = from ?? to!;
+    let b = to ?? from!;
+    if (a > b) [a, b] = [b, a];
+    const oldest = new Date();
+    oldest.setUTCMonth(oldest.getUTCMonth() - OLDEST_MONTHS);
+    const oldestKey = oldest.toISOString().slice(0, 10);
+    if (a < oldestKey) a = oldestKey;
+    if (b > today) b = today;
+    if (a > b) a = b;
+    return { since: a, until: b, key: "custom" };
+  }
+  const monthStart = `${today.slice(0, 7)}-01`;
+  if (params.period === "last_month") {
+    const lastEnd = shiftDay(monthStart, -1);
+    return { since: `${lastEnd.slice(0, 7)}-01`, until: lastEnd, key: "last_month" };
+  }
+  return { since: monthStart, until: today, key: "this_month" };
 }
 
 /** What a campaign is for, guessed from its name. */
@@ -131,7 +165,7 @@ function monthsBack(n: number): { since: string; until: string } {
 
 const FIELDS = "spend,impressions,clicks,actions";
 
-export async function loadMetaAds(period: MetaPeriod): Promise<MetaAdsReport> {
+export async function loadMetaAds(range: MetaRange): Promise<MetaAdsReport> {
   const token = process.env.META_ADS_ACCESS_TOKEN;
   const account = process.env.META_AD_ACCOUNT_ID;
   if (!token || !account) {
@@ -142,20 +176,37 @@ export async function loadMetaAds(period: MetaPeriod): Promise<MetaAdsReport> {
     };
   }
   try {
+    const timeRange = JSON.stringify({ since: range.since, until: range.until });
     const [totalRows, campaignRows, monthRows] = await Promise.all([
-      insights({ fields: FIELDS, date_preset: period }),
-      insights({ fields: `campaign_id,campaign_name,${FIELDS}`, level: "campaign", date_preset: period }),
+      insights({ fields: FIELDS, time_range: timeRange }),
+      insights({ fields: `campaign_id,campaign_name,${FIELDS}`, level: "campaign", time_range: timeRange }),
       insights({ fields: `campaign_name,${FIELDS}`, level: "campaign", time_increment: "monthly", time_range: JSON.stringify(monthsBack(12)) }),
     ]);
     const first = totalRows[0];
     const total = first ? toRow(first) : ZERO;
 
-    // The period just before, same length, for "vs previous" arrows.
+    // The days just before, same length, for "vs previous" arrows. This
+    // month so far compares with the same days of last month. Skipped when
+    // that would reach past what Meta keeps.
     let previous: MetaRow | null = null;
-    if (period !== "maximum" && first) {
-      const days = Math.round((Date.parse(first.date_stop) - Date.parse(first.date_start)) / 86_400_000) + 1;
-      const until = shiftDay(first.date_start, -1);
-      const prevRows = await insights({ fields: FIELDS, time_range: JSON.stringify({ since: shiftDay(until, -(days - 1)), until }) });
+    const days = Math.round((Date.parse(range.until) - Date.parse(range.since)) / 86_400_000) + 1;
+    let prevSince: string;
+    let prevUntil: string;
+    if (range.key === "this_month" || range.key === "last_month") {
+      prevUntil = shiftDay(range.since, -1);
+      prevSince = `${prevUntil.slice(0, 7)}-01`;
+      if (range.key === "this_month") {
+        const sameDay = shiftDay(prevSince, days - 1);
+        if (sameDay < prevUntil) prevUntil = sameDay;
+      }
+    } else {
+      prevUntil = shiftDay(range.since, -1);
+      prevSince = shiftDay(prevUntil, -(days - 1));
+    }
+    const oldest = new Date();
+    oldest.setUTCMonth(oldest.getUTCMonth() - OLDEST_MONTHS);
+    if (prevSince >= oldest.toISOString().slice(0, 10)) {
+      const prevRows = await insights({ fields: FIELDS, time_range: JSON.stringify({ since: prevSince, until: prevUntil }) });
       previous = prevRows[0] ? toRow(prevRows[0]) : ZERO;
     }
     const campaigns = campaignRows
@@ -167,9 +218,9 @@ export async function loadMetaAds(period: MetaPeriod): Promise<MetaAdsReport> {
       }))
       .filter((c) => c.spendCents > 0)
       .sort((a, b) => b.spendCents - a.spendCents);
-    const range = monthsBack(12);
+    const chartMonths = monthsBack(12);
     const months: MetaMonthRow[] = [];
-    for (let m = range.since.slice(0, 7); m <= range.until.slice(0, 7); m = shiftDay(`${m}-28`, 7).slice(0, 7)) {
+    for (let m = chartMonths.since.slice(0, 7); m <= chartMonths.until.slice(0, 7); m = shiftDay(`${m}-28`, 7).slice(0, 7)) {
       months.push({ ...ZERO, month: m, byKind: { HIRING: ZERO, FRANCHISE: ZERO, OTHER: ZERO } });
     }
     for (const r of monthRows) {
@@ -182,8 +233,8 @@ export async function loadMetaAds(period: MetaPeriod): Promise<MetaAdsReport> {
     }
     return {
       ok: true,
-      since: first?.date_start ?? null,
-      until: first?.date_stop ?? null,
+      since: range.since,
+      until: range.until,
       total,
       previous,
       campaigns,

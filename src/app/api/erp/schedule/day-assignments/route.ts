@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { applyNextDaySurcharge } from "@/lib/erp/nextDaySurcharge";
 import { prisma } from "@/lib/prisma";
 import { dayKey } from "@/lib/erp/schedule";
 import { computeSeriesDates, parseDatesList, SeriesDateRangeError } from "@/lib/erp/scheduleSeries";
@@ -337,6 +338,8 @@ export async function POST(req: Request) {
     // A day that's already fully confirmed tells a newly set requester now
     await Promise.all(assignments.map(notifyRequester));
 
+    // Days a project manager asked for next day get their surcharge once work is assigned.
+    for (const a of assignments) await applyNextDaySurcharge(a.id).catch((e) => console.error("Next day surcharge failed", { id: a.id }, e));
     return NextResponse.json({ seriesId: series.id, assignments, subPay }, { status: 201 });
   }
 
@@ -400,5 +403,10 @@ export async function POST(req: Request) {
 
   await notifyRequester(assignment);
 
-  return NextResponse.json({ ...assignment, subPay }, { status: 201 });
+  // A day a project manager asked for next day gets its surcharge once work is assigned.
+  const surcharge = await applyNextDaySurcharge(assignment.id).catch((e) => {
+    console.error("Next day surcharge failed", { id: assignment.id }, e);
+    return null;
+  });
+  return NextResponse.json({ ...assignment, subPay, surcharge }, { status: 201 });
 }

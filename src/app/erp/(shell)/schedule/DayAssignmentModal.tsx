@@ -394,9 +394,10 @@ export function DayAssignmentModal({
       const data = (await res.json().catch(() => ({}))) as {
         id?: string;
         seriesId?: string;
-        assignments?: { id: string; requesterName?: string | null; requesterEmail?: string | null }[];
+        assignments?: { id: string; requesterName?: string | null; requesterEmail?: string | null; nextDayUpcharge?: boolean }[];
         requesterName?: string | null;
         requesterEmail?: string | null;
+        nextDayUpcharge?: boolean;
         error?: string;
       };
       if (!res.ok) throw new Error(data.error || "Failed to assign");
@@ -420,6 +421,7 @@ export function DayAssignmentModal({
             internalNote: internalNote.trim() || null,
             requesterName: a.requesterName ?? null,
             requesterEmail: a.requesterEmail ?? null,
+            nextDayUpcharge: a.nextDayUpcharge ?? false,
           }))
         );
       } else if (data.id) {
@@ -440,6 +442,7 @@ export function DayAssignmentModal({
           internalNote: internalNote.trim() || null,
           requesterName: data.requesterName ?? null,
           requesterEmail: data.requesterEmail ?? null,
+          nextDayUpcharge: data.nextDayUpcharge ?? false,
         });
       }
       setProjectId("");

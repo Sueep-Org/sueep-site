@@ -53,6 +53,12 @@ export function CreatingAChangeOrder() {
                 <Img src="/help/change_order/co_1.png" alt="Project details page" />
                 A simple click on any of the grey area will drop down and allows you to quickly change the status of the order
                 <Img src="/help/change_order/co_2.png" alt="Change order status" />
+                <strong>Rejecting or voiding:</strong> picking <strong>REJECTED</strong> or <strong>VOID</strong> asks
+                &ldquo;Why is it being rejected?&rdquo; and won&apos;t save without an answer. The reason shows under the
+                change order&apos;s title and on its details page, with who wrote it and when. You can&apos;t create a change
+                order that starts out rejected or void. When a property manager denies a sub&apos;s request, the change order is
+                voided with their reason filled in for you.
+                <br /><br />
                 Click on the pink &ldquo;View Details&rdquo; text to view all details of the change order and add to it.
                 <Img src="/help/change_order/co_3.png" alt="Change order details" />
                 This will bring you to the details page 

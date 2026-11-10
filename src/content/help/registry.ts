@@ -35,6 +35,7 @@ import { JanitorialGettingStarted } from "./janitorial/getting-started";
 import { JanitorialSchedulingAndHours } from "./janitorial/scheduling-and-hours";
 import { JanitorialQualityChecks } from "./janitorial/quality-checks";
 import { FinanceDashboard } from "./finance/finance-dashboard";
+import { AdSpend } from "./finance/ad-spend";
 import { InsuranceOverview } from "./insurance/insurance-overview";
 import { CoiQuickStart } from "./insurance/coi-quick-start";
 import { PropertyManagerLinks } from "./turnover/property-manager-links";
@@ -442,6 +443,15 @@ export const registry: ArticleEntry[] = [
     order: 1,
     component: FinanceDashboard,
     roles: [...PM_LEVEL_ROLES],
+  },
+  {
+    slug: "finance/ad-spend",
+    title: "Ad Spend (Facebook & Instagram)",
+    category: "Pay & Finance",
+    description: "What we spend on Meta ads, cost per lead by campaign and month, picking dates, and how it lines up with QuickBooks.",
+    order: 2,
+    component: AdSpend,
+    roles: [...PM_LEVEL_ROLES, "SALES"],
   },
   {
     slug: "insurance/insurance-overview",

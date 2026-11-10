@@ -1,4 +1,4 @@
-import { Callout, H2, P, UL, LI } from "@/app/erp/components/help/HelpComponents";
+import { Callout, H2, P, UL, LI, A } from "@/app/erp/components/help/HelpComponents";
 
 export function FinanceDashboard() {
   return (
@@ -129,6 +129,12 @@ export function FinanceDashboard() {
           month with <strong>~</strong>. It switches to the real numbers by itself once they&apos;re entered.
         </LI>
       </UL>
+
+      <P>
+        Under the costs there&apos;s a <strong>Meta ads</strong> note: Facebook and Instagram ad spend for the same dates. It&apos;s
+        for reference only. QuickBooks already has those card charges inside Marketing (or Recruiting), so it&apos;s never
+        added again. <strong>By campaign</strong> opens the <A href="/erp/help/finance/ad-spend">Ad spend</A> page.
+      </P>
 
       <H2>Compare with QuickBooks</H2>
       <P>

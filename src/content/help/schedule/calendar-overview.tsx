@@ -385,6 +385,74 @@ export function ScheduleCalendarOverview() {
             a mouse or trackpad; on a phone, tap a bar to open the project instead.
           </P>
         </Step>
+
+        <Step n={12} title="Company holidays">
+          <P>
+            Company holidays are shaded gray with their name (Thanksgiving Day, Christmas Eve...) on the Project, Janitorial and
+            Master calendars, shaded on the Gantt chart, and crossed out in the small date pickers. Nobody should be working.
+          </P>
+          <UL>
+            <LI>
+              Clicking <strong>+</strong> on a holiday, dragging work onto one, or duplicating a day onto one asks
+              &quot;Schedule anyway?&quot; first. You can still do it; it just won&apos;t happen by accident.
+            </LI>
+            <LI>
+              Start and end date fields (new projects, a project&apos;s schedule, change orders) show a warning under the field
+              when the date is a holiday.
+            </LI>
+            <LI>
+              Weekly janitorial shifts still show on holidays. Click the date number on the Janitorial calendar to skip them.
+            </LI>
+            <LI>The holiday list is set by the tech team each year (2026 and New Year&apos;s Day 2027 are in).</LI>
+          </UL>
+        </Step>
+
+        <Step n={13} title="Requests from project managers (Schedule SOV Work)">
+          <P>
+            A GC&apos;s project manager can ask for contract work through the project request form (Schedule SOV Work). They
+            pick the dates and must say <strong>what they need done</strong> in the notes. They can&apos;t pick SOV lines
+            anymore (picking the same line twice used up its budget). They see a read-only list of SOV lines that aren&apos;t
+            on the calendar or finished yet, for reference.
+          </P>
+          <UL>
+            <LI>
+              Each requested day lands on the calendar with their notes and their name under <strong>Requested by</strong>.
+              The office attaches the right SOV line (or a change order) when scheduling.
+            </LI>
+            <LI>
+              <strong>Next day requests:</strong> days they ask for today or tomorrow show an amber <strong>ND</strong> tag on the
+              chip. The form and their confirmation email tell them a 20% next day upcharge applies.
+            </LI>
+            <LI>
+              When you assign an <strong>SOV line</strong> to an ND day, the ERP adds a change order{" "}
+              <strong>Next day surcharge: &lt;SOV line&gt; (date)</strong> worth 20% of that SOV line, completed on that day
+              so it shows on Billing. Taking the line back off the day voids it (unless it&apos;s already billed).
+            </LI>
+            <LI>
+              When you attach a <strong>change order</strong> to an ND day, its next day upcharge box is ticked and 20% is
+              added to its price, once.
+            </LI>
+          </UL>
+        </Step>
+
+        <Step n={14} title="Turning a request into a change order">
+          <P>
+            If what they asked for isn&apos;t in their contract, open the day and click{" "}
+            <strong>Not in the contract? Turn into a change order</strong> under Requested by (roles that see prices only).
+          </P>
+          <UL>
+            <LI>Give it a title (filled in from their notes) and, if you know it, a price. You can set the price later.</LI>
+            <LI>On an ND day, 20% is added to the price you type.</LI>
+            <LI>
+              Tick <strong>Email &lt;name&gt; that it&apos;s a change order</strong> to tell them, with an optional message. They
+              get the title, the price if set, and your message; their reply comes to you.
+            </LI>
+            <LI>
+              The change order is made for that day as <strong>Submitted</strong> (waiting for their OK) and put on the day.
+              Any SOV lines come off the day, and any next day surcharge made for them is voided.
+            </LI>
+          </UL>
+        </Step>
       </Steps>
     </>
   );

@@ -21,7 +21,8 @@ type ProjectOption = {
    * offers a price estimate at all. See hasCustomChangeOrderLaborRate. */
   hasCustomLaborRate: boolean;
 };
-type SovItem = { id: string; description: string; completed: boolean };
+/** An SOV line not done yet and not on the calendar, shown read only. */
+type SovItem = { description: string };
 
 /** Filename for a downloaded CO contract. Blob URLs carry no filename, so
  * without a `download` attribute the browser saves them under a random id
@@ -34,7 +35,7 @@ function contractFilename(coTitle: string, suffix = "") {
 
 const STEP_LABELS_CO =["Your Project", "Request Type", "Details"] as const;
 const STEP_LABELS_CO_SIGNED = ["Your Project", "Request Type", "Details", "Sign Contract"] as const;
-const STEP_LABELS_SOV = ["Your Project", "Request Type", "SOV Items"] as const;
+const STEP_LABELS_SOV = ["Your Project", "Request Type", "Details"] as const;
 
 function StepIndicator({ current, type, willSign }: { current: number; type: RequestType | null; willSign: boolean }) {
   const labels = type === "sov-schedule" ? STEP_LABELS_SOV : willSign ? STEP_LABELS_CO_SIGNED : STEP_LABELS_CO;
@@ -126,7 +127,6 @@ export function ProjectManagerForm({ onBack, nextDayPct }: Props) {
   // Step 3 — SOV fields
   const [sovItems, setSovItems] = useState<SovItem[]>([]);
   const [sovLoading, setSovLoading] = useState(false);
-  const [selectedSovIds, setSelectedSovIds] = useState<string[]>([]);
   const [desiredDate, setDesiredDate] = useState("");
   // Optional last day: blank means just the one day.
   const [desiredEndDate, setDesiredEndDate] = useState("");
@@ -182,7 +182,6 @@ export function ProjectManagerForm({ onBack, nextDayPct }: Props) {
   async function loadSovItems(projectId: string) {
     setSovLoading(true);
     setSovItems([]);
-    setSelectedSovIds([]);
     try {
       const res = await fetch(`/api/external/projects/${projectId}/sov`);
       const data = (await res.json()) as { items?: SovItem[] };
@@ -281,7 +280,7 @@ export function ProjectManagerForm({ onBack, nextDayPct }: Props) {
     if (requestType === "change-order" && coEstimatedEndDate && coEstimatedEndDate < coEstimatedStartDate) {
       return "Estimated end date must be on or after the start date.";
     }
-    if (requestType === "sov-schedule" && sovItems.length > 0 && !selectedSovIds.length) return "Please select at least one SOV item.";
+    if (requestType === "sov-schedule" && !comments.trim()) return "Please tell us what you need done.";
     if (requestType === "sov-schedule" && !desiredDate) return "Start date is required.";
     if (requestType === "sov-schedule" && desiredEndDate && desiredEndDate < desiredDate) return "The end date can't be before the start date.";
     return "";
@@ -308,7 +307,6 @@ export function ProjectManagerForm({ onBack, nextDayPct }: Props) {
         // coCleanerCount itself (see deriveChangeOrderSupervisorCount).
         coCleanerCount: coCleanerCount.trim() || undefined,
         coNoCrewRequired,
-        sovItemIds: selectedSovIds.length ? selectedSovIds : undefined,
         desiredDate: desiredDate || undefined,
         desiredEndDate: desiredEndDate && desiredEndDate !== desiredDate ? desiredEndDate : undefined,
         comments: comments.trim() || undefined,
@@ -424,7 +422,7 @@ export function ProjectManagerForm({ onBack, nextDayPct }: Props) {
             setRequestType(null);
             setCoTitle(""); setCoDescription(""); setCoEstimatedStartDate(""); setCoEstimatedEndDate("");
             setCoCleanerCount(""); setCoPriceCents(null);
-            setSelectedSovIds([]); setDesiredDate(""); setDesiredEndDate(""); setComments("");
+            setDesiredDate(""); setDesiredEndDate(""); setComments("");
             setRequesterName(""); setRequesterEmail("");
             if (contractPdfUrl) URL.revokeObjectURL(contractPdfUrl);
             setContractPdfUrl(""); setSignaturePngDataUrl(""); setSignaturePrintedName("");
@@ -513,7 +511,7 @@ export function ProjectManagerForm({ onBack, nextDayPct }: Props) {
                 {
                   value: "sov-schedule" as const,
                   title: "Schedule SOV Work",
-                  description: "Select a line item from your Schedule of Values and tell us when you'd like it done.",
+                  description: "Tell us what contract work you need and when you'd like it done.",
                 },
                 {
                   value: "change-order" as const,
@@ -766,42 +764,20 @@ export function ProjectManagerForm({ onBack, nextDayPct }: Props) {
 
             {sovLoading && <p className="text-sm text-gray-500">Loading SOV items…</p>}
 
-            {!sovLoading && sovItems.length === 0 && (
-              <p className="text-sm text-gray-500">
-                This project doesn&apos;t have SOV line items set up yet, that&apos;s fine. Add a date and any comments
-                below and we&apos;ll get it on the calendar.
-              </p>
-            )}
-
             {!sovLoading && sovItems.length > 0 && (
               <div>
-                <label className={label}>Select SOV line items *</label>
-                <p className="mt-0.5 text-xs text-gray-500">Pick as many as you need.</p>
-                <div className="mt-2 max-h-64 overflow-y-auto space-y-2 rounded-md border border-gray-200 p-2">
-                  {sovItems.map((item) => (
-                    <label
-                      key={item.id}
-                      className={`flex cursor-pointer items-start gap-3 rounded-md px-3 py-2.5 transition ${selectedSovIds.includes(item.id) ? "bg-pink-50 ring-1 ring-[#E73C6E]" : "hover:bg-gray-50"} ${item.completed ? "opacity-50" : ""}`}
-                    >
-                      <input
-                        type="checkbox"
-                        name="sovItem"
-                        value={item.id}
-                        checked={selectedSovIds.includes(item.id)}
-                        disabled={item.completed}
-                        onChange={(e) => {
-                          const on = e.target.checked;
-                          setSelectedSovIds((prev) => (on ? [...prev, item.id] : prev.filter((id) => id !== item.id)));
-                        }}
-                        className="mt-0.5 accent-[#E73C6E]"
-                      />
-                      <div className="min-w-0">
-                        <p className="text-sm text-gray-800">{item.description}</p>
-                        {item.completed && <p className="text-xs text-green-600">Already completed</p>}
-                      </div>
-                    </label>
+                <p className={label}>Still to be scheduled</p>
+                <p className="mt-0.5 text-xs text-gray-500">
+                  Work on this project that isn&apos;t on our calendar or finished yet. For reference only: tell us what you need in the notes below and we&apos;ll match it.
+                </p>
+                <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+                  {sovItems.map((item, i) => (
+                    <li key={i} className="flex gap-2">
+                      <span aria-hidden className="text-gray-400">•</span>
+                      <span>{item.description}</span>
+                    </li>
                   ))}
-                </div>
+                </ul>
               </div>
             )}
 
@@ -833,15 +809,20 @@ export function ProjectManagerForm({ onBack, nextDayPct }: Props) {
                 <p className="mt-1 text-xs text-gray-500">Leave blank for one day.</p>
               </div>
             </div>
+            {isNextDayStart(desiredDate) ? (
+              <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                Work requested for today or tomorrow has a {nextDayPct}% next day upcharge.
+              </p>
+            ) : null}
             <div>
-              <label className={label} htmlFor="sov-comments">Comments</label>
+              <label className={label} htmlFor="sov-comments">What do you need done? *</label>
               <textarea
                 id="sov-comments"
                 rows={3}
                 className={input}
                 value={comments}
                 onChange={(e) => setComments(e.target.value)}
-                placeholder="Any access requirements, special instructions, or context…"
+                placeholder="Which areas or floors, what work, how many people, access or special instructions…"
               />
             </div>
             <div className="grid gap-4 sm:grid-cols-2 border-t border-gray-100 pt-4">

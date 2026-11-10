@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
-import { getErpAuth, canSeeFinanceDashboard } from "@/lib/erpAuth";
+import { getErpAuth, canSeeFinanceDashboard, canSeeFinancials } from "@/lib/erpAuth";
 import { InfoTip } from "@/app/erp/components/ui";
 import { prisma } from "@/lib/prisma";
 import {
   loadMetaAds,
-  parseMetaPeriod,
+  resolveMetaRange,
   META_PERIODS,
   CAMPAIGN_KINDS,
   type CampaignKind,
@@ -246,12 +246,14 @@ function trimLeadingEmpty(months: MetaMonthRow[]): MetaMonthRow[] {
   return months.slice(Math.min(first, Math.max(months.length - 3, 0)));
 }
 
-export default async function AdsPage({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
+export default async function AdsPage({ searchParams }: { searchParams: Promise<{ period?: string; from?: string; to?: string }> }) {
   const auth = await getErpAuth();
-  if (!auth || !canSeeFinanceDashboard(auth.role)) redirect("/erp");
-  const period = parseMetaPeriod((await searchParams).period);
-  const periodLabel = META_PERIODS.find((p) => p.key === period)!.label.toLowerCase();
-  const report = await loadMetaAds(period);
+  // Same people as Recruitment (it links here) and the Finance dashboard.
+  if (!auth || !canSeeFinancials(auth.role)) redirect("/erp");
+  const range = resolveMetaRange(await searchParams);
+  const period = range.key;
+  const periodLabel = period === "custom" ? "these dates" : META_PERIODS.find((p) => p.key === period)!.label.toLowerCase();
+  const report = await loadMetaAds(range);
   const erp = report.ok ? await erpLeadCounts(report.since, report.until) : null;
 
   const byKind = report.ok
@@ -264,13 +266,17 @@ export default async function AdsPage({ searchParams }: { searchParams: Promise<
       })).filter((k) => k.row.spendCents > 0)
     : [];
   const maxCampaign = report.ok ? Math.max(...report.campaigns.map((c) => c.spendCents), 1) : 1;
-  const prevLabel = "the period before";
+  const rangeDays = Math.round((Date.parse(range.until) - Date.parse(range.since)) / 86_400_000) + 1;
+  const prevLabel =
+    period === "this_month" ? "the same days last month" : period === "last_month" ? "the month before" : `the ${rangeDays === 1 ? "day" : `${rangeDays} days`} before`;
+  const backHref = canSeeFinanceDashboard(auth.role) ? "/erp?tab=finance" : "/erp/candidates";
+  const backLabel = canSeeFinanceDashboard(auth.role) ? "Finance" : "Recruitment";
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <Link href="/erp?tab=finance" className="text-xs text-gray-500 hover:text-pink-600">← Finance</Link>
+          <Link href={backHref} className="text-xs text-gray-500 hover:text-pink-600">← {backLabel}</Link>
           <h1 className="mt-1 flex items-center gap-1 text-2xl font-semibold text-gray-900">
             Ad spend
             <InfoTip
@@ -282,19 +288,37 @@ export default async function AdsPage({ searchParams }: { searchParams: Promise<
             <p className="text-xs text-gray-500">{dayLabel(report.since)} to {dayLabel(report.until)}</p>
           ) : null}
         </div>
-        <nav className="flex flex-wrap gap-1.5">
-          {META_PERIODS.map((p) => (
-            <Link
-              key={p.key}
-              href={`/erp/ads?period=${p.key}`}
-              className={`rounded-full border px-3 py-1 text-xs font-medium ${
-                p.key === period ? "border-pink-600 bg-pink-50 text-pink-700" : "border-gray-200 bg-white text-gray-600 hover:border-pink-300"
-              }`}
-            >
-              {p.label}
-            </Link>
-          ))}
-        </nav>
+        <div className="flex flex-wrap items-center gap-2">
+          <nav className="flex flex-wrap gap-1.5">
+            {META_PERIODS.map((p) => (
+              <Link
+                key={p.key}
+                href={`/erp/ads?period=${p.key}`}
+                className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                  p.key === period ? "border-pink-600 bg-pink-50 text-pink-700" : "border-gray-200 bg-white text-gray-600 hover:border-pink-300"
+                }`}
+              >
+                {p.label}
+              </Link>
+            ))}
+          </nav>
+          {/* Any other dates: a plain form, so it works without page scripts. */}
+          <form
+            action="/erp/ads"
+            className={`flex flex-wrap items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs ${
+              period === "custom" ? "border-pink-600 bg-pink-50" : "border-gray-200 bg-white"
+            }`}
+          >
+            <label className="sr-only" htmlFor="ads-from">From</label>
+            <input id="ads-from" name="from" type="date" defaultValue={range.since} className="rounded border-0 bg-transparent px-1 py-0.5 text-xs text-gray-700 focus:ring-1 focus:ring-pink-500" />
+            <span className="text-gray-400">to</span>
+            <label className="sr-only" htmlFor="ads-to">To</label>
+            <input id="ads-to" name="to" type="date" defaultValue={range.until} className="rounded border-0 bg-transparent px-1 py-0.5 text-xs text-gray-700 focus:ring-1 focus:ring-pink-500" />
+            <button type="submit" className="rounded-full bg-pink-600 px-2.5 py-0.5 font-medium text-white hover:bg-pink-500">
+              Show
+            </button>
+          </form>
+        </div>
       </div>
 
       {!report.ok ? (

@@ -12,6 +12,7 @@ import { loadPricingSettings } from "@/lib/pricingSettingsServer";
 import { generateChangeOrderContractPdf } from "@/lib/contracts/buildChangeOrderContractPdf";
 import { embedChangeOrderSignature } from "@/lib/contracts/fillChangeOrderPdf";
 import { isNextDayStart, withNextDayUpcharge } from "@/lib/nextDayUpcharge";
+import { applyNextDaySurcharge } from "@/lib/erp/nextDaySurcharge";
 
 export const runtime = "nodejs";
 
@@ -84,6 +85,12 @@ export async function POST(req: Request) {
     body.coEstimatedEndDate < body.coEstimatedStartDate
   ) {
     return NextResponse.json({ error: "coEstimatedEndDate must be on or after coEstimatedStartDate" }, { status: 400 });
+  }
+  // What they need goes in the notes now: project managers no longer pick SOV
+  // lines (picking the same line twice used up its budget). The office
+  // attaches the SOV line when scheduling.
+  if (type === "sov-schedule" && !body.comments?.trim()) {
+    return NextResponse.json({ error: "Tell us what you need done in the notes." }, { status: 400 });
   }
   if (type === "sov-schedule" && !body.desiredDate) {
     return NextResponse.json({ error: "desiredDate is required for SOV scheduling" }, { status: 400 });
@@ -238,18 +245,12 @@ export async function POST(req: Request) {
   // same click-to-open coverage editor, same delete button), not a separate
   // lightweight "request" chip that only looks similar. Kept out of
   // ProjectChangeOrder entirely, see that model's own comment for why.
-  let sovDescriptions: string[] | undefined;
-  const sovItemIds = [...new Set([...(Array.isArray(body.sovItemIds) ? body.sovItemIds : []), ...(body.sovItemId ? [body.sovItemId] : [])].filter((id): id is string => typeof id === "string" && !!id))];
+  // SOV lines sent by older copies of the form are ignored on purpose.
+  const sovDescriptions: string[] | undefined = undefined;
+  // Days asked for today or tomorrow carry the next day upcharge; it's added
+  // when the office assigns an SOV line or change order (nextDaySurcharge.ts).
+  const nextDayKeys = new Set(sovDays.filter((d) => isNextDayStart(d.toISOString().slice(0, 10))).map((d) => d.toISOString().slice(0, 10)));
   if (type === "sov-schedule") {
-    if (sovItemIds.length) {
-      const sovItems = await prisma.projectSOVItem.findMany({
-        where: { id: { in: sovItemIds }, sov: { projectId } },
-        select: { id: true, description: true },
-      });
-      if (sovItems.length !== sovItemIds.length) return NextResponse.json({ error: "SOV item not found" }, { status: 404 });
-      // In the order they were picked
-      sovDescriptions = sovItemIds.map((id) => sovItems.find((s) => s.id === id)!.description);
-    }
 
     // Preserved here (not just in the notification email) so "who asked for
     // this" stays visible on the calendar chip itself, not just in an inbox.
@@ -266,22 +267,27 @@ export async function POST(req: Request) {
       const mergedComment = existingAssignment?.comment ? `${existingAssignment.comment}\n${requesterLine}` : requesterLine;
       // Who to email once everyone on the day confirms (latest request wins)
       const requester = { requesterName: requesterName.trim(), requesterEmail: requesterEmail.trim() };
-      await prisma.projectDayAssignment.upsert({
+      const nextDay = nextDayKeys.has(date.toISOString().slice(0, 10));
+      const saved = await prisma.projectDayAssignment.upsert({
         where: { projectId_date: { projectId, date } },
         create: {
           projectId,
           date,
           comment: mergedComment,
           ...requester,
-          sovItems: sovItemIds.length ? { connect: sovItemIds.map((id) => ({ id })) } : undefined,
+          nextDayUpcharge: nextDay,
         },
         update: {
           comment: mergedComment,
           ...requester,
           ...(existingAssignment?.requesterEmail !== requester.requesterEmail ? { requesterNotifiedFor: null } : {}),
-          sovItems: sovItemIds.length ? { connect: sovItemIds.map((id) => ({ id })) } : undefined,
+          // Never cleared here: an earlier next day ask still stands.
+          ...(nextDay ? { nextDayUpcharge: true } : {}),
         },
+        select: { id: true },
       });
+      // A day that already had work assigned gets its surcharge right away.
+      if (nextDay) await applyNextDaySurcharge(saved.id).catch((e) => console.error("Next day surcharge failed", { id: saved.id }, e));
     }
   }
 
@@ -320,7 +326,15 @@ export async function POST(req: Request) {
 
   const typeLabel = type === "change-order" ? "Change Order Request" : "SOV Work Scheduling Request";
   const desiredDatesLabel = body.desiredEndDate && body.desiredEndDate !== body.desiredDate ? `${body.desiredDate} to ${body.desiredEndDate}` : body.desiredDate;
+  const nextDayInfo =
+    type === "sov-schedule" && nextDayKeys.size > 0
+      ? {
+          days: [...nextDayKeys].sort().map((k) => new Date(`${k}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })).join(", "),
+          pct: (await loadPricingSettings()).nextDayPct,
+        }
+      : undefined;
   const html = buildProjectRequestEmail({
+    nextDay: nextDayInfo,
     type,
     projectTitle: project.jobTitle,
     requesterName: requesterName.trim(),
@@ -339,6 +353,7 @@ export async function POST(req: Request) {
   });
 
   const confirmationHtml = buildProjectRequestConfirmationEmail({
+    nextDay: nextDayInfo,
     type,
     projectTitle: project.jobTitle,
     requesterName: requesterName.trim(),

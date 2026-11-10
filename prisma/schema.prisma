@@ -1058,6 +1058,9 @@ model ProjectChangeOrder {
   /// Who wrote statusNote (ErpUser email, or "Sueep" for automatic voids) and when.
   statusNoteBy        String?
   statusNoteAt        DateTime?
+  /// Set on the "Next day surcharge" change order made for one SOV line on
+  /// one next-day calendar day ("dayAssignmentId:sovItemId"), so it's only made once.
+  surchargeKey        String?   @unique
   contractValueCents  Int?
   estMaterialCents    Int?
   estTravelCents      Int?
@@ -1568,6 +1571,10 @@ model ProjectDayAssignment {
   /// described and shown on the calendar.
   comment String?
 
+  /// Asked for by an outside project manager for today or tomorrow, so a
+  /// next day upcharge applies. Assigning an SOV line or change order to the
+  /// day adds it (see src/lib/erp/nextDaySurcharge.ts).
+  nextDayUpcharge Boolean @default(false)
   /// Staff-only note for this day. Never included in invites or emails,
   /// unlike comment which goes out to everyone invited.
   internalNote String?
