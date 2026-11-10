@@ -4014,7 +4014,7 @@ export function SchedulePlanner({
                           className="shrink-0 rounded bg-amber-200 px-1 text-[9px] font-bold text-amber-900"
                           title="Asked for next day by the project manager. Assigning an SOV line or change order adds the next day surcharge."
                         >
-                          ND
+                          Next day
                         </span>
                       ) : null}
                       <span className="truncate">{compactLabel ?? project.jobTitle}</span>

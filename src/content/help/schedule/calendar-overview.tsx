@@ -420,16 +420,17 @@ export function ScheduleCalendarOverview() {
               The office attaches the right SOV line (or a change order) when scheduling.
             </LI>
             <LI>
-              <strong>Next day requests:</strong> days they ask for today or tomorrow show an amber <strong>ND</strong> tag on the
-              chip. The form and their confirmation email tell them a 20% next day upcharge applies.
+              <strong>Next day requests:</strong> days they ask for today or tomorrow show an amber <strong>Next day</strong> tag on
+              the chip. The form and their confirmation email tell them a 20% next day upcharge applies.
             </LI>
             <LI>
-              When you assign an <strong>SOV line</strong> to an ND day, the ERP adds a change order{" "}
+              When you assign an <strong>SOV line</strong> to a Next day day, the ERP adds a change order{" "}
               <strong>Next day surcharge: &lt;SOV line&gt; (date)</strong> worth 20% of that SOV line, completed on that day
-              so it shows on Billing. Taking the line back off the day voids it (unless it&apos;s already billed).
+              so it shows on Billing. Taking the line back off the day, or removing the day, voids it (unless it&apos;s
+              already billed). Dragging the day to another date keeps the Next day tag and moves the surcharge to the new date.
             </LI>
             <LI>
-              When you attach a <strong>change order</strong> to an ND day, its next day upcharge box is ticked and 20% is
+              When you attach a <strong>change order</strong> to a Next day day, its next day upcharge box is ticked and 20% is
               added to its price, once.
             </LI>
           </UL>
@@ -442,7 +443,7 @@ export function ScheduleCalendarOverview() {
           </P>
           <UL>
             <LI>Give it a title (filled in from their notes) and, if you know it, a price. You can set the price later.</LI>
-            <LI>On an ND day, 20% is added to the price you type.</LI>
+            <LI>On a Next day day, 20% is added to the price you type.</LI>
             <LI>
               Tick <strong>Email &lt;name&gt; that it&apos;s a change order</strong> to tell them, with an optional message. They
               get the title, the price if set, and your message; their reply comes to you.

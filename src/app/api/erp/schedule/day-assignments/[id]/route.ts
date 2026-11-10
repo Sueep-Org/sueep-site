@@ -6,6 +6,7 @@ import { isScheduleRemovalReason } from "@/lib/erp/scheduleRemovals";
 import { loadAppLists } from "@/lib/erp/appListsServer";
 import { getErpAuth } from "@/lib/erpAuth";
 import { syncScheduleSubPay } from "@/lib/erp/subPay";
+import { voidNextDaySurcharges } from "@/lib/erp/nextDaySurcharge";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -86,6 +87,8 @@ export async function DELETE(req: Request, ctx: Ctx) {
     cancelled: true,
   });
 
+  // A next day surcharge made for this day shouldn't stay on Billing.
+  await voidNextDaySurcharges(id).catch((e) => console.error("Voiding next day surcharge failed", { id }, e));
   await prisma.$transaction([
     prisma.projectDayAssignment.delete({ where: { id } }),
     prisma.projectWorkerDayAssignment.deleteMany({ where: { projectId: existing.projectId, date: existing.date } }),

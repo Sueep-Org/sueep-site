@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { moveNextDaySurcharges } from "@/lib/erp/nextDaySurcharge";
 import { prisma } from "@/lib/prisma";
 import { isBilledStatus, isPaidStatus, parseBillingStatus, voidReasonFor } from "@/lib/erp/billingStatus";
 import { inputToCents } from "@/lib/erp/money";
@@ -360,6 +361,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
           ]);
           // Calendar pay is booked on the sub's last day, which just moved.
           await syncScheduleSubPay(id);
+          // Its next day surcharge (if any) moves with it.
+          await moveNextDaySurcharges(soleAssignment.id, newProjectDate!);
         }
       } catch (e) {
         console.error("Failed to move day assignment alongside projectDate", e);

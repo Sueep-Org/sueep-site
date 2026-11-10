@@ -241,9 +241,14 @@ export async function POST(req: Request) {
 
   // Runs after the days are written and before any invite goes out, so the
   // sub's invite shows the visit's pay (see subPay.ts).
-  const movedFromLineId = moveFromId
-    ? ((await prisma.projectDayAssignment.findFirst({ where: { id: moveFromId, projectId }, select: { subPayAssignmentId: true } }))?.subPayAssignmentId ?? null)
+  const movedFrom = moveFromId
+    ? await prisma.projectDayAssignment.findFirst({ where: { id: moveFromId, projectId }, select: { subPayAssignmentId: true, nextDayUpcharge: true } })
     : null;
+  const movedFromLineId = movedFrom?.subPayAssignmentId ?? null;
+  // A next day request keeps its flag when the day is dragged to another date;
+  // its surcharge is remade on the new day and the old day's is voided when
+  // that day is deleted.
+  const keepNextDay = movedFrom?.nextDayUpcharge ? { nextDayUpcharge: true } : {};
   async function placeSubPay(dates: Date[]): Promise<"saved" | "set-elsewhere" | null> {
     let result: "saved" | "set-elsewhere" | null = null;
     if (supervisorContractorId && hasCalendarSubPay(project!.segment)) {
@@ -347,13 +352,13 @@ export async function POST(req: Request) {
     where: { projectId_date: { projectId, date } },
     create: {
       projectId, date, supervisorUserId, projectManagerUserId, supervisorContractorId, startTime, endTime,
-      scopeItems, comment, internalNote, ...requester,
+      scopeItems, comment, internalNote, ...requester, ...keepNextDay,
       sovItems: sovItemIds.length > 0 ? { connect: sovItemIds.map((id) => ({ id })) } : undefined,
       changeOrders: changeOrderIds.length > 0 ? { connect: changeOrderIds.map((id) => ({ id })) } : undefined,
     },
     update: {
       supervisorUserId, projectManagerUserId, supervisorContractorId, startTime, endTime,
-      scopeItems, comment, internalNote, ...requesterUpdate(date),
+      scopeItems, comment, internalNote, ...requesterUpdate(date), ...keepNextDay,
       sovItems: { set: sovItemIds.map((id) => ({ id })) },
       changeOrders: { set: changeOrderIds.map((id) => ({ id })) },
     },
