@@ -5,7 +5,7 @@ import { deriveProjectLifecycle, hasActiveChangeOrder } from "@/lib/erp/projectL
 import { getErpAuth, canSeeJobCosts as checkFinancials, canSeeMarginOnly as checkMarginOnly } from "@/lib/erpAuth";
 import { getSupervisorProjectScope } from "@/lib/erp/supervisorScope";
 import { costLaborLogs, sumLineCosts } from "@/lib/erp/laborCost";
-import { computeProjectActualsWithChangeOrders } from "@/lib/erp/projectMargin";
+import { changeOrderValueCents, computeProjectActualsWithChangeOrders } from "@/lib/erp/projectMargin";
 import { getDescLine as getProjectDetailLine } from "@/lib/erp/descLine";
 import { ProjectsTabs } from "./ProjectsTabs";
 
@@ -260,6 +260,8 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
       percentInvoiced: p.percentInvoiced,
       billingStatus: p.billingStatus ?? null,
       contractValueCents: actuals.contractValueCents,
+      baseContractValueCents: p.contractValueCents,
+      coContractValueCents: qualifyingCOs.reduce((s, co) => s + changeOrderValueCents(co), 0),
       laborEntries,
       materialEntries,
       totalHours,
