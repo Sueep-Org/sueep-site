@@ -616,7 +616,7 @@ export function ProjectsExpandableTable({
   const openSet = useMemo(() => new Set(openIds), [openIds]);
   const openCoSet = useMemo(() => new Set(openCoIds), [openCoIds]);
   const openGroupSet = useMemo(() => new Set(openGroupTitles), [openGroupTitles]);
-  // Financial columns: Contract, COs, Total, Act Cost, Margin, Est/Act Labor, Est/Act Material (9 columns);
+  // Financial columns: Total, Contract, COs, Act Cost, Margin, Est/Act Labor, Est/Act Material (9 columns);
   // margin-only mode adds just the one Margin % column instead.
   const colCount = 7 + (canSeeFinancials ? 9 : canSeeMarginOnly ? 1 : 0);
 
@@ -641,6 +641,11 @@ export function ProjectsExpandableTable({
             <th className="w-[280px] min-w-[280px] px-3 py-2 font-semibold">Job</th>
             <th className="w-[130px] min-w-[130px] px-3 py-2 font-semibold">PM</th>
             {canSeeFinancials && (
+              <th className="px-3 py-2 font-semibold" title="Base contract plus change orders. Margin is based on this.">
+                Total
+              </th>
+            )}
+            {canSeeFinancials && (
               <th className="px-3 py-2 font-semibold" title="Base contract value, before change orders">
                 Contract
               </th>
@@ -648,11 +653,6 @@ export function ProjectsExpandableTable({
             {canSeeFinancials && (
               <th className="px-3 py-2 font-semibold" title="Sum of non-void/rejected change orders">
                 COs
-              </th>
-            )}
-            {canSeeFinancials && (
-              <th className="px-3 py-2 font-semibold" title="Base contract plus change orders. Margin is based on this.">
-                Total
               </th>
             )}
             {canSeeFinancials && <th className="px-3 py-2 font-semibold">Act. Cost</th>}
@@ -747,13 +747,13 @@ export function ProjectsExpandableTable({
                     <td className="w-[130px] min-w-[130px] truncate px-3 py-2 text-gray-900" title={groupPm ?? undefined}>
                       {groupPm ?? <span className="text-gray-400">-</span>}
                     </td>
+                    {canSeeFinancials && <td className="px-3 py-2 font-medium text-gray-900">{centsToDollars(groupContract)}</td>}
                     {canSeeFinancials && <td className="px-3 py-2 text-gray-900">{centsToDollars(groupBaseContract)}</td>}
                     {canSeeFinancials && (
                       <td className="px-3 py-2 text-gray-900">
                         {groupCoContract ? centsToDollars(groupCoContract) : <span className="text-gray-400">-</span>}
                       </td>
                     )}
-                    {canSeeFinancials && <td className="px-3 py-2 font-medium text-gray-900">{centsToDollars(groupContract)}</td>}
                     {canSeeFinancials && <td className="px-3 py-2 text-gray-900">{centsToDollars(groupActualCost)}</td>}
                     {canSeeFinancials ? (
                       <td className={`px-3 py-2 font-medium ${groupActualCost === 0 ? "text-gray-400" : marginClass(groupMargin)}`}>
@@ -840,13 +840,13 @@ export function ProjectsExpandableTable({
                       );
                     })()}
                   </td>
+                  {canSeeFinancials && <td className="px-3 py-2 font-medium text-gray-900">{centsToDollars(p.contractValueCents)}</td>}
                   {canSeeFinancials && <td className="px-3 py-2 text-gray-900">{centsToDollars(baseContractCents(p))}</td>}
                   {canSeeFinancials && (
                     <td className="px-3 py-2 text-gray-900">
                       {p.coContractValueCents ? centsToDollars(p.coContractValueCents) : <span className="text-gray-400">-</span>}
                     </td>
                   )}
-                  {canSeeFinancials && <td className="px-3 py-2 font-medium text-gray-900">{centsToDollars(p.contractValueCents)}</td>}
                   {canSeeFinancials && <td className="px-3 py-2 text-gray-900">{centsToDollars(actualCost)}</td>}
                   {canSeeFinancials ? (
                     <td className={`px-3 py-2 font-medium ${actualCost === 0 ? "text-gray-400" : marginClass(margin)}`}>
@@ -924,6 +924,8 @@ export function ProjectsExpandableTable({
                             <td className="w-[130px] min-w-[130px] truncate px-3 py-1.5 text-sm text-gray-700" title={co.supervisor ?? undefined}>
                               {co.supervisor ? truncateAtHyphen(co.supervisor) : <span className="text-gray-400">-</span>}
                             </td>
+                            {/* Total -> n/a for a CO */}
+                            {canSeeFinancials && <td className="px-3 py-1.5 text-sm text-gray-400">-</td>}
                             {/* Contract (base) -> n/a for a CO */}
                             {canSeeFinancials && <td className="px-3 py-1.5 text-sm text-gray-400">-</td>}
                             {/* COs -> this CO's value (voided/rejected shown struck, not counted) */}
@@ -939,8 +941,7 @@ export function ProjectsExpandableTable({
                                 )}
                               </td>
                             )}
-                            {/* Total -> n/a for a CO */}
-                            {canSeeFinancials && <td className="px-3 py-1.5 text-sm text-gray-400">-</td>}
+
                             {canSeeFinancials && (
                               <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
                                 {centsToDollars(coActualCost)}
@@ -1056,8 +1057,8 @@ export function ProjectsExpandableTable({
                           </td>
                           {dash}
                           {canSeeFinancials && dash}
-                          {canSeeFinancials && <td className={cell}>{centsToDollars(value)}</td>}
                           {canSeeFinancials && dash}
+                          {canSeeFinancials && <td className={cell}>{centsToDollars(value)}</td>}
                           {canSeeFinancials && <td className={cell}>{centsToDollars(cost)}</td>}
                           {canSeeFinancials ? (
                             <td className={`${cell} ${cost === 0 ? "text-gray-400" : marginClass(totMargin)}`}>
