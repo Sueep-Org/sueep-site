@@ -1,11 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import {
-  computeChangeOrderLaborEstimate,
+  clientChangeOrderPrice,
   deriveChangeOrderSupervisorCount,
   getChangeOrderLaborRates,
   hasCustomChangeOrderLaborRate,
 } from "@/lib/changeOrderLaborRates";
-import { isNextDayStart, nextDayUpchargeCents, withNextDayUpcharge } from "@/lib/nextDayUpcharge";
 import { loadPricingSettings } from "@/lib/pricingSettingsServer";
 import { fillChangeOrderContractPdf } from "@/lib/contracts/fillChangeOrderPdf";
 
@@ -25,6 +24,8 @@ export type ChangeOrderContractInput = {
   coTitle: string;
   coDescription?: string;
   coEstimatedStartDate?: string;
+  /** Last day of the work; left out for one day */
+  coEstimatedEndDate?: string;
   coCleanerCount?: string;
   clientCompany: string;
   clientAddress: string;
@@ -64,17 +65,18 @@ export async function generateChangeOrderContractPdf(
   const supervisorCount = deriveChangeOrderSupervisorCount(cleanerCount);
   const pricing = await loadPricingSettings();
   const rates = getChangeOrderLaborRates(project.laborRateCard, pricing.coPriceRates);
-  const estimate = computeChangeOrderLaborEstimate(
-    { cleanerCount, supervisorCount, hours: pricing.coDayHours },
-    rates,
-  );
-
-  // Work starting today or tomorrow gets the next day upcharge, same as the form showed
-  const nextDay = isNextDayStart(input.coEstimatedStartDate);
-  const totalCents = withNextDayUpcharge(estimate.totalCents, nextDay, pricing.nextDayPct);
-  const scopeDescription = [input.coDescription ?? "", nextDay ? `Total includes a ${pricing.nextDayPct}% next day upcharge (${formatAmount(nextDayUpchargeCents(estimate.totalCents, pricing.nextDayPct))}).` : ""]
-    .filter(Boolean)
-    .join("\n\n");
+  // One day of labor per day of the range; only today/tomorrow days get the next day upcharge, same as the form showed
+  const price = clientChangeOrderPrice({ cleanerCount, supervisorCount }, rates, {
+    startKey: input.coEstimatedStartDate,
+    endKey: input.coEstimatedEndDate,
+    coDayHours: pricing.coDayHours,
+    nextDayPct: pricing.nextDayPct,
+  });
+  const upchargeNote =
+    price.upchargeCents > 0
+      ? `Total includes a ${pricing.nextDayPct}% next day upcharge (${formatAmount(price.upchargeCents)})${price.days > 1 ? ` on ${price.upchargeDays} of ${price.days} days (today or tomorrow)` : ""}.`
+      : "";
+  const scopeDescription = [input.coDescription ?? "", upchargeNote].filter(Boolean).join("\n\n");
 
   const today = new Date();
   const expires = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000);
@@ -94,15 +96,12 @@ export async function generateChangeOrderContractPdf(
       scopeDescription,
       numCleaners: String(cleanerCount),
       numForemen: String(supervisorCount),
-      // Every change order priced through this flow is a flat one-day
-      // estimate (see PricingSettings.coDayHours /
-      // computeChangeOrderLaborEstimate). There's no separate "days on
-      // site" input to reflect here.
-      numDays: "1",
+      // One flat day (PricingSettings.coDayHours) per day of the range
+      numDays: String(price.days),
       cleanerRate: formatAmount(rates.cleanerHourlyRateCents),
       foremanRate: formatAmount(rates.foremanHourlyRateCents),
-      subtotal: formatAmount(estimate.totalCents),
-      total: formatAmount(totalCents),
+      subtotal: formatAmount(price.subtotalCents),
+      total: formatAmount(price.totalCents),
       purchaseTerms: DEFAULT_PURCHASE_TERMS,
     });
     return { ok: true, pdfBytes };

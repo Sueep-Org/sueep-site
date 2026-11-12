@@ -102,6 +102,8 @@ export function ProjectManagerForm({ onBack, nextDayPct }: Props) {
   const coSupervisorCount = deriveChangeOrderSupervisorCount(Number(coCleanerCount) || 0);
   const [coPriceCents, setCoPriceCents] = useState<number | null>(null);
   const [coPriceLoading, setCoPriceLoading] = useState(false);
+  /** Days in the range and how many of them carry the next day upcharge, from the estimate */
+  const [coPriceDays, setCoPriceDays] = useState<{ days: number; upchargeDays: number; upchargeCents: number } | null>(null);
   const coPriceDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [clientCompany, setClientCompany] = useState("");
   const [clientAddress, setClientAddress] = useState("");
@@ -167,10 +169,12 @@ export function ProjectManagerForm({ onBack, nextDayPct }: Props) {
     coPriceDebounce.current = setTimeout(async () => {
       setCoPriceLoading(true);
       try {
-        const params = new URLSearchParams({ cleanerCount: String(cleaners), startDate: coEstimatedStartDate });
+        const params = new URLSearchParams({ cleanerCount: String(cleaners), startDate: coEstimatedStartDate, endDate: coEstimatedEndDate });
         const res = await fetch(`/api/external/projects/${selectedProject.id}/co-price-estimate?${params}`);
-        const data = (await res.json()) as { priced?: boolean; totalCents?: number };
-        setCoPriceCents(data.priced && typeof data.totalCents === "number" ? data.totalCents : null);
+        const data = (await res.json()) as { priced?: boolean; totalCents?: number; days?: number; upchargeDays?: number; upchargeCents?: number };
+        const ok = data.priced && typeof data.totalCents === "number";
+        setCoPriceCents(ok ? data.totalCents! : null);
+        setCoPriceDays(ok ? { days: data.days ?? 1, upchargeDays: data.upchargeDays ?? 0, upchargeCents: data.upchargeCents ?? 0 } : null);
       } catch {
         setCoPriceCents(null);
       } finally {
@@ -178,7 +182,7 @@ export function ProjectManagerForm({ onBack, nextDayPct }: Props) {
       }
     }, 300);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [coCleanerCount, coEstimatedStartDate, selectedProject?.id, selectedProject?.hasCustomLaborRate]);
+  }, [coCleanerCount, coEstimatedStartDate, coEstimatedEndDate, selectedProject?.id, selectedProject?.hasCustomLaborRate]);
 
   async function loadSovItems(projectId: string) {
     setSovLoading(true);
@@ -219,6 +223,7 @@ export function ProjectManagerForm({ onBack, nextDayPct }: Props) {
           coTitle: coTitle.trim(),
           coDescription: coDescription.trim() || undefined,
           coEstimatedStartDate: coEstimatedStartDate || undefined,
+          coEstimatedEndDate: coEstimatedEndDate || undefined,
           coCleanerCount: coCleanerCount.trim() || undefined,
           clientCompany: clientCompany.trim(),
           clientAddress: clientAddress.trim(),
@@ -345,6 +350,7 @@ export function ProjectManagerForm({ onBack, nextDayPct }: Props) {
             coTitle: coTitle.trim(),
             coDescription: coDescription.trim() || undefined,
             coEstimatedStartDate: coEstimatedStartDate || undefined,
+            coEstimatedEndDate: coEstimatedEndDate || undefined,
             coCleanerCount: coCleanerCount.trim() || undefined,
             clientCompany: clientCompany.trim(),
             clientAddress: clientAddress.trim(),
@@ -422,7 +428,7 @@ export function ProjectManagerForm({ onBack, nextDayPct }: Props) {
             setSelectedProjectId("");
             setRequestType(null);
             setCoTitle(""); setCoDescription(""); setCoEstimatedStartDate(""); setCoEstimatedEndDate("");
-            setCoCleanerCount(""); setCoPriceCents(null);
+            setCoCleanerCount(""); setCoPriceCents(null); setCoPriceDays(null);
             setDesiredDate(""); setDesiredEndDate(""); setComments("");
             setRequesterName(""); setRequesterEmail("");
             if (contractPdfUrl) URL.revokeObjectURL(contractPdfUrl);
@@ -569,19 +575,35 @@ export function ProjectManagerForm({ onBack, nextDayPct }: Props) {
                 placeholder="Describe what needs to be done and why…"
               />
             </div>
-            <div>
-              <label className={label} htmlFor="co-start-date">Estimated start date *</label>
-              <input
-                id="co-start-date"
-                type="date"
-                required
-                className={input}
-                value={coEstimatedStartDate}
-                onChange={(e) => setCoEstimatedStartDate(e.target.value)}
-              />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className={label} htmlFor="co-start-date">Start date *</label>
+                <input
+                  id="co-start-date"
+                  type="date"
+                  required
+                  className={input}
+                  value={coEstimatedStartDate}
+                  onChange={(e) => {
+                    setCoEstimatedStartDate(e.target.value);
+                    // An end date before the new start would be invalid: drop it.
+                    if (coEstimatedEndDate && e.target.value && coEstimatedEndDate < e.target.value) setCoEstimatedEndDate("");
+                  }}
+                />
+              </div>
+              <div>
+                <label className={label} htmlFor="co-end-date">End date</label>
+                <input
+                  id="co-end-date"
+                  type="date"
+                  min={coEstimatedStartDate || undefined}
+                  className={input}
+                  value={coEstimatedEndDate}
+                  onChange={(e) => setCoEstimatedEndDate(e.target.value)}
+                />
+                <p className="mt-1 text-[11px] text-gray-400">Leave blank for one day.</p>
+              </div>
             </div>
-            {/* Estimated end date hidden from the external form for now, per request. State and
-                submit wiring left intact so it can be re-shown by restoring this block. */}
             <label className="flex items-center gap-2 text-xs text-gray-600">
               <input
                 type="checkbox"
@@ -618,10 +640,16 @@ export function ProjectManagerForm({ onBack, nextDayPct }: Props) {
                     <span className="font-semibold text-gray-900">
                       {coPriceLoading ? "Calculating…" : centsToDollars(coPriceCents)}
                     </span>
+                    {!coPriceLoading && coPriceDays && coPriceDays.days > 1 && <span className="text-gray-500"> for {coPriceDays.days} days</span>}
                   </p>
                 )}
-                {coPriceCents != null && isNextDayStart(coEstimatedStartDate) && (
-                  <p className="mt-1 text-xs text-amber-700">Includes a {nextDayPct}% next day upcharge for work starting today or tomorrow.</p>
+                {!coPriceLoading && coPriceCents != null && coPriceDays && coPriceDays.upchargeCents > 0 && (
+                  <p className="mt-1 text-xs text-amber-700">
+                    Includes a {nextDayPct}% next day upcharge ({centsToDollars(coPriceDays.upchargeCents)})
+                    {coPriceDays.days > 1
+                      ? ` on ${coPriceDays.upchargeDays === 1 ? "the 1 day" : `the ${coPriceDays.upchargeDays} days`} that ${coPriceDays.upchargeDays === 1 ? "is" : "are"} today or tomorrow. The other days are regular price.`
+                      : " for work today or tomorrow."}
+                  </p>
                 )}
                 {coPriceCents != null && (
                   <div className="mt-4 grid gap-3 border-t border-gray-200 pt-4 sm:grid-cols-2">

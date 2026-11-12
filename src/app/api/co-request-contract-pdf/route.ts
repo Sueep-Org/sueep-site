@@ -11,6 +11,7 @@ type Body = {
   coTitle?: string;
   coDescription?: string;
   coEstimatedStartDate?: string;
+  coEstimatedEndDate?: string;
   coCleanerCount?: string;
   clientCompany?: string;
   clientAddress?: string;
@@ -59,6 +60,7 @@ export async function POST(req: Request) {
     coTitle,
     coDescription: body.coDescription?.trim() || undefined,
     coEstimatedStartDate: body.coEstimatedStartDate,
+    coEstimatedEndDate: body.coEstimatedEndDate,
     coCleanerCount: body.coCleanerCount,
     clientCompany: body.clientCompany?.trim() ?? "",
     clientAddress: body.clientAddress?.trim() ?? "",
