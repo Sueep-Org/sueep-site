@@ -58,7 +58,12 @@ export type ProjectTableRow = {
   percentDone: number;
   percentInvoiced: number;
   billingStatus: string | null;
+  /** Total contract: base + qualifying change orders. Margin runs off this. */
   contractValueCents: number | null;
+  /** Base contract only, before change orders. */
+  baseContractValueCents?: number | null;
+  /** Sum of non-void/rejected change order values. */
+  coContractValueCents?: number;
   laborEntries: LaborRowBase[];
   materialEntries: { date: string; category: string; itemName: string; quantity: number | null; unit: string | null; costCents: number; notes: string | null }[];
   totalHours: number;
@@ -200,6 +205,20 @@ function MarginWarningIcon() {
       />
     </svg>
   );
+}
+
+/** A CO counts toward totals unless voided or rejected (matches projectMargin). */
+function isQualifyingCo(co: { status: string }) {
+  return co.status !== "VOID" && co.status !== "REJECTED";
+}
+
+/** A CO's price, or its estimate until a price is set (matches projectMargin). */
+function coValueCents(co: { contractValueCents: number | null; estimatedCostCents: number | null }) {
+  return co.contractValueCents ?? co.estimatedCostCents ?? 0;
+}
+
+function baseContractCents(row: ProjectTableRow) {
+  return row.baseContractValueCents !== undefined ? row.baseContractValueCents : row.contractValueCents;
 }
 
 function sumProjects(rows: ProjectTableRow[], selector: (row: ProjectTableRow) => number | null | undefined) {
@@ -597,9 +616,9 @@ export function ProjectsExpandableTable({
   const openSet = useMemo(() => new Set(openIds), [openIds]);
   const openCoSet = useMemo(() => new Set(openCoIds), [openCoIds]);
   const openGroupSet = useMemo(() => new Set(openGroupTitles), [openGroupTitles]);
-  // Financial columns: Contract, Act Cost, Margin, Est/Act Labor, Est/Act Material (7 columns);
+  // Financial columns: Contract, COs, Total, Act Cost, Margin, Est/Act Labor, Est/Act Material (9 columns);
   // margin-only mode adds just the one Margin % column instead.
-  const colCount = 7 + (canSeeFinancials ? 7 : canSeeMarginOnly ? 1 : 0);
+  const colCount = 7 + (canSeeFinancials ? 9 : canSeeMarginOnly ? 1 : 0);
 
   function toggle(id: string) {
     setOpenIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -622,8 +641,18 @@ export function ProjectsExpandableTable({
             <th className="w-[280px] min-w-[280px] px-3 py-2 font-semibold">Job</th>
             <th className="w-[130px] min-w-[130px] px-3 py-2 font-semibold">PM</th>
             {canSeeFinancials && (
-              <th className="px-3 py-2 font-semibold" title="Base contract value plus non-void/rejected change orders">
+              <th className="px-3 py-2 font-semibold" title="Base contract value, before change orders">
                 Contract
+              </th>
+            )}
+            {canSeeFinancials && (
+              <th className="px-3 py-2 font-semibold" title="Sum of non-void/rejected change orders">
+                COs
+              </th>
+            )}
+            {canSeeFinancials && (
+              <th className="px-3 py-2 font-semibold" title="Base contract plus change orders. Margin is based on this.">
+                Total
               </th>
             )}
             {canSeeFinancials && <th className="px-3 py-2 font-semibold">Act. Cost</th>}
@@ -660,6 +689,8 @@ export function ProjectsExpandableTable({
               : 0;
             const groupPm = groupTitle ? groupSueepPmLabel(groupRows) : null;
             const groupContract = groupTitle ? sumProjects(groupRows, (row) => row.contractValueCents) : 0;
+            const groupBaseContract = groupTitle ? sumProjects(groupRows, baseContractCents) : 0;
+            const groupCoContract = groupTitle ? sumProjects(groupRows, (row) => row.coContractValueCents) : 0;
             const groupEstLabor = groupTitle ? sumProjects(groupRows, (row) => row.estLaborCents) : 0;
             const groupActualLabor = groupTitle ? sumProjects(groupRows, (row) => row.actualLaborCents) : 0;
             const groupActualMaterial = groupTitle ? sumProjects(groupRows, (row) => row.actualMaterialCents) : 0;
@@ -716,6 +747,12 @@ export function ProjectsExpandableTable({
                     <td className="w-[130px] min-w-[130px] truncate px-3 py-2 text-gray-900" title={groupPm ?? undefined}>
                       {groupPm ?? <span className="text-gray-400">-</span>}
                     </td>
+                    {canSeeFinancials && <td className="px-3 py-2 text-gray-900">{centsToDollars(groupBaseContract)}</td>}
+                    {canSeeFinancials && (
+                      <td className="px-3 py-2 text-gray-900">
+                        {groupCoContract ? centsToDollars(groupCoContract) : <span className="text-gray-400">-</span>}
+                      </td>
+                    )}
                     {canSeeFinancials && <td className="px-3 py-2 font-medium text-gray-900">{centsToDollars(groupContract)}</td>}
                     {canSeeFinancials && <td className="px-3 py-2 text-gray-900">{centsToDollars(groupActualCost)}</td>}
                     {canSeeFinancials ? (
@@ -803,7 +840,13 @@ export function ProjectsExpandableTable({
                       );
                     })()}
                   </td>
-                  {canSeeFinancials && <td className="px-3 py-2 text-gray-900">{centsToDollars(p.contractValueCents)}</td>}
+                  {canSeeFinancials && <td className="px-3 py-2 text-gray-900">{centsToDollars(baseContractCents(p))}</td>}
+                  {canSeeFinancials && (
+                    <td className="px-3 py-2 text-gray-900">
+                      {p.coContractValueCents ? centsToDollars(p.coContractValueCents) : <span className="text-gray-400">-</span>}
+                    </td>
+                  )}
+                  {canSeeFinancials && <td className="px-3 py-2 font-medium text-gray-900">{centsToDollars(p.contractValueCents)}</td>}
                   {canSeeFinancials && <td className="px-3 py-2 text-gray-900">{centsToDollars(actualCost)}</td>}
                   {canSeeFinancials ? (
                     <td className={`px-3 py-2 font-medium ${actualCost === 0 ? "text-gray-400" : marginClass(margin)}`}>
@@ -881,12 +924,23 @@ export function ProjectsExpandableTable({
                             <td className="w-[130px] min-w-[130px] truncate px-3 py-1.5 text-sm text-gray-700" title={co.supervisor ?? undefined}>
                               {co.supervisor ? truncateAtHyphen(co.supervisor) : <span className="text-gray-400">-</span>}
                             </td>
-                            {/* Contract -> contract value */}
+                            {/* Contract (base) -> n/a for a CO */}
+                            {canSeeFinancials && <td className="px-3 py-1.5 text-sm text-gray-400">-</td>}
+                            {/* COs -> this CO's value (voided/rejected shown struck, not counted) */}
                             {canSeeFinancials && (
-                              <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
-                                {centsToDollars(co.contractValueCents)}
+                              <td
+                                className={`px-3 py-1.5 text-sm tabular-nums ${isQualifyingCo(co) ? "text-gray-800" : "text-gray-400 line-through"}`}
+                                title={isQualifyingCo(co) ? undefined : "Not counted (voided/rejected)"}
+                              >
+                                {co.contractValueCents == null && co.estimatedCostCents != null ? (
+                                  <span title="Estimate, no price set yet">~{centsToDollars(co.estimatedCostCents)}</span>
+                                ) : (
+                                  centsToDollars(co.contractValueCents)
+                                )}
                               </td>
                             )}
+                            {/* Total -> n/a for a CO */}
+                            {canSeeFinancials && <td className="px-3 py-1.5 text-sm text-gray-400">-</td>}
                             {canSeeFinancials && (
                               <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
                                 {centsToDollars(coActualCost)}
@@ -942,6 +996,8 @@ export function ProjectsExpandableTable({
                             <td className="px-3 py-1.5 text-sm tabular-nums text-gray-800">
                               {co.actualHours != null ? co.actualHours : <span className="text-gray-400">-</span>}
                             </td>
+                            {/* Progress -> n/a for a CO */}
+                            <td className="px-3 py-1.5 text-sm text-gray-400">-</td>
                             <td className="px-3 py-1.5 text-gray-900">
                               {co.percentInvoiced > 0 ? `${co.percentInvoiced}%` : <span className="text-gray-400">-</span>}
                             </td>
@@ -971,6 +1027,66 @@ export function ProjectsExpandableTable({
                       );
                     })}
 
+                    {/* CO totals - qualifying (non-void/rejected) change orders summed */}
+                    {(() => {
+                      const cos = p.changeOrders.filter(isQualifyingCo);
+                      if (cos.length === 0) return null;
+                      let value = 0, cost = 0, estLabor = 0, actLabor = 0, estMat = 0, actMat = 0, estHrs = 0, actHrs = 0;
+                      let anyEstHrs = false, anyActHrs = false;
+                      for (const co of cos) {
+                        const lab = (co.laborCostCents > 0 ? co.laborCostCents : (co.actualLaborCents ?? 0)) + co.contractorCostCents;
+                        const mat = co.materialCostCents > 0 ? co.materialCostCents : (co.actualMaterialCents ?? 0);
+                        value += coValueCents(co);
+                        actLabor += lab;
+                        actMat += mat;
+                        cost += lab + mat;
+                        estLabor += co.estLaborCents ?? 0;
+                        estMat += co.estMaterialCents ?? 0;
+                        if (co.estHours != null) { anyEstHrs = true; estHrs += co.estHours; }
+                        if (co.actualHours != null) { anyActHrs = true; actHrs += co.actualHours; }
+                      }
+                      const totMargin = value - cost;
+                      const totMarginPct = value ? `${Math.round((totMargin / value) * 100)}%` : null;
+                      const cell = "px-3 py-1.5 text-sm font-semibold tabular-nums text-gray-900";
+                      const dash = <td className="px-3 py-1.5 text-sm text-gray-400">-</td>;
+                      return (
+                        <tr className="border-t border-gray-300 bg-gray-100" onClick={(e) => e.stopPropagation()}>
+                          <td className="w-[280px] min-w-[280px] px-3 py-1.5 pl-8 text-xs font-semibold uppercase tracking-wide text-gray-600">
+                            CO total ({cos.length})
+                          </td>
+                          {dash}
+                          {canSeeFinancials && dash}
+                          {canSeeFinancials && <td className={cell}>{centsToDollars(value)}</td>}
+                          {canSeeFinancials && dash}
+                          {canSeeFinancials && <td className={cell}>{centsToDollars(cost)}</td>}
+                          {canSeeFinancials ? (
+                            <td className={`${cell} ${cost === 0 ? "text-gray-400" : marginClass(totMargin)}`}>
+                              {cost === 0 ? (
+                                "-"
+                              ) : (
+                                <>
+                                  {centsToDollars(totMargin)}
+                                  {totMarginPct ? <span className="ml-1 text-xs font-normal text-gray-500">({totMarginPct})</span> : null}
+                                </>
+                              )}
+                            </td>
+                          ) : canSeeMarginOnly ? (
+                            <td className={`${cell} ${cost === 0 ? "text-gray-400" : marginClass(totMargin)}`}>
+                              {cost === 0 || totMarginPct == null ? "-" : totMarginPct}
+                            </td>
+                          ) : null}
+                          {canSeeFinancials && <td className={cell}>{centsToDollars(estLabor)}</td>}
+                          {canSeeFinancials && <td className={cell}>{centsToDollars(actLabor)}</td>}
+                          {canSeeFinancials && <td className={cell}>{centsToDollars(estMat)}</td>}
+                          {canSeeFinancials && <td className={cell}>{centsToDollars(actMat)}</td>}
+                          <td className={cell}>{anyEstHrs ? estHrs : <span className="text-gray-400">-</span>}</td>
+                          <td className={cell}>{anyActHrs ? actHrs.toFixed(2) : <span className="text-gray-400">-</span>}</td>
+                          {dash}
+                          {dash}
+                          {dash}
+                        </tr>
+                      );
+                    })()}
                   </>
                 ) : null}
                   </>
