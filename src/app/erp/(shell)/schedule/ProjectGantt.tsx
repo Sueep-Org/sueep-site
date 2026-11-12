@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { InfoTip, useConfirm, useToast } from "@/app/erp/components/ui";
-import { holidayOn } from "@/lib/erp/holidays";
+import { useHolidays } from "@/app/components/HolidaysProvider";
 import {
   addDays,
   dayKey,
@@ -175,6 +175,7 @@ export function ProjectGantt({
 }) {
   const router = useRouter();
   const confirm = useConfirm();
+  const { holidayOn } = useHolidays();
   const toast = useToast();
   // Eastern business day, not the viewer's own timezone, same as the calendar.
   const todayDate = useMemo(() => todayEasternAsUtcMidnight(), []);
@@ -537,7 +538,7 @@ export function ProjectGantt({
       }
     }
     return { months, days, holidays };
-  }, [range.start, totalDays, pxPerDay, zoom]);
+  }, [range.start, totalDays, pxPerDay, zoom, holidayOn]);
 
   function toggleSection(k: GanttSection) {
     setCollapsed((prev) => {

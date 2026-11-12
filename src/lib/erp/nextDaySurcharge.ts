@@ -109,3 +109,48 @@ export async function applyNextDaySurcharge(dayAssignmentId: string, opts: { pct
   }
   return result;
 }
+
+/** Unbilled, unvoided surcharge change orders made for one calendar day. */
+function openSurcharges(dayAssignmentId: string) {
+  return prisma.projectChangeOrder.findMany({
+    where: {
+      surchargeKey: { startsWith: `${dayAssignmentId}:` },
+      status: { not: "VOID" },
+      OR: [{ billingStatus: null }, { billingStatus: "NOT_BILLED" }],
+    },
+    select: { id: true, title: true },
+  });
+}
+
+/**
+ * The calendar day is being removed: void its surcharge change orders so
+ * they don't sit on Billing for work that won't happen. Already billed ones
+ * are left alone. Call before deleting the day.
+ */
+export async function voidNextDaySurcharges(dayAssignmentId: string, reason = "Its calendar day was removed."): Promise<string[]> {
+  const open = await openSurcharges(dayAssignmentId);
+  if (open.length === 0) return [];
+  await prisma.projectChangeOrder.updateMany({
+    where: { id: { in: open.map((c) => c.id) } },
+    data: { status: "VOID", statusNote: reason, statusNoteBy: "Sueep", statusNoteAt: new Date() },
+  });
+  return open.map((c) => c.title);
+}
+
+/** The calendar day moved to another date: its surcharge change orders move with it (dates and title). */
+export async function moveNextDaySurcharges(dayAssignmentId: string, newDate: Date): Promise<void> {
+  const open = await openSurcharges(dayAssignmentId);
+  const when = dayLabel(newDate);
+  for (const c of open) {
+    await prisma.projectChangeOrder.update({
+      where: { id: c.id },
+      data: {
+        title: c.title.replace(/\([A-Z][a-z]{2} \d{1,2}\)$/, `(${when})`),
+        requestedDate: newDate,
+        startDate: newDate,
+        endDate: newDate,
+        completedAt: newDate,
+      },
+    });
+  }
+}

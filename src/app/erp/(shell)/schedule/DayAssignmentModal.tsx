@@ -16,7 +16,7 @@ import { useInsuranceCheck } from "@/app/erp/components/useInsuranceCheck";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { centsToDollars } from "@/lib/erp/money";
 import { MiniCalendarPicker } from "./MiniCalendarPicker";
-import { holidayOn } from "@/lib/erp/holidays";
+import { useHolidays } from "@/app/components/HolidaysProvider";
 import { useConfirm } from "@/app/erp/components/ui";
 import { AnswerMark, answerUid, type Answers } from "./AnswerMark";
 import { useFloatingMenu } from "@/app/erp/components/useFloatingMenu";
@@ -287,6 +287,7 @@ export function DayAssignmentModal({
 
   const allDateKeys = pickedKeys.size > 0 ? [...new Set([dateKey, ...pickedKeys])].sort() : null;
   const confirmHoliday = useConfirm();
+  const { holidayOn } = useHolidays();
   // The day the modal opened on was already confirmed on the calendar; extra
   // days picked here ask before anything lands on a company holiday.
   async function okForExtraHolidays(): Promise<boolean> {

@@ -16,6 +16,7 @@
  * (REAL_ESTATE and janitorial-turnover per-unit pricing — unrelated
  * concepts, despite the similar name).
  */
+import { nextDayCountInRange, nextDayUpchargeCents } from "@/lib/nextDayUpcharge";
 
 /** We don't ask anyone to type an hours estimate for a change order — crews
  * are assumed to work a flat day per person (PricingSettings.coDayHours, set
@@ -136,4 +137,25 @@ export function computeChangeOrderLaborEstimate(
   const cleanerCents = Math.round(cleanerCount * hours * rates.cleanerHourlyRateCents);
   const supervisorCents = Math.round(supervisorCount * hours * rates.foremanHourlyRateCents);
   return { cleanerCents, supervisorCents, totalCents: cleanerCents + supervisorCents };
+}
+
+/**
+ * Price of a change order a client requests online over a start-end range
+ * (YYYY-MM-DD; no end means one day). Every day costs one day of labor, and
+ * only the days that fall today or tomorrow (Eastern) get the next day
+ * upcharge: tomorrow through Saturday upcharges tomorrow only. Same math as
+ * the ERP's own change order form (ChangeOrderLaborEstimator).
+ */
+export function clientChangeOrderPrice(
+  counts: { cleanerCount: number; supervisorCount: number },
+  rates: ResolvedChangeOrderLaborRates,
+  range: { startKey: string | null | undefined; endKey: string | null | undefined; coDayHours: number; nextDayPct: number },
+  now: Date = new Date(),
+): { days: number; upchargeDays: number; subtotalCents: number; upchargeCents: number; totalCents: number } {
+  const start = range.startKey?.slice(0, 10) ?? "";
+  const days = changeOrderDayCount(start, range.endKey?.slice(0, 10) || start);
+  const subtotalCents = computeChangeOrderLaborEstimate({ ...counts, hours: range.coDayHours * days }, rates).totalCents;
+  const upchargeDays = Math.min(days, nextDayCountInRange(start, range.endKey, now));
+  const upchargeCents = upchargeDays > 0 ? Math.round((nextDayUpchargeCents(subtotalCents, range.nextDayPct) * upchargeDays) / days) : 0;
+  return { days, upchargeDays, subtotalCents, upchargeCents, totalCents: subtotalCents + upchargeCents };
 }

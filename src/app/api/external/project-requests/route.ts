@@ -3,7 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { getNotificationSetting } from "@/lib/notificationSettings";
 import { sendEmail, buildProjectRequestEmail, buildProjectRequestConfirmationEmail } from "@/lib/email";
 import {
-  computeChangeOrderLaborEstimate,
+  changeOrderDayCount,
+  clientChangeOrderPrice,
   deriveChangeOrderSupervisorCount,
   getChangeOrderLaborRates,
   hasCustomChangeOrderLaborRate,
@@ -11,7 +12,7 @@ import {
 import { loadPricingSettings } from "@/lib/pricingSettingsServer";
 import { generateChangeOrderContractPdf } from "@/lib/contracts/buildChangeOrderContractPdf";
 import { embedChangeOrderSignature } from "@/lib/contracts/fillChangeOrderPdf";
-import { isNextDayStart, withNextDayUpcharge } from "@/lib/nextDayUpcharge";
+import { isNextDayStart } from "@/lib/nextDayUpcharge";
 import { applyNextDaySurcharge } from "@/lib/erp/nextDaySurcharge";
 
 export const runtime = "nodejs";
@@ -86,6 +87,9 @@ export async function POST(req: Request) {
   ) {
     return NextResponse.json({ error: "coEstimatedEndDate must be on or after coEstimatedStartDate" }, { status: 400 });
   }
+  if (type === "change-order" && changeOrderDayCount(body.coEstimatedStartDate!, body.coEstimatedEndDate || body.coEstimatedStartDate!) > 62) {
+    return NextResponse.json({ error: "Pick a range of 62 days or fewer" }, { status: 400 });
+  }
   // What they need goes in the notes now: project managers no longer pick SOV
   // lines (picking the same line twice used up its budget). The office
   // attaches the SOV line when scheduling.
@@ -158,17 +162,18 @@ export async function POST(req: Request) {
       ? new Date(`${body.coEstimatedEndDate}T00:00:00Z`)
       : null;
     const priced = hasCustomChangeOrderLaborRate(project.laborRateCard) && (cleanerCount > 0 || supervisorCount > 0);
-    // Same rule as the price shown on the form and the contract they signed
-    const nextDayUpcharge = isNextDayStart(body.coEstimatedStartDate);
+    // Same price as the form and the contract they signed: one day of labor
+    // per day of the range, next day upcharge only on today/tomorrow days.
     const pricing = await loadPricingSettings();
-    if (priced) {
-      const rates = getChangeOrderLaborRates(project.laborRateCard, pricing.coPriceRates);
-      const estimate = computeChangeOrderLaborEstimate(
-        { cleanerCount, supervisorCount, hours: pricing.coDayHours },
-        rates,
-      );
-      quotedPriceCents = withNextDayUpcharge(estimate.totalCents, nextDayUpcharge, pricing.nextDayPct);
-    }
+    const rates = getChangeOrderLaborRates(project.laborRateCard, pricing.coPriceRates);
+    const price = clientChangeOrderPrice({ cleanerCount, supervisorCount }, rates, {
+      startKey: body.coEstimatedStartDate,
+      endKey: body.coEstimatedEndDate,
+      coDayHours: pricing.coDayHours,
+      nextDayPct: pricing.nextDayPct,
+    });
+    const nextDayUpcharge = price.upchargeDays > 0;
+    if (priced) quotedPriceCents = price.totalCents;
     const co = await prisma.projectChangeOrder.create({
       data: {
         projectId,
@@ -184,7 +189,7 @@ export async function POST(req: Request) {
         estLaborers: cleanerCount > 0 ? cleanerCount : null,
         estSupervisors: supervisorCount > 0 ? supervisorCount : null,
         noCrewRequired: body.coNoCrewRequired === true,
-        estHours: priced ? pricing.coDayHours : null,
+        estHours: priced ? pricing.coDayHours * price.days : null,
         contractValueCents: quotedPriceCents,
         nextDayUpcharge,
       },
@@ -206,6 +211,7 @@ export async function POST(req: Request) {
           coTitle: body.coTitle!.trim(),
           coDescription: body.coDescription?.trim() || undefined,
           coEstimatedStartDate: body.coEstimatedStartDate,
+          coEstimatedEndDate: body.coEstimatedEndDate,
           coCleanerCount: body.coCleanerCount,
           clientCompany: body.clientCompany!.trim(),
           clientAddress: body.clientAddress!.trim(),

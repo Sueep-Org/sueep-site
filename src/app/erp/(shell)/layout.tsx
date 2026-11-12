@@ -8,6 +8,8 @@ import { loadPricingSettings } from "@/lib/pricingSettingsServer";
 import { DEFAULT_PRICING_SETTINGS } from "@/lib/pricingSettings";
 import { loadAppLists } from "@/lib/erp/appListsServer";
 import { DEFAULT_APP_LISTS } from "@/lib/erp/appLists";
+import { loadCompanyHolidays } from "@/lib/erp/holidaysServer";
+import { DEFAULT_COMPANY_HOLIDAYS } from "@/lib/erp/holidays";
 
 /** Neon cold start / Prisma can exceed default on first request after idle. */
 export const maxDuration = 60;
@@ -16,7 +18,7 @@ export default async function ErpShellLayout({ children }: { children: React.Rea
   const auth = await getErpAuth();
   const role = auth?.role ?? "EMPLOYEE";
   // Admins and the Business Manager see a banner on every page when QuickBooks needs reconnecting.
-  const [qboBroken, pricing, lists] = await Promise.all([
+  const [qboBroken, pricing, lists, holidays] = await Promise.all([
     canManageQuickBooks(role)
       ? prisma.qboConnection.findFirst({ where: { status: "NEEDS_RECONNECT", environment: qboEnvironment() }, select: { id: true } }).catch(() => null)
       : null,
@@ -28,10 +30,14 @@ export default async function ErpShellLayout({ children }: { children: React.Rea
       console.error("Could not load lists, using defaults", e);
       return DEFAULT_APP_LISTS;
     }),
+    loadCompanyHolidays().catch((e) => {
+      console.error("Could not load company holidays, using defaults", e);
+      return DEFAULT_COMPANY_HOLIDAYS;
+    }),
   ]);
 
   return (
-    <ErpProviders pricing={pricing} lists={lists}>
+    <ErpProviders pricing={pricing} lists={lists} holidays={holidays}>
       <div id="erp-shell" className="flex min-h-screen sm:h-screen flex-col sm:flex-row">
         <ErpNav role={role} />
         {/* relative: makes main the containing block for absolute descendants

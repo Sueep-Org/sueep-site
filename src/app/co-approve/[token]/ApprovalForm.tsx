@@ -46,10 +46,17 @@ export function ApprovalForm({ token, view, preselect }: { token: string; view: 
     <div className="mt-3 space-y-4">
       <div className={card}>
         <h1 className="text-lg font-semibold text-gray-900">Change order for approval</h1>
-        <p className="mt-1 text-sm text-gray-700">
-          Extra work our crew found at <strong>{view.unit}</strong>
-          {view.address ? <span className="text-gray-500"> ({view.address})</span> : null}.
-        </p>
+        {view.intro ? (
+          <p className="mt-1 text-sm text-gray-700">
+            <strong>{view.unit}</strong>
+            {view.address ? <span className="text-gray-500"> ({view.address})</span> : null}. {view.intro}
+          </p>
+        ) : (
+          <p className="mt-1 text-sm text-gray-700">
+            Extra work our crew found at <strong>{view.unit}</strong>
+            {view.address ? <span className="text-gray-500"> ({view.address})</span> : null}.
+          </p>
+        )}
       </div>
 
       {view.photoIds.length > 0 && (

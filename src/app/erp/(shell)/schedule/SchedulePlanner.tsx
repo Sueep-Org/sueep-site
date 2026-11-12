@@ -12,8 +12,9 @@ import { MiniCalendarPicker, dayAfter } from "./MiniCalendarPicker";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { useFloatingMenu } from "@/app/erp/components/useFloatingMenu";
 import { InfoTip, useConfirm } from "@/app/erp/components/ui";
-import { holidayConfirm, holidayOn } from "@/lib/erp/holidays";
+import { useHolidays } from "@/app/components/HolidaysProvider";
 import { RequestToChangeOrder } from "./RequestToChangeOrder";
+import { NextDayToggle } from "./NextDayToggle";
 import { usePricingSettings } from "@/app/components/PricingSettingsProvider";
 import { useInsuranceCheck } from "@/app/erp/components/useInsuranceCheck";
 import {
@@ -424,6 +425,7 @@ function DuplicateToMoreDaysSection({
     sovItemIds.length > 0 ||
     scopeItems.length > 0 ||
     changeOrderIds.length > 0;
+  const { holidayOn } = useHolidays();
   const confirm = useConfirm();
   const sortedKeys = [...pickedKeys].sort();
 
@@ -697,6 +699,7 @@ export function SchedulePlanner({
   // pre-filled with that project, instead of landing on the bare calendar.
   const router = useRouter();
   const { nextDayPct } = usePricingSettings();
+  const { holidayConfirm, holidayOn } = useHolidays();
   const confirm = useConfirm();
   const checkInsurance = useInsuranceCheck(contractors);
   const searchParams = useSearchParams();
@@ -2592,6 +2595,15 @@ export function SchedulePlanner({
               />
             )}
             {eventDayAssignment && canSetSubPay ? (
+              <NextDayToggle
+                key={`nd-${eventDayAssignment.id}`}
+                dayAssignmentId={eventDayAssignment.id}
+                on={!!eventDayAssignment.nextDayUpcharge}
+                pct={nextDayPct}
+                onChanged={(on) => setDayAssignments((prev) => prev.map((a) => (a.id === eventDayAssignment.id ? { ...a, nextDayUpcharge: on } : a)))}
+              />
+            ) : null}
+            {eventDayAssignment && canSetSubPay ? (
               <RequestToChangeOrder
                 key={eventDayAssignment.id}
                 dayAssignmentId={eventDayAssignment.id}
@@ -4014,7 +4026,7 @@ export function SchedulePlanner({
                           className="shrink-0 rounded bg-amber-200 px-1 text-[9px] font-bold text-amber-900"
                           title="Asked for next day by the project manager. Assigning an SOV line or change order adds the next day surcharge."
                         >
-                          ND
+                          Next day
                         </span>
                       ) : null}
                       <span className="truncate">{compactLabel ?? project.jobTitle}</span>

@@ -5,7 +5,7 @@ import type { ScheduleDayRemovalRow } from "@/lib/erp/scheduleRemovals";
 import {
   addDays,
   coIsComplete,
-  contractorAssignmentDayKeys,
+  contractorWorkedDayKeys,
   dayKey,
   type ScheduleChangeOrder,
   type ScheduleCoDayAssignment,
@@ -274,10 +274,10 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     prisma.contractorAssignment.findMany({
       where: { projectId: { not: null } },
       orderBy: { createdAt: "asc" },
-      select: { projectId: true, contractorId: true, assignedDate: true, startDate: true, endDate: true, costCents: true, setOnSchedule: true },
+      select: { projectId: true, contractorId: true, assignedDate: true, startDate: true, endDate: true, costCents: true, setOnSchedule: true, subPayDays: { select: { date: true } } },
     }),
     prisma.changeOrderContractorAssignment.findMany({
-      select: { changeOrderId: true, contractorId: true, assignedDate: true, startDate: true, endDate: true, costCents: true, setOnSchedule: true },
+      select: { changeOrderId: true, contractorId: true, assignedDate: true, startDate: true, endDate: true, costCents: true, setOnSchedule: true, subPayDays: { select: { date: true } } },
     }),
     prisma.scheduleDayRemoval.findMany({ orderBy: { createdAt: "asc" }, include: { changeOrder: { select: { title: true } } } }),
     // Notes a property manager typed on their turnover request, shown on the unit's chip and card.
@@ -441,10 +441,12 @@ export default async function SchedulePage({ searchParams }: PageProps) {
   // Contractor engagements confirm a day the same way LaborEntry does for
   // employees, just without per-day hours to add — see
   // contractorAssignmentDayKeys's doc comment.
+  // A sub's schedule-paid days count as worked once they've passed (contractorWorkedDayKeys).
+  const workedThroughKey = dayKey(todayEasternAsUtcMidnight());
   for (const ca of contractorAssignmentRows) {
     if (!ca.projectId) continue;
     const contractorName = contractorNameById.get(ca.contractorId);
-    for (const k of contractorAssignmentDayKeys(ca.assignedDate, ca.startDate, ca.endDate)) {
+    for (const k of contractorWorkedDayKeys(ca, workedThroughKey)) {
       const set = workDayKeysByProject.get(ca.projectId) ?? new Set<string>();
       set.add(k);
       workDayKeysByProject.set(ca.projectId, set);
@@ -493,7 +495,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
   // contractor engaged directly on a change order.
   for (const ca of coContractorAssignmentRows) {
     const contractorName = contractorNameById.get(ca.contractorId);
-    for (const k of contractorAssignmentDayKeys(ca.assignedDate, ca.startDate, ca.endDate)) {
+    for (const k of contractorWorkedDayKeys(ca, workedThroughKey)) {
       const set = workDayKeysByChangeOrder.get(ca.changeOrderId) ?? new Set<string>();
       set.add(k);
       workDayKeysByChangeOrder.set(ca.changeOrderId, set);
@@ -873,11 +875,11 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     addDay(key, le.projectId, dayKey(le.workDate), true);
   }
   for (const ca of contractorAssignmentRows) {
-    for (const k of contractorAssignmentDayKeys(ca.assignedDate, ca.startDate, ca.endDate)) addDay(`c:${ca.contractorId}`, ca.projectId, k, true);
+    for (const k of contractorWorkedDayKeys(ca, workedThroughKey)) addDay(`c:${ca.contractorId}`, ca.projectId, k, true);
   }
   for (const ca of coContractorAssignmentRows) {
     const pid = projectIdByChangeOrder.get(ca.changeOrderId);
-    for (const k of contractorAssignmentDayKeys(ca.assignedDate, ca.startDate, ca.endDate)) addDay(`c:${ca.contractorId}`, pid, k, true);
+    for (const k of contractorWorkedDayKeys(ca, workedThroughKey)) addDay(`c:${ca.contractorId}`, pid, k, true);
   }
   for (const cl of coLaborerRows) addDay(crew.keyForName(cl.name), projectIdByChangeOrder.get(cl.changeOrderId), dayKey(cl.workDate), true);
   for (const a of workerAssignmentRows) {

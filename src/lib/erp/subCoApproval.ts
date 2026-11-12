@@ -8,6 +8,8 @@
  * The property manager sees our charge only, never the sub pay or the sub.
  */
 import { randomBytes } from "crypto";
+import { loadClientCoView, recordClientCoAnswer } from "./clientCoApproval";
+import { loadPricingSettings } from "@/lib/pricingSettingsServer";
 import { prisma } from "@/lib/prisma";
 import { escapeHtml, sendEmail } from "@/lib/email";
 import { centsToDollars } from "./money";
@@ -156,6 +158,8 @@ export async function sendToPropertyManager(id: string, actor: string, opts: { u
 
 export type ApprovalView = {
   unit: string;
+  /** Replaces "Extra work our crew found at <unit>" (client change orders, see clientCoApproval.ts). */
+  intro?: string;
   address: string | null;
   lines: { label: string; quantity: number; totalCents: number }[];
   surcharge: { label: string; percent: number; cents: number } | null;
@@ -172,7 +176,8 @@ export type ApprovalView = {
 export async function loadApprovalView(token: string): Promise<ApprovalView | null> {
   if (!isApprovalToken(token)) return null;
   const r = await loadRequest({ pmToken: token });
-  if (!r) return null;
+  // Not a sub request: maybe a change order made from a client's scheduling request.
+  if (!r) return loadClientCoView(token, (await loadPricingSettings()).nextDayPct);
   const { lines, surcharge, totalCents } = chargeLines(r);
   const managers = await propertyManagersFor(r.project.buildingId);
   const state =
@@ -195,7 +200,7 @@ export async function loadApprovalView(token: string): Promise<ApprovalView | nu
 export async function recordPmAnswer(token: string, answer: "APPROVED" | "DENIED", reasonRaw: string | null): Promise<Fail | { state: ApprovalView["state"] }> {
   if (!isApprovalToken(token)) return { error: "This link isn't valid anymore." };
   const r = await prisma.subCoRequest.findUnique({ where: { pmToken: token }, select: { id: true, status: true } });
-  if (!r) return { error: "This link isn't valid anymore." };
+  if (!r) return (await recordClientCoAnswer(token, answer, reasonRaw)) ?? { error: "This link isn't valid anymore." };
   if (r.status === "APPROVED" || r.status === "DENIED") return { error: "This change order was already answered." };
   if (r.status === "CANCELLED") return { error: "We withdrew this request, so there's nothing to answer." };
   if (r.status !== "WAITING_PM") return { error: "We're updating this request. You'll get a new email shortly." };

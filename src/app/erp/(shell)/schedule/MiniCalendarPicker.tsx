@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { addDays, dayKey, monthLabel, monthMatrix, startOfMonth } from "@/lib/erp/schedule";
-import { holidayOn } from "@/lib/erp/holidays";
+import { useHolidays } from "@/app/components/HolidaysProvider";
 
 const WEEKDAY_HEADS = ["S", "M", "T", "W", "T", "F", "S"];
 
@@ -28,6 +28,7 @@ export function MiniCalendarPicker({
   /** Which month the calendar opens on, as a YYYY-MM-DD date within it. */
   initialMonthAnchor: string;
 }) {
+  const { holidayOn } = useHolidays();
   const [cursor, setCursor] = useState(() => startOfMonth(new Date(`${initialMonthAnchor}T00:00:00.000Z`)));
   const matrix = monthMatrix(cursor);
 

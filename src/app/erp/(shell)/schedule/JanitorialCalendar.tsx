@@ -6,7 +6,7 @@ import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { Button, Modal, inputClass, labelClass, useConfirm } from "@/app/erp/components/ui";
 import { dayCellLabelWithYear, dayKey, formatHours, formatShortDate, monthLabel, monthMatrix, startOfMonth } from "@/lib/erp/schedule";
 import { todayEasternAsUtcMidnight } from "@/lib/erp/dates";
-import { holidayConfirm, holidayOn } from "@/lib/erp/holidays";
+import { useHolidays } from "@/app/components/HolidaysProvider";
 import {
   WEEKDAY_SHORT,
   formatTime12,
@@ -63,6 +63,7 @@ function useChipClass(): (contractId: string) => string {
 
 export function JanitorialCalendar({ initialContractId = "" }: { initialContractId?: string }) {
   const confirmHoliday = useConfirm();
+  const { holidayConfirm, holidayOn } = useHolidays();
   const [cursor, setCursor] = useState(() => startOfMonth(todayEasternAsUtcMidnight()));
   const [data, setData] = useState<ScheduleResponse | null>(null);
   const [loading, setLoading] = useState(false);

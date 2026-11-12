@@ -113,6 +113,35 @@ export function SettingsOverview() {
         them. &quot;Placed by mistake&quot; can&apos;t be hidden because it&apos;s the one that deletes the day.
       </P>
 
+      <H2>Holidays tab (Admin only)</H2>
+      <P>
+        Company holidays: days nobody works. The schedule calendars mark them and ask before anyone schedules work on one
+        (see <A href="/erp/help/schedule/calendar-overview">Schedule Calendar</A>). Only Admins see this tab; Business
+        Managers don&apos;t, and holiday changes don&apos;t show on their History tab.
+      </P>
+      <UL>
+        <LI>
+          <strong>Add a holiday:</strong> pick the date, type the name, click <strong>+ Add holiday</strong>, then{" "}
+          <strong>Save holidays</strong>. Rename or remove a future holiday the same way.
+        </LI>
+        <LI>
+          <strong>Next year:</strong> <strong>Copy 2026 to 2027</strong> copies the latest full year to the same days. Each copy
+          is marked <strong>Check this date</strong> in amber: holidays like Thanksgiving or Memorial Day fall on a different
+          date every year, so fix those before saving.
+        </LI>
+        <LI>
+          <strong>Holidays before today are locked</strong> (grayed out with a lock), so past schedules and pay don&apos;t
+          change.
+        </LI>
+        <LI>
+          <strong>Work already scheduled:</strong> after saving, a new holiday that already has jobs, change order days or
+          janitorial shifts on it is listed in amber. Nothing is moved; open the schedule and move or skip it yourself.
+        </LI>
+        <LI>
+          <strong>Reset to built-in list</strong> goes back to the original list. Every save is on the History tab.
+        </LI>
+      </UL>
+
       <H2>Good to know</H2>
       <UL>
         <LI>Changes apply as soon as you save. Pages that were already open show them after a refresh.</LI>

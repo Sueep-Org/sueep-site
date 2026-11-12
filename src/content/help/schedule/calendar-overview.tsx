@@ -403,7 +403,9 @@ export function ScheduleCalendarOverview() {
             <LI>
               Weekly janitorial shifts still show on holidays. Click the date number on the Janitorial calendar to skip them.
             </LI>
-            <LI>The holiday list is set by the tech team each year (2026 and New Year&apos;s Day 2027 are in).</LI>
+            <LI>
+              Admins add and change holidays on <A href="/erp/help/settings/settings-overview">Settings, Holidays tab</A>.
+            </LI>
           </UL>
         </Step>
 
@@ -420,16 +422,22 @@ export function ScheduleCalendarOverview() {
               The office attaches the right SOV line (or a change order) when scheduling.
             </LI>
             <LI>
-              <strong>Next day requests:</strong> days they ask for today or tomorrow show an amber <strong>ND</strong> tag on the
-              chip. The form and their confirmation email tell them a 20% next day upcharge applies.
+              <strong>Next day requests:</strong> days they ask for today or tomorrow show an amber <strong>Next day</strong> tag on
+              the chip. The form and their confirmation email tell them a 20% next day upcharge applies.
             </LI>
             <LI>
-              When you assign an <strong>SOV line</strong> to an ND day, the ERP adds a change order{" "}
+              When you assign an <strong>SOV line</strong> to a Next day day, the ERP adds a change order{" "}
               <strong>Next day surcharge: &lt;SOV line&gt; (date)</strong> worth 20% of that SOV line, completed on that day
-              so it shows on Billing. Taking the line back off the day voids it (unless it&apos;s already billed).
+              so it shows on Billing. Taking the line back off the day, or removing the day, voids it (unless it&apos;s
+              already billed). Dragging the day to another date keeps the Next day tag and moves the surcharge to the new date.
             </LI>
             <LI>
-              When you attach a <strong>change order</strong> to an ND day, its next day upcharge box is ticked and 20% is
+              <strong>Rush jobs that come in by phone:</strong> open the day and tick <strong>Next day</strong> (roles that see
+              prices). It works the same as a request from the form. Unticking it voids the surcharge change orders; change
+              orders that already got the 20% keep their price, so fix those by hand if needed.
+            </LI>
+            <LI>
+              When you attach a <strong>change order</strong> to a Next day day, its next day upcharge box is ticked and 20% is
               added to its price, once.
             </LI>
           </UL>
@@ -442,10 +450,13 @@ export function ScheduleCalendarOverview() {
           </P>
           <UL>
             <LI>Give it a title (filled in from their notes) and, if you know it, a price. You can set the price later.</LI>
-            <LI>On an ND day, 20% is added to the price you type.</LI>
+            <LI>On a Next day day, 20% is added to the price you type.</LI>
             <LI>
               Tick <strong>Email &lt;name&gt; that it&apos;s a change order</strong> to tell them, with an optional message. They
-              get the title, the price if set, and your message; their reply comes to you.
+              get the title, the price if set, and your message; their reply comes to you. <strong>With a price</strong>, the
+              email has <strong>Approve / Deny</strong> buttons: Approve moves the change order to Approved, Deny to Rejected
+              with their reason, and the office gets an email either way (who gets it is on Email Settings, &quot;Client
+              approved or denied a change order&quot;). Without a price there are no buttons; follow up with them.
             </LI>
             <LI>
               The change order is made for that day as <strong>Submitted</strong> (waiting for their OK) and put on the day.

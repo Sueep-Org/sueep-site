@@ -108,6 +108,14 @@ export const NOTIFICATIONS = {
     ccEditable: true,
     sender: "sueep",
   }),
+  CLIENT_CO_ANSWERED: def({
+    label: "Client approved or denied a change order",
+    group: "Projects & schedule",
+    when: "A client presses Approve or Deny on a change order made from their scheduling request",
+    toMode: "recipients",
+    ccEditable: true,
+    defaultTo: () => [env("DOCUSEAL_SUEEP_SIGNER_EMAIL", "david@sueep.com"), "jennifer@sueep.com"],
+  }),
   SCHEDULE_REQUESTER_CONFIRMED: def({
     label: "Client's day confirmed",
     group: "Projects & schedule",

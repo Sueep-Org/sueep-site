@@ -13,6 +13,9 @@ import { loadPayrollRules } from "@/lib/erp/payrollRulesServer";
 import { loadAppLists, listKey } from "@/lib/erp/appListsServer";
 import { APP_LIST_IDS } from "@/lib/erp/appLists";
 import { ListEditor } from "./ListEditor";
+import { HolidaysEditor } from "./HolidaysEditor";
+import { COMPANY_HOLIDAYS_SETTING_KEY, DEFAULT_COMPANY_HOLIDAYS, parseCompanyHolidays } from "@/lib/erp/holidays";
+import { todayEasternKey } from "@/lib/erp/dates";
 
 export const metadata: Metadata = {
   title: "Settings",
@@ -22,7 +25,7 @@ export const dynamic = "force-dynamic";
 
 const HISTORY_SHOWN = 200;
 
-type Tab = SettingsTab | "history";
+type Tab = SettingsTab | "holidays" | "history";
 type PageProps = { searchParams: Promise<{ tab?: string }> };
 
 const OTHER_PAGES = [
@@ -36,6 +39,10 @@ const shortDate = (d: Date) =>
 
 function historyValue(key: string, value: string | null): string {
   if (value == null) return "Default";
+  if (key === COMPANY_HOLIDAYS_SETTING_KEY) {
+    const list = parseCompanyHolidays(value) ?? [];
+    return `${list.length} holiday${list.length === 1 ? "" : "s"}${list.length ? ` (${list.map((h) => h.date.slice(0, 4)).filter((y, i, a) => a.indexOf(y) === i).join(", ")})` : ""}`;
+  }
   const def = settingDef(key);
   if (def?.kind === "number" && def.dated) return datedHistoryText(def, datedNumberHistory(def, value));
   if (def) return formatSetting(def, value);
@@ -47,9 +54,12 @@ export default async function SettingsPage({ searchParams }: PageProps) {
   if (!auth || !canManageSettings(auth.role)) redirect("/erp");
 
   const { tab: tabParam } = await searchParams;
-  const tab: Tab = tabParam === "history" || SETTINGS_TABS.some((t) => t.id === tabParam) ? (tabParam as Tab) : SETTINGS_TABS[0].id;
+  // Company holidays: Admin only (a Business Manager doesn't see the tab).
+  const isAdmin = auth.role === "ADMIN";
+  const tab: Tab =
+    tabParam === "history" || (tabParam === "holidays" && isAdmin) || SETTINGS_TABS.some((t) => t.id === tabParam) ? (tabParam as Tab) : SETTINGS_TABS[0].id;
 
-  const fields = tab === "history" ? [] : await loadSettings(SETTINGS.filter((s) => s.tab === tab));
+  const fields = tab === "history" || tab === "holidays" ? [] : await loadSettings(SETTINGS.filter((s) => s.tab === tab));
   const editors = EDITOR_SETTINGS.filter((e) => e.tab === tab);
   const loadStandards = async (): Promise<StandardLists> => {
     const [pricing, saved] = await Promise.all([
@@ -73,14 +83,30 @@ export default async function SettingsPage({ searchParams }: PageProps) {
     ]);
     return APP_LIST_IDS.map((id) => ({ id, items: lists[id], saved: saved.some((s) => s.key === listKey(id)) }));
   };
-  const [history, employees, standards, tiers, lists] = await Promise.all([
-    tab === "history" ? prisma.appSettingChange.findMany({ orderBy: { createdAt: "desc" }, take: HISTORY_SHOWN }) : Promise.resolve([]),
+  const loadHolidays = async () => {
+    const [row, change] = await Promise.all([
+      prisma.appSetting.findUnique({ where: { key: COMPANY_HOLIDAYS_SETTING_KEY } }),
+      prisma.appSettingChange.findFirst({ where: { key: COMPANY_HOLIDAYS_SETTING_KEY }, orderBy: { createdAt: "desc" } }),
+    ]);
+    const saved = row ? parseCompanyHolidays(row.value) : null;
+    return { holidays: saved ?? DEFAULT_COMPANY_HOLIDAYS, saved: !!saved, changedBy: change?.byEmail ?? null, changedAt: change?.createdAt.toISOString() ?? null };
+  };
+  const [history, employees, standards, tiers, lists, holidays] = await Promise.all([
+    tab === "history"
+      ? prisma.appSettingChange.findMany({
+          // Holiday changes are Admin only, like the Holidays tab.
+          where: isAdmin ? {} : { key: { not: COMPANY_HOLIDAYS_SETTING_KEY } },
+          orderBy: { createdAt: "desc" },
+          take: HISTORY_SHOWN,
+        })
+      : Promise.resolve([]),
     editors.some((e) => e.id === "health")
       ? prisma.employee.findMany({ where: { status: "ACTIVE" }, select: { id: true, firstName: true, lastName: true } })
       : Promise.resolve([]),
     tab === "pricing" ? loadStandards() : Promise.resolve(null),
     tab === "commission" ? loadTiers() : Promise.resolve(null),
     tab === "lists" ? loadLists() : Promise.resolve(null),
+    tab === "holidays" ? loadHolidays() : Promise.resolve(null),
   ]);
   const employeeOptions = employees.map((e) => ({ id: e.id, name: `${e.firstName} ${e.lastName}`.trim() })).sort((a, b) => a.name.localeCompare(b.name));
 
@@ -90,7 +116,7 @@ export default async function SettingsPage({ searchParams }: PageProps) {
       .filter((e) => ("section" in e ? e.section : "") === section && ("first" in e && e.first) === first)
       .map((e) => <EditorSetting key={e.id} id={e.id} label={e.label} info={e.info} employees={employeeOptions} standards={standards} tiers={tiers} />);
 
-  const tabs: { id: Tab; label: string }[] = [...SETTINGS_TABS, { id: "history", label: "History" }];
+  const tabs: { id: Tab; label: string }[] = [...SETTINGS_TABS, ...(isAdmin ? [{ id: "holidays" as const, label: "Holidays" }] : []), { id: "history", label: "History" }];
 
   return (
     <div className="space-y-6">
@@ -118,7 +144,9 @@ export default async function SettingsPage({ searchParams }: PageProps) {
         </nav>
       </div>
 
-      {lists ? (
+      {holidays ? (
+        <HolidaysEditor holidays={holidays.holidays} saved={holidays.saved} today={todayEasternKey()} changedBy={holidays.changedBy} changedAt={holidays.changedAt} />
+      ) : lists ? (
         <div className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white shadow-sm">
           {lists.map((l) => (
             <ListEditor key={l.id} id={l.id} items={l.items} saved={l.saved} />

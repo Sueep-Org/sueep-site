@@ -459,6 +459,22 @@ export function contractorAssignmentDayKeys(assignedDate: Date | null, startDate
   return keys;
 }
 
+/**
+ * Days a contractor line counts as worked on the calendar: its own dates, plus
+ * for pay typed on the schedule (setOnSchedule, saved with only an end date so
+ * payroll pays it once) the calendar days that pay covers, once each has
+ * passed. Without the second part every past sub-run day showed "planned,
+ * nothing logged". A sub who didn't come: remove the day.
+ */
+export function contractorWorkedDayKeys(
+  ca: { assignedDate: Date | null; startDate: Date | null; endDate: Date | null; setOnSchedule?: boolean; subPayDays?: { date: Date }[] },
+  todayKey: string,
+): string[] {
+  const keys = new Set(contractorAssignmentDayKeys(ca.assignedDate, ca.startDate, ca.endDate));
+  if (ca.setOnSchedule) for (const d of ca.subPayDays ?? []) if (dayKey(d.date) <= todayKey) keys.add(dayKey(d.date));
+  return [...keys].sort();
+}
+
 /** A planned or covering row naming a contractor, keyed by the project or
  * change order it's on (`ownerId`). */
 export type SoloCoverageInput = { ownerId: string; dateKey: string; contractorId: string | null };

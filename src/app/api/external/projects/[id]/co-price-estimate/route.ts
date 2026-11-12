@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
-  computeChangeOrderLaborEstimate,
+  clientChangeOrderPrice,
   deriveChangeOrderSupervisorCount,
   getChangeOrderLaborRates,
   hasCustomChangeOrderLaborRate,
 } from "@/lib/changeOrderLaborRates";
 import { loadPricingSettings } from "@/lib/pricingSettingsServer";
-import { isNextDayStart, withNextDayUpcharge } from "@/lib/nextDayUpcharge";
 
 export const runtime = "nodejs";
 
@@ -30,8 +29,8 @@ export async function GET(req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
   const { searchParams } = new URL(req.url);
   const cleanerCount = parseCount(searchParams.get("cleanerCount"));
-  // Work starting today or tomorrow gets the next day upcharge (see nextDayUpcharge.ts)
-  const nextDay = isNextDayStart(searchParams.get("startDate"));
+  const startKey = searchParams.get("startDate");
+  const endKey = searchParams.get("endDate");
   const supervisorCount = deriveChangeOrderSupervisorCount(cleanerCount);
 
   // Same eligible-segment check as the sibling SOV/search endpoints.
@@ -51,10 +50,15 @@ export async function GET(req: Request, ctx: Ctx) {
 
   const pricing = await loadPricingSettings();
   const rates = getChangeOrderLaborRates(project.laborRateCard, pricing.coPriceRates);
-  const estimate = computeChangeOrderLaborEstimate(
-    { cleanerCount, supervisorCount, hours: pricing.coDayHours },
-    rates,
-  );
+  // One day of labor per day of the range; only today/tomorrow days get the next day upcharge
+  const price = clientChangeOrderPrice({ cleanerCount, supervisorCount }, rates, { startKey, endKey, coDayHours: pricing.coDayHours, nextDayPct: pricing.nextDayPct });
 
-  return NextResponse.json({ priced: true, totalCents: withNextDayUpcharge(estimate.totalCents, nextDay, pricing.nextDayPct), nextDayUpcharge: nextDay });
+  return NextResponse.json({
+    priced: true,
+    totalCents: price.totalCents,
+    days: price.days,
+    upchargeDays: price.upchargeDays,
+    upchargeCents: price.upchargeCents,
+    nextDayUpcharge: price.upchargeDays > 0,
+  });
 }
