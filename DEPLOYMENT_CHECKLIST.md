@@ -1,102 +1,77 @@
-# Firebase & Vercel Deployment Checklist
+# Deploys, migrations and secrets
 
-## Pre-Deployment Checklist
+How to ship changes to sueep.com / app.sueep.com safely. Read the "Database and migrations" section of the [README](README.md) first: **local dev and the live site share one database.**
 
-- [ ] Firebase project created and web app configured
-- [ ] All Firebase credentials obtained from Firebase Console
-- [ ] Stripe API keys obtained (test or production)
-- [ ] Database (Neon PostgreSQL) configured with pooled and direct URLs
-- [ ] `.env.local` file created with all required variables:
-  - [ ] All NEXT_PUBLIC_FIREBASE_* variables
-  - [ ] STRIPE_SECRET_KEY and NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-  - [ ] DATABASE_URL and DIRECT_URL
-  - [ ] ERP_SESSION_SECRET (min 32 random characters)
-  - [ ] (Optional) HUBSPOT_ACCESS_TOKEN, HUBSPOT_CLIENT_SECRET, HUBSPOT_PIPELINE_STAGE_MAP
-- [ ] Local development tested: `npm run dev` works without errors
-- [ ] Local build tested: `npm run build` succeeds (includes Prisma migrations & code generation)
-- [ ] All features tested locally (Firebase auth, ERP login, database queries, Stripe checkout, etc.)
-- [ ] Code committed to git
+## Normal deploy
 
-## Vercel Setup Checklist
+1. Work on a branch. Run `npm run lint` and `npx tsc --noEmit`, and try the change locally (`npm run dev`).
+2. If the change has a migration, make sure it only **adds** things (new tables, nullable columns, indexes) and that `prisma/schema.prisma` matches.
+3. Open a pull request into `main` on GitHub (`Sueep-Org/sueep-site`) and merge it.
+4. Vercel builds automatically. The build runs `prisma migrate deploy && prisma generate && next build`, so **pending migrations are applied to the live database during the build**. A migration that fails, fails the deploy.
+5. Check the deploy (below).
 
-- [ ] Vercel account created
-- [ ] GitHub repository connected to Vercel (or using Vercel CLI)
-- [ ] Project created in Vercel Dashboard
-- [ ] All environment variables added to Vercel:
-  - [ ] NEXT_PUBLIC_FIREBASE_API_KEY
-  - [ ] NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-  - [ ] NEXT_PUBLIC_FIREBASE_PROJECT_ID
-  - [ ] NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-  - [ ] NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-  - [ ] NEXT_PUBLIC_FIREBASE_APP_ID
-  - [ ] DATABASE_URL (must use pooled connection for Neon)
-  - [ ] DIRECT_URL (must use direct connection for Neon)
-  - [ ] ERP_SESSION_SECRET (min 32 random characters)
-  - [ ] STRIPE_SECRET_KEY
-  - [ ] NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-  - [ ] HUBSPOT_ACCESS_TOKEN (optional - only if using HubSpot sync)
-  - [ ] HUBSPOT_CLIENT_SECRET (optional - only if using HubSpot sync)
-  - [ ] HUBSPOT_PIPELINE_STAGE_MAP (optional - only if using HubSpot sync)
+Preview deploys (other branches or PRs) run the same build. Because they point at the same database, **a preview deploy applies its migrations to the live database too.** Don't push a branch with an unfinished migration.
 
-## Deployment Steps
+## Applying a migration before the deploy
 
-1. **Option A - GitHub Integration (Automatic):**
-   ```bash
-   git add .
-   git commit -m "Configure Firebase and Vercel"
-   git push origin main
-   # Vercel will auto-deploy from your GitHub repo
-   ```
+Sometimes a migration has to exist before the code ships, e.g. so local dev works:
 
-2. **Option B - Vercel CLI:**
-   ```bash
-   vercel --prod
-   ```
-
-## Post-Deployment Checks
-
-- [ ] Deployment successful (check Vercel Dashboard - no build errors)
-- [ ] Website loads without 500 errors
-- [ ] Firebase authentication working (login/signup pages functional)
-- [ ] Database queries working (check ERP dashboard if available)
-- [ ] Stripe checkout working on painting/commercial cleaning lead forms
-- [ ] All public routes loading (/, /painting, /commercial-cleaning, /referral, /blog, etc.)
-- [ ] Check Vercel logs for any errors: `vercel logs`
-- [ ] Monitor first 24 hours for unexpected errors
-- [ ] Test on mobile devices
-- [ ] Verify no sensitive data (API keys, secrets) exposed in browser console
-
-## Rollback Plan
-
-If something goes wrong:
 ```bash
-# View previous deployments
-vercel deployments
-
-# Promote a previous deployment to production
-vercel promote <deployment-url>
-
-# Or redeploy with fixes
-git push  # make fixes first
-vercel --prod
+npx prisma migrate deploy                     # applies every pending migration in prisma/migrations
+# or, for SQL you ran by hand:
+npx prisma db execute --file prisma/migrations/<folder>/migration.sql
+npx prisma migrate resolve --applied <folder>
+npx prisma migrate status                     # should say "Database schema is up to date"
 ```
 
-## Environment Variables by Visibility
+Never run `migrate dev`, `migrate reset`, or `db push --force-reset` against this database, and never use its URL as a shadow database.
 
-### Public (visible to browser, must have NEXT_PUBLIC_ prefix):
-- NEXT_PUBLIC_FIREBASE_API_KEY
-- NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-- NEXT_PUBLIC_FIREBASE_PROJECT_ID
-- NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-- NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-- NEXT_PUBLIC_FIREBASE_APP_ID
-- NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+## After every deploy
 
-### Secret (server-side only):
-- STRIPE_SECRET_KEY (required for payment processing)
-- DATABASE_URL (must use pooled connection: "-pooler" in hostname)
-- DIRECT_URL (must use direct connection: add "&channel_binding=require")
-- ERP_SESSION_SECRET (min 32 random characters for JWT signing)
-- HUBSPOT_ACCESS_TOKEN (if using HubSpot integration)
-- HUBSPOT_CLIENT_SECRET (if using HubSpot integration)
-- HUBSPOT_PIPELINE_STAGE_MAP (if using HubSpot integration)
+- Vercel → Deployments: the build is green.
+- Open `app.sueep.com`, sign in, and open the page you changed.
+- Vercel → Logs: no new errors in the first few minutes.
+- If you touched email: ERP → Email Log shows the sends.
+- If you touched a cron: Vercel → Settings → Cron Jobs → run it once, or wait for the next run, and check its log.
+
+## Rollback
+
+Vercel → Deployments → pick the last good deployment → **Promote to Production** (or `vercel promote <url>`). The rollback is instant.
+
+Migrations are **not** rolled back. Since migrations only add things, the older code keeps working against the newer schema. If a migration itself was wrong, write a new migration that fixes it. Don't edit or delete an applied one.
+
+## Environment variables
+
+- Every variable is listed and explained in [.env.example](.env.example).
+- Set them in Vercel → Project → Settings → Environment Variables. Changes only take effect on the **next deploy**, so redeploy after editing.
+- `NEXT_PUBLIC_*` values are visible in the browser. Never put a secret in one.
+- Pull them locally with `vercel env pull .env.local`. Then move `DATABASE_URL`, `DIRECT_URL`, `ERP_ENCRYPTION_KEY` and the `QBO_*` lines into `.env` (see README).
+- Local dev uses `QBO_ENVIRONMENT=sandbox` and the localhost `QBO_REDIRECT_URI`. Production uses `production` and `https://app.sueep.com/api/erp/quickbooks/callback`.
+
+## Rotating secrets
+
+Do this when someone with access leaves, or a value may have leaked. Change the value at the service, update Vercel, redeploy, then update local `.env` files.
+
+| Secret | How to rotate | Side effects |
+|---|---|---|
+| `ERP_SESSION_SECRET` | `openssl rand -hex 32` | Everyone is signed out once |
+| `CRON_SECRET` | `openssl rand -hex 32` | None. Vercel sends the new value after the redeploy |
+| `HUBSPOT_ACCESS_TOKEN` / `HUBSPOT_CLIENT_SECRET` | HubSpot → Private apps → rotate | Syncs fail until Vercel is updated |
+| `QBO_CLIENT_SECRET` | Intuit Developer → app → Keys | Then reconnect QuickBooks from ERP → QuickBooks |
+| `RESEND_API_KEY` | resend.com → API keys | Email fails until Vercel is updated |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Stripe dashboard | Checkout fails until Vercel is updated |
+| `META_ADS_ACCESS_TOKEN` | See [META_ADS_SETUP.md](META_ADS_SETUP.md) | Ad spend page errors until updated |
+| `DATABASE_URL` / `DIRECT_URL` | Neon → reset the role password | Update both, in Vercel and in `.env` |
+| `ERP_ENCRYPTION_KEY` | **Don't rotate**, unless you also write a script that decrypts with the old key and re-encrypts with the new one | A changed key makes every stored SSN, bank number, Company Info login and QuickBooks token unreadable |
+
+Company Info logins stored inside the ERP (ERP → Company Info) are separate from these. Change them at each website, then update them in the ERP.
+
+## New machine setup
+
+```bash
+git clone https://github.com/Sueep-Org/sueep-site && cd sueep-site
+npm install
+vercel link && vercel env pull .env.local     # needs access to the Vercel team
+# move the DB / encryption / QBO lines into .env (see above)
+npm run dev
+```

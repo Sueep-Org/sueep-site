@@ -96,7 +96,7 @@ export async function POST(req: Request) {
     }
 
     // Notification recipients aren't a supervisor's call to make — force the
-    // same people a PM's "notify" picker defaults to (Sergio, Nick, David,
+    // same people a PM's "notify" picker defaults to (Sergio, David,
     // Jennifer), regardless of what (if anything) the request supplied. This
     // overrides rather than merely defaults, so it can't be widened or
     // narrowed by a tampered request either.
@@ -104,7 +104,6 @@ export async function POST(req: Request) {
       where: {
         OR: [
           { firstName: { equals: "Sergio", mode: "insensitive" } },
-          { firstName: { equals: "Nick", mode: "insensitive" } },
           { firstName: { equals: "David", mode: "insensitive" }, lastName: { equals: "Rodriguez", mode: "insensitive" } },
           { firstName: { equals: "Jennifer", mode: "insensitive" }, lastName: { equals: "Cortes-Loya", mode: "insensitive" } },
         ],

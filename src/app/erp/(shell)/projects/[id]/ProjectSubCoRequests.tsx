@@ -55,7 +55,7 @@ export function ProjectSubCoRequests({ data, buildingId, projectId }: { data: Su
         )}
         <InfoTip
           wide
-          text={"Subs send these from the link in their turnover invite. The property manager sees the charge only; the sub sees their pay only.\n\nRequests with an Other line, or with no property manager email, wait here for the office. The rest are emailed to the property manager right away, with David, Jennifer, Nick and Edwin copied.\n\nChanging one the property manager hasn't answered emails them the update."}
+          text={"Subs send these from the link in their turnover invite. The property manager sees the charge only; the sub sees their pay only.\n\nRequests with an Other line, or with no property manager email, wait here for the office. The rest are emailed to the property manager right away, with David, Jennifer and Edwin copied.\n\nChanging one the property manager hasn't answered emails them the update."}
         />
       </div>
 

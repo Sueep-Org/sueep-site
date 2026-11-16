@@ -271,7 +271,7 @@ export function ScheduleCalendarOverview() {
           </Callout>
           <Callout type="tip">
             Every schedule email has <strong>Confirm</strong> and <strong>Can&apos;t make it</strong> buttons (no login
-            needed; they can add a reason). If someone can&apos;t make it, Jennifer, Edwin, David and Nick get an email
+            needed; they can add a reason). If someone can&apos;t make it, Jennifer, Edwin and David get an email
             right away (change the list on the Notifications page under Schedule declined), and the person stays on the
             schedule so a PM can swap someone in. At about 2pm, the same people get a list of anyone scheduled for
             tomorrow who hasn&apos;t answered. Hover or click a chip to see a dot next to each person&apos;s name:

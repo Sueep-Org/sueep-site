@@ -136,7 +136,7 @@ export const NOTIFICATIONS = {
     group: "Projects & schedule",
     when: "Someone scheduled on a day clicks Can't make it in their invite (or changes back to Confirm). They stay on the schedule, marked declined.",
     toMode: "recipients",
-    defaultTo: () => ["jennifer@sueep.com", "edwin@sueep.com", "david@sueep.com", "nick@sueep.com"],
+    defaultTo: () => ["jennifer@sueep.com", "edwin@sueep.com", "david@sueep.com"],
     ccEditable: true,
   }),
   SCHEDULE_UNANSWERED: def({
@@ -144,7 +144,7 @@ export const NOTIFICATIONS = {
     group: "Reminders",
     when: "About 2pm, when people scheduled for tomorrow haven't clicked Confirm or Can't make it yet",
     toMode: "recipients",
-    defaultTo: () => ["jennifer@sueep.com", "edwin@sueep.com", "david@sueep.com", "nick@sueep.com"],
+    defaultTo: () => ["jennifer@sueep.com", "edwin@sueep.com", "david@sueep.com"],
     ccEditable: true,
   }),
   READY_TO_BILL: def({
@@ -236,7 +236,7 @@ export const NOTIFICATIONS = {
     when: "A sub's change order request on a turnover is priced and ready (or the office changes it); the property manager gets Approve and Deny buttons",
     automatic: "The building's property managers (their links, or the building's contact email)",
     ccEditable: true,
-    defaultCc: ["david@sueep.com", "jennifer@sueep.com", "nick@sueep.com", "edwin@sueep.com"],
+    defaultCc: ["david@sueep.com", "jennifer@sueep.com", "edwin@sueep.com"],
     sender: "sueep",
   }),
   SUB_CO_APPROVAL_REMINDER: def({
@@ -267,7 +267,7 @@ export const NOTIFICATIONS = {
     group: "Turnovers",
     when: "A sub's change order is approved or denied, with the charge, sub pay and margin",
     toMode: "recipients",
-    defaultTo: () => ["david@sueep.com", "jennifer@sueep.com", "nick@sueep.com", "edwin@sueep.com"],
+    defaultTo: () => ["david@sueep.com", "jennifer@sueep.com", "edwin@sueep.com"],
     ccEditable: true,
   }),
   SUB_CO_CANCELLED: def({
@@ -411,7 +411,7 @@ export const NOTIFICATIONS = {
     when: "A sub declines a job offer, doesn't answer by the deadline, or accepts after the job changed",
     automatic: "Whoever sent the offer",
     toMode: "also",
-    defaultTo: () => ["jennifer@sueep.com", "edwin@sueep.com", "david@sueep.com", "nick@sueep.com"],
+    defaultTo: () => ["jennifer@sueep.com", "edwin@sueep.com", "david@sueep.com"],
     ccEditable: true,
   }),
   SUB_CREW_CHANGED: def({
@@ -420,7 +420,7 @@ export const NOTIFICATIONS = {
     when: "A sub changes how many people (or who) they're bringing to days they run",
     automatic: "The day's PM, when one is set",
     toMode: "also",
-    defaultTo: () => ["jennifer@sueep.com", "edwin@sueep.com", "david@sueep.com", "nick@sueep.com"],
+    defaultTo: () => ["jennifer@sueep.com", "edwin@sueep.com", "david@sueep.com"],
     ccEditable: true,
   }),
   SUB_CHECK_IN_MISSED: def({
@@ -429,7 +429,7 @@ export const NOTIFICATIONS = {
     when: "A sub running a day hasn't checked in from their portal by the start time plus the grace window (Settings, Subs). Only subs who use their portal.",
     automatic: "The day's PM, when one is set",
     toMode: "also",
-    defaultTo: () => ["jennifer@sueep.com", "edwin@sueep.com", "david@sueep.com", "nick@sueep.com"],
+    defaultTo: () => ["jennifer@sueep.com", "edwin@sueep.com", "david@sueep.com"],
     ccEditable: true,
   }),
   SUB_REVIEW_READY: def({
@@ -541,7 +541,7 @@ export const NOTIFICATIONS = {
     when: "About 8am, when calendar items reach their category's reminder days",
     automatic: "Sales and Estimation get one with only the Bids category",
     toMode: "recipients",
-    defaultTo: () => ["edwin@sueep.com", "emma@sueep.com", "david@sueep.com", "jennifer@sueep.com", "nick@sueep.com"],
+    defaultTo: () => ["edwin@sueep.com", "emma@sueep.com", "david@sueep.com", "jennifer@sueep.com"],
   }),
 
   OFFER_LETTER_DUE: def({
