@@ -178,7 +178,7 @@ export function ReadyToSendHelp() {
           nobody makes that contract&apos;s invoice by hand any more, or the month gets two invoices.
         </LI>
         <LI>
-          <strong>Invoice label</strong> is the name on the line, like THE SMITH for &quot;Recurring cleaning THE SMITH&quot;.
+          <strong>Invoice label</strong> is the name on the line, like THE SMITH for &quot;Recurring cleaning THE SMITH - Monthly contract, November 2026&quot;.
           Blank uses the building name.
         </LI>
         <LI>

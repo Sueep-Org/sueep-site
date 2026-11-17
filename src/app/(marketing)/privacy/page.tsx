@@ -129,8 +129,8 @@ export default function PrivacyPage() {
               Example: Thank you for reaching out to Sueep. We&apos;ve received your inquiry and are working on a
               solution. Our team will update you within 24–48 business hours. For any further questions, feel free to
               reply or contact us at{" "}
-              <a href="tel:+12672173596" className="text-[#E73C6E] font-medium hover:underline">
-                (267) 217-3596
+              <a href="tel:+12675811228" className="text-[#E73C6E] font-medium hover:underline">
+                (267) 581-1228
               </a>
               .
             </p>
@@ -174,8 +174,8 @@ export default function PrivacyPage() {
             <h3 className="text-lg font-semibold text-gray-900">7. Help</h3>
             <p className="mt-2">
               For any issues, reply with the keyword HELP. You may also reach us directly at{" "}
-              <a href="tel:+12672173596" className="text-[#E73C6E] font-medium hover:underline">
-                (267) 217-3596
+              <a href="tel:+12675811228" className="text-[#E73C6E] font-medium hover:underline">
+                (267) 581-1228
               </a>{" "}
               or{" "}
               <a href="mailto:contact@sueep.com" className="text-[#E73C6E] font-medium hover:underline">
@@ -308,8 +308,8 @@ export default function PrivacyPage() {
             </a>
             <br />
             Phone:{" "}
-            <a href="tel:+12672173596" className="text-[#E73C6E] font-medium hover:underline">
-              (267) 217-3596
+            <a href="tel:+12675811228" className="text-[#E73C6E] font-medium hover:underline">
+              (267) 581-1228
             </a>
           </p>
         </section>

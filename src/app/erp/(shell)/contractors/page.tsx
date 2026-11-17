@@ -185,7 +185,14 @@ export default async function ContractorsPage({ searchParams }: PageProps) {
   return (
     <div className="space-y-6">
       <NewContractorForm title={<h1 className="text-2xl font-semibold text-gray-900">Contractor Verification</h1>} />
-      
+      {auth && isPmLevel(auth.role) ? (
+        <div className="flex justify-end">
+          <Link href="/erp/contractors/email" className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50">
+            Email subs
+          </Link>
+        </div>
+      ) : null}
+
       {showBids || reviews ? (
         <DetailTabs
           tabs={[

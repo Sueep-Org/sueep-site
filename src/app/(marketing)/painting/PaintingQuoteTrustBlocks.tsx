@@ -39,8 +39,8 @@ export function PaintingQuoteTrustLeft() {
   );
 }
 
-const phoneDisplay = "(267) 217-3596";
-const phoneHref = "tel:+12672173596";
+const phoneDisplay = "(267) 581-1228";
+const phoneHref = "tel:+12675811228";
 
 export function PaintingQuoteTrustRight() {
   return (

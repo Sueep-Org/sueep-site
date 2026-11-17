@@ -10,7 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { todayEasternKey, utcDateKey } from "./dates";
 import { draftRecipients, loadBuildingInvoiceDestination, loadProjectInvoiceDestination, periodRecipients, withDraftRecipients, type InvoiceDestination } from "./invoiceDestination";
-import { billingDateKey, draftLines, linesTotal, monthLabel } from "./janitorialInvoiceDrafts";
+import { billingDateKey, draftLines, linesTotal, monthlyContractTitle } from "./janitorialInvoiceDrafts";
 import { describePlan, invoiceEmailHtml, invoiceLinesFor, planDelivery, type InvoiceForDelivery } from "./invoiceDelivery";
 import { setInvoiceDates } from "@/lib/hubspot/invoiceDrafts";
 import { qboDraftForPreview } from "./qboInvoiceDrafts";
@@ -44,7 +44,7 @@ async function loadDraft(kind: DraftKind, rowId: string): Promise<LoadedDraft | 
     const label = p.recurringContract.invoiceLabel?.trim() || p.recurringContract.building.name;
     return {
       hubspotInvoiceId: link.hubspotInvoiceId,
-      title: `${p.recurringContract.building.name}, ${monthLabel(p.periodStart)}`,
+      title: monthlyContractTitle(p.recurringContract.building.name, p.periodStart),
       invoiceDateKey: billingDateKey(p.periodStart, p.recurringContract.billingDayOfMonth),
       dueDateKey: link.dueDate ? utcDateKey(link.dueDate) : null,
       lines: draftLines(label, p),

@@ -50,13 +50,18 @@ export function monthLabel(periodStart: Date): string {
   return periodStart.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 }
 
+/** Invoice title / email subject for a janitorial month, e.g. "The Smith - Recurring monthly contract, November 2026". */
+export function monthlyContractTitle(name: string, periodStart: Date): string {
+  return `${name} - Recurring monthly contract, ${monthLabel(periodStart)}`;
+}
+
 export function draftLines(
   label: string,
   period: { periodStart: Date; amountCents: number; charges: { description: string; amountCents: number }[] },
 ): DraftLine[] {
   const month = monthLabel(period.periodStart);
   return [
-    { name: `Recurring cleaning ${label}`, description: `${label} - Janitorial services, ${month}`, amountCents: period.amountCents },
+    { name: `Recurring cleaning ${label}`, description: `Monthly contract, ${month}`, amountCents: period.amountCents },
     ...period.charges.map((c) => ({ name: c.description, description: `${label}, ${month}`, amountCents: c.amountCents })),
   ];
 }
@@ -260,7 +265,7 @@ export async function approveDraft(periodId: string, email: string): Promise<{ o
         recipients: periodRecipients(p),
         hubspotInvoiceId: found.link.hubspotInvoiceId,
         number: snap.number,
-        title: `${p.recurringContract.building.name}, ${monthLabel(p.periodStart)}`,
+        title: monthlyContractTitle(p.recurringContract.building.name, p.periodStart),
         totalCents: linesTotal(lines),
         dueDate: snap.dueDate,
         viewUrl: snap.viewUrl,
