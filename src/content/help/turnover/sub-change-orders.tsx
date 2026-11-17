@@ -40,7 +40,7 @@ export function SubChangeOrders() {
         </Step>
         <Step n={3} title="3. The property manager answers">
           They get the photos, each line at our price, and <strong>Approve</strong> and <strong>Deny</strong> buttons. David,
-          Jennifer, Nick and Edwin are copied. The buttons open a page where they press Approve, or Deny with an optional
+          Jennifer and Edwin are copied. The buttons open a page where they press Approve, or Deny with an optional
           reason. No login needed. Replies go to their Sueep contact.
         </Step>
         <Step n={4} title="4. After the answer">
@@ -54,7 +54,7 @@ export function SubChangeOrders() {
               <strong>Denied:</strong> the sub is told not to do the work.
             </LI>
           </UL>
-          David, Jennifer, Nick and Edwin get a summary with both prices and the margin either way.
+          David, Jennifer and Edwin get a summary with both prices and the margin either way.
         </Step>
       </Steps>
 
@@ -168,7 +168,7 @@ export function SubChangeOrders() {
           </tr>
           <tr>
             <TD>Sub change order for approval</TD>
-            <TD>The property manager, with David, Jennifer, Nick and Edwin copied</TD>
+            <TD>The property manager, with David, Jennifer and Edwin copied</TD>
           </tr>
           <tr>
             <TD>Sub change order answered (to the sub)</TD>
@@ -176,7 +176,7 @@ export function SubChangeOrders() {
           </tr>
           <tr>
             <TD>Sub change order answered (to the team)</TD>
-            <TD>David, Jennifer, Nick and Edwin</TD>
+            <TD>David, Jennifer and Edwin</TD>
           </tr>
           <tr>
             <TD>Sub change order cancelled</TD>

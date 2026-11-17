@@ -92,9 +92,19 @@ export async function parsePropertyManagerBody(
 
 /** Starting Sueep contact for a new property manager. Name and phone come
  * from their Employee profile, so a changed number shows up here too. */
-export const DEFAULT_SUEEP_CONTACT_EMAIL = "nick@sueep.com";
+export const DEFAULT_SUEEP_CONTACT_EMAIL = "edwin@sueep.com";
 
-/** Nick Wehr as the starting Sueep contact for a new property manager, or
+/** Also gets property managers' replies, on top of their Sueep contact.
+ * Covers sales while the role is open (Nov 2026); empty it once a new
+ * salesperson is their contact. */
+export const PM_REPLY_ALSO = ["jennifer@sueep.com"];
+
+/** Reply-to for an email to property managers: their Sueep contact plus PM_REPLY_ALSO. */
+export function pmReplyTo(contactEmail: string | null | undefined): string[] | undefined {
+  return contactEmail ? [contactEmail, ...PM_REPLY_ALSO] : undefined;
+}
+
+/** Edwin Giraldo as the starting Sueep contact for a new property manager, or
  * the signed-in staff member if his employee profile can't be found. */
 export async function defaultSueepContact(staffEmail: string): Promise<{ name: string; phone: string; email: string }> {
   for (const email of [DEFAULT_SUEEP_CONTACT_EMAIL, staffEmail]) {

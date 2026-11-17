@@ -61,6 +61,16 @@ export async function POST(req: Request) {
   // If email is in ERP_ADMIN_EMAILS, always enforce ADMIN (handles existing records too)
   const forceAdmin = initialRole === "ADMIN";
 
+  // A user an admin added ahead of time (or one whose Firebase account was
+  // recreated) is matched by email and takes over this Firebase uid.
+  const byUid = await prisma.erpUser.findUnique({ where: { firebaseUid: firebaseUser.uid }, select: { id: true } });
+  if (!byUid && email) {
+    const byEmail = await prisma.erpUser.findUnique({ where: { email }, select: { id: true } });
+    if (byEmail) {
+      await prisma.erpUser.update({ where: { id: byEmail.id }, data: { firebaseUid: firebaseUser.uid } });
+    }
+  }
+
   const erpUser = await prisma.erpUser.upsert({
     where: { firebaseUid: firebaseUser.uid },
     update: { email, ...(forceAdmin ? { role: "ADMIN" } : {}) },

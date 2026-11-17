@@ -24,7 +24,7 @@ export async function sendEmail(options: {
   to?: string | string[];
   subject: string;
   html: string;
-  replyTo?: string;
+  replyTo?: string | string[];
   cc?: string[];
   bcc?: string[];
   attachments?: Attachment[];
@@ -45,7 +45,9 @@ export async function sendEmail(options: {
   const html = def.layout ? wrapEmailLayout(options.html, options.type, options.lang) : options.html;
   // Worker and client emails come from a noreply address, so a reply would
   // be lost. When someone in the ERP sent it, replies go to them instead.
-  const replyTo = options.replyTo ?? (def.sender === "sueep" ? await signedInEmail() : undefined);
+  // Several reply-to addresses are kept as one "a, b" string, the way the Email Log stores them.
+  const givenReplyTo = Array.isArray(options.replyTo) ? uniqueAddresses(options.replyTo).join(", ") || undefined : options.replyTo;
+  const replyTo = givenReplyTo ?? (def.sender === "sueep" ? await signedInEmail() : undefined);
   const base = { type: options.type, to, cc, bcc: options.bcc ?? [], replyTo, subject: options.subject, html, attachments: options.attachments, link: options.link, sentBy: options.sentBy, keepAttachments: options.keepAttachments };
 
   if (!to.length) return "NO_RECIPIENTS";
@@ -86,7 +88,7 @@ export async function deliverEmail(e: {
       to: e.to,
       subject: e.subject,
       html: e.html,
-      reply_to: e.replyTo ?? undefined,
+      reply_to: e.replyTo ? e.replyTo.split(/\s*,\s*/).filter(Boolean) : undefined,
       cc: e.cc.length ? e.cc : undefined,
       bcc: e.bcc.length ? e.bcc : undefined,
       attachments: e.attachments?.map((a) => ({ filename: a.filename, content: a.content })),

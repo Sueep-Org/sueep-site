@@ -656,8 +656,7 @@ export function NewProjectForm({
       if (
         name === "david rodriguez" ||
         name === "jennifer cortes-loya" ||
-        e.firstName.toLowerCase() === "sergio" ||
-        e.firstName.toLowerCase() === "nick"
+        e.firstName.toLowerCase() === "sergio"
       )
         ids.push(e.id);
     }

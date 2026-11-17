@@ -37,7 +37,7 @@ const STATUS_COLORS: Record<SupervisorChangeOrderRow["status"], string> = {
   COMPLETED: "bg-emerald-100 text-emerald-700",
 };
 
-/** Finds the standing "notify on a new CO" recipients (Sergio, Nick, David
+/** Finds the standing "notify on a new CO" recipients (Sergio, David
  * Rodriguez, Jennifer Cortes-Loya), same matching rule as the PM-facing
  * change order form's default selection, so supervisors always reach the
  * same people without being handed a full employee picker (they don't need
@@ -51,8 +51,7 @@ function resolveDefaultNotifyIds(employees: EmployeeNotifyOption[]): string[] {
     if (
       name === "david rodriguez" ||
       name === "jennifer cortes-loya" ||
-      e.firstName.toLowerCase() === "sergio" ||
-      e.firstName.toLowerCase() === "nick"
+      e.firstName.toLowerCase() === "sergio"
     ) {
       ids.push(e.id);
     }

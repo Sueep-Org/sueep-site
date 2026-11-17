@@ -9,7 +9,7 @@
  * - A changed day (new date, time, scope or address) is sent again and asks
  *   again: the answer goes back to "no answer yet".
  * - Can't make it alerts the "Schedule declined" recipients (Jennifer, Edwin,
- *   David, Nick by default) right away. Nothing is removed from the schedule.
+ *   David by default) right away. Nothing is removed from the schedule.
  * - When everyone on a day the client asked for has confirmed, the client
  *   hears it (scheduleRequester.ts).
  * - About 2pm the day before, anyone who hasn't answered for tomorrow goes in

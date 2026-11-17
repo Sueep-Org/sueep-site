@@ -14,6 +14,7 @@ import { prisma } from "@/lib/prisma";
 import { escapeHtml, sendEmail } from "@/lib/email";
 import { centsToDollars } from "./money";
 import { applySubCoAnswer, subCoRequestsPath } from "./subCoOutcome";
+import { pmReplyTo } from "./propertyManagers";
 
 export { subCoRequestsPath };
 
@@ -139,7 +140,7 @@ export async function sendToPropertyManager(id: string, actor: string, opts: { u
   const result = await sendEmail({
     type: "SUB_CO_APPROVAL",
     to,
-    replyTo: contact?.email ?? undefined,
+    replyTo: pmReplyTo(contact?.email),
     link: subCoRequestsPath(r.project.id),
     subject: `${updated ? "Updated: " : ""}Change order for approval, ${unitName(r)}`,
     html: approvalEmailHtml(r, token, updated, contact),
@@ -235,7 +236,7 @@ export async function sendPmReminder(id: string, now: Date = new Date()): Promis
   const result = await sendEmail({
     type: "SUB_CO_APPROVAL_REMINDER",
     to,
-    replyTo: contact?.email ?? undefined,
+    replyTo: pmReplyTo(contact?.email),
     link: subCoRequestsPath(r.project.id),
     subject: `Reminder: change order for approval, ${unitName(r)}`,
     html: approvalEmailHtml(r, r.pmToken, false, contact, true),
