@@ -139,8 +139,8 @@ export default function TermsPage() {
             </a>
             <br />
             Phone:{" "}
-            <a href="tel:+12672173596" className={link}>
-              (267) 217-3596
+            <a href="tel:+12675811228" className={link}>
+              (267) 581-1228
             </a>
           </p>
         </section>

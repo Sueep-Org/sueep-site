@@ -13,7 +13,7 @@ export const metadata = {
 export default function PaintingPage() {
   const HERO_IMAGE = "/painting/hero.jpg";
   const BOTTOM_IMAGE = "/painting/bottom.jpg";
-  const phoneHref = "tel:+12672173596";
+  const phoneHref = "tel:+12675811228";
   return (
     <main className="bg-white text-gray-900">
       {/* Hero Section (match sueep.com homepage cover) */}
@@ -30,9 +30,9 @@ export default function PaintingPage() {
           <a
             href={phoneHref}
             className="block text-2xl md:text-4xl font-extrabold text-[#E73C6E] bg-white/90 backdrop-blur px-3 py-2 rounded-md shadow"
-            aria-label="Call Sueep at 267-217-3596"
+            aria-label="Call Sueep at 267-581-1228"
           >
-            267-217-3596
+            267-581-1228
           </a>
         </div>
         <div className="relative z-10 px-6">

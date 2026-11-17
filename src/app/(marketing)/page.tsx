@@ -136,7 +136,9 @@ export default function Home() {
             <p className="text-xs font-semibold uppercase tracking-widest text-[#E73C6E]">Get in touch</p>
             <h3 className="mt-2 font-semibold text-xl md:text-2xl">Sueep Headquarters</h3>
             <p className="mt-3 text-gray-300 text-base md:text-lg leading-relaxed">3500 Scotts Lane, Unit F22<br />Philadelphia, PA 19129</p>
-            <p className="mt-3 text-gray-300 text-base md:text-lg leading-relaxed">(267) 217-3596</p>
+            <p className="mt-3 text-gray-300 text-base md:text-lg leading-relaxed">
+              <a href="tel:+12675811228" className="hover:text-white hover:underline">(267) 581-1228</a>
+            </p>
             <p className="mt-3 text-gray-300 text-base md:text-lg leading-relaxed">contact@sueep.com</p>
             <p className="mt-6 text-gray-400 text-sm md:text-base">Serving PA • NJ • NY</p>
           </div>

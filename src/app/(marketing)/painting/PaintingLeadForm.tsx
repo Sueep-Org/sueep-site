@@ -7,7 +7,7 @@ const inputClass =
   "w-full rounded-md px-4 py-3 text-base bg-white text-gray-900 placeholder-gray-500 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#E73C6E]/50 focus:border-[#E73C6E]";
 
 export default function PaintingLeadForm() {
-  const phoneHref = "tel:+12672173596";
+  const phoneHref = "tel:+12675811228";
 
   const persistLead = (e: FormEvent<HTMLFormElement>) => {
     const form = e.currentTarget;
@@ -108,7 +108,7 @@ export default function PaintingLeadForm() {
         <p className="text-sm text-gray-600">
           Prefer to talk? Call{" "}
           <a href={phoneHref} className="font-semibold underline decoration-transparent hover:decoration-inherit">
-            267-217-3596
+            267-581-1228
           </a>
         </p>
       </form>

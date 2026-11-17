@@ -148,8 +148,8 @@ if (typeof gtag === 'function') {
           )}
           <p className={`text-sm text-gray-600 ${paintingQuoteFlow ? "mt-3" : "mt-6"}`}>
             Prefer to talk?{" "}
-            <a className="font-semibold" href="tel:+12672173596">
-              267-217-3596
+            <a className="font-semibold" href="tel:+12675811228">
+              267-581-1228
             </a>
           </p>
         </div>
