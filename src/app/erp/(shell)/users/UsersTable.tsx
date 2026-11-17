@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { useConfirm, useToast } from "@/app/erp/components/ui";
 
 const ROLES = ["ADMIN", "PROJECT_MANAGER", "BUSINESS_MANAGER", "SALES", "SUPERVISOR", "ESTIMATION", "EMPLOYEE"] as const;
@@ -100,6 +100,54 @@ export function UsersTable({ users: initialUsers, currentUserId }: { users: User
     }
   }
 
+  const [newEmail, setNewEmail] = useState("");
+  const [newRole, setNewRole] = useState<ErpRole>("EMPLOYEE");
+  const [adding, setAdding] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState<string | null>(null);
+
+  async function addUser(e: FormEvent) {
+    e.preventDefault();
+    setAdding(true);
+    setError("");
+    try {
+      const res = await fetch("/api/erp/users", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: newEmail, role: newRole }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { user?: User; existingLogin?: boolean; emailSent?: boolean; error?: string };
+      if (!res.ok || !data.user) { setError(data.error ?? "Couldn't add user"); return; }
+      setUsers((prev) => [...prev, data.user!]);
+      setNewEmail("");
+      setNewRole("EMPLOYEE");
+      if (data.existingLogin) {
+        toast(`${data.user.email} added. They already have a login, so they sign in with their current password.`);
+      } else if (data.emailSent) {
+        toast(`${data.user.email} added. They've been emailed a link to set their password.`);
+      } else {
+        toast(`${data.user.email} added, but the password email failed. Use "Send password email" to retry.`, "error");
+      }
+    } catch {
+      setError("Network error");
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function sendPasswordEmail(userId: string, email: string) {
+    setSendingEmail(userId);
+    try {
+      const res = await fetch(`/api/erp/users/${userId}/password-email`, { method: "POST" });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) { toast(data.error ?? "Couldn't send the email", "error"); return; }
+      toast(`Password email sent to ${email}.`);
+    } catch {
+      toast("Network error", "error");
+    } finally {
+      setSendingEmail(null);
+    }
+  }
+
   async function deleteUser(userId: string, email: string) {
     if (!(await confirm({ message: `Remove ${email} from the ERP? They will be re-added as Employee on next login.` }))) return;
     setDeleting(userId);
@@ -118,6 +166,40 @@ export function UsersTable({ users: initialUsers, currentUserId }: { users: User
 
   return (
     <div className="space-y-6">
+      <form onSubmit={(e) => void addUser(e)} className="flex flex-wrap items-end gap-3 rounded-lg border border-gray-200 bg-white p-4">
+        <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-xs font-medium text-gray-700">
+          Email
+          <input
+            type="email"
+            required
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+            placeholder="name@sueep.com"
+            className="rounded border border-gray-300 px-2 py-1.5 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs font-medium text-gray-700">
+          Role
+          <select
+            value={newRole}
+            onChange={(e) => setNewRole(e.target.value as ErpRole)}
+            className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-800 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+          >
+            {ROLES.map((r) => (
+              <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="submit"
+          disabled={adding}
+          className="rounded bg-pink-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-pink-700 disabled:opacity-50"
+        >
+          {adding ? "Adding…" : "Add user"}
+        </button>
+        <p className="w-full text-xs text-gray-500">They get an email to set their password, then sign in with this role.</p>
+      </form>
+
       {error ? <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p> : null}
       <div className="overflow-hidden rounded-lg border border-gray-200">
         <table className="w-full text-sm">
@@ -155,7 +237,15 @@ export function UsersTable({ users: initialUsers, currentUserId }: { users: User
                   <td className="px-4 py-2.5 text-xs text-gray-500">
                     {new Date(user.createdAt).toLocaleDateString()}
                   </td>
-                  <td className="px-4 py-2.5 text-right">
+                  <td className="space-x-4 whitespace-nowrap px-4 py-2.5 text-right">
+                    <button
+                      type="button"
+                      disabled={isBusy || sendingEmail === user.id}
+                      onClick={() => void sendPasswordEmail(user.id, user.email)}
+                      className="text-xs text-gray-500 hover:text-gray-800 disabled:opacity-40"
+                    >
+                      {sendingEmail === user.id ? "Sending…" : "Send password email"}
+                    </button>
                     {!isSelf && (
                       <button
                         type="button"
@@ -173,7 +263,7 @@ export function UsersTable({ users: initialUsers, currentUserId }: { users: User
           </tbody>
         </table>
         {users.length === 0 && (
-          <p className="py-8 text-center text-sm text-gray-500">No users yet. Users appear here on first login.</p>
+          <p className="py-8 text-center text-sm text-gray-500">No users yet. Add one above.</p>
         )}
       </div>
 
