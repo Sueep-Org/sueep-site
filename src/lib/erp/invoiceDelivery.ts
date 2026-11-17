@@ -361,8 +361,8 @@ export async function invoiceLinesFor(hubspotInvoiceId: string): Promise<{ lines
   ]);
   const lines = [
     ...months.map((m) => ({
-      name: "Janitorial services",
-      description: `${m.period.recurringContract.building.name}, ${m.period.periodStart.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" })}`,
+      name: `Recurring cleaning ${m.period.recurringContract.building.name}`,
+      description: `Monthly contract, ${m.period.periodStart.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" })}`,
       amountCents: m.amountCents,
     })),
     ...units.map((u) => ({ name: "Turn Over", description: u.unitNumber, amountCents: u.amountCents })),

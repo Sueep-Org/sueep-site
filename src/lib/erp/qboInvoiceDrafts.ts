@@ -29,7 +29,7 @@ import { prisma } from "@/lib/prisma";
 import { todayEasternKey, utcDateKey } from "./dates";
 import { addDaysKey } from "./manualHoursRepeat";
 import { draftRecipients, loadBuildingInvoiceDestination, loadProjectInvoiceDestination, withDraftRecipients, type InvoiceDestination } from "./invoiceDestination";
-import { billingDateKey, draftLines, monthLabel } from "./janitorialInvoiceDrafts";
+import { billingDateKey, draftLines, monthLabel, monthlyContractTitle } from "./janitorialInvoiceDrafts";
 import { markItemsBilled } from "./itemInvoiceDrafts";
 import { loadQboConnection, qboEnvironment, qboGet, qboPost, type QboEnvironment } from "./qboClient";
 import { LINE_KINDS, QBO_ITEM_MAP_KEY, sameName, subCustomerName, type LineKind } from "./qboMapping";
@@ -212,7 +212,7 @@ export async function qboDraftForPreview(id: string) {
   if (!d) return null;
   const destination = await destinationOf(d);
   const c = draftContent(d, destination?.paymentTermsDays ?? null);
-  const title = d.kind === "MONTH" && d.period ? `${d.title}, ${monthLabel(d.period.periodStart)}` : d.title;
+  const title = d.kind === "MONTH" && d.period ? monthlyContractTitle(d.title, d.period.periodStart) : d.title;
   return { title, lines: c.lines.map(({ name, description, amountCents }) => ({ name, description, amountCents })), dueDateKey: c.dueDateKey, destination };
 }
 
@@ -501,7 +501,7 @@ export async function approveQboDraft(id: string, email: string): Promise<{ ok: 
     hubspotInvoiceId: null,
     qboInvoiceId: created.Id,
     number: savedNumber,
-    title: d.kind === "MONTH" && d.period ? `${d.title}, ${monthLabel(d.period.periodStart)}` : d.title,
+    title: d.kind === "MONTH" && d.period ? monthlyContractTitle(d.title, d.period.periodStart) : d.title,
     totalCents,
     dueDate: `${dueDateKey}T12:00:00.000Z`,
     viewUrl: await payLink(created.Id),

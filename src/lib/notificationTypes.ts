@@ -382,6 +382,21 @@ export const NOTIFICATIONS = {
     ccEditable: true,
     sender: "sueep",
   }),
+  SUB_BULK_EMAIL: def({
+    label: "Email to subs",
+    group: "People",
+    when: "Someone sends a message to several subs at once from Contractors → Email subs",
+    automatic: "The subs picked, one email each",
+    ccEditable: true,
+    sender: "sueep",
+  }),
+  SUB_BULK_EMAIL_TEST: def({
+    label: "Email to subs (test)",
+    group: "People",
+    when: "Someone presses Send me a test on Contractors → Email subs",
+    automatic: "The person testing, only",
+    sender: "sueep",
+  }),
   SUB_PORTAL_WELCOME: def({
     label: "Sub portal link",
     group: "People",
