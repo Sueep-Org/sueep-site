@@ -130,7 +130,7 @@ If the Intuit app's keys changed: update `QBO_CLIENT_ID` and `QBO_CLIENT_SECRET`
 | Jennifer's role switch | ✅ **Done.** jennifer@ is `BUSINESS_MANAGER` | n/a |
 | `scripts/encrypt-pii.ts --apply` | ✅ **Done Nov 19.** 16 values encrypted (4 employees, 2 contractors, 2 candidates); a re-run finds 0 | n/a |
 | `scripts/convert-work-order-contacts.ts --apply` | ✅ **Done Nov 19.** 12 job briefs, 18 contacts, 3 lines to notes; a re-run finds 0 | n/a |
-| Notifications page recipients | ✅ **Done Nov 19.** Safety escalation goes to edwin@ and jennifer@. emma@ was removed from Turnovers completed (cc contact@ remains) and Management reminders (Edwin, David, Jennifer) | The code defaults in `src/lib/notificationTypes.ts` still name emma@, but only apply if a saved setting is reset. Update them when convenient |
+| Notifications page recipients | ✅ **Done Nov 19.** Safety escalation goes to edwin@ and jennifer@. emma@ was removed from Turnovers completed (cc contact@ remains) and Management reminders (Edwin, David, Jennifer) | The code defaults in `src/lib/notificationTypes.ts` match (emma@ removed) |
 | QuickBooks on a company login | ✅ **Done.** Connected through Edwin's QuickBooks login | n/a |
 
 Both scripts skip rows that are already done, so re-running them is harmless.
@@ -164,8 +164,8 @@ Details and next phases are in each plan in `sueep-plans` (see its README status
 **Known issues:**
 - Local dev and production share one database (see section 3).
 - Cron times are fixed UTC and drift by an hour with daylight saving.
-- Some names are hardcoded in code: emma@/david@/jennifer@/edwin@ in `src/lib/notificationTypes.ts` defaults, and "Jennifer Cortes-Loya" name matching in project and change order forms. These break quietly when people leave.
-- Root files `pm-dashboard.xlsx`, `turns-rows.json`, `turns-import-report.json`, `build.log` are old import leftovers. Check them for client data, then remove them.
+- Some names are hardcoded in code: david@/jennifer@/edwin@ in `src/lib/notificationTypes.ts` defaults, and "Jennifer Cortes-Loya" name matching in project and change order forms. These break quietly when people leave.
+- The old import files (`pm-dashboard.xlsx`, `turns-rows.json`, `turns-import-report.json`, `build.log`) were removed Nov 19. They held client building names, worker names and pay rates, and are still in git history.
 - Old branches (`estimator-updates`, `erp-changes`, `feature/*`, `app`) are stale. `main` is the source of truth.
 - The `sueep-plans` README marks several features "not committed". They are all merged into `main` now, so read those notes as out of date.
 
