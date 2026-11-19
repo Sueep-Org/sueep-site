@@ -12,6 +12,7 @@ Some pages on `app.sueep.com` need no login, because the link itself is the key:
 **Stack:** Next.js 15 (App Router) · React 19 · TypeScript · Tailwind 4 · Prisma 5 on Neon Postgres · Firebase Auth + Storage · Resend (email) · Vercel (hosting + crons).
 
 Related docs:
+- [HANDOVER.md](HANDOVER.md): start here if you're new: owners, open steps, what each cron breaks, what to do when things break.
 - [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md): how to deploy, run migrations, roll back, and rotate secrets.
 - [META_ADS_SETUP.md](META_ADS_SETUP.md): the Meta ads connection behind the ERP's Ad spend page.
 - [.env.example](.env.example): every environment variable, what it does, and which ones are required.
