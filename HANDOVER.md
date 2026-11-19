@@ -23,7 +23,7 @@ Nothing the ERP needs should depend on Emma's login after Nov 25.
 | **Neon** | Postgres (ERP database; the estimator has its own) | Company account (not Emma) | Login removed |
 | **Resend** | All email, from `noreply@mail.sueep.com` | **contact@sueep.com** (owner + billing since Nov 19) | Leaves the team (account not deleted) |
 | **Intuit Developer** app | QuickBooks Online keys (`QBO_*`) | **contact@sueep.com** | n/a |
-| **QuickBooks** connection | Nightly P&L + A/R sync, invoices | Connected under Emma's QuickBooks login today. **Must be reconnected** by a company QuickBooks admin (section 5) | |
+| **QuickBooks** connection | Nightly P&L + A/R sync, invoices | Connected through **Edwin's** QuickBooks login. The ERP shows "connected by emma@" because it records the ERP user who clicked Connect, not the QuickBooks login | n/a |
 | **Firebase** | ERP sign-in, file storage | Other company owners exist | Removed on last day |
 | **HubSpot** | Deals, invoices, walk dates, webhook | Company account. The private app token belongs to the account, not a user | Super admin removed on last day |
 | **DocuSeal** | Legacy: real estate agreements only | Not Emma's account | Change `DOCUSEAL_SUEEP_SIGNER_EMAIL` (still Emma) |
@@ -120,7 +120,7 @@ Who: an ERP **Admin** who is also a **QuickBooks admin** for the Sueep company. 
 
 If the Intuit app's keys changed: update `QBO_CLIENT_ID` and `QBO_CLIENT_SECRET` in Vercel, **redeploy**, then reconnect. `QBO_REDIRECT_URI` must exactly match a redirect URI on the Intuit app (`https://app.sueep.com/api/erp/quickbooks/callback`).
 
-**Open now:** the app moved to contact@, but production is still connected through Emma's QuickBooks login (last sync Nov 19, OK). Before Nov 25: put the contact@ app's keys in Vercel, redeploy, have a company QuickBooks admin reconnect, and confirm the next nightly sync.
+**Current state (Nov 19):** the Intuit app is on contact@, and production QuickBooks is connected through Edwin's QuickBooks login. The last sync on Nov 19 was OK. If the person whose QuickBooks login authorized the connection loses access to the company, expect a reconnect.
 
 ## 6. Open post-deploy steps (checked against the live database, Nov 19)
 
@@ -131,7 +131,7 @@ If the Intuit app's keys changed: update `QBO_CLIENT_ID` and `QBO_CLIENT_SECRET`
 | `scripts/encrypt-pii.ts --apply` | ✅ **Done Nov 19.** 16 values encrypted (4 employees, 2 contractors, 2 candidates); a re-run finds 0 | n/a |
 | `scripts/convert-work-order-contacts.ts --apply` | ✅ **Done Nov 19.** 12 job briefs, 18 contacts, 3 lines to notes; a re-run finds 0 | n/a |
 | Notifications page recipients | ⚠️ **Partly done.** Safety escalation now goes to edwin@ and jennifer@ (Nov 19). emma@ is still on Turnovers completed (cc) and Management reminders, alongside other people | ERP → Notifications: remove emma@ from those two. The code defaults in `src/lib/notificationTypes.ts` also name emma@; update them when convenient |
-| QuickBooks reconnect under company login | ❌ **Pending** | Section 5 |
+| QuickBooks on a company login | ✅ **Done.** Connected through Edwin's QuickBooks login | n/a |
 
 Both scripts skip rows that are already done, so re-running them is harmless.
 
@@ -155,7 +155,7 @@ Both scripts skip rows that are already done, so re-running them is harmless.
 Details and next phases are in each plan in `sueep-plans` (see its README status table).
 
 **Sprint (SPRINT_NOV_2026.md):**
-1. **Invoicing only through the ERP (QuickBooks cutover).** The production switch is already on **QuickBooks** (AppSetting `qboInvoiceDrafts.production=true`, next number 1412, checked Nov 19). Still open: the Intuit app questionnaire set to "writes data", the new keys plus reconnect (section 5), and Edwin confirming HubSpot's own invoice sync is off. After that, remove the HubSpot backup drafting path and the "until the cutover" notes in help articles.
+1. **Invoicing only through the ERP (QuickBooks cutover).** The production switch is already on **QuickBooks** (AppSetting `qboInvoiceDrafts.production=true`, next number 1412, checked Nov 19). Still open: the Intuit app questionnaire set to "writes data", and Edwin confirming HubSpot's own invoice sync is off. After that, remove the HubSpot backup drafting path and the "until the cutover" notes in help articles.
 2. **Change order contracts in the ERP.** Email PDF + upload the signed copy is built. Next: a signing link from the ERP.
 3. **Business settings page.** Phases 1, 2, 3, 4A, 5 and 6 are built; 4B waits on "Save all" in production. See SETTINGS_PLAN.md.
 
