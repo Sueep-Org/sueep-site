@@ -130,7 +130,7 @@ If the Intuit app's keys changed: update `QBO_CLIENT_ID` and `QBO_CLIENT_SECRET`
 | Jennifer's role switch | ✅ **Done.** jennifer@ is `BUSINESS_MANAGER` | n/a |
 | `scripts/encrypt-pii.ts --apply` | ✅ **Done Nov 19.** 16 values encrypted (4 employees, 2 contractors, 2 candidates); a re-run finds 0 | n/a |
 | `scripts/convert-work-order-contacts.ts --apply` | ✅ **Done Nov 19.** 12 job briefs, 18 contacts, 3 lines to notes; a re-run finds 0 | n/a |
-| Notifications page recipients | ⚠️ **Partly done.** Safety escalation now goes to edwin@ and jennifer@ (Nov 19). emma@ is still on Turnovers completed (cc) and Management reminders, alongside other people | ERP → Notifications: remove emma@ from those two. The code defaults in `src/lib/notificationTypes.ts` also name emma@; update them when convenient |
+| Notifications page recipients | ✅ **Done Nov 19.** Safety escalation goes to edwin@ and jennifer@. emma@ was removed from Turnovers completed (cc contact@ remains) and Management reminders (Edwin, David, Jennifer) | The code defaults in `src/lib/notificationTypes.ts` still name emma@, but only apply if a saved setting is reset. Update them when convenient |
 | QuickBooks on a company login | ✅ **Done.** Connected through Edwin's QuickBooks login | n/a |
 
 Both scripts skip rows that are already done, so re-running them is harmless.
