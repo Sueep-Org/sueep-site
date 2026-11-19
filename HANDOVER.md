@@ -155,7 +155,7 @@ Both scripts can safely be re-run: they skip rows that are already done.
 Details and next phases are in each plan in `sueep-plans` (see its README status table).
 
 **Sprint (SPRINT_NOV_2026.md):**
-1. **Invoicing only through the ERP (QuickBooks cutover).** The Admin switch is built. Waiting on: the Intuit app questionnaire set to "writes data", the new keys plus reconnect, and Edwin turning off HubSpot's invoice sync. After that, remove the HubSpot drafting path and the "until the cutover" notes in help articles.
+1. **Invoicing only through the ERP (QuickBooks cutover).** The production switch is already on **QuickBooks** (AppSetting `qboInvoiceDrafts.production=true`, next number 1412, checked Nov 19). Still open: the Intuit app questionnaire set to "writes data", the new keys plus reconnect (section 5), and Edwin confirming HubSpot's own invoice sync is off. After that, remove the HubSpot backup drafting path and the "until the cutover" notes in help articles.
 2. **Change order contracts in the ERP.** Email PDF + upload the signed copy is built. Next: a signing link from the ERP.
 3. **Business settings page.** Phases 1, 2, 3, 4A, 5 and 6 are built; 4B waits on "Save all" in production. See SETTINGS_PLAN.md.
 
