@@ -128,12 +128,12 @@ If the Intuit app's keys changed: update `QBO_CLIENT_ID` and `QBO_CLIENT_SECRET`
 |---|---|---|
 | Unapplied migrations | ✅ **None.** 151 of 151 applied | n/a |
 | Jennifer's role switch | ✅ **Done.** jennifer@ is `BUSINESS_MANAGER` | n/a |
-| `scripts/encrypt-pii.ts --apply` | ❌ **Pending.** Dry run: 16 plain-text values (4 employees, 2 contractors, 2 candidates) | Encryption is live, so this is safe to run. These are SSNs and bank numbers, so do it first. `npx tsx --env-file=.env --env-file=.env.local scripts/encrypt-pii.ts --apply` |
-| `scripts/convert-work-order-contacts.ts --apply` | ❌ **Pending.** Dry run: 12 job briefs, 18 contacts, 3 lines to notes | Read the dry-run output first, then `npx tsx --env-file=.env --env-file=.env.local scripts/convert-work-order-contacts.ts --apply` |
+| `scripts/encrypt-pii.ts --apply` | ✅ **Done Nov 19.** 16 values encrypted (4 employees, 2 contractors, 2 candidates); a re-run finds 0 | n/a |
+| `scripts/convert-work-order-contacts.ts --apply` | ✅ **Done Nov 19.** 12 job briefs, 18 contacts, 3 lines to notes; a re-run finds 0 | n/a |
 | Notifications page recipients | ❌ **Pending.** emma@ is still saved on Safety escalation (only recipient), Turnovers completed (cc) and Management reminders | ERP → Notifications: pick replacements and save. The code defaults in `src/lib/notificationTypes.ts` also name emma@; update them when convenient |
 | QuickBooks reconnect under company login | ❌ **Pending** | Section 5 |
 
-Both scripts can safely be re-run: they skip rows that are already done.
+Both scripts skip rows that are already done, so re-running them is harmless.
 
 ## 7. When things break
 
