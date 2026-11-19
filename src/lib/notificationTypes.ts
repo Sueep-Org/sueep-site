@@ -194,7 +194,7 @@ export const NOTIFICATIONS = {
     group: "Projects & schedule",
     when: "A worker reaches the safety violation limit (3 on record)",
     toMode: "recipients",
-    defaultTo: () => [env("SAFETY_ESCALATION_EMAIL", "emma@sueep.com")],
+    defaultTo: () => (process.env.SAFETY_ESCALATION_EMAIL?.trim() ? [env("SAFETY_ESCALATION_EMAIL", "")] : ["edwin@sueep.com", "jennifer@sueep.com"]),
     ccEditable: true,
   }),
 
@@ -346,7 +346,7 @@ export const NOTIFICATIONS = {
     when: "Each evening, listing units finished at each building",
     automatic: "The building's property manager, with Sueep PMs on bcc",
     ccEditable: true,
-    defaultCc: ["contact@sueep.com", "emma@sueep.com"],
+    defaultCc: ["contact@sueep.com"],
     sender: "sueep",
   }),
 
@@ -556,7 +556,7 @@ export const NOTIFICATIONS = {
     when: "About 8am, when calendar items reach their category's reminder days",
     automatic: "Sales and Estimation get one with only the Bids category",
     toMode: "recipients",
-    defaultTo: () => ["edwin@sueep.com", "emma@sueep.com", "david@sueep.com", "jennifer@sueep.com"],
+    defaultTo: () => ["edwin@sueep.com", "david@sueep.com", "jennifer@sueep.com"],
   }),
 
   OFFER_LETTER_DUE: def({

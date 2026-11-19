@@ -69,7 +69,7 @@ export type TurnoverCompletionDigestResult = {
 
 /** Emails each building's property manager one digest listing every
  * turnover unit that finished recently, cc'ing contact@sueep.com and
- * emma@sueep.com and bcc'ing every Sueep PM involved, never sent per-unit,
+ * bcc'ing every Sueep PM involved, never sent per-unit,
  * and never sent at all when there's nothing to report (same "no empty
  * digest" rule sendScheduleNudgeEmails already follows).
  *
@@ -192,7 +192,7 @@ export async function sendTurnoverCompletionDigest(): Promise<TurnoverCompletion
         : `${projects.length} ${plural} completed at ${building.name}`;
 
       try {
-        // contact@ and emma@ are cc'd by default; that list is on the Notifications page.
+        // contact@ is cc'd by default; that list is on the Notifications page.
         await sendEmail({
           type: "TURNOVER_COMPLETION_DIGEST",
           link: `/erp/buildings/${building.id}`,
