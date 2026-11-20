@@ -46,11 +46,6 @@ export const DEFAULT_APP_LISTS: AppLists = {
   janitorialRoles: items(["Janitorial", "Cleaner", "Porter", "Foreman", "Supervisor", "Concierge", "Patrol"]),
 };
 
-/** Items to offer in a picker. */
-export function shownItems(list: ListItem[]): ListItem[] {
-  return list.filter((i) => !i.hidden);
-}
-
 /** The label for a stored value, hidden items included, else the value itself. */
 export function listLabel(list: ListItem[], value: string | null | undefined, fallback = "-"): string {
   if (!value) return fallback;

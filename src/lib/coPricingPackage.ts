@@ -37,8 +37,6 @@ export type CoIssue = {
 
 export type CoSurchargeId = "next-day" | "weekend";
 
-export const CO_SURCHARGE_IDS: CoSurchargeId[] = ["next-day", "weekend"];
-
 export type CoSurcharge = {
   id: CoSurchargeId;
   label: string;

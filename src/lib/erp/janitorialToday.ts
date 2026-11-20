@@ -14,8 +14,6 @@ export type TodayStatus =
   | "UPCOMING" // later today
   | "DONE"; // finished (clocked, corrected, or marked didn't work)
 
-export const ATTENTION_STATUSES: TodayStatus[] = ["LATE", "NEEDS_COVER", "STILL_CLOCKED_IN", "NO_CLOCK_IN"];
-
 export type TodayItem = ResolvedShiftHours & {
   status: TodayStatus;
   /** For LATE: minutes past the scheduled start. */

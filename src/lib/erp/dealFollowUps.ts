@@ -9,19 +9,12 @@
  * - Overdue: due before today. Due this week: today through 6 days out.
  */
 import { prisma } from "@/lib/prisma";
-import { addDaysKey } from "./manualHoursRepeat";
 import { outcomeOf, type Bundle, type PipelineKey } from "./postConDeals";
 
 const MAX_TEXT = 300;
 const DAY_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
 export type NextStep = { text: string; dueDate: string; byEmail: string };
-export type NextStepState = "overdue" | "week" | "later";
-
-export function nextStepState(dueDate: string, todayKey: string): NextStepState {
-  return dueDate < todayKey ? "overdue" : dueDate <= addDaysKey(todayKey, 6) ? "week" : "later";
-}
-
 /** Open stages that should have a next step: from Bidding or Walkthrough through the stage before won. */
 export function nextStepStages(bundle: Bundle): Set<string> {
   const open = bundle.stageOrder.filter((id) => outcomeOf(bundle, id) === "open");

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sendEmail } from "@/lib/email";
+import { sendEmail, escapeHtml } from "@/lib/email";
 
 // Only used by the FormSubmit fallback; with Resend, recipients are set on the ERP Notifications page.
 const TO_EMAIL = process.env.CONTACT_TO_EMAIL || "contact@sueep.com";
@@ -67,13 +67,4 @@ export async function POST(req: NextRequest) {
     console.error("/api/painting/lead error", e);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
-}
-
-function escapeHtml(input: string) {
-  return input
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
 }

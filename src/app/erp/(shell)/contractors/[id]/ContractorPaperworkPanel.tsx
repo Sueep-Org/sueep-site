@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { InfoTip } from "@/app/erp/components/ui";
+import { formatDt } from "@/lib/erp/dates";
 
 type PaperworkItem = { label: string; url: string };
 
@@ -15,15 +16,6 @@ type Props = {
   resendConfigured: boolean;
   siteUrl: string;
 };
-
-function formatDt(iso: string | null): string {
-  if (!iso) return "-";
-  try {
-    return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(iso));
-  } catch {
-    return iso;
-  }
-}
 
 export function ContractorPaperworkPanel({
   id,

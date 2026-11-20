@@ -17,10 +17,6 @@ export const REQUEST_STATUSES = [
   { value: "CANCELLED", label: "Cancelled" },
 ] as const;
 
-export function requestStatusLabel(v: string): string {
-  return REQUEST_STATUSES.find((s) => s.value === v)?.label ?? v;
-}
-
 export const OPEN_STATUSES = ["NEW", "PENDING_REVIEW"];
 
 export type RequestHolder = { name: string; address: string | null };

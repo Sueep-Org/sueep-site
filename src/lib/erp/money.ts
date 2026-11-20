@@ -33,3 +33,14 @@ export function inputToCents(v: unknown): number | null {
   if (typeof v === "string") return parseMoneyInput(v);
   return null;
 }
+
+/** Hourly pay from a request body → cents. undefined = not sent or invalid
+ * (leave alone), null or "" = clear it. Negative amounts are invalid. */
+export function parseHourlyPayCents(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const raw = String(value).replace(/[$,\s]/g, "");
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return undefined;
+  return Math.round(n * 100);
+}

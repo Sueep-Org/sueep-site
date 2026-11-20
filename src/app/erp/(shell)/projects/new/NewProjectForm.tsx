@@ -270,10 +270,6 @@ interface NewProjectFormProps {
   payloadExtra?: Record<string, unknown>;
 }
 
-function normalizeBuildingName(value: string) {
-  return value.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
 function extractAddressFromScheduleProject(project?: ScheduleBuildingOption | null) {
   if (!project?.description) return "";
   const addressLine = project.description
@@ -673,8 +669,6 @@ export function NewProjectForm({
   const [buildings, setBuildings] = useState<BuildingOption[]>(initialBuildings);
   const [buildingsLoading, setBuildingsLoading] = useState(initialBuildings.length === 0);
   const [scheduleBuildings, setScheduleBuildings] = useState<ScheduleBuildingOption[]>(initialScheduleBuildings);
-  const [scheduleBuildingsLoading, setScheduleBuildingsLoading] = useState(initialScheduleBuildings.length === 0);
-  const [scheduleBuildingsError, setScheduleBuildingsError] = useState("");
   const [buildingProjectId, setBuildingProjectId] = useState("");
   const [isAddingBuilding, setIsAddingBuilding] = useState(false);
   const [newBuildingPricing, setNewBuildingPricing] = useState<TurnoverPricingPackage | null>(null);
@@ -808,13 +802,8 @@ export function NewProjectForm({
   }, [allowErpDataFetch, initialBuildings.length]);
 
   useEffect(() => {
-    if (!allowErpDataFetch) {
-      setScheduleBuildingsLoading(false);
-      return;
-    }
+    if (!allowErpDataFetch) return;
     let mounted = true;
-    setScheduleBuildingsLoading(initialScheduleBuildings.length === 0);
-    setScheduleBuildingsError("");
     fetch("/api/erp/projects?category=schedule-janitorial")
       .then((res) => (res.ok ? res.json() : Promise.reject()))
       .then((data) => {
@@ -822,10 +811,7 @@ export function NewProjectForm({
         if (Array.isArray(data)) setScheduleBuildings(data);
       })
       .catch(() => {
-        if (mounted) setScheduleBuildingsError("Could not load janitorial schedule buildings.");
-      })
-      .finally(() => {
-        if (mounted) setScheduleBuildingsLoading(false);
+        // Address suggestions just won't include schedule buildings.
       });
     return () => {
       mounted = false;
@@ -945,36 +931,6 @@ export function NewProjectForm({
     setPmName(building?.pmName ?? "");
     setPmEmail(building?.pmEmail ?? "");
     setPmPhone(building?.pmPhone ?? "");
-    resetDealSearchState();
-  }
-
-  function applySelectedScheduleBuilding(id: string, fallback?: Partial<ScheduleBuildingOption> & { address?: string }) {
-    if (id === ADD_NEW_BUILDING_VALUE) {
-      setIsAddingBuilding(true);
-      setBuildingProjectId(id);
-      setBuildingName("");
-      setBuildingAddress("");
-      setIsAddingAddress(true);
-      setPmName("");
-      setPmEmail("");
-      setPmPhone("");
-      resetDealSearchState();
-      return;
-    }
-
-    const scheduleBuilding = scheduleBuildings.find((option) => option.id === id);
-    const scheduleName = scheduleBuilding?.jobTitle || fallback?.jobTitle || "";
-    const matchedBuilding = buildings.find((building) => normalizeBuildingName(building.name) === normalizeBuildingName(scheduleName));
-    const extractedAddress = extractAddressFromScheduleProject(scheduleBuilding || null);
-
-    setIsAddingBuilding(false);
-    setIsAddingAddress(false);
-    setBuildingProjectId(id);
-    setBuildingName(scheduleName);
-    setBuildingAddress(extractedAddress || matchedBuilding?.address || fallback?.address || "");
-    setPmName("");
-    setPmEmail(matchedBuilding?.pmEmail || "");
-    setPmPhone(matchedBuilding?.pmPhone || "");
     resetDealSearchState();
   }
 

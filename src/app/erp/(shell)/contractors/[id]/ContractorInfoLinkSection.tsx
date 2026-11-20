@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { formatDt } from "@/lib/erp/dates";
 
 type Props = {
   id: string;
@@ -11,15 +12,6 @@ type Props = {
   resendConfigured: boolean;
   siteUrl: string;
 };
-
-function formatDt(iso: string | null): string {
-  if (!iso) return "-";
-  try {
-    return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(iso));
-  } catch {
-    return iso;
-  }
-}
 
 /** Just the "send the contractor a secure self-service link" widget — the
  * fields it collects live in their own always-editable sections below

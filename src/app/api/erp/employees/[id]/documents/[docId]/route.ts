@@ -1,14 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { parseDate } from "@/lib/erp/dates";
 
 type Ctx = { params: Promise<{ id: string; docId: string }> };
-
-function parseDate(value: unknown): Date | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null || value === "") return null;
-  const d = new Date(String(value));
-  return Number.isNaN(d.getTime()) ? undefined : d;
-}
 
 export async function PATCH(req: Request, ctx: Ctx) {
   const { id, docId } = await ctx.params;
