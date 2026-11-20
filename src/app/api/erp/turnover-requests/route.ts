@@ -6,6 +6,7 @@ import { TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
 import { buildTurnoverRequestEmailHtml, sendEmail } from "@/lib/email";
 import { getNotificationSetting } from "@/lib/notificationSettings";
 import { canonicalUnitName } from "@/lib/erp/unitNamesDb";
+import { parseDate } from "@/lib/erp/dates";
 
 type RequestBody = Record<string, unknown>;
 
@@ -21,13 +22,6 @@ function parseUnitQuality(value: unknown): string | null {
 function parsePartialTurnLayout(value: unknown): string | null {
   const layout = String(value ?? "").trim();
   return (PARTIAL_TURN_LAYOUT_VALUES as readonly string[]).includes(layout) ? layout : null;
-}
-
-function parseDate(value: unknown): Date | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null || value === "") return null;
-  const date = new Date(String(value));
-  return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
 function parseIntValue(value: unknown): number | null | undefined {

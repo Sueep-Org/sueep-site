@@ -54,3 +54,24 @@ export function addOneYearKey(key: string): string {
   d.setUTCFullYear(d.getUTCFullYear() + 1);
   return utcDateKey(d);
 }
+
+/**
+ * A date from a request body. undefined = not sent (leave the field alone),
+ * null or "" = clear it, unparseable = undefined (also left alone).
+ */
+export function parseDate(value: unknown): Date | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const d = new Date(String(value));
+  return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
+/** "Nov 20, 2026, 3:15 PM" for an ISO timestamp, "-" when empty. */
+export function formatDt(iso: string | null): string {
+  if (!iso) return "-";
+  try {
+    return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}

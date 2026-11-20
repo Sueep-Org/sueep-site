@@ -68,13 +68,6 @@ export function invoicePaidOn(invoice: HubSpotInvoiceRecord): Date | null {
   return d && !Number.isNaN(d.getTime()) ? new Date(`${todayEasternKey(d)}T00:00:00.000Z`) : null;
 }
 
-/** invoicePaidOn for one invoice by id. */
-export async function fetchInvoicePaidOn(invoiceId: string): Promise<Date | null> {
-  const res = await hubspotFetch(`/crm/v3/objects/invoices/${invoiceId}?properties=hs_payment_date`);
-  if (!res.ok) return null;
-  return invoicePaidOn((await res.json()) as HubSpotInvoiceRecord);
-}
-
 type HubSpotAssociationPage = {
   results?: Array<{ toObjectId?: number }>;
   paging?: { next?: { after?: string } };

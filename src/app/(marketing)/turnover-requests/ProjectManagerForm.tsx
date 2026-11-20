@@ -154,7 +154,6 @@ export function ProjectManagerForm({ onBack, nextDayPct }: Props) {
         setProjectsLoading(false);
       }
     }, 300);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
   // Live price preview as the requester types in a crew size — only fires
@@ -181,7 +180,6 @@ export function ProjectManagerForm({ onBack, nextDayPct }: Props) {
         setCoPriceLoading(false);
       }
     }, 300);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coCleanerCount, coEstimatedStartDate, coEstimatedEndDate, selectedProject?.id, selectedProject?.hasCustomLaborRate]);
 
   async function loadSovItems(projectId: string) {

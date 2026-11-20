@@ -7,6 +7,7 @@ import { syncProjectBillingFromRequest } from "@/lib/sovSync";
 import { BILLING_STATUSES, voidReasonFor, type BillingStatus } from "@/lib/erp/billingStatus";
 import { billingBlockedBySubReview } from "@/lib/erp/subReviews";
 import { matchUnitName } from "@/lib/erp/unitNames";
+import { parseDate } from "@/lib/erp/dates";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -15,13 +16,6 @@ const PARTIAL_TURN_LAYOUT_VALUES = TURNOVER_UNIT_LAYOUTS.filter((l) => l !== "co
 function parsePartialTurnLayout(value: unknown): string | null {
   const layout = String(value ?? "").trim();
   return (PARTIAL_TURN_LAYOUT_VALUES as readonly string[]).includes(layout) ? layout : null;
-}
-
-function parseDate(value: unknown): Date | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null || value === "") return null;
-  const date = new Date(String(value));
-  return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
 function parseIntValue(value: unknown): number | null | undefined {

@@ -195,10 +195,6 @@ export function isCardTab(value: unknown): value is CardTab {
   return typeof value === "string" && (CARD_TABS as readonly string[]).includes(value);
 }
 
-export function cardById(id: string): DashboardCardDef | undefined {
-  return DASHBOARD_CARDS.find((c) => c.id === id);
-}
-
 /** A person's saved layout, already cleaned (see dashboardPrefs.ts). */
 export type DashboardLayoutPrefs = {
   hiddenCards: string[];

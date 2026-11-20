@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sendEmail } from "@/lib/email";
+import { sendEmail, escapeHtml } from "@/lib/email";
 import {
   computePaintingQuote,
   formatUsd,
@@ -132,13 +132,4 @@ async function notifyAfterQuote(input: PaintingQuoteInput, q: PaintingQuoteResul
       replyTo: TO_EMAIL,
     });
   }
-}
-
-function escapeHtml(s: string) {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
 }

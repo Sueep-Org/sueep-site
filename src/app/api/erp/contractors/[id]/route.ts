@@ -4,18 +4,12 @@ import { Prisma } from "@prisma/client";
 import { getErpAuth, canViewSsn } from "@/lib/erpAuth";
 import { inputToCents } from "@/lib/erp/money";
 import { parseLang } from "@/lib/erp/language";
+import { parseDate } from "@/lib/erp/dates";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 const STATUSES = ["ACTIVE", "INACTIVE"] as const;
 const BACKGROUND_CHECK_STATUSES = ["PASSED", "FAILED", "PENDING", "NOT_DONE"] as const;
-
-function parseDate(value: unknown): Date | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null || value === "") return null;
-  const d = new Date(String(value));
-  return Number.isNaN(d.getTime()) ? undefined : d;
-}
 
 export async function GET(_req: Request, ctx: Ctx) {
   const { id } = await ctx.params;

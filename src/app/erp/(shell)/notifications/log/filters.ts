@@ -48,7 +48,3 @@ export function logHref(f: Partial<LogFilterValues>, page = 1): string {
   const s = p.toString();
   return `/erp/notifications/log${s ? `?${s}` : ""}`;
 }
-
-export function hasAnyFilter(f: LogFilterValues): boolean {
-  return FILTER_KEYS.some((k) => f[k] !== "");
-}

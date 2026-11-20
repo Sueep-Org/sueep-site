@@ -31,8 +31,6 @@ export function changeOrderDayCount(startKey: string, endKey: string): number {
   return Math.round(ms / 86_400_000) + 1;
 }
 
-export type ChangeOrderLaborRole = "CLEANER" | "FOREMAN";
-
 export type ChangeOrderLaborRateCard = {
   cleanerHourlyRateCents?: number;
   foremanHourlyRateCents?: number;

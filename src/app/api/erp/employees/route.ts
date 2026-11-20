@@ -4,24 +4,10 @@ import { prisma } from "@/lib/prisma";
 import { evaluateEmployeeCompliance } from "@/lib/erp/employees";
 import { getErpAuth } from "@/lib/erpAuth";
 import { recordInitialPay } from "@/lib/erp/payRates";
+import { parseDate } from "@/lib/erp/dates";
+import { parseHourlyPayCents } from "@/lib/erp/money";
 
 const STATUSES = ["ACTIVE", "INACTIVE"] as const;
-
-function parseDate(value: unknown): Date | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null || value === "") return null;
-  const d = new Date(String(value));
-  return Number.isNaN(d.getTime()) ? undefined : d;
-}
-
-function parseHourlyPayCents(value: unknown): number | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null || value === "") return null;
-  const raw = String(value).replace(/[$,\s]/g, "");
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n < 0) return undefined;
-  return Math.round(n * 100);
-}
 
 export async function GET() {
   const employees = await prisma.employee.findMany({

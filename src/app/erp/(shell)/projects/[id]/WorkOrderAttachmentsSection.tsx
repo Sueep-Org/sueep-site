@@ -36,7 +36,6 @@ export function WorkOrderAttachmentsSection({ projectId }: { projectId: string }
         if (data.length > 0) setOpen(true);
       })
       .catch(() => setLoaded(true));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [base]);
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {

@@ -1,17 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { parseDate } from "@/lib/erp/dates";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 const MAX_FILE_BYTES = 4 * 1024 * 1024;
 const ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
-
-function parseDate(value: unknown): Date | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null || value === "") return null;
-  const d = new Date(String(value));
-  return Number.isNaN(d.getTime()) ? undefined : d;
-}
 
 export async function POST(req: Request, ctx: Ctx) {
   const { id } = await ctx.params;

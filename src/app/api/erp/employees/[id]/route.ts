@@ -3,29 +3,14 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canViewSsn, canEditPayInfo } from "@/lib/erpAuth";
 import { recordPayChange, samePay, type PayValues } from "@/lib/erp/payRates";
-import { todayEasternKey } from "@/lib/erp/dates";
+import { todayEasternKey, parseDate } from "@/lib/erp/dates";
 import { parseLang } from "@/lib/erp/language";
+import { parseHourlyPayCents } from "@/lib/erp/money";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 const STATUSES = ["ACTIVE", "INACTIVE"] as const;
 const BACKGROUND_CHECK_STATUSES = ["PASSED", "FAILED", "PENDING", "NOT_DONE"] as const;
-
-function parseDate(value: unknown): Date | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null || value === "") return null;
-  const d = new Date(String(value));
-  return Number.isNaN(d.getTime()) ? undefined : d;
-}
-
-function parseHourlyPayCents(value: unknown): number | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null || value === "") return null;
-  const raw = String(value).replace(/[$,\s]/g, "");
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n < 0) return undefined;
-  return Math.round(n * 100);
-}
 
 export async function GET(_req: Request, ctx: Ctx) {
   const { id } = await ctx.params;

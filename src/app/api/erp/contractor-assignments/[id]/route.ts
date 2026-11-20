@@ -1,15 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { markSovItemsCompleted, syncSovPercentDone } from "@/lib/sovSync";
+import { parseDate } from "@/lib/erp/dates";
 
 type Ctx = { params: Promise<{ id: string }> };
-
-function parseDate(value: unknown): Date | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null || value === "") return null;
-  const date = new Date(String(value));
-  return Number.isNaN(date.getTime()) ? undefined : date;
-}
 
 export async function GET(_req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
