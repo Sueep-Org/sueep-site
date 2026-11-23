@@ -20,7 +20,7 @@ import { ReadyToSend, type BillableGroupRow, type ContractSetting, type Delivery
 import { withHubSpotId } from "@/lib/erp/invoiceLinkSource";
 import { qboEnvironment } from "@/lib/erp/qboClient";
 import { BillingFlowBar } from "@/app/erp/components/BillingFlowBar";
-import { draftContent, draftsGoToQuickBooks, type QboDraftLine, suggestedNextInvoiceNumber, loadRecentQboTests, loadWaitingQboDrafts, qboInvoiceUrl } from "@/lib/erp/qboInvoiceDrafts";
+import { draftContent, draftsGoToQuickBooks, type QboDraftLine, loadRecentQboTests, loadWaitingQboDrafts, qboInvoiceUrl } from "@/lib/erp/qboInvoiceDrafts";
 
 export const metadata: Metadata = { title: "Ready to Send" };
 export const dynamic = "force-dynamic";
@@ -91,7 +91,7 @@ export default async function ReadyToSendPage() {
   };
 
   const qboEnv = qboEnvironment();
-  const [draftRows0, failed, discarded, contracts, nextInvoiceNumber, billable, itemDrafts, waitingDeliveries, toQuickBooks, qboDrafts, qboTests] = await Promise.all([
+  const [draftRows0, failed, discarded, contracts, billable, itemDrafts, waitingDeliveries, toQuickBooks, qboDrafts, qboTests] = await Promise.all([
     prisma.hubSpotContractInvoice.findMany({
       where: { draftedByErp: true, status: "draft" },
       select: { hubspotInvoiceId: true, amountCents: true, invoiceDate: true, dueDate: true, period: { select: periodSelect } },
@@ -111,7 +111,6 @@ export default async function ReadyToSendPage() {
       select: { id: true, autoDraftInvoices: true, invoiceLabel: true, billingDayOfMonth: true, monthlyRateCents: true, buildingId: true, building: { select: { name: true, hubspotDealId: true } } },
       orderBy: { building: { name: "asc" } },
     }),
-    suggestedNextInvoiceNumber(),
     loadBillableGroups(),
     loadWaitingItemDrafts(),
     prisma.invoiceDelivery.findMany({ where: DELIVERY_WAITING_WHERE, orderBy: { createdAt: "asc" } }),
@@ -344,8 +343,7 @@ export default async function ReadyToSendPage() {
         failed={failed.map(monthRow)}
         discarded={discarded.map(monthRow)}
         contracts={contractRows}
-        isAdmin={auth.role === "ADMIN"}
-        qbo={{ environment: qboEnv, on: toQuickBooks, tests: qboTestRows, nextInvoiceNumber }}
+        qbo={{ environment: qboEnv, on: toQuickBooks, tests: qboTestRows }}
       />
     </div>
   );

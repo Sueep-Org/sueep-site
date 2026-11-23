@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getErpAuth, canViewCompanies } from "@/lib/erpAuth";
 import { prisma } from "@/lib/prisma";
 import { getTurnoverPricingPackage, TURNOVER_UNIT_LAYOUTS } from "@/lib/turnoverPricingPackages";
 import { NewBuildingForm } from "./NewBuildingForm";
@@ -8,6 +10,9 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export default async function BuildingsPage() {
+  // Shows property manager contacts, so the same roles as Companies.
+  const auth = await getErpAuth();
+  if (!auth || !canViewCompanies(auth.role)) redirect("/erp");
   const [buildings, { turnoverPackage }] = await Promise.all([prisma.building.findMany({ orderBy: { name: "asc" } }), loadPricingSettings()]);
 
   return (
@@ -16,7 +21,7 @@ export default async function BuildingsPage() {
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Buildings</h1>
           <p className="mt-1 text-sm text-gray-600">
-            Track buildings in the system and manage property manager contact details.
+            Every building we work at. Who gets each building&apos;s emails is set on Property Managers.
           </p>
         </div>
         <NewBuildingForm />
@@ -29,9 +34,9 @@ export default async function BuildingsPage() {
               <tr>
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Builder / Address</th>
-                <th className="px-4 py-3">PM name</th>
-                <th className="px-4 py-3">PM email</th>
-                <th className="px-4 py-3">PM phone</th>
+                <th className="px-4 py-3">Building contact</th>
+                <th className="px-4 py-3">Contact email</th>
+                <th className="px-4 py-3">Contact phone</th>
                 <th className="px-4 py-3">Pricing package</th>
                 <th className="px-4 py-3">Actions</th>
               </tr>

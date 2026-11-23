@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
  * turnoverCompletionDigest.ts for the recent/stale/safety-ceiling
  * thresholds), bcc'ing the Sueep PM(s) involved. Skipped entirely for a
  * building with nothing to report, and skipped (logged, retried next run)
- * for a building with no pmEmail on file.
+ * for a building with no property manager on file.
  */
 export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");

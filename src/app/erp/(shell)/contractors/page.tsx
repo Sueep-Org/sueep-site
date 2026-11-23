@@ -9,9 +9,7 @@ import { loadAllSubScoresCached, loadBidderBidLines, loadContractorBidLines, sum
 import { loadPastBidders } from "@/lib/erp/subBidLinks";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { BiddersTab, type BidderRow } from "./BiddersTab";
-import { ReviewsTab } from "./ReviewsTab";
 import { isPmLevel } from "@/lib/erpRoles";
-import { loadReviewList } from "@/lib/erp/subReviews";
 import { fieldScoreHelp, OVERALL_SCORE_HELP, PRICING_SCORE_HELP, type SubScores } from "@/lib/erp/subScores";
 import { Stars } from "@/app/erp/components/Stars";
 
@@ -62,8 +60,6 @@ export default async function ContractorsPage({ searchParams }: PageProps) {
   });
   const auth = await getErpAuth();
   const showBids = canSeeProposals(auth?.role);
-  // Every PM's open reviews; the review page itself still checks who can act on each
-  const reviews = auth && isPmLevel(auth.role) ? await loadReviewList(auth, { status: ["PENDING", "NEEDS_FIX"], mine: false }) : null;
   const [bidLines, scores, pastBidders, bidderLines] = showBids
     ? await Promise.all([loadContractorBidLines(), loadAllSubScoresCached(), loadPastBidders(), loadBidderBidLines()])
     : [new Map(), new Map(), [], new Map()];
@@ -186,19 +182,21 @@ export default async function ContractorsPage({ searchParams }: PageProps) {
     <div className="space-y-6">
       <NewContractorForm title={<h1 className="text-2xl font-semibold text-gray-900">Contractors</h1>} />
       {auth && isPmLevel(auth.role) ? (
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <Link href="/erp/sub-reviews" className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50">
+            Sub Reviews
+          </Link>
           <Link href="/erp/contractors/email" className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50">
             Email subs
           </Link>
         </div>
       ) : null}
 
-      {showBids || reviews ? (
+      {showBids ? (
         <DetailTabs
           tabs={[
             { label: "Contractors", content: contractorList },
-            ...(showBids ? [{ label: "Bidders", content: <BiddersTab bidders={bidders} /> }] : []),
-            ...(reviews ? [{ label: "Reviews", content: <ReviewsTab reviews={reviews} /> }] : []),
+            { label: "Bidders", content: <BiddersTab bidders={bidders} /> },
           ]}
         />
       ) : (

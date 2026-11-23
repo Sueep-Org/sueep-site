@@ -607,7 +607,7 @@ export function ChangeOrderDetailEditor({
                   <input id="co-requested-by" className={input} value={requestedBy} onChange={(e) => setRequestedBy(e.target.value)} />
                 </div>
                 <div>
-                  <label className={label}>PM</label>
+                  <label className={label}>Sueep PM</label>
                   <PmCombobox employees={employees} value={supervisor} onChange={setSupervisor} />
                 </div>
                 <div>
@@ -668,7 +668,7 @@ export function ChangeOrderDetailEditor({
           ),
         },
         {
-          label: "Costs",
+          label: "Financials",
           content: (
             <>
               {/* Contract value — standalone at top */}
@@ -792,7 +792,7 @@ export function ChangeOrderDetailEditor({
           ),
         },
         {
-          label: "Laborers",
+          label: "Labor",
           content: (
             <ChangeOrderLaborersSection
               projectId={projectId}

@@ -6,7 +6,7 @@ export function CreatingATurnoverRequest() {
       <H2>Overview</H2>
       <P>
         Turnover requests track a unit&apos;s scope of work and drive its pricing. Clients send
-        them through the website form or their private property manager page, and PMs can also
+        them through the website form or their private property manager page, and Sueep project managers can also
         create one directly from New Project. The same scope can be edited from inside the ERP
         afterward.
       </P>
@@ -24,14 +24,14 @@ export function CreatingATurnoverRequest() {
         </Step>
 
         <Step n={2} title="Creating a request yourself, from New Project">
-          PMs, Admins, and Sales can also create a turnover request directly, without going
+          Project Managers, Admins, and Sales can also create a turnover request directly, without going
           through the public form. Go to <strong>New Project</strong>, and set Segment to{" "}
           <strong>Janitorial turnover requests</strong>.
           <Img src="/help/turnover/turnover_3.png" alt="New Project form for a turnover" />
           <UL>
             <LI>
               Pick the building from the dropdown, or choose <strong>Add new building...</strong>{" "}
-              to create one on the spot (name, address, and PM contact).
+              to create one on the spot (name, address, and property manager contact).
             </LI>
             <LI>
               A new building also shows its price table, filled with standard prices. Change any
@@ -102,7 +102,7 @@ export function CreatingATurnoverRequest() {
             This checklist gates two different things at two different thresholds, on the unit&apos;s{" "}
             <strong>Labor</strong> tab: logging any labor at all needs the checklist at least 75%
             complete, and checking <strong>Mark unit as completed</strong> needs it{" "}
-            <strong>fully</strong> checked off. A PM can override either one.
+            <strong>fully</strong> checked off. A Sueep PM can override either one.
           </Callout>
         </Step>
       </Steps>

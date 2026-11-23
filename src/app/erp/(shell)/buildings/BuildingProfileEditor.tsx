@@ -198,8 +198,12 @@ export function BuildingProfileEditor({ buildingId, initial, commissionEmployeeI
             className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
           />
         </div>
+        <p className="text-xs text-gray-500 sm:col-span-2">
+          <span className="font-medium text-gray-700">Building contact.</span> Only used for this building&apos;s emails until
+          a property manager is added under Property managers below.
+        </p>
         <div>
-          <label className="block text-xs font-medium text-gray-600">Property manager name</label>
+          <label className="block text-xs font-medium text-gray-600">Contact name</label>
           <input
             value={pmName}
             onChange={(e) => setPmName(e.target.value)}
@@ -207,7 +211,7 @@ export function BuildingProfileEditor({ buildingId, initial, commissionEmployeeI
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-600">Property manager email</label>
+          <label className="block text-xs font-medium text-gray-600">Contact email</label>
           <input
             value={pmEmail}
             onChange={(e) => setPmEmail(e.target.value)}
@@ -216,7 +220,7 @@ export function BuildingProfileEditor({ buildingId, initial, commissionEmployeeI
           />
         </div>
         <div className="sm:col-span-2">
-          <label className="block text-xs font-medium text-gray-600">Property manager phone</label>
+          <label className="block text-xs font-medium text-gray-600">Contact phone</label>
           <input
             value={pmPhone}
             onChange={(e) => setPmPhone(e.target.value)}

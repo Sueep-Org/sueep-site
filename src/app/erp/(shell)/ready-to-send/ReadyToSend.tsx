@@ -70,8 +70,6 @@ export type QboDraftsInfo = {
   environment: "sandbox" | "production";
   on: boolean;
   tests: QboTestRow[];
-  /** What the next QuickBooks invoice number would be, for the switch's confirm box */
-  nextInvoiceNumber: number;
 };
 
 export type DeliveryRow = {
@@ -167,7 +165,6 @@ export function ReadyToSend({
   failed,
   discarded,
   contracts,
-  isAdmin,
   qbo,
 }: {
   drafts: DraftRow[];
@@ -176,7 +173,6 @@ export function ReadyToSend({
   failed: MonthRow[];
   discarded: MonthRow[];
   contracts: ContractSetting[];
-  isAdmin: boolean;
   qbo: QboDraftsInfo;
 }) {
   const router = useRouter();
@@ -190,7 +186,6 @@ export function ReadyToSend({
   const [expanded, setExpanded] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>(deliveries.length ? "sending" : drafts.length || failed.length ? "approve" : "bill");
   const [pick, setPick] = useState<string | null>(null);
-  const [switching, setSwitching] = useState(false);
   useEffect(() => {
     const { tab: t, pick: p } = urlParams();
     if (t) setTab(t);
@@ -303,40 +298,16 @@ export function ReadyToSend({
     });
   }
 
-  async function setQboDrafts(on: boolean, nextInvoiceNumber?: number): Promise<boolean> {
-    let saved = false;
-    await run("qbo-switch", async () => {
-      const { ok, data } = await call("/api/erp/invoice-drafts/settings", "PUT", { qboDrafts: on, nextInvoiceNumber });
-      if (!ok) toast(String(data.error ?? "Could not save."));
-      else toast(on ? "New invoices now go to QuickBooks." : "New invoices now go to HubSpot. Turn HubSpot's invoice sync to QuickBooks back on.");
-      saved = ok;
-    });
-    return saved;
-  }
-
-  async function switchToHubSpot() {
-    const ok = await confirm({
-      title: "Switch to HubSpot (backup)?",
-      message:
-        "New drafts will be made in HubSpot instead of QuickBooks. HubSpot only copies invoices into QuickBooks while its invoice sync is on, so turn that back on in HubSpot too, or these invoices won't reach QuickBooks. Drafts already waiting stay where they are.",
-      confirmLabel: "Switch to HubSpot",
-      danger: true,
-    });
-    if (ok) await setQboDrafts(false);
-  }
-
   const selectedRows = drafts.filter((d) => selected.has(d.rowId));
   const destination = qbo.on ? `QuickBooks${qbo.environment === "sandbox" ? " (test company)" : ""}` : "HubSpot (backup)";
   const billableCount = billable.reduce((s, g) => s + g.items.length, 0);
+  // In the order the work moves: pick finished work, approve its draft, then send it.
   const tabs: { key: Tab; label: string; count?: number; alert?: boolean }[] = [
-    { key: "approve", label: "To approve", count: drafts.length, alert: failed.length > 0 },
     { key: "bill", label: "Ready to bill", count: billableCount },
+    { key: "approve", label: "To approve", count: drafts.length, alert: failed.length > 0 },
     { key: "sending", label: "Needs sending", count: deliveries.length, alert: deliveries.length > 0 },
     { key: "contracts", label: "Contracts" },
   ];
-  const settings = isAdmin
-    ? [qbo.on ? { label: "Switch to HubSpot (backup)", onClick: () => void switchToHubSpot() } : { label: "Switch to QuickBooks", onClick: () => setSwitching(true) }]
-    : [];
 
   return (
     <div className="space-y-4">
@@ -364,11 +335,10 @@ export function ReadyToSend({
               qbo.environment === "sandbox"
                 ? "Local dev. QuickBooks drafts here are tests: Approve makes the invoice in Intuit's test company, emails only you a copy, and changes nothing real."
                 : qbo.on
-                  ? "Approve creates the invoice in QuickBooks, marks the work Billed and sends it to the client. An Admin can switch to HubSpot as a backup from the menu here."
-                  : "Backup mode: Approve opens the invoice in HubSpot, and HubSpot copies it into QuickBooks only while its invoice sync is on. An Admin switches back to QuickBooks from the menu here."
+                  ? "Approve creates the invoice in QuickBooks, marks the work Billed and sends it to the client. An Admin can switch to HubSpot as a backup on the QuickBooks page."
+                  : "Backup mode: Approve opens the invoice in HubSpot, and HubSpot copies it into QuickBooks only while its invoice sync is on. An Admin switches back to QuickBooks on the QuickBooks page."
             }
           />
-          {settings.length > 0 && <RowMenu label="Invoice settings" items={settings} disabled={busy !== null} />}
         </span>
       </div>
 
@@ -568,48 +538,7 @@ export function ReadyToSend({
       {editing && <EditDraft draft={editing} onClose={() => setEditing(null)} />}
       {editingLines && <EditLines draft={editingLines} onClose={() => setEditingLines(null)} />}
       {editingRecipients && <EditRecipients draft={editingRecipients} onClose={() => setEditingRecipients(null)} />}
-      {switching && (
-        <SwitchToQuickBooks
-          suggested={qbo.nextInvoiceNumber}
-          busy={busy !== null}
-          onClose={() => setSwitching(false)}
-          onConfirm={async (n) => {
-            if (await setQboDrafts(true, n)) setSwitching(false);
-          }}
-        />
-      )}
     </div>
-  );
-}
-
-/** Confirm box for switching new invoices to QuickBooks, with the next invoice number. */
-function SwitchToQuickBooks({ suggested, busy, onClose, onConfirm }: { suggested: number; busy: boolean; onClose: () => void; onConfirm: (n: number) => Promise<void> }) {
-  const [value, setValue] = useState(String(suggested));
-  const n = Number(value);
-  const valid = Number.isInteger(n) && n > 0;
-  return (
-    <Modal open onClose={onClose} dismissible={!busy} size="sm">
-      <h3 className="text-base font-semibold text-gray-900">Switch to QuickBooks</h3>
-      <p className="mt-1 text-xs text-gray-500">New drafts will be made for QuickBooks. Approve creates each invoice there and sends it to the client. Drafts already waiting stay as they are.</p>
-      <label className={`${labelClass.default} mt-4`}>
-        <span className="flex items-center gap-1">
-          Next invoice number
-          <InfoTip text="Filled in from the highest invoice number the ERP knows. If someone made an invoice in HubSpot today, check its number there and use the one after it." />
-        </span>
-        <span className="mt-1 flex items-center gap-1 text-sm text-gray-700">
-          INV-
-          <input value={value} onChange={(e) => setValue(e.target.value.replace(/\D/g, ""))} inputMode="numeric" className={`${inputClass.md} w-32`} />
-        </span>
-      </label>
-      <div className="mt-5 flex justify-end gap-2">
-        <Button variant="secondary" size="sm" onClick={onClose} disabled={busy}>
-          Cancel
-        </Button>
-        <Button size="sm" disabled={!valid || busy} onClick={() => void onConfirm(n)}>
-          Switch to QuickBooks
-        </Button>
-      </div>
-    </Modal>
   );
 }
 

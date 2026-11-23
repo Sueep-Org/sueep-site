@@ -35,7 +35,7 @@ type Props = {
   /** HubSpot invoices/quotes tab, financial roles only */
   canSeeInvoices?: boolean;
   units: BuildingUnit[];
-  /** This building's janitorial (recurring) contract, managed on the Janitorial Contracts page. */
+  /** This building's janitorial (recurring) contract, managed on the Janitorial page. */
   janitorialContract?: { id: string; status: string; monthlyRateCents: number } | null;
   canManageJanitorial?: boolean;
   employees: { id: string; name: string }[];
@@ -182,7 +182,7 @@ export function BuildingTabs({
               <p>This building has no janitorial contract.</p>
               {canManageJanitorial && (
                 <Link href="/erp/janitorial" className="mt-2 inline-block text-pink-600 hover:underline">
-                  Set one up on the Janitorial Contracts page
+                  Set one up on the Janitorial page
                 </Link>
               )}
             </>

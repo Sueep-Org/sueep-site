@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getErpAuth, canEditPricing } from "@/lib/erpAuth";
+import { getErpAuth, canEditPricing, canViewCompanies } from "@/lib/erpAuth";
 import { BuildingPricingPackageEditor } from "../../BuildingPricingPackageEditor";
 import { BuildingCoPricingPackageEditor } from "../../BuildingCoPricingPackageEditor";
 
@@ -30,12 +30,14 @@ export default async function BuildingPricingPackagePage({ params }: PageProps) 
               {building.name} rates for unit cleaning and painting turnover requests.
             </p>
           </div>
-          <Link
-            href="/erp/buildings"
-            className="rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-          >
-            All buildings
-          </Link>
+          {auth && canViewCompanies(auth.role) ? (
+            <Link
+              href="/erp/buildings"
+              className="rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+            >
+              All buildings
+            </Link>
+          ) : null}
         </div>
       </div>
 

@@ -7,7 +7,7 @@ export function JanitorialContracts() {
       <P>
         Setting up a janitorial contract, pricing it, keeping it current, and its billing months and profit. Each contract
         belongs to one building and bills a flat monthly price. Admins, Project Managers, the Business Manager and Sales can
-        open <strong>Janitorial Contracts</strong> (left menu). New to it? Start with{" "}
+        open <strong>Janitorial</strong> (left menu). New to it? Start with{" "}
         <A href="/erp/help/janitorial/getting-started">Janitorial: Getting Started</A>. Scheduling janitors and their hours
         are in <A href="/erp/help/janitorial/scheduling-and-hours">Janitorial Scheduling, Clock-In and Hours</A>.
       </P>

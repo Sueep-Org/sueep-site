@@ -14,30 +14,12 @@ import { prisma } from "@/lib/prisma";
 import { escapeHtml, sendEmail } from "@/lib/email";
 import { centsToDollars } from "./money";
 import { applySubCoAnswer, subCoRequestsPath } from "./subCoOutcome";
-import { pmReplyTo } from "./propertyManagers";
+import { buildingPropertyManagers, pmReplyTo, type BuildingContact } from "./propertyManagers";
 
 export { subCoRequestsPath };
 
-type Manager = { id: string | null; name: string; email: string; contact: { name: string | null; phone: string | null; email: string | null } | null };
-
 /** Who gets the approval email: the building's active property manager links, else the building's contact email. */
-export async function propertyManagersFor(buildingId: string | null | undefined): Promise<Manager[]> {
-  if (!buildingId) return [];
-  const [links, building] = await Promise.all([
-    prisma.propertyManagerBuilding.findMany({
-      where: { buildingId, propertyManager: { active: true } },
-      select: { propertyManager: { select: { id: true, name: true, email: true, sueepContactName: true, sueepContactPhone: true, sueepContactEmail: true } } },
-    }),
-    prisma.building.findUnique({ where: { id: buildingId }, select: { pmName: true, pmEmail: true } }),
-  ]);
-  const fromLinks = links
-    .map((l) => l.propertyManager)
-    .filter((m) => m.email)
-    .map((m) => ({ id: m.id, name: m.name, email: m.email, contact: { name: m.sueepContactName, phone: m.sueepContactPhone, email: m.sueepContactEmail } }));
-  if (fromLinks.length) return fromLinks;
-  const email = building?.pmEmail?.trim();
-  return email ? [{ id: null, name: building?.pmName?.trim() || email, email, contact: null }] : [];
-}
+export const propertyManagersFor = buildingPropertyManagers;
 
 export async function propertyManagerEmailsFor(buildingId: string | null | undefined): Promise<{ name: string; email: string }[]> {
   return (await propertyManagersFor(buildingId)).map(({ name, email }) => ({ name, email }));
@@ -82,7 +64,7 @@ function unitName(r: Loaded): string {
   return b && !r.project.jobTitle.includes(b) ? `${r.project.jobTitle} (${b})` : r.project.jobTitle;
 }
 
-function approvalEmailHtml(r: Loaded, token: string, updated: boolean, contact: Manager["contact"], reminder = false): string {
+function approvalEmailHtml(r: Loaded, token: string, updated: boolean, contact: BuildingContact["contact"], reminder = false): string {
   const base = appUrl();
   const page = `${base}/co-approve/${token}`;
   const { lines, surcharge, totalCents } = chargeLines(r);

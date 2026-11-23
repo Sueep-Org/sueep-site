@@ -40,7 +40,7 @@ export function HowInvoicingWorks() {
             <TD>HubSpot</TD>
             <TD>
               Sales deals only. Older invoices made in HubSpot still show in the ERP. HubSpot is only used for new invoices if an
-              Admin switches Ready to Send to the HubSpot backup.
+              Admin switches to the HubSpot backup on the QuickBooks page.
             </TD>
           </tr>
         </tbody>
@@ -104,7 +104,7 @@ export function HowInvoicingWorks() {
             </TD>
           </tr>
           <tr>
-            <TD>Ready to Send: To approve, Ready to bill, Contracts</TD>
+            <TD>Ready to Send: Ready to bill, To approve, Contracts</TD>
             <TD>Make drafts, check and edit them, approve them. Turn on Auto-draft for janitorial contracts.</TD>
             <TD>
               <A href="/erp/help/billing/ready-to-send">Ready to Send: Drafting and Approving Invoices</A>
@@ -156,7 +156,7 @@ export function HowInvoicingWorks() {
           <tr>
             <TD>Admin</TD>
             <TD>
-              Everything below, plus connecting QuickBooks and switching Ready to Send between QuickBooks and the HubSpot backup.
+              Everything below, plus connecting QuickBooks and switching new invoices between QuickBooks and the HubSpot backup (QuickBooks page).
             </TD>
           </tr>
           <tr>
@@ -225,7 +225,7 @@ export function HowInvoicingWorks() {
 
       <H2>The HubSpot backup</H2>
       <P>
-        If QuickBooks cannot be used, an Admin can switch Ready to Send to <strong>HubSpot (backup)</strong>. New drafts are
+        If QuickBooks cannot be used, an Admin can switch new invoices to <strong>HubSpot (backup)</strong> on the QuickBooks page. New drafts are
         then made in HubSpot and reach QuickBooks only while HubSpot&apos;s own invoice sync is on. Everything else on the
         billing pages works the same. See{" "}
         <A href="/erp/help/billing/ready-to-send">Ready to Send: Drafting and Approving Invoices</A> for switching.

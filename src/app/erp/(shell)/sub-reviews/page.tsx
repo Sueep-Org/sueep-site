@@ -70,7 +70,7 @@ export default async function SubReviewsPage({ searchParams }: PageProps) {
                 <th className="px-4 py-2 font-medium">Day</th>
                 <th className="px-4 py-2 font-medium">Job</th>
                 <th className="px-4 py-2 font-medium">Sub</th>
-                <th className="px-4 py-2 font-medium">PM</th>
+                <th className="px-4 py-2 font-medium">Sueep PM</th>
                 <th className="px-4 py-2 font-medium">Round</th>
                 <th className="px-4 py-2" />
               </tr>

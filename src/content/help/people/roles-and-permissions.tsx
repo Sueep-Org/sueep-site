@@ -21,7 +21,7 @@ export function RolesAndPermissions() {
             <TD>Admin</TD>
             <TD>
               Everything, plus users, the Company Info access log, connecting QuickBooks, and switching invoices between
-              QuickBooks and the HubSpot backup.
+              QuickBooks and the HubSpot backup (on the QuickBooks page).
             </TD>
           </tr>
           <tr>

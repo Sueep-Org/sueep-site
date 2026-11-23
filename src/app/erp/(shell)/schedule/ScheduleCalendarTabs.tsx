@@ -6,7 +6,7 @@ import Link from "next/link";
 const CALENDARS = [
   { id: "projects", label: "Projects", href: "/erp/schedule" },
   { id: "master", label: "Master", href: "/erp/schedule?calendar=master" },
-  { id: "janitorial", label: "Janitorial Contracts", href: "/erp/schedule?calendar=janitorial" },
+  { id: "janitorial", label: "Janitorial", href: "/erp/schedule?calendar=janitorial" },
   { id: "management", label: "Management", href: "/erp/schedule?calendar=management" },
 ] as const;
 

@@ -23,17 +23,7 @@ export default async function NewProjectPage() {
     ? ["JANITORIAL_TURNOVER_REQUESTS"]
     : ["JANITORIAL_TURNOVER_REQUESTS", "COMMERCIAL_CLEANING"];
 
-  const changeOrderProjectFilter = cfg
-    ? {
-        OR: [
-          { hubspotPipelineId: cfg.postConstruction.pipelineId },
-          { hubspotPipelineId: cfg.janitorial.pipelineId },
-          { segment: { in: janitorialSegments } },
-        ],
-      }
-    : {};
-
-  const [rawBuildings, allProjects, employees] = await Promise.all([
+  const [rawBuildings, employees] = await Promise.all([
     prisma.building.findMany({
       orderBy: { name: "asc" },
       select: {
@@ -45,12 +35,12 @@ export default async function NewProjectPage() {
         pmPhone: true,
         pricingPackage: true,
         turnoverRequests: { where: { unitNumber: { not: null } }, select: { unitNumber: true } },
+        propertyManagers: {
+          where: { propertyManager: { active: true } },
+          select: { propertyManager: { select: { name: true, email: true } } },
+          orderBy: { propertyManager: { name: "asc" } },
+        },
       },
-    }),
-    prisma.project.findMany({
-      where: changeOrderProjectFilter,
-      orderBy: [{ projectDate: "desc" }, { updatedAt: "desc" }],
-      select: { id: true, jobTitle: true, segment: true, hubspotPipelineId: true, laborRateCard: true },
     }),
     prisma.employee.findMany({
       where: { status: "ACTIVE" },
@@ -76,8 +66,9 @@ export default async function NewProjectPage() {
   });
   // Flatten to just the unit numbers already used on each building, so the
   // form can warn on a duplicate unit identifier client-side.
-  const buildings = rawBuildings.map(({ turnoverRequests, ...building }) => ({
+  const buildings = rawBuildings.map(({ turnoverRequests, propertyManagers, ...building }) => ({
     ...building,
+    linkedManagers: propertyManagers.map((l) => l.propertyManager),
     existingUnitNumbers: Array.from(
       new Set(turnoverRequests.map((t) => t.unitNumber).filter((n): n is string => Boolean(n)))
     ),
@@ -100,7 +91,6 @@ export default async function NewProjectPage() {
         initialBuildings={buildings}
         initialScheduleBuildings={scheduleBuildings}
         janitorialPipelineId={cfg?.janitorial.pipelineId || null}
-        allProjects={allProjects}
         employees={employees}
         canEditPricing={auth ? canEditPricing(auth.role) : false}
       />

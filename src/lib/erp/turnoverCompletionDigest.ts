@@ -3,6 +3,7 @@ import { todayEasternAsUtcMidnight } from "@/lib/erp/dates";
 import { getBackupPms } from "@/lib/notificationSettings";
 import { sendEmail, buildTurnoverCompletionDigestEmail } from "@/lib/email";
 import { findEmployeeEmailByName, getDescLine } from "@/lib/erp/createLaborEntry";
+import { buildingPropertyManagers } from "@/lib/erp/propertyManagers";
 
 // A unit is still "news" to a property manager if it was marked complete
 // within this many days of actually finishing. Past that, an email about it
@@ -99,7 +100,7 @@ export async function sendTurnoverCompletionDigest(): Promise<TurnoverCompletion
       description: true,
       turnoverCompletedAt: true,
       supervisorUser: { select: { email: true } },
-      building: { select: { id: true, name: true, address: true, pmEmail: true } },
+      building: { select: { id: true, name: true, address: true } },
       turnoverRequest: { select: { unitNumber: true } },
     },
   });
@@ -136,11 +137,13 @@ export async function sendTurnoverCompletionDigest(): Promise<TurnoverCompletion
   await Promise.allSettled(
     Array.from(byBuilding.values()).map(async (projects) => {
       const building = projects[0].building!;
-      if (!building.pmEmail) {
+      // The building's linked property managers, else its typed-in contact.
+      const managerEmails = (await buildingPropertyManagers(building.id)).map((m) => m.email);
+      if (managerEmails.length === 0) {
         // Not stamped, purposely, so this building's units are picked up
-        // again on the next run once a pmEmail is on file rather than
-        // missing their digest permanently.
-        console.warn(`Skipping turnover completion digest for "${building.name}" — no pmEmail on file`);
+        // again on the next run once a property manager is on file rather
+        // than missing their digest permanently.
+        console.warn(`Skipping turnover completion digest for "${building.name}" — no property manager on file`);
         skippedBuildings.push(building.name);
         return;
       }
@@ -196,7 +199,7 @@ export async function sendTurnoverCompletionDigest(): Promise<TurnoverCompletion
         await sendEmail({
           type: "TURNOVER_COMPLETION_DIGEST",
           link: `/erp/buildings/${building.id}`,
-          to: building.pmEmail,
+          to: managerEmails,
           bcc: Array.from(pmEmails),
           subject,
           html,

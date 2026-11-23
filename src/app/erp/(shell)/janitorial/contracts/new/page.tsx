@@ -35,7 +35,7 @@ export default async function NewJanitorialContractPage() {
     <div className="mx-auto max-w-5xl space-y-4">
       <div>
         <Link href="/erp/janitorial" className="text-xs text-pink-600 hover:underline">
-          ← Janitorial Contracts
+          ← Janitorial
         </Link>
         <h1 className="mt-2 text-2xl font-semibold text-gray-900">New janitorial contract</h1>
       </div>

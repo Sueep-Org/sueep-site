@@ -38,7 +38,8 @@ export function PropertyManagerLinks() {
           they&apos;re listed on. Otherwise type their name and email. Each email can only belong to one property manager.
           <Callout type="tip">
             You can also start from a building: open it, and on the <strong>Details</strong> tab click <strong>+ Add</strong> under{" "}
-            <strong>Property manager links</strong>. That building is picked for you.
+            <strong>Property managers</strong>. That building is picked for you, and its building contact is filled in if
+            they aren&apos;t set up yet.
           </Callout>
         </Step>
         <Step n={2} title="2. Pick their buildings">
