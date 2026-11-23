@@ -122,6 +122,18 @@ function CompletionStatusIcon({ complete }: { complete: boolean }) {
   );
 }
 
+/** "Day ✓" on a chip whose day was marked complete on the schedule. The green ✓ means the whole job is complete. */
+function DayDonePill({ done }: { done: boolean }) {
+  return done ? (
+    <span className="shrink-0 rounded bg-sky-100 px-1 text-[9px] font-bold text-sky-800" title="This day is marked complete">
+      Day ✓
+    </span>
+  ) : null;
+}
+
+/** Schedule day completions by key: "p:<projectId>:<YYYY-MM-DD>" or "co:<changeOrderId>:<YYYY-MM-DD>". */
+export type ScheduleDayCompletionRow = { key: string; completedByName: string | null; completedAt: string };
+
 function completionChipClass(complete: boolean): string {
   return complete ? "opacity-60" : "";
 }
@@ -618,6 +630,8 @@ export function SchedulePlanner({
   answers = {},
   canSetSubPay = false,
   initialDayRemovals = [],
+  initialDayCompletions = [],
+  canMarkDayComplete = false,
 }: {
   projects: ScheduleProject[];
   supervisors: Person[];
@@ -637,6 +651,10 @@ export function SchedulePlanner({
   canSetSubPay?: boolean;
   /** Planned days removed for a real reason, drawn grayed out (see scheduleRemovals.ts) */
   initialDayRemovals?: ScheduleDayRemovalRow[];
+  /** Days marked complete on the schedule (only a record of the day; whole jobs are completed on the project page) */
+  initialDayCompletions?: ScheduleDayCompletionRow[];
+  /** Admin, PM, Business Manager, Sales and Supervisors (canMarkScheduleDayComplete) */
+  canMarkDayComplete?: boolean;
 }) {
   const removalReasons = useAppLists().removalReasons;
   // Anchors the whole calendar (which month/day is "today") to Eastern time,
@@ -751,6 +769,123 @@ export function SchedulePlanner({
   // The chip's × asks why first (RemoveDayModal). Anything but "placed by
   // mistake" leaves a grayed-out removed chip on that day with the reason.
   const [dayRemovals, setDayRemovals] = useState(initialDayRemovals);
+  const [dayCompletions, setDayCompletions] = useState(() => new Map(initialDayCompletions.map((c) => [c.key, c])));
+  const [dayCompleteSaving, setDayCompleteSaving] = useState<string | null>(null);
+  const isDayDone = (key: string) => dayCompletions.has(key);
+  /** Mark (or undo) one day of a job or change order complete. Never touches the job's own status. */
+  // Open on a job's day card when the day has SOV lines still open: tick which to also mark complete.
+  const [sovPicker, setSovPicker] = useState<{ key: string; picks: string[] } | null>(null);
+  async function toggleDayComplete(target: { projectId: string; changeOrderId?: string | null; dateKey: string; completeSovItemIds?: string[] }) {
+    const key = target.changeOrderId ? `co:${target.changeOrderId}:${target.dateKey}` : `p:${target.projectId}:${target.dateKey}`;
+    const undo = dayCompletions.has(key);
+    setDayCompleteSaving(key);
+    try {
+      const res = await fetch("/api/erp/schedule/day-completions", {
+        method: undo ? "DELETE" : "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ projectId: target.projectId, changeOrderId: target.changeOrderId ?? null, date: target.dateKey, completeSovItemIds: target.completeSovItemIds ?? [] }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; completedByName?: string | null; completedAt?: string };
+      if (!res.ok) {
+        setEventError(data.error || "Could not save.");
+        return;
+      }
+      setDayCompletions((prev) => {
+        const next = new Map(prev);
+        if (undo) next.delete(key);
+        else next.set(key, { key, completedByName: data.completedByName ?? null, completedAt: data.completedAt ?? new Date().toISOString() });
+        return next;
+      });
+      setSovPicker(null);
+      // SOV lines changed on the job: reload so their ✓ and the job's percent done show.
+      if (target.completeSovItemIds?.length) router.refresh();
+    } finally {
+      setDayCompleteSaving(null);
+    }
+  }
+  /** The day-complete control on a project's day cards, plus where the whole job gets finished. */
+  function renderDayCompleteControl(p: ScheduleProject, k: string) {
+    const key = `p:${p.id}:${k}`;
+    const done = dayCompletions.get(key);
+    // SOV lines this day was scheduled for that aren't complete yet.
+    const daySovIds = new Set(dayAssignments.filter((a) => a.projectId === p.id && a.dateKey === k).flatMap((a) => a.sovItemIds));
+    const openDaySovs = p.sovItems.filter((i) => daySovIds.has(i.id) && !i.completed);
+    const picker = sovPicker?.key === key ? sovPicker : null;
+    return (
+      <div className="mt-2 space-y-1">
+        {picker ? (
+          <div className="rounded-md border border-sky-200 bg-sky-50 p-2">
+            <p className="text-[10px] font-semibold text-sky-900">Also mark this day&apos;s SOV lines complete? (optional)</p>
+            <div className="mt-1 space-y-0.5">
+              {openDaySovs.map((i) => (
+                <label key={i.id} className="flex cursor-pointer items-center gap-1.5 text-[10px] text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={picker.picks.includes(i.id)}
+                    onChange={(e) =>
+                      setSovPicker({ key, picks: e.target.checked ? [...picker.picks, i.id] : picker.picks.filter((x) => x !== i.id) })
+                    }
+                    className="h-3 w-3 rounded border-gray-300 text-sky-600"
+                  />
+                  <span className="truncate">{i.description}</span>
+                </label>
+              ))}
+            </div>
+            <p className="mt-1 text-[9px] text-gray-500">Ticked lines are marked complete on {formatShortDate(k)} and become ready to bill. Undoing the day doesn&apos;t untick them.</p>
+            <div className="mt-1.5 flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => void toggleDayComplete({ projectId: p.id, dateKey: k, completeSovItemIds: picker.picks })}
+                disabled={dayCompleteSaving === key}
+                className="rounded bg-sky-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-sky-500 disabled:opacity-50"
+              >
+                {dayCompleteSaving === key ? "Saving…" : picker.picks.length ? `Mark day and ${picker.picks.length} line${picker.picks.length === 1 ? "" : "s"} complete` : "Mark day complete"}
+              </button>
+              <button type="button" onClick={() => setSovPicker(null)} className="rounded border border-gray-200 px-2 py-1 text-[10px] text-gray-600 hover:bg-gray-50">
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {done ? (
+            <span className="rounded bg-sky-100 px-2 py-1 text-[10px] font-semibold text-sky-800">
+              ✓ Day complete{done.completedByName ? ` · ${done.completedByName}` : ""}
+            </span>
+          ) : null}
+          {canMarkDayComplete && !picker ? (
+            <button
+              type="button"
+              onClick={() =>
+                !done && openDaySovs.length > 0
+                  ? setSovPicker({ key, picks: [] })
+                  : void toggleDayComplete({ projectId: p.id, dateKey: k })
+              }
+              disabled={dayCompleteSaving === key}
+              className={
+                done
+                  ? "rounded border border-gray-200 px-2 py-1 text-[10px] font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                  : "rounded border border-sky-600 px-2 py-1 text-[10px] font-medium text-sky-700 hover:bg-sky-50 disabled:opacity-50"
+              }
+            >
+              {dayCompleteSaving === key ? "Saving…" : done ? "Undo" : "Mark day complete"}
+            </button>
+          ) : null}
+        </div>
+        {p.status !== "COMPLETE" ? (
+          <p className="text-[10px] text-gray-500">
+            Finished the whole job? Use <span className="font-medium">Mark job complete</span> on the{" "}
+            <Link href={`/erp/projects/${p.id}`} className="text-pink-600 hover:underline">
+              project page
+            </Link>
+            .
+          </p>
+        ) : (
+          <p className="text-[10px] font-medium text-emerald-700">✓ The whole job is complete.</p>
+        )}
+      </div>
+    );
+  }
   const [pendingRemoval, setPendingRemoval] = useState<{ assignmentId: string; title: string; dateKey: string } | null>(null);
   const [dismissingRemovalId, setDismissingRemovalId] = useState<string | null>(null);
 
@@ -1682,17 +1817,8 @@ export function SchedulePlanner({
             >
               View project
             </Link>
-            {p.status !== "COMPLETE" ? (
-              <button
-                type="button"
-                onClick={() => void handleMarkComplete(p.id, p.jobTitle, k)}
-                disabled={eventSaving}
-                className="rounded border border-emerald-600 px-2 py-1 text-[10px] font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
-              >
-                {eventSaving ? "Saving…" : "Mark whole job complete"}
-              </button>
-            ) : null}
           </div>
+          {renderDayCompleteControl(p, k)}
         </div>
       </div>,
       document.body,
@@ -1718,6 +1844,12 @@ export function SchedulePlanner({
       <CoDayPopover
         co={co}
         dateKey={k}
+        dayComplete={{
+          done: isDayDone(`co:${co.id}:${k}`),
+          completedByName: dayCompletions.get(`co:${co.id}:${k}`)?.completedByName ?? null,
+          saving: dayCompleteSaving === `co:${co.id}:${k}`,
+          onToggle: canMarkDayComplete ? () => void toggleDayComplete({ projectId: co.projectId, changeOrderId: co.id, dateKey: k }) : null,
+        }}
         parentProjectTitle={parentProject?.jobTitle}
         assignment={assignment}
         coDays={coDayAssignments.filter((a) => a.changeOrderId === co.id)}
@@ -2115,55 +2247,6 @@ export function SchedulePlanner({
     }
   }
 
-  // Mark-complete from the calendar — sets the project's end date to
-  // whichever day's card the user opened this popover from, and flips
-  // status to COMPLETE in the same PATCH. The API route (not this handler)
-  // owns the actual guards: turnover-segment projects require the quality
-  // checklist finished first (unless the acting user can override it), so
-  // that error comes back verbatim in `data.error` and is shown the same
-  // way handleEventDatesSave's own errors are.
-  async function handleMarkComplete(projectId: string, jobTitle: string, endDateKey: string) {
-    // This closes the whole job, not the day's card it was opened from.
-    // Ongoing jobs whose work comes in as change orders were being closed
-    // by mistake (Brightview Brick, 2026-11), so say so and count open COs.
-    const openCos = changeOrders.filter(
-      (co) => co.projectId === projectId && !coIsComplete(co.status) && co.status !== "REJECTED" && co.status !== "VOID",
-    ).length;
-    const coWarning = openCos > 0 ? ` It still has ${openCos} open change order${openCos === 1 ? "" : "s"}.` : "";
-    if (
-      !(await confirm({
-        message: `Mark the whole job "${jobTitle}" complete, with an end date of ${formatShortDate(endDateKey)}? This closes the job, not just this day.${coWarning}`,
-        danger: openCos > 0,
-        confirmLabel: "Mark whole job complete",
-      }))
-    )
-      return;
-    setEventSaving(true);
-    setEventError("");
-    try {
-      const res = await fetch(`/api/erp/projects/${projectId}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ projectEndDate: endDateKey, status: "COMPLETE" }),
-      });
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) {
-        setEventError(data.error || "Failed to mark complete");
-        return;
-      }
-      // Reachable from either the date-editing popover or the read-only
-      // labor popover (see renderLaborPopover's own "Mark complete" button)
-      // — close whichever one is actually open.
-      setEventPopoverKey(null);
-      setLaborPopoverKey(null);
-      router.refresh();
-    } catch {
-      setEventError("Failed to mark complete");
-    } finally {
-      setEventSaving(false);
-    }
-  }
-
   function renderEventPopover(k: string, p: ScheduleProject) {
     if (eventPopoverKey !== `${k}:${p.id}`) return null;
 
@@ -2309,17 +2392,8 @@ export function SchedulePlanner({
           </div>
         )}
 
+        {renderDayCompleteControl(p, k)}
         <div className="mt-2 flex items-center gap-1.5">
-          {p.status !== "COMPLETE" ? (
-            <button
-              type="button"
-              onClick={() => void handleMarkComplete(p.id, p.jobTitle, k)}
-              disabled={eventSaving}
-              className="rounded border border-emerald-600 px-2 py-1 text-[10px] font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
-            >
-              {eventSaving ? "Saving…" : "Mark whole job complete"}
-            </button>
-          ) : null}
           <Link
             href={`/erp/projects/${p.id}`}
             className="rounded border border-gray-200 px-2 py-1 text-[10px] font-medium text-gray-600 hover:border-pink-300 hover:text-pink-600"
@@ -3694,6 +3768,7 @@ export function SchedulePlanner({
                     <>
                       {warningIcons}
                       <CompletionStatusIcon complete={coIsComplete(co.status)} />
+                      <DayDonePill done={isDayDone(`co:${co.id}:${k}`)} />
                       <span className="truncate">{co.title}</span>
                     </>
                   );
@@ -3827,6 +3902,7 @@ export function SchedulePlanner({
                     <>
                       <span aria-hidden>⚠</span>
                       <CompletionStatusIcon complete={p.status === "COMPLETE"} />
+                      <DayDonePill done={isDayDone(`p:${p.id}:${k}`)} />
                       <span className="truncate" title={p.jobTitle}>{compactLabel ?? p.jobTitle}</span>
                     </>
                   );
@@ -3885,6 +3961,7 @@ export function SchedulePlanner({
                     <>
                       {isOverdue ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : null}
                       <CompletionStatusIcon complete={p.status === "COMPLETE"} />
+                      <DayDonePill done={isDayDone(`p:${p.id}:${k}`)} />
                       <span className="truncate">{compactLabel ?? p.jobTitle}</span>
                     </>
                   );
@@ -3956,6 +4033,7 @@ export function SchedulePlanner({
                   const chipContent = (
                     <>
                       <CompletionStatusIcon complete={p.status === "COMPLETE"} />
+                      <DayDonePill done={isDayDone(`p:${p.id}:${k}`)} />
                       <span className="truncate">{compactLabel ?? p.jobTitle}</span>
                     </>
                   );
@@ -4028,6 +4106,7 @@ export function SchedulePlanner({
                         <span aria-hidden title="No supervisor assigned" className="shrink-0 text-amber-950">⚠</span>
                       ) : null}
                       <CompletionStatusIcon complete={project.status === "COMPLETE"} />
+                      <DayDonePill done={isDayDone(`p:${project.id}:${k}`)} />
                       {assignment.nextDayUpcharge ? (
                         <span
                           className="shrink-0 rounded bg-amber-200 px-1 text-[9px] font-bold text-amber-900"
@@ -4544,7 +4623,11 @@ export function SchedulePlanner({
                   </div>
                   <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
                     <span aria-hidden className="text-emerald-700">✓</span>
-                    = complete (faded)
+                    = whole job complete (faded)
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
+                    <span aria-hidden className="rounded bg-sky-100 px-1 text-[9px] font-bold text-sky-800">Day ✓</span>
+                    = that day is complete
                   </div>
                 </div>
               </div>

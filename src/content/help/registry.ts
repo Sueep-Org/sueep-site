@@ -115,7 +115,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "projects/creating-a-change-order",
-    keywords: ["change order", "co", "extra work", "add on", "udr", "pool", "grill", "reject", "void", "notify"],
+    keywords: ["change order", "co", "extra work", "add on", "udr", "pool", "grill", "reject", "void", "notify", "mark change order complete", "complete change order"],
     title: "Creating a Change Order",
     category: "Projects & Schedule",
     description: "How to create a change order for a post-construction project in the ERP",
@@ -125,7 +125,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "projects/projects-overview",
-    keywords: ["project page", "tabs", "overview", "financials", "safety checklist", "sov", "schedule of values", "client", "layout"],
+    keywords: ["project page", "tabs", "overview", "financials", "safety checklist", "sov", "schedule of values", "client", "layout", "mark job complete", "complete job", "finish job", "close job", "job done"],
     title: "Projects Overview",
     category: "Projects & Schedule",
     description: "Overview of the projects table, project details page, and editing projects.",
@@ -244,7 +244,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "schedule/calendar-overview",
-    keywords: ["schedule", "calendar", "gantt", "assign", "crew", "reschedule", "drag", "supervisor", "job offer", "invite", "confirm"],
+    keywords: ["schedule", "calendar", "gantt", "assign", "crew", "reschedule", "drag", "supervisor", "job offer", "invite", "confirm", "mark day complete", "day complete", "day done", "finish day"],
     title: "Using the Schedule Calendar",
     category: "Projects & Schedule",
     description: "How to read the calendar, filter it, and assign supervisors and workers to future days.",

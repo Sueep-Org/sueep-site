@@ -47,7 +47,7 @@ export function CreatingAChangeOrder() {
             <Step n={4} title="Details Page Overview">
                 Below is an overview of the details tab. Click &ldquo;Save changes&rdquo; after edits, otherwise nothing will save.
                 <Img src="/help/change_order/details_1.png" alt="Details tab" />
-                Once labor has been logged against it, a <strong>Mark complete</strong> button appears here, and the start date auto-sets to the first day labor was logged.
+                Once labor has been logged against it, a <strong>Mark complete</strong> button appears here, and the start date auto-sets to the first day labor was logged. You can also finish a change order from its card on the Schedule with <strong>Mark whole change order complete</strong>, or mark just one of its days done with <strong>Mark day complete</strong>.
                 <br /><br />
                 Financials tab: this is where you update all estimated and actual costs. The actual cost of labor and materials is pulled from their corresponding logs.
                 <Img src="/help/change_order/details_1.5.png" alt="Financials tab" />

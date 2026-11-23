@@ -613,15 +613,15 @@ function NotCompletedAlert({ rows, onCompleted }: { rows: NotCompletedRow[]; onC
   const LIMIT = 8;
 
   async function markComplete(r: NotCompletedRow) {
-    if (!(await confirm({ message: `Mark "${r.title}" complete with an end date of ${shortDate(r.lastDayKey)}?`, danger: false, confirmLabel: "Mark complete" }))) return;
+    if (!(await confirm({ message: `Mark the change order "${r.title}" complete with an end date of ${shortDate(r.lastDayKey)}?`, danger: false, confirmLabel: "Mark change order complete" }))) return;
     setSavingId(r.id);
     setError("");
     try {
-      // Same requests as the schedule card's Mark complete buttons.
-      const res = await fetch(r.kind === "co" ? `/api/erp/projects/${r.projectId}/change-orders/${r.id}` : `/api/erp/projects/${r.id}`, {
+      // Change orders only (same request as the schedule card's button); whole jobs are completed on the project page.
+      const res = await fetch(`/api/erp/projects/${r.projectId}/change-orders/${r.id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(r.kind === "co" ? { status: "COMPLETED", endDate: r.lastDayKey } : { status: "COMPLETE", projectEndDate: r.lastDayKey }),
+        body: JSON.stringify({ status: "COMPLETED", endDate: r.lastDayKey }),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Failed to mark complete");
@@ -640,7 +640,7 @@ function NotCompletedAlert({ rows, onCompleted }: { rows: NotCompletedRow[]; onC
         <button type="button" onClick={() => setOpen((v) => !v)} className="text-sm font-medium text-amber-900 hover:underline">
           {rows.length} job{rows.length !== 1 ? "s" : ""} past {rows.length !== 1 ? "their" : "its"} scheduled day, not marked complete
         </button>
-        <InfoTip text="These jobs and change orders had their last scheduled day pass, but nobody marked them complete, so they don't show up below to bill. Mark complete uses the last scheduled day as the end date." />
+        <InfoTip text="These jobs and change orders had their last scheduled day pass, but nobody marked them complete, so they don't show up below to bill. Jobs are completed on their project page (Mark job complete). Change orders can be completed here, with the last scheduled day as the end date." />
       </div>
       {open && (
         <>
@@ -658,14 +658,21 @@ function NotCompletedAlert({ rows, onCompleted }: { rows: NotCompletedRow[]; onC
                 <span className="text-xs text-amber-800">
                   {shortDate(r.lastDayKey)}, {r.daysAgo} day{r.daysAgo !== 1 ? "s" : ""} ago
                 </span>
-                <button
-                  type="button"
-                  onClick={() => void markComplete(r)}
-                  disabled={savingId === r.id}
-                  className="rounded border border-emerald-600 px-2 py-0.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
-                >
-                  {savingId === r.id ? "Saving…" : "Mark complete"}
-                </button>
+                {r.kind === "co" ? (
+                  <button
+                    type="button"
+                    onClick={() => void markComplete(r)}
+                    disabled={savingId === r.id}
+                    className="rounded border border-emerald-600 px-2 py-0.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                  >
+                    {savingId === r.id ? "Saving…" : "Mark change order complete"}
+                  </button>
+                ) : (
+                  // Whole jobs are only completed on the project page (Mark job complete).
+                  <Link href={`/erp/projects/${r.id}`} className="text-[11px] font-medium text-pink-600 hover:underline">
+                    Open project to mark it complete →
+                  </Link>
+                )}
               </li>
             ))}
           </ul>

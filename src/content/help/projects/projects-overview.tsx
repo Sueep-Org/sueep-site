@@ -34,6 +34,12 @@ export function ProjectsOverview() {
           order fields (name, address, service type, main points of contact, and any notes to the
           PM), plus its setup fields: lifecycle (Upcoming, WIP, or Completed), segment, PM,
           supervisor, and start/end dates.
+          <Callout type="info">
+            When the whole job is finished, click <strong>Mark job complete</strong> at the top of the project page and
+            pick the end date. This is the only place a whole job is completed. On the Schedule you mark single days
+            done instead (<strong>Mark day complete</strong>). Once it&apos;s complete, the top of the page shows who
+            completed it and when.
+          </Callout>
           Each main point of contact has its own Name, Role, Email and Phone boxes. Use{" "}
           <strong>+ Add contact</strong> for another person and the <strong>×</strong> to remove one. Phone numbers tidy
           themselves into (610) 555-0100 form.

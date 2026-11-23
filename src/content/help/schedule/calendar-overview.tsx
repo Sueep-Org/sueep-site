@@ -202,6 +202,17 @@ export function ScheduleCalendarOverview() {
             anyway (e.g. splitting a shift), but it won&apos;t happen silently.
           </Callout>
           A <strong>View project</strong> link at the bottom takes you to the full project page.
+          <Callout type="info">
+            <strong>Marking a day complete.</strong> <strong>Mark day complete</strong> on the card records that this
+            day&apos;s work is done: who marked it and when, with a blue <strong>Day ✓</strong> on the chip. It never
+            closes the job. If the day was scheduled for SOV lines that are still open, it lists them so you can
+            tick any that are finished too: those are marked complete on that day and become ready to bill. Leave
+            them unticked to mark only the day. <strong>Undo</strong> takes the day back but leaves ticked lines
+            complete (untick them on the project&apos;s Financials tab). To finish the <em>whole job</em>, use{" "}
+            <strong>Mark job complete</strong> at the top of the project page. Change orders are the exception: their
+            card on the calendar also has <strong>Mark whole change order complete</strong>. Admins, Project Managers,
+            the Business Manager, Sales and Supervisors can mark days complete.
+          </Callout>
         </Step>
 
         <Step n={5} title="Moving a planned chip's date">

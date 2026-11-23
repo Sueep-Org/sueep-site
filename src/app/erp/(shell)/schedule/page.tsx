@@ -31,6 +31,7 @@ import {
 import { SchedulePlanner } from "./SchedulePlanner";
 import { crewOf } from "@/lib/erp/subCrew";
 import { isPmLevel } from "@/lib/erpRoles";
+import { canMarkScheduleDayComplete } from "@/lib/erpAuth";
 import { loadAllSubScoresCached } from "@/lib/erp/subBidStats";
 import type { SubScores } from "@/lib/erp/subScores";
 import { SubStaffProvider } from "./SubOfferBox";
@@ -113,6 +114,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     contractorAssignmentRows,
     coContractorAssignmentRows,
     dayRemovalRows,
+    dayCompletionRows,
     requestNoteRows,
     supervisorSelf,
   ] = await Promise.all([
@@ -280,6 +282,11 @@ export default async function SchedulePage({ searchParams }: PageProps) {
       select: { changeOrderId: true, contractorId: true, assignedDate: true, startDate: true, endDate: true, costCents: true, setOnSchedule: true, subPayDays: { select: { date: true } } },
     }),
     prisma.scheduleDayRemoval.findMany({ orderBy: { createdAt: "asc" }, include: { changeOrder: { select: { title: true } } } }),
+    // Days marked complete on the schedule; the last year is plenty for any month on screen.
+    prisma.scheduleDayCompletion.findMany({
+      where: { date: { gte: new Date(Date.now() - 366 * 86_400_000) } },
+      select: { key: true, projectId: true, completedByName: true, createdAt: true },
+    }),
     // Notes a property manager typed on their turnover request, shown on the unit's chip and card.
     prisma.propertyManagerRequest
       .findMany({ where: { projectId: { not: null }, notes: { not: null } }, select: { projectId: true, notes: true } })
@@ -942,6 +949,10 @@ export default async function SchedulePage({ searchParams }: PageProps) {
         initialCoWorkerAssignments={visibleCoWorkerAssignments}
         canSetSubPay={canSetSubPay}
         initialDayRemovals={dayRemovals.filter((r) => visibleProjects.some((p) => p.id === r.projectId))}
+        initialDayCompletions={dayCompletionRows
+          .filter((c) => visibleProjects.some((p) => p.id === c.projectId))
+          .map((c) => ({ key: c.key, completedByName: c.completedByName, completedAt: c.createdAt.toISOString() }))}
+        canMarkDayComplete={canMarkScheduleDayComplete(auth?.role ?? "EMPLOYEE")}
       />
       </SubStaffProvider>
 

@@ -222,6 +222,11 @@ export function canSeeMarginOnly(role: ErpRole): boolean {
   return role === "SUPERVISOR";
 }
 
+/** Schedule: mark one day of a job or change order complete (not the whole job, which is done on its page). */
+export function canMarkScheduleDayComplete(role: ErpRole): boolean {
+  return isPmLevel(role) || role === "SALES" || role === "SUPERVISOR";
+}
+
 /** Who can add a new janitorial turnover unit to a building. Deliberately
  * includes SUPERVISOR (unlike canEditPricing) since supervisors can specify a
  * unit's scope of work without ever touching the building's pricing package,

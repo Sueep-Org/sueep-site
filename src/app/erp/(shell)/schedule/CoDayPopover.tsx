@@ -65,7 +65,10 @@ export function CoDayPopover({
   onWorkerCreated,
   onWorkerDeleted,
   onDayRemoved,
+  dayComplete,
 }: {
+  /** This CO day marked complete on the schedule (SchedulePlanner owns the state). Null when the viewer can't mark days. */
+  dayComplete: { done: boolean; completedByName: string | null; saving: boolean; onToggle: (() => void) | null };
   co: ScheduleChangeOrder;
   dateKey: string;
   parentProjectTitle: string | undefined;
@@ -124,9 +127,9 @@ export function CoDayPopover({
   async function handleMarkComplete() {
     if (
       !(await confirm({
-        message: `Mark "${co.title}" complete with an end date of ${dayCellLabel(dateKey)}?`,
+        message: `Mark the whole change order "${co.title}" complete, with an end date of ${dayCellLabel(dateKey)}? This closes the change order, not just this day.`,
         danger: false,
-        confirmLabel: "Mark complete",
+        confirmLabel: "Mark whole change order complete",
       }))
     )
       return;
@@ -724,6 +727,25 @@ export function CoDayPopover({
         {takeOffError ? <p className="mt-2.5 text-[10px] text-red-500">{takeOffError}</p> : null}
 
         <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-gray-100 pt-2.5">
+          {dayComplete.done ? (
+            <span className="rounded bg-sky-100 px-2 py-1 text-[10px] font-semibold text-sky-800">
+              ✓ Day complete{dayComplete.completedByName ? ` · ${dayComplete.completedByName}` : ""}
+            </span>
+          ) : null}
+          {dayComplete.onToggle ? (
+            <button
+              type="button"
+              onClick={dayComplete.onToggle}
+              disabled={dayComplete.saving}
+              className={
+                dayComplete.done
+                  ? "rounded border border-gray-200 px-2 py-1 text-[10px] font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                  : "rounded border border-sky-600 px-2 py-1 text-[10px] font-medium text-sky-700 hover:bg-sky-50 disabled:opacity-50"
+              }
+            >
+              {dayComplete.saving ? "Saving…" : dayComplete.done ? "Undo day" : "Mark day complete"}
+            </button>
+          ) : null}
           <Link
             href={`/erp/projects/${co.projectId}/change-orders/${co.id}`}
             className="rounded bg-pink-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-pink-500"
@@ -737,7 +759,7 @@ export function CoDayPopover({
               disabled={completing}
               className="rounded border border-emerald-600 px-2 py-1 text-[10px] font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
             >
-              {completing ? "Saving…" : "Mark complete"}
+              {completing ? "Saving…" : "Mark whole change order complete"}
             </button>
           ) : null}
           {canTakeOffDay ? (
