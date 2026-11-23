@@ -115,7 +115,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "projects/creating-a-change-order",
-    keywords: ["change order", "co", "extra work", "add on", "udr", "pool", "grill", "reject", "void", "notify", "mark change order complete", "complete change order"],
+    keywords: ["change order", "co", "extra work", "add on", "udr", "pool", "grill", "reject", "void", "notify", "mark change order complete", "complete change order", "create contract", "change order contract", "email contract", "signed copy", "co contract"],
     title: "Creating a Change Order",
     category: "Projects & Schedule",
     description: "How to create a change order for a post-construction project in the ERP",

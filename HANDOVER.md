@@ -166,6 +166,7 @@ A cleanup pass on Emma's last week. Full list and what's still open: `UX_CLEANUP
 - A whole job (anything but a unit turn) is finished only with **Mark job complete** at the top of the project page. Unit turns and change orders can also be finished from their Schedule card. A turn still needs its quality checklist done (the API enforces it).
 - Chips: ✓ and faded = day complete; solid green circle = whole job complete (every day counts as done).
 - Change orders are created only on a project's Change Orders tab (not from New Project).
+- **Change order contracts** come from the client's request link (they sign online), or from **Create contract** on the change order's Signing tab: the ERP fills the same PDF (`generateManualChangeOrderContractPdf` in `src/lib/contracts/buildChangeOrderContractPdf.ts`), priced either by rates (same math as the request page; cleaners required; the hourly rates can be edited for that contract only) or by a typed price (crew optional), locks everything but the signature fields, and emails it (email type "Change order contract"). The PM uploads the signed copy on that row, which marks the change order Approved. "Send for Signing" (DocuSeal) is the old path and still works.
 
 **Billing.** The QuickBooks / HubSpot (backup) invoice switch is on the **QuickBooks** page (Admin only), not Ready to Send. Auto-draft and the invoice label are set per janitorial contract on its **Billing** tab; the Janitorial list has an Auto-draft column.
 

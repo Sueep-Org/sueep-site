@@ -67,6 +67,32 @@ export function CreatingAChangeOrder() {
                 <Img src="/help/change_order/details_5.png" alt="Signing tab" />
             </Step>
 
+            <Step n={5} title="Making the contract yourself">
+                When the client asked for the work by phone or email instead of through their request link, make the
+                contract here: on the <strong>Signing</strong> tab, click <strong>Create contract</strong>.
+                <br /><br />
+                The form starts from this change order: title, scope, start date, crew, the client company and site
+                address, and the project&apos;s contacts to send it to. Pick how it&apos;s priced:
+                <br /><br />
+                <strong>Use rates:</strong> the same math as the request page: cleaners and foremen times this project&apos;s
+                rates, one day per date from the start to the end date, plus the next day surcharge for today or tomorrow.
+                The number of cleaners is required; foremen fill in from it and can be changed. The cleaner and foreman
+                hourly rates show this project&apos;s rates (or the company rates from Settings) and can be edited for this
+                contract only, without changing the project. The form shows the total as you type.
+                <br />
+                <strong>Enter a price:</strong> type the price (it starts as the change order&apos;s Contract value).
+                Cleaners, foremen and days are optional; leave them blank to show only the price.
+                <br /><br />
+                Click <strong>Preview PDF</strong> to check
+                it, then <strong>Email contract</strong>. The client gets the PDF to sign; only the signature, printed name
+                and date can be filled in, so the price and scope can&apos;t be changed. Replies come back to you.
+                <br /><br />
+                The contract shows as <strong>Emailed, waiting for signed copy</strong>. When the client sends it back
+                signed, click <strong>Upload signed copy</strong> on that row. That stores it and marks the change order{" "}
+                <strong>Approved</strong> (the usual approval email goes out). Admins, Project Managers, the Business
+                Manager, Sales and Estimation can create contracts.
+            </Step>
+
         </Steps>
     </>
   );

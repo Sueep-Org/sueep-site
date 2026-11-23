@@ -1314,6 +1314,13 @@ model ChangeOrderContract {
   docusealSubmissionId Int?
   signedAt             DateTime?
   signedDocumentUrl    String?
+  /// A contract made in the ERP (Create contract on the change order) and
+  /// emailed to the client: the unsigned PDF as a data URL, and who it went to.
+  /// signingStatus is EMAILED until the signed copy is uploaded (then SIGNED).
+  unsignedPdfUrl       String?
+  sentAt               DateTime?
+  sentTo               String?
+  sentBy               String?
 
   @@index([changeOrderId])
   @@index([docusealSubmissionId])
