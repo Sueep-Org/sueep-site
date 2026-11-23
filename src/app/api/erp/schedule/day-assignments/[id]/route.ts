@@ -8,6 +8,9 @@ import { loadAppLists } from "@/lib/erp/appListsServer";
 import { getErpAuth } from "@/lib/erpAuth";
 import { syncScheduleSubPay } from "@/lib/erp/subPay";
 import { voidNextDaySurcharges } from "@/lib/erp/nextDaySurcharge";
+import { normalizeBillingStatus } from "@/lib/erp/billingStatus";
+import { listLabel } from "@/lib/erp/appLists";
+import { syncProjectBillingFromRequest } from "@/lib/sovSync";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -27,11 +30,13 @@ export async function DELETE(req: Request, ctx: Ctx) {
   if (forbidden) return forbidden;
   const { id } = await ctx.params;
 
-  // Optional { reason, note }. Any reason except MISTAKE leaves a grayed-out
+  // Optional { reason, note, voidJob }. Any reason except MISTAKE leaves a grayed-out
   // ScheduleDayRemoval on the calendar; no body (older callers) or MISTAKE
-  // just deletes like before.
-  const body = (await req.json().catch(() => null)) as { reason?: unknown; note?: unknown } | null;
-  const reason = isScheduleRemovalReason(body?.reason, (await loadAppLists()).removalReasons) ? body.reason : null;
+  // just deletes like before. voidJob also voids the whole job when this was
+  // its last day on the calendar (see voidJobAfterLastDay below).
+  const body = (await req.json().catch(() => null)) as { reason?: unknown; note?: unknown; voidJob?: unknown } | null;
+  const removalReasons = (await loadAppLists()).removalReasons;
+  const reason = isScheduleRemovalReason(body?.reason, removalReasons) ? body.reason : null;
   const note = typeof body?.note === "string" && body.note.trim() ? body.note.trim().slice(0, 500) : null;
 
   const existing = await prisma.projectDayAssignment.findUnique({
@@ -131,5 +136,36 @@ export async function DELETE(req: Request, ctx: Ctx) {
     });
   }
 
-  return NextResponse.json({ ok: true, removal });
+  const voided =
+    body?.voidJob === true && reason && reason !== "MISTAKE"
+      ? await voidJobAfterLastDay(existing.projectId, note ?? listLabel(removalReasons, reason))
+      : null;
+
+  return NextResponse.json({ ok: true, removal, voided });
+}
+
+/**
+ * Voids the job (billing status Voided) when it has no days left on the
+ * calendar, asked for from the Remove day dialog. A turnover unit voids its
+ * turnover request too, which carries it to the project, same as voiding it
+ * on the turnover request. A job already billed or paid is left alone.
+ */
+async function voidJobAfterLastDay(projectId: string, voidReason: string): Promise<{ ok: boolean; message: string }> {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { billingStatus: true, turnoverRequestId: true, _count: { select: { dayAssignments: true } } },
+  });
+  if (!project) return { ok: false, message: "Job not found" };
+  if (project._count.dayAssignments > 0) return { ok: false, message: "Job still has other days on the calendar, not voided" };
+  const status = normalizeBillingStatus(project.billingStatus);
+  if (status === "VOIDED") return { ok: true, message: "Job was already voided" };
+  if (status !== "NOT_BILLED") return { ok: false, message: "Job is already billed or paid, not voided. Change it on the project if needed." };
+
+  if (project.turnoverRequestId) {
+    await prisma.turnoverRequest.update({ where: { id: project.turnoverRequestId }, data: { billingStatus: "VOIDED", voidReason } });
+    await syncProjectBillingFromRequest(project.turnoverRequestId, "VOIDED", null, voidReason);
+  } else {
+    await prisma.project.update({ where: { id: projectId }, data: { billingStatus: "VOIDED", voidReason } });
+  }
+  return { ok: true, message: "Job voided" };
 }

@@ -11,7 +11,7 @@ import { DayAssignmentModal } from "./DayAssignmentModal";
 import { MiniCalendarPicker, dayAfter } from "./MiniCalendarPicker";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { useFloatingMenu } from "@/app/erp/components/useFloatingMenu";
-import { InfoTip, useConfirm } from "@/app/erp/components/ui";
+import { InfoTip, useConfirm, useToast } from "@/app/erp/components/ui";
 import { useHolidays } from "@/app/components/HolidaysProvider";
 import { RequestToChangeOrder } from "./RequestToChangeOrder";
 import { NextDayToggle } from "./NextDayToggle";
@@ -726,6 +726,7 @@ export function SchedulePlanner({
   const { nextDayPct } = usePricingSettings();
   const { holidayConfirm, holidayOn } = useHolidays();
   const confirm = useConfirm();
+  const toast = useToast();
   const checkInsurance = useInsuranceCheck(contractors);
   const searchParams = useSearchParams();
   useEffect(() => {
@@ -972,7 +973,7 @@ export function SchedulePlanner({
   const [pendingRemoval, setPendingRemoval] = useState<{ assignmentId: string; title: string; dateKey: string } | null>(null);
   const [dismissingRemovalId, setDismissingRemovalId] = useState<string | null>(null);
 
-  async function handleDeleteAssignment(id: string, reason: ScheduleRemovalReason, note: string) {
+  async function handleDeleteAssignment(id: string, reason: ScheduleRemovalReason, note: string, voidJob = false) {
     const assignment = dayAssignments.find((a) => a.id === id);
     setDeletingAssignmentId(id);
     const previous = dayAssignments;
@@ -981,10 +982,14 @@ export function SchedulePlanner({
       const res = await fetch(`/api/erp/schedule/day-assignments/${id}`, {
         method: "DELETE",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ reason, note }),
+        body: JSON.stringify({ reason, note, voidJob }),
       });
       if (!res.ok) throw new Error("Failed to remove");
-      const data = (await res.json()) as { removal: { id: string; coveredBy: string | null; removedByName: string | null; note: string | null } | null };
+      const data = (await res.json()) as {
+        removal: { id: string; coveredBy: string | null; removedByName: string | null; note: string | null } | null;
+        voided: { ok: boolean; message: string } | null;
+      };
+      if (data.voided) toast(data.voided.message, data.voided.ok ? "success" : "error");
       if (data.removal && assignment) {
         const r = data.removal;
         setDayRemovals((prev) => [
@@ -4791,9 +4796,13 @@ export function SchedulePlanner({
         open={pendingRemoval !== null}
         title={pendingRemoval?.title ?? ""}
         dateLabel={pendingRemoval ? dayCellLabel(pendingRemoval.dateKey) : ""}
+        isLastDay={
+          !!pendingRemoval &&
+          !dayAssignments.some((a) => a.id !== pendingRemoval.assignmentId && a.projectId === dayAssignments.find((x) => x.id === pendingRemoval.assignmentId)?.projectId)
+        }
         onClose={() => setPendingRemoval(null)}
-        onRemove={(reason, note) => {
-          if (pendingRemoval) handleDeleteAssignment(pendingRemoval.assignmentId, reason, note);
+        onRemove={(reason, note, voidJob) => {
+          if (pendingRemoval) handleDeleteAssignment(pendingRemoval.assignmentId, reason, note, voidJob);
           setPendingRemoval(null);
         }}
       />

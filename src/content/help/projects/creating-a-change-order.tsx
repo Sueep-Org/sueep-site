@@ -82,6 +82,15 @@ export function CreatingAChangeOrder() {
                 <br />
                 <strong>Enter a price:</strong> type the price (it starts as the change order&apos;s Contract value).
                 Cleaners, foremen and days are optional; leave them blank to show only the price.
+                <br />
+                <strong>Hourly rate:</strong> when you don&apos;t know the hours yet, the contract shows only the rate (for
+                example $65/hr) with no total; the subtotal and total read &quot;Billed hourly&quot; and the scope notes that
+                it&apos;s billed for the hours actually worked. The rate is required; a separate foreman rate, the crew and
+                the days are optional.
+                <br /><br />
+                <strong>Purchase terms</strong> start with the standard terms (payment due within 30 days, governed by the
+                original service agreement). Add to them or change them for this contract only; <strong>Reset</strong> puts
+                the standard terms back. Long terms continue on an extra page of the PDF.
                 <br /><br />
                 Click <strong>Preview PDF</strong> to check
                 it, then <strong>Email contract</strong>. The client gets the PDF to sign; only the signature, printed name

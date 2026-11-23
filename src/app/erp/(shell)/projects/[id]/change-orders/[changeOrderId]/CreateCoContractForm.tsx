@@ -5,6 +5,7 @@ import { Button, InfoTip, inputClass, labelClass } from "@/app/erp/components/ui
 import { usePricingSettings } from "@/app/components/PricingSettingsProvider";
 import { clientChangeOrderPrice, deriveChangeOrderSupervisorCount, getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
 import { centsToDollars } from "@/lib/erp/money";
+import { DEFAULT_PURCHASE_TERMS } from "@/lib/contracts/changeOrderTerms";
 import type { ContractItem } from "./ChangeOrderSigningSection";
 
 /** What the form starts with, from the change order and its project. */
@@ -59,9 +60,10 @@ export function CreateCoContractForm({
     recipientName: first?.name ?? "",
     recipientEmail: first?.email ?? "",
     message: "",
+    purchaseTerms: DEFAULT_PURCHASE_TERMS,
   });
   // Start on Enter a price when the change order already has one, else on rates.
-  const [mode, setMode] = useState<"rates" | "price">(prefill.totalCents ? "price" : "rates");
+  const [mode, setMode] = useState<"rates" | "price" | "hourly">(prefill.totalCents ? "price" : "rates");
   const [foremenEdited, setForemenEdited] = useState(false);
   const pricing = usePricingSettings();
   // This project's rates (else the company's), editable for this contract only.
@@ -74,6 +76,8 @@ export function CreateCoContractForm({
     const n = Math.round(Number(v.replace(/[$,\s]/g, "")) * 100);
     return Number.isFinite(n) && n > 0 ? n : null;
   };
+  // Hourly rate: no total, just the rate (foreman rate optional, blank = not shown).
+  const [hourlyInputs, setHourlyInputs] = useState({ cleaner: (baseRates.cleanerHourlyRateCents / 100).toFixed(2), foreman: "" });
   const rates = {
     cleanerHourlyRateCents: rateCents(rateInputs.cleaner) ?? baseRates.cleanerHourlyRateCents,
     foremanHourlyRateCents: rateCents(rateInputs.foreman) ?? baseRates.foremanHourlyRateCents,
@@ -106,14 +110,15 @@ export function CreateCoContractForm({
       cleaners: f.cleaners || null,
       // By rates, foremen follow the cleaners unless someone changed the number.
       foremen: mode === "rates" ? foremenCount : f.foremen || null,
-      days: mode === "price" ? f.days || null : null,
-      cleanerRateCents: mode === "rates" ? rates.cleanerHourlyRateCents : null,
-      foremanRateCents: mode === "rates" ? rates.foremanHourlyRateCents : null,
+      days: mode === "rates" ? null : f.days || null,
+      cleanerRateCents: mode === "rates" ? rates.cleanerHourlyRateCents : mode === "hourly" ? rateCents(hourlyInputs.cleaner) : null,
+      foremanRateCents: mode === "rates" ? rates.foremanHourlyRateCents : mode === "hourly" ? rateCents(hourlyInputs.foreman) : null,
       clientCompany: f.clientCompany,
       clientAddress: f.clientAddress,
       recipientName: f.recipientName,
       recipientEmail: f.recipientEmail,
       message: f.message,
+      purchaseTerms: f.purchaseTerms,
     });
   }
   const url = `/api/erp/projects/${projectId}/change-orders/${changeOrderId}/contract/create`;
@@ -163,21 +168,21 @@ export function CreateCoContractForm({
     <div className="mt-4 space-y-3 rounded-lg border-2 border-pink-200 bg-pink-50/40 p-4">
       <p className="flex items-center gap-1 text-sm font-semibold text-gray-900">
         Create contract
-        <InfoTip text="For when the client didn't use the request link. Price it by this project's rates (like the request page) or type a price. Email it, the client signs and replies with it, then use Upload signed copy on the row, which marks the change order Approved." wide />
+        <InfoTip text="For when the client didn't use the request link. Price it by this project's rates (like the request page), type a price, or give just an hourly rate when the hours aren't known. Email it, the client signs and replies with it, then use Upload signed copy on the row, which marks the change order Approved." wide />
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
         {field("Title", "coTitle")}
         <div>
           <span className={labelClass.default}>Pricing</span>
           <div className="mt-1 inline-flex overflow-hidden rounded-md border border-gray-300 text-xs">
-            {(["rates", "price"] as const).map((m) => (
+            {(["rates", "price", "hourly"] as const).map((m) => (
               <button
                 key={m}
                 type="button"
                 onClick={() => setMode(m)}
                 className={`px-3 py-1.5 font-medium ${mode === m ? "bg-gray-900 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
               >
-                {m === "rates" ? "Use rates" : "Enter a price"}
+                {m === "rates" ? "Use rates" : m === "price" ? "Enter a price" : "Hourly rate"}
               </button>
             ))}
           </div>
@@ -243,6 +248,33 @@ export function CreateCoContractForm({
               : "Enter the number of cleaners to see the price. Same math as the request page: crew x rates x hours per day x days."}
           </p>
         </div>
+      ) : mode === "hourly" ? (
+        <div className="space-y-2 rounded-md border border-gray-200 bg-white p-3">
+          <div className="grid gap-3 sm:grid-cols-4">
+            {(["cleaner", "foreman"] as const).map((k) => (
+              <label key={k} className="block">
+                <span className={labelClass.default}>{k === "cleaner" ? "Rate ($/hr) *" : "Foreman rate ($/hr)"}</span>
+                <input
+                  value={hourlyInputs[k]}
+                  onChange={(e) => setHourlyInputs((r) => ({ ...r, [k]: e.target.value }))}
+                  inputMode="decimal"
+                  placeholder={k === "foreman" ? "Optional" : undefined}
+                  className={`${inputClass.sm} mt-1 w-full`}
+                />
+              </label>
+            ))}
+            {field("Start date", "startDateKey", { type: "date" })}
+            {field("Cleaners", "cleaners", { inputMode: "numeric" })}
+          </div>
+          <div className="grid gap-3 sm:grid-cols-4">
+            {field("Foremen", "foremen", { inputMode: "numeric" })}
+            {field("Days", "days", { inputMode: "numeric" })}
+          </div>
+          <p className="text-xs text-gray-500">
+            For when you don&apos;t know the hours yet: the contract shows only the rate, no total (subtotal and total read
+            &quot;Billed hourly&quot;), billed for the hours actually worked. Foreman rate, crew and days are optional.
+          </p>
+        </div>
       ) : (
         <div className="space-y-2 rounded-md border border-gray-200 bg-white p-3">
           <div className="grid gap-3 sm:grid-cols-4">
@@ -265,6 +297,18 @@ export function CreateCoContractForm({
       <label className="block">
         <span className={labelClass.default}>Scope of work</span>
         <textarea value={f.scope} onChange={set("scope")} rows={3} className={`${inputClass.sm} mt-1 w-full`} />
+      </label>
+      <label className="block">
+        <span className="flex items-center gap-1">
+          <span className={labelClass.default}>Purchase terms</span>
+          {f.purchaseTerms !== DEFAULT_PURCHASE_TERMS && (
+            <button type="button" onClick={() => setF((p) => ({ ...p, purchaseTerms: DEFAULT_PURCHASE_TERMS }))} className="text-[11px] text-pink-600 hover:underline">
+              Reset
+            </button>
+          )}
+        </span>
+        <textarea value={f.purchaseTerms} onChange={set("purchaseTerms")} rows={3} className={`${inputClass.sm} mt-1 w-full`} />
+        <span className="text-[11px] text-gray-500">Starts with the standard terms; add to them for this contract only. Left blank, the standard terms are used.</span>
       </label>
       <div className="grid gap-3 sm:grid-cols-2">
         {prefill.contacts.length > 1 ? (
