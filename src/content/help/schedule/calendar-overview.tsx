@@ -328,6 +328,13 @@ export function ScheduleCalendarOverview() {
             to see the reason, the note, who was covering it, and who removed it. Click its own{" "}
             <strong>×</strong> to clear it for good.
           </P>
+          <Callout type="warning">
+            A gray, crossed-out chip only means that <strong>day</strong> was removed. The job itself stays open and
+            still shows as WIP on Projects. If it was the job&apos;s last day on the calendar, the Remove dialog offers{" "}
+            <strong>Also void the whole job</strong>: tick it when the work won&apos;t be done or billed, and the job
+            (and its turnover request) is set to Voided with your note as the reason. A job already billed or paid
+            isn&apos;t voided from here; change it on the project.
+          </Callout>
           <P>
             A <strong>change order</strong> chip works the same way from its card: click the chip, then{" "}
             <strong>Take off this day</strong>. If that day is the change order&apos;s start or end date, the

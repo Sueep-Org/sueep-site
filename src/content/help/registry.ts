@@ -65,7 +65,7 @@ export type ArticleEntry = {
 export const registry: ArticleEntry[] = [
   {
     slug: "contracts/uploading-a-contract",
-    keywords: ["docuseal", "sign", "signature", "e-sign", "pdf", "upload signed", "send for signing", "agreement", "create contract", "change order contract"],
+    keywords: ["docuseal", "sign", "signature", "e-sign", "pdf", "upload signed", "send for signing", "agreement", "create contract", "hourly rate", "billed hourly", "purchase terms", "change order contract"],
     title: "Uploading a Contract",
     category: "Projects & Schedule",
     description: "How to upload a contract PDF and send it for signing through DocuSeal.",
@@ -115,7 +115,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "projects/creating-a-change-order",
-    keywords: ["change order", "co", "extra work", "add on", "udr", "pool", "grill", "reject", "void", "notify", "mark change order complete", "complete change order", "create contract", "change order contract", "email contract", "signed copy", "co contract"],
+    keywords: ["change order", "co", "extra work", "add on", "udr", "pool", "grill", "reject", "void", "notify", "mark change order complete", "complete change order", "create contract", "hourly rate", "billed hourly", "purchase terms", "change order contract", "email contract", "signed copy", "co contract"],
     title: "Creating a Change Order",
     category: "Projects & Schedule",
     description: "How to create a change order for a post-construction project in the ERP",

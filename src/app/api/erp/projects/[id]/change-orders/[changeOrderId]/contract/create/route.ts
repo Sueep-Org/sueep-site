@@ -33,7 +33,7 @@ export async function POST(req: Request, ctx: Ctx) {
   const coTitle = str(b.coTitle) || co.title;
   const recipientName = str(b.recipientName);
   const recipientEmail = str(b.recipientEmail).toLowerCase();
-  const mode = b.mode === "rates" ? "rates" : "price";
+  const mode = b.mode === "rates" ? "rates" : b.mode === "hourly" ? "hourly" : "price";
   const dateKey = (v: unknown) => (/^\d{4}-\d{2}-\d{2}$/.test(str(v)) ? str(v) : undefined);
   const startDateKey = dateKey(b.startDateKey);
   const endDateKey = dateKey(b.endDateKey);
@@ -59,6 +59,7 @@ export async function POST(req: Request, ctx: Ctx) {
     cleanerRateCents: num(b.cleanerRateCents),
     foremanRateCents: num(b.foremanRateCents),
     referenceNumber,
+    purchaseTerms: str(b.purchaseTerms),
   });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
   const filename = `${coTitle.replace(/[^\w\- ]+/g, "").trim() || "change-order"} contract.pdf`;
@@ -73,7 +74,7 @@ export async function POST(req: Request, ctx: Ctx) {
   const message = str(b.message);
   const html = `
     <p>Hi ${escapeHtml(recipientName)},</p>
-    <p>Attached is the change order contract for <strong>${escapeHtml(coTitle)}</strong> on ${escapeHtml(co.project.jobTitle)}, for ${escapeHtml(formatUsd(result.totalCents))}.</p>
+    <p>Attached is the change order contract for <strong>${escapeHtml(coTitle)}</strong> on ${escapeHtml(co.project.jobTitle)}, ${result.totalCents !== null ? `for ${escapeHtml(formatUsd(result.totalCents))}` : `billed at ${escapeHtml(result.rateSummary ?? "an hourly rate")} for the hours worked`}.</p>
     ${message ? `<p>${escapeHtml(message).replace(/\n/g, "<br />")}</p>` : ""}
     <p>Please sign it and reply to this email with the signed copy. We'll schedule the work once it's back.</p>
     <p>Thank you,<br />Sueep</p>`;

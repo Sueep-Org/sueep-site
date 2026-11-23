@@ -8,8 +8,7 @@ import {
 import { loadPricingSettings } from "@/lib/pricingSettingsServer";
 import { fillChangeOrderContractPdf, lockContractFieldsExceptSigning } from "@/lib/contracts/fillChangeOrderPdf";
 
-const DEFAULT_PURCHASE_TERMS =
-  "Payment due within 30 days of invoice date. This change order is governed by the terms of the original service agreement between Sueep LLC and the client.";
+import { DEFAULT_PURCHASE_TERMS } from "@/lib/contracts/changeOrderTerms";
 
 function formatAmount(cents: number): string {
   return (cents / 100).toFixed(2);
@@ -127,21 +126,25 @@ export type ManualChangeOrderContractInput = {
    * "rates": priced like the request page (cleaners and foremen x the
    * project's rates x one day per date in the range, plus the next day
    * surcharge); cleaners are required. "price": totalCents as typed, and the
-   * crew lines only when filled in.
+   * crew lines only when filled in. "hourly": no total, just the hourly
+   * rate(s) (cleanerRateCents required, foremanRateCents optional), billed
+   * for the hours actually worked; crew lines only when filled in.
    */
-  mode: "rates" | "price";
+  mode: "rates" | "price" | "hourly";
   totalCents?: number | null;
   cleaners?: number | null;
   foremen?: number | null;
   days?: number | null;
-  /** "rates" only: hourly rates typed on the form for this contract (else the project's, else the company's) */
+  /** "rates": hourly rates typed on the form for this contract (else the project's, else the company's). "hourly": the rates billed. */
   cleanerRateCents?: number | null;
   foremanRateCents?: number | null;
   referenceNumber: string;
+  /** Purchase Terms as edited on the form; blank uses the default terms */
+  purchaseTerms?: string;
 };
 
 export type ManualChangeOrderContractResult =
-  | { ok: true; pdfBytes: Uint8Array; totalCents: number }
+  | { ok: true; pdfBytes: Uint8Array; totalCents: number | null; rateSummary: string | null }
   | { ok: false; error: string; status: number };
 
 /**
@@ -156,7 +159,8 @@ export async function generateManualChangeOrderContractPdf(input: ManualChangeOr
   const count = (n: number | null | undefined) => (n && n > 0 ? String(Math.round(n)) : "");
 
   let crew: { numCleaners: string; numForemen: string; numDays: string; cleanerRate: string; foremanRate: string; subtotal: string; total: string };
-  let totalCents: number;
+  let totalCents: number | null;
+  let rateSummary: string | null = null;
   let scopeDescription = input.scopeDescription;
   if (input.mode === "rates") {
     const cleaners = Math.max(0, Math.round(Number(input.cleaners) || 0));
@@ -197,6 +201,25 @@ export async function generateManualChangeOrderContractPdf(input: ManualChangeOr
       subtotal: formatAmount(price.subtotalCents),
       total: formatAmount(price.totalCents),
     };
+  } else if (input.mode === "hourly") {
+    const rate = (v: number | null | undefined) => (v !== null && v !== undefined && Number.isFinite(Number(v)) && Number(v) > 0 ? Math.round(Number(v)) : null);
+    const cleanerRate = rate(input.cleanerRateCents);
+    const foremanRate = rate(input.foremanRateCents);
+    if (!cleanerRate) return { ok: false, error: "Enter the hourly rate.", status: 400 };
+    totalCents = null;
+    rateSummary = foremanRate
+      ? `$${formatAmount(cleanerRate)}/hr per cleaner and $${formatAmount(foremanRate)}/hr per foreman`
+      : `$${formatAmount(cleanerRate)}/hr`;
+    scopeDescription = [scopeDescription, `Billed at ${rateSummary} for the hours actually worked.`].filter(Boolean).join("\n\n");
+    crew = {
+      numCleaners: count(input.cleaners),
+      numForemen: count(input.foremen),
+      numDays: count(input.days),
+      cleanerRate: formatAmount(cleanerRate),
+      foremanRate: foremanRate ? formatAmount(foremanRate) : "",
+      subtotal: "Billed hourly",
+      total: "Billed hourly",
+    };
   } else {
     totalCents = Math.round(Number(input.totalCents));
     if (!Number.isFinite(totalCents) || totalCents <= 0) return { ok: false, error: "Enter the contract price.", status: 400 };
@@ -227,10 +250,10 @@ export async function generateManualChangeOrderContractPdf(input: ManualChangeOr
       startDate: input.startDateKey ? formatDate(new Date(`${input.startDateKey}T12:00:00Z`)) : undefined,
       scopeDescription,
       ...crew,
-      purchaseTerms: DEFAULT_PURCHASE_TERMS,
+      purchaseTerms: input.purchaseTerms?.trim() || DEFAULT_PURCHASE_TERMS,
     });
     // Emailed to sign in their own PDF app: only signature, printed name and date stay editable.
-    return { ok: true, pdfBytes: await lockContractFieldsExceptSigning(pdfBytes), totalCents };
+    return { ok: true, pdfBytes: await lockContractFieldsExceptSigning(pdfBytes), totalCents, rateSummary };
   } catch (e) {
     console.error("Failed to fill manual change order contract PDF:", e);
     return { ok: false, error: "Contract could not be prepared. Please try again.", status: 500 };
