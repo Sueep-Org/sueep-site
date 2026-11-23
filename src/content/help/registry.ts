@@ -292,7 +292,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "compensation/compensation-overview",
-    keywords: ["payroll", "pay", "commission", "reimbursement", "offshore", "salary", "pay period", "add hours", "overtime", "paycheck"],
+    keywords: ["payroll", "pay", "commission", "reimbursement", "offshore", "salary", "pay period", "add hours", "overtime", "paycheck", "hold pay", "sub pay on hold", "release"],
     title: "Compensation Overview",
     category: "Pay & Finance",
     description: "How Payroll, Offshore Payroll, Commission, Bids, and Reimbursements work.",

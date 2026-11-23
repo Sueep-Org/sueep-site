@@ -12,6 +12,7 @@ import { loadPayHistories, payRateOn } from "@/lib/erp/payRates";
 import { fillRepeatingManualHours } from "@/lib/erp/manualHoursRepeat";
 import { loadPayrollRules } from "@/lib/erp/payrollRulesServer";
 import { timeOffEntryDays, unpaidTimeOffDays } from "@/lib/erp/timeOff";
+import type { SubPayLineKind } from "@/lib/erp/subPayHold";
 
 export function startOfDay(date: Date): Date {
   const d = new Date(date);
@@ -48,14 +49,22 @@ type ManualEntryRow = {
 /**
  * A contractor's cost is paid once, in the period holding its end date (or
  * its start date, or assigned date, when that's all it has). A job running
- * across two periods used to count in full in both.
+ * across two periods used to count in full in both. Pay on hold is left out
+ * until it's released, then paid in the period holding the release date.
  */
 function contractorPayDateIn(periodStart: Date, periodEnd: Date) {
   const inPeriod = { gte: periodStart, lte: periodEnd };
   return [
-    { endDate: inPeriod },
-    { endDate: null, startDate: inPeriod },
-    { endDate: null, startDate: null, assignedDate: inPeriod },
+    {
+      payHeldAt: null,
+      OR: [
+        { endDate: inPeriod },
+        { endDate: null, startDate: inPeriod },
+        { endDate: null, startDate: null, assignedDate: inPeriod },
+      ],
+    },
+    // Held then released on the Payroll page: paid on its release date (subPayHold.ts)
+    { payHeldAt: { not: null }, payReleasedAt: inPeriod },
   ];
 }
 
@@ -378,11 +387,20 @@ export async function computePayrollRows(periodStart: Date, periodEnd: Date) {
   // ── Contractor rows — group by contractor, sum costCents ───────────────
   // Each pay line is kept too, so payroll can show what the total is made of.
   type ContractorLine = {
-    id: string; date: string | null; projectId: string | null; title: string;
+    id: string; kind: SubPayLineKind; date: string | null; projectId: string | null; title: string;
     role: string | null; amountCents: number; fromSchedule: boolean;
+    /** Released from hold: the line's own date, and the hold's note */
+    releasedFrom: string | null; holdNote: string | null;
   };
   const contractorMap = new Map<string, { name: string; costCents: number; projects: Set<string>; lines: ContractorLine[] }>();
   const dayOf = (d: Date | null) => d?.toISOString().slice(0, 10) ?? null;
+  type DatedLine = { endDate: Date | null; startDate: Date | null; assignedDate: Date | null; payReleasedAt: Date | null; payHoldNote: string | null };
+  const linePayDates = (a: DatedLine) => {
+    const own = dayOf(a.endDate ?? a.startDate ?? a.assignedDate);
+    return a.payReleasedAt
+      ? { date: dayOf(a.payReleasedAt), releasedFrom: own ?? "", holdNote: a.payHoldNote }
+      : { date: own, releasedFrom: null, holdNote: null };
+  };
 
   for (const a of contractorAssignments) {
     const key = a.contractorId;
@@ -393,7 +411,7 @@ export async function computePayrollRows(periodStart: Date, periodEnd: Date) {
     c.costCents += a.costCents ?? 0;
     if (a.project?.jobTitle) c.projects.add(a.project.jobTitle);
     c.lines.push({
-      id: a.id, date: dayOf(a.endDate ?? a.startDate ?? a.assignedDate), projectId: a.projectId,
+      id: a.id, kind: "project", ...linePayDates(a), projectId: a.projectId,
       title: a.project?.jobTitle ?? "No project", role: a.role, amountCents: a.costCents ?? 0, fromSchedule: a.setOnSchedule,
     });
   }
@@ -407,7 +425,7 @@ export async function computePayrollRows(periodStart: Date, periodEnd: Date) {
     c.costCents += a.costCents ?? 0;
     if (a.changeOrder.project?.jobTitle) c.projects.add(a.changeOrder.project.jobTitle);
     c.lines.push({
-      id: a.id, date: dayOf(a.endDate ?? a.startDate ?? a.assignedDate), projectId: a.changeOrder.project?.id ?? null,
+      id: a.id, kind: "co", ...linePayDates(a), projectId: a.changeOrder.project?.id ?? null,
       title: `${a.changeOrder.project?.jobTitle ?? ""} · CO: ${a.changeOrder.title}`, role: a.role, amountCents: a.costCents ?? 0, fromSchedule: false,
     });
   }
