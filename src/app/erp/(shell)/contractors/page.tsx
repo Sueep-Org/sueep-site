@@ -1,8 +1,9 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { NewContractorForm } from "./NewContractorForm";
 import { subCoverage, type CoverageItem } from "@/lib/erp/subCoverage";
-import { getErpAuth } from "@/lib/erpAuth";
+import { canSeeFinancials, getErpAuth } from "@/lib/erpAuth";
 import { canSeeProposals } from "@/lib/erp/subBids";
 import { loadSubPortalSettings } from "@/lib/erp/subPortalSettingsServer";
 import { loadAllSubScoresCached, loadBidderBidLines, loadContractorBidLines, summarizeBids } from "@/lib/erp/subBidStats";
@@ -59,6 +60,8 @@ export default async function ContractorsPage({ searchParams }: PageProps) {
     orderBy: { name: "asc" },
   });
   const auth = await getErpAuth();
+  // Same roles as the Contractors menu item; before this only the menu hid it.
+  if (!auth || !canSeeFinancials(auth.role)) redirect("/erp");
   const showBids = canSeeProposals(auth?.role);
   const [bidLines, scores, pastBidders, bidderLines] = showBids
     ? await Promise.all([loadContractorBidLines(), loadAllSubScoresCached(), loadPastBidders(), loadBidderBidLines()])

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getErpAuth, canSeeFinancials } from "@/lib/erpAuth";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { contractedTurnoverScope, turnoverScopeLabel } from "@/lib/erp/turnoverScope";
@@ -128,6 +129,9 @@ type BuildingRow = {
 };
 
 export async function GET(req: Request) {
+  // Same roles as Project Billing's roles; the middleware only checks someone is signed in.
+  const auth = await getErpAuth();
+  if (!auth || !canSeeFinancials(auth.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { nextDayPct } = await loadPricingSettings();
   const { searchParams } = new URL(req.url);
   const startParam = searchParams.get("start");

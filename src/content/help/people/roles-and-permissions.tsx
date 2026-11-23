@@ -6,7 +6,7 @@ export function RolesAndPermissions() {
       <H2>What this is</H2>
       <P>
         Every ERP login has one role. The role decides which pages you see, what you can change, and which tabs your dashboard
-        has. Admins set roles on <strong>User Management</strong>, which also has the full permission chart.
+        has. Admins set roles on <strong>User Management</strong>, which also has the full permission chart (Role Permissions, at the bottom of the Staff tab).
       </P>
 
       <Table>
@@ -34,19 +34,19 @@ export function RolesAndPermissions() {
           </tr>
           <tr>
             <TD>Sales</TD>
-            <TD>Projects, billing, commission and reimbursements, companies, win/loss. No payroll totals.</TD>
+            <TD>Projects, deals, janitorial, Project Billing, commission and reimbursements, insurance, employees (with pay and SSNs), field recruitment, contractors, companies, property managers, win/loss and ad spend. No payroll totals, invoices or office hiring.</TD>
           </tr>
           <tr>
             <TD>Estimation</TD>
-            <TD>Projects, pricing and the AI Estimator. Sees job costs (contract value, labor and material costs, margins) on projects, the dashboard and the schedule, but not payroll, pay info, commission or reimbursements.</TD>
+            <TD>Projects (creating them too), the Deals board, pricing packages, contractors&apos; pages and the Estimator. Sees job costs (contract value, labor and material costs, margins) on projects, the dashboard and the schedule, but not payroll, pay info, commission or reimbursements.</TD>
           </tr>
           <tr>
             <TD>Supervisor</TD>
-            <TD>Their own jobs on the schedule, labor logs and checklists.</TD>
+            <TD>Their own projects by default, the schedule, labor logs, checklists and safety checks. Sees margin as a percent, not dollars.</TD>
           </tr>
           <tr>
             <TD>Employee</TD>
-            <TD>The schedule.</TD>
+            <TD>The dashboard, the schedule, and on projects only the Labor and Checklist tabs.</TD>
           </tr>
         </tbody>
       </Table>

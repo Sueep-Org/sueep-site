@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getErpAuth, canViewSsn, canEditPayInfo, isPmLevel } from "@/lib/erpAuth";
 import { CONTRACTOR_MANUAL_SECTIONS, CONTRACTOR_PROFILE_EXTRA_SECTIONS, subFieldName } from "@/lib/erp/subcontractorQuestionnaire";
@@ -41,6 +41,9 @@ export const runtime = "nodejs";
 type PageProps = { params: Promise<{ id: string }> };
 
 export default async function ContractorDetailPage({ params }: PageProps) {
+  // Everyone except Supervisors and Employees: Estimation opens subs from a project's Proposals tab.
+  const viewer = await getErpAuth();
+  if (!viewer || !canSeeProposals(viewer.role)) redirect("/erp");
   const { id } = await params;
   const contractor = await prisma.contractor.findUnique({
     where: { id },
