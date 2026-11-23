@@ -1689,7 +1689,7 @@ export function SchedulePlanner({
                 disabled={eventSaving}
                 className="rounded border border-emerald-600 px-2 py-1 text-[10px] font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
               >
-                {eventSaving ? "Saving…" : "Mark complete"}
+                {eventSaving ? "Saving…" : "Mark whole job complete"}
               </button>
             ) : null}
           </div>
@@ -2123,11 +2123,18 @@ export function SchedulePlanner({
   // that error comes back verbatim in `data.error` and is shown the same
   // way handleEventDatesSave's own errors are.
   async function handleMarkComplete(projectId: string, jobTitle: string, endDateKey: string) {
+    // This closes the whole job, not the day's card it was opened from.
+    // Ongoing jobs whose work comes in as change orders were being closed
+    // by mistake (Brightview Brick, 2026-11), so say so and count open COs.
+    const openCos = changeOrders.filter(
+      (co) => co.projectId === projectId && !coIsComplete(co.status) && co.status !== "REJECTED" && co.status !== "VOID",
+    ).length;
+    const coWarning = openCos > 0 ? ` It still has ${openCos} open change order${openCos === 1 ? "" : "s"}.` : "";
     if (
       !(await confirm({
-        message: `Mark "${jobTitle}" complete with an end date of ${formatShortDate(endDateKey)}?`,
-        danger: false,
-        confirmLabel: "Mark complete",
+        message: `Mark the whole job "${jobTitle}" complete, with an end date of ${formatShortDate(endDateKey)}? This closes the job, not just this day.${coWarning}`,
+        danger: openCos > 0,
+        confirmLabel: "Mark whole job complete",
       }))
     )
       return;
@@ -2310,7 +2317,7 @@ export function SchedulePlanner({
               disabled={eventSaving}
               className="rounded border border-emerald-600 px-2 py-1 text-[10px] font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
             >
-              {eventSaving ? "Saving…" : "Mark complete"}
+              {eventSaving ? "Saving…" : "Mark whole job complete"}
             </button>
           ) : null}
           <Link

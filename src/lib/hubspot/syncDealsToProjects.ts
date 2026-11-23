@@ -174,6 +174,9 @@ export async function syncHubSpotDealsToProjects(): Promise<{
             // next sync used to flip the project back to ACTIVE. Reopening
             // a completed project is done by hand in the ERP.
             ...(stageChanged && existing.status !== "COMPLETE" ? { status } : {}),
+            ...(stageChanged && existing.status !== "COMPLETE" && status === "COMPLETE"
+              ? { completedAt: new Date(), completedBy: "HubSpot sync" }
+              : {}),
             hubspotPipelineId: pipelineId,
             hubspotStageId: stageId,
             // Once a project has a start date, the ERP schedule owns it —
@@ -220,6 +223,7 @@ export async function syncHubSpotDealsToProjects(): Promise<{
             supervisor: null,
             segment: projectSegment,
             status,
+            ...(status === "COMPLETE" ? { completedAt: new Date(), completedBy: "HubSpot sync" } : {}),
             contractValueCents: contractValueCents ?? null,
             projectDate,
             projectEndDate,
