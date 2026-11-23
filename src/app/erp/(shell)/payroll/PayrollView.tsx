@@ -5,7 +5,9 @@ import Link from "next/link";
 import { Button, InfoTip, Modal, useConfirm, useToast } from "@/app/erp/components/ui";
 import { EmployeeCombobox, type EmployeeOption } from "@/app/erp/components/EmployeeCombobox";
 import { splitHoursOverWorkingDays } from "@/lib/erp/manualHours";
-import { DEFAULT_PAYROLL_ANCHOR, anchorDate, biweeklyIndex, biweeklyRange } from "@/lib/erp/payPeriods";
+import { DEFAULT_PAYROLL_ANCHOR, anchorDate, biweeklyIndex, biweeklyRange, payPeriodForDay } from "@/lib/erp/payPeriods";
+import { todayEasternKey } from "@/lib/erp/dates";
+import type { HeldSubPayLine, SubPayLineKind } from "@/lib/erp/subPayHold";
 import type { EmployerTax } from "@/lib/erp/employerTax";
 import { EmployerTaxRatesModal } from "./EmployerTaxRatesModal";
 import { HealthInsuranceModal } from "./HealthInsuranceModal";
@@ -49,12 +51,16 @@ type PayrollRow = {
 
 type ContractorLine = {
   id: string;
+  kind: SubPayLineKind;
   date: string | null;
   projectId: string | null;
   title: string;
   role: string | null;
   amountCents: number;
   fromSchedule: boolean;
+  /** Released from hold: the line's own date (date above is the release date) */
+  releasedFrom: string | null;
+  holdNote: string | null;
 };
 
 /** Pay lines for the same job, day and role: usually entered twice by mistake. */
@@ -334,6 +340,10 @@ export function PayrollView({ employees = [] }: { employees?: EmployeeOption[] }
   const [removingRepeat, setRemovingRepeat] = useState<{ group: ManualGroup; name: string } | null>(null);
   const [taxRatesOpen, setTaxRatesOpen] = useState(false);
   const [healthOpen, setHealthOpen] = useState(false);
+  const [held, setHeld] = useState<HeldSubPayLine[]>([]);
+  const [holding, setHolding] = useState<{ line: ContractorLine; name: string; note: string } | null>(null);
+  const [releasing, setReleasing] = useState<{ line: HeldSubPayLine; payDate: string } | null>(null);
+  const [savingHold, setSavingHold] = useState(false);
 
   // Load anchor from API on mount
   useEffect(() => {
@@ -370,6 +380,46 @@ export function PayrollView({ employees = [] }: { employees?: EmployeeOption[] }
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [periodIndex, anchorISO, anchorLoaded, reloadKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sub pay on hold is the same list on every period
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/erp/payroll/sub-pay-hold")
+      .then((r) => (r.ok ? r.json() : { held: [] }))
+      .then((d: { held: HeldSubPayLine[] }) => { if (!cancelled) setHeld(d.held ?? []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [reloadKey]);
+
+  async function saveSubPayHold(body: Record<string, unknown>, done: string): Promise<boolean> {
+    setSavingHold(true);
+    try {
+      const res = await fetch("/api/erp/payroll/sub-pay-hold", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { toast(d.error ?? "Could not save", "error"); return false; }
+      toast(done, "success");
+      setReloadKey((k) => k + 1);
+      return true;
+    } finally {
+      setSavingHold(false);
+    }
+  }
+
+  async function confirmHold() {
+    if (!holding) return;
+    const ok = await saveSubPayHold({ action: "hold", kind: holding.line.kind, id: holding.line.id, note: holding.note }, "Pay put on hold.");
+    if (ok) setHolding(null);
+  }
+
+  async function confirmRelease() {
+    if (!releasing) return;
+    const ok = await saveSubPayHold({ action: "release", kind: releasing.line.kind, id: releasing.line.id, payDate: releasing.payDate }, "Pay released.");
+    if (ok) setReleasing(null);
+  }
 
   async function saveAnchor(draft: string): Promise<string | null> {
     try {
@@ -896,7 +946,8 @@ export function PayrollView({ employees = [] }: { employees?: EmployeeOption[] }
                       {open && (
                         <tr className="border-b border-gray-200 bg-gray-50">
                           <td colSpan={5} className="px-4 pb-4 pt-1">
-                            <PayrollRowDetails row={row} start={start} end={end} onEditManual={openEdit} onRemoveManual={removeManualHours} />
+                            <PayrollRowDetails row={row} start={start} end={end} onEditManual={openEdit} onRemoveManual={removeManualHours}
+                              onHoldLine={(line) => setHolding({ line, name: row.name, note: "" })} />
                           </td>
                         </tr>
                       )}
@@ -924,6 +975,103 @@ export function PayrollView({ employees = [] }: { employees?: EmployeeOption[] }
           </table>
         </div>
       </section>
+
+      {held.length > 0 && (
+        <section className="overflow-hidden rounded-lg border border-amber-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between gap-3 border-b border-amber-100 bg-amber-50 px-4 py-2.5">
+            <div>
+              <p className="text-sm font-semibold text-amber-900">Sub pay on hold</p>
+              <p className="text-xs text-amber-800">Not in any pay period until released. Release pays it in the period holding the date you pick.</p>
+            </div>
+            <p className="shrink-0 text-sm font-semibold tabular-nums text-amber-900">{fmt(held.reduce((n, l) => n + l.amountCents, 0))}</p>
+          </div>
+          <table className="w-full text-left text-xs">
+            <tbody>
+              {held.map((l) => (
+                <tr key={`${l.kind}-${l.id}`} className="border-b border-gray-100 last:border-0">
+                  <td className="px-4 py-2 font-medium text-gray-900">
+                    <Link href={`/erp/contractors/${l.contractorId}`} className="hover:text-pink-600 hover:underline">{l.contractorName}</Link>
+                  </td>
+                  <td className="w-24 px-2 py-2 tabular-nums text-gray-500">{l.date ? formatDate(new Date(`${l.date}T00:00:00Z`)) : "-"}</td>
+                  <td className="px-2 py-2">
+                    {l.projectId ? (
+                      <Link href={`/erp/projects/${l.projectId}?tab=Labor`} className="text-gray-800 hover:text-pink-600 hover:underline">{l.title}</Link>
+                    ) : (
+                      <span className="text-gray-800">{l.title}</span>
+                    )}
+                    {l.role && <span className="ml-1.5 text-gray-500">{l.role}</span>}
+                    <p className="text-[11px] text-gray-400">
+                      Held {formatDate(new Date(l.heldAt))}{l.heldBy ? ` by ${l.heldBy}` : ""}{l.note ? `: ${l.note}` : ""}
+                    </p>
+                  </td>
+                  <td className="px-2 py-2 text-right tabular-nums text-gray-800">{fmt(l.amountCents)}</td>
+                  <td className="px-4 py-2 text-right">
+                    <button type="button" onClick={() => setReleasing({ line: l, payDate: todayEasternKey() })}
+                      className="rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                      Release
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      <Modal open={!!holding} onClose={() => setHolding(null)} size="sm">
+        {holding && (
+          <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); confirmHold(); }}>
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Hold pay</h2>
+              <p className="mt-1 text-sm text-gray-600">
+                {fmt(holding.line.amountCents)} for {holding.name}, {holding.line.title}
+                {holding.line.date ? ` (${formatDate(new Date(`${holding.line.date}T00:00:00Z`))})` : ""}.
+                It comes out of this period and waits under Sub pay on hold until you release it.
+              </p>
+            </div>
+            <label className="block text-xs font-medium text-gray-600">
+              Reason <span className="font-normal text-gray-400">(optional)</span>
+              <input type="text" value={holding.note} autoFocus placeholder="e.g. Not paid out on the Nov 14 run"
+                onChange={(e) => setHolding((h) => h && { ...h, note: e.target.value })} className={manualInputCls} />
+            </label>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setHolding(null)} className="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100">Cancel</button>
+              <Button size="sm" type="submit" disabled={savingHold}>{savingHold ? "Saving..." : "Hold pay"}</Button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      <Modal open={!!releasing} onClose={() => setReleasing(null)} size="sm">
+        {releasing && (() => {
+          const valid = /^\d{4}-\d{2}-\d{2}$/.test(releasing.payDate);
+          const period = valid ? payPeriodForDay(releasing.payDate, anchorISO) : null;
+          return (
+            <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); confirmRelease(); }}>
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">Release pay</h2>
+                <p className="mt-1 text-sm text-gray-600">
+                  {fmt(releasing.line.amountCents)} for {releasing.line.contractorName}, {releasing.line.title}.
+                </p>
+              </div>
+              <label className="block text-xs font-medium text-gray-600">
+                Pay it on
+                <input type="date" required value={releasing.payDate}
+                  onChange={(e) => setReleasing((r) => r && { ...r, payDate: e.target.value })} className={manualInputCls} />
+              </label>
+              {period && (
+                <p className="text-xs text-gray-500">
+                  Goes in the {formatDate(period.start)} – {formatDate(period.end)} pay period.
+                </p>
+              )}
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setReleasing(null)} className="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100">Cancel</button>
+                <Button size="sm" type="submit" disabled={savingHold || !valid}>{savingHold ? "Saving..." : "Release"}</Button>
+              </div>
+            </form>
+          );
+        })()}
+      </Modal>
 
       {/* Summary */}
       {data && filteredRows.length > 0 && (
@@ -964,12 +1112,14 @@ function PayrollRowDetails({
   end,
   onEditManual,
   onRemoveManual,
+  onHoldLine,
 }: {
   row: PayrollRow;
   start: Date;
   end: Date;
   onEditManual: (g: ManualGroup, name: string) => void;
   onRemoveManual: (g: ManualGroup, name: string) => void;
+  onHoldLine: (line: ContractorLine) => void;
 }) {
   const head = "text-[11px] font-semibold uppercase tracking-wide text-gray-400";
   if (row.isContractor) {
@@ -990,9 +1140,18 @@ function PayrollRowDetails({
                   )}
                   {l.fromSchedule && <span className="ml-1.5 rounded bg-gray-100 px-1 py-0.5 text-[10px] text-gray-500">from calendar</span>}
                   {dupes.has(l.id) && <span className="ml-1.5 text-[10px] font-medium text-amber-700">same job, day and role as another line</span>}
+                  {l.releasedFrom != null && (
+                    <span className="ml-1.5 rounded bg-amber-50 px-1 py-0.5 text-[10px] text-amber-800"
+                      title={l.holdNote ? `Held: ${l.holdNote}` : undefined}>
+                      released from hold{l.releasedFrom ? `, originally ${formatDate(new Date(`${l.releasedFrom}T00:00:00Z`))}` : ""}
+                    </span>
+                  )}
                 </td>
                 <td className="py-1 pr-3 text-gray-500">{l.role ?? ""}</td>
                 <td className="py-1 text-right tabular-nums text-gray-800">{fmt(l.amountCents)}</td>
+                <td className="w-12 py-1 pl-3 text-right">
+                  <button type="button" onClick={() => onHoldLine(l)} className="text-gray-400 hover:text-amber-700">Hold</button>
+                </td>
               </tr>
             ))}
           </tbody>

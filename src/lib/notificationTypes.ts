@@ -542,6 +542,15 @@ export const NOTIFICATIONS = {
     toMode: "recipients",
     ccEditable: true,
   }),
+  CO_CONTRACT_SENT: def({
+    label: "Change order contract",
+    group: "Projects & schedule",
+    when: "Someone emails a change order contract they made on the change order (Create contract) for signing",
+    automatic: "The client address typed when sending. Replies go to whoever sent it",
+    ccEditable: true,
+    sender: "sueep",
+  }),
+
   COI_REQUEST_LINK: def({
     label: "COI request link",
     group: "Insurance",

@@ -336,3 +336,19 @@ export async function flattenContractPdf(pdfBytes: Uint8Array): Promise<Uint8Arr
   pdfDoc.getForm().flatten();
   return pdfDoc.save();
 }
+
+/** The fields a client fills when signing an emailed contract; everything else is locked. */
+const SIGNING_FIELDS = new Set(["signature", "signature_date", "printed_name"]);
+
+/**
+ * Makes every field read-only except signature, printed name and date, for a
+ * contract emailed to the client to sign in their own PDF app: they can sign,
+ * but can't change the price, scope or anything else Sueep filled in.
+ */
+export async function lockContractFieldsExceptSigning(pdfBytes: Uint8Array): Promise<Uint8Array> {
+  const pdfDoc = await PDFDocument.load(pdfBytes);
+  for (const field of pdfDoc.getForm().getFields()) {
+    if (!SIGNING_FIELDS.has(field.getName())) field.enableReadOnly();
+  }
+  return pdfDoc.save();
+}

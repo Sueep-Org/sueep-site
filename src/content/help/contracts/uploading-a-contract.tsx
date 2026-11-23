@@ -41,6 +41,13 @@ export function UploadingAContract() {
           <Img src="/help/contracts/co_details_2.png" alt="Project details page" />
           Then just navigate to the signing tab! You can skip to <SkipTo href="#Contract-Signing-How">contract</SkipTo> signing now
           <Img src="/help/contracts/co_details_3.png" alt="Change order details page" />
+          <Callout type="info">
+            Change orders don&apos;t need a PDF of your own: <strong>Create contract</strong> on the Signing tab makes the
+            contract from the change order (priced by rates or a price you type), emails it to the client, and takes the
+            signed copy back. See{" "}
+            <A href="/erp/help/projects/creating-a-change-order">Creating a Change Order: Making the contract yourself</A>.
+            The DocuSeal steps below are only needed when you already have your own contract PDF.
+          </Callout>
         </Step>
         </div>
 

@@ -6,7 +6,7 @@ import {
   hasCustomChangeOrderLaborRate,
 } from "@/lib/changeOrderLaborRates";
 import { loadPricingSettings } from "@/lib/pricingSettingsServer";
-import { fillChangeOrderContractPdf } from "@/lib/contracts/fillChangeOrderPdf";
+import { fillChangeOrderContractPdf, lockContractFieldsExceptSigning } from "@/lib/contracts/fillChangeOrderPdf";
 
 const DEFAULT_PURCHASE_TERMS =
   "Payment due within 30 days of invoice date. This change order is governed by the terms of the original service agreement between Sueep LLC and the client.";
@@ -107,6 +107,132 @@ export async function generateChangeOrderContractPdf(
     return { ok: true, pdfBytes };
   } catch (e) {
     console.error("Failed to fill change order contract PDF:", e);
+    return { ok: false, error: "Contract could not be prepared. Please try again.", status: 500 };
+  }
+}
+
+export type ManualChangeOrderContractInput = {
+  projectId: string;
+  coTitle: string;
+  scopeDescription: string;
+  /** YYYY-MM-DD */
+  startDateKey?: string;
+  /** YYYY-MM-DD, last day of the work; with "rates" it sets the number of days */
+  endDateKey?: string;
+  clientCompany: string;
+  clientAddress: string;
+  recipientName: string;
+  recipientEmail: string;
+  /**
+   * "rates": priced like the request page (cleaners and foremen x the
+   * project's rates x one day per date in the range, plus the next day
+   * surcharge); cleaners are required. "price": totalCents as typed, and the
+   * crew lines only when filled in.
+   */
+  mode: "rates" | "price";
+  totalCents?: number | null;
+  cleaners?: number | null;
+  foremen?: number | null;
+  days?: number | null;
+  /** "rates" only: hourly rates typed on the form for this contract (else the project's, else the company's) */
+  cleanerRateCents?: number | null;
+  foremanRateCents?: number | null;
+  referenceNumber: string;
+};
+
+export type ManualChangeOrderContractResult =
+  | { ok: true; pdfBytes: Uint8Array; totalCents: number }
+  | { ok: false; error: string; status: number };
+
+/**
+ * A contract a PM makes on the change order itself (Create contract), not
+ * through the client's request link. Same PDF as generateChangeOrderContractPdf,
+ * priced either by the project's rates (same math as the request page) or by
+ * a price the PM types. Fields other than the signature ones are locked.
+ */
+export async function generateManualChangeOrderContractPdf(input: ManualChangeOrderContractInput): Promise<ManualChangeOrderContractResult> {
+  const project = await prisma.project.findUnique({ where: { id: input.projectId }, select: { jobTitle: true, laborRateCard: true } });
+  if (!project) return { ok: false, error: "Project not found", status: 404 };
+  const count = (n: number | null | undefined) => (n && n > 0 ? String(Math.round(n)) : "");
+
+  let crew: { numCleaners: string; numForemen: string; numDays: string; cleanerRate: string; foremanRate: string; subtotal: string; total: string };
+  let totalCents: number;
+  let scopeDescription = input.scopeDescription;
+  if (input.mode === "rates") {
+    const cleaners = Math.max(0, Math.round(Number(input.cleaners) || 0));
+    if (cleaners <= 0) return { ok: false, error: "Enter the number of cleaners to price by rates.", status: 400 };
+    const foremen =
+      input.foremen !== null && input.foremen !== undefined && Number.isFinite(Number(input.foremen))
+        ? Math.max(0, Math.round(Number(input.foremen)))
+        : deriveChangeOrderSupervisorCount(cleaners);
+    const pricing = await loadPricingSettings();
+    const base = getChangeOrderLaborRates(project.laborRateCard, pricing.coPriceRates);
+    const typed = (v: number | null | undefined) => (v !== null && v !== undefined && Number.isFinite(Number(v)) && Number(v) > 0 ? Math.round(Number(v)) : null);
+    // Rates typed on the form win for this contract only; nothing is saved to the project.
+    const rates = {
+      cleanerHourlyRateCents: typed(input.cleanerRateCents) ?? base.cleanerHourlyRateCents,
+      foremanHourlyRateCents: typed(input.foremanRateCents) ?? base.foremanHourlyRateCents,
+    };
+    const price = clientChangeOrderPrice({ cleanerCount: cleaners, supervisorCount: foremen }, rates, {
+      startKey: input.startDateKey,
+      endKey: input.endDateKey,
+      coDayHours: pricing.coDayHours,
+      nextDayPct: pricing.nextDayPct,
+    });
+    if (price.upchargeCents > 0) {
+      scopeDescription = [
+        scopeDescription,
+        `Total includes a ${pricing.nextDayPct}% next day upcharge (${formatAmount(price.upchargeCents)})${price.days > 1 ? ` on ${price.upchargeDays} of ${price.days} days (today or tomorrow)` : ""}.`,
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+    }
+    totalCents = price.totalCents;
+    crew = {
+      numCleaners: String(cleaners),
+      numForemen: String(foremen),
+      numDays: String(price.days),
+      cleanerRate: formatAmount(rates.cleanerHourlyRateCents),
+      foremanRate: formatAmount(rates.foremanHourlyRateCents),
+      subtotal: formatAmount(price.subtotalCents),
+      total: formatAmount(price.totalCents),
+    };
+  } else {
+    totalCents = Math.round(Number(input.totalCents));
+    if (!Number.isFinite(totalCents) || totalCents <= 0) return { ok: false, error: "Enter the contract price.", status: 400 };
+    crew = {
+      numCleaners: count(input.cleaners),
+      numForemen: count(input.foremen),
+      numDays: count(input.days),
+      cleanerRate: "",
+      foremanRate: "",
+      subtotal: formatAmount(totalCents),
+      total: formatAmount(totalCents),
+    };
+  }
+
+  const today = new Date();
+  const expires = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000);
+  try {
+    const pdfBytes = await fillChangeOrderContractPdf({
+      changeOrderTitle: input.coTitle,
+      referenceNumber: input.referenceNumber,
+      projectName: project.jobTitle,
+      clientCompany: input.clientCompany,
+      clientAddress: input.clientAddress,
+      requesterName: input.recipientName,
+      requesterEmail: input.recipientEmail,
+      dateCreated: formatDate(today),
+      dateExpires: formatDate(expires),
+      startDate: input.startDateKey ? formatDate(new Date(`${input.startDateKey}T12:00:00Z`)) : undefined,
+      scopeDescription,
+      ...crew,
+      purchaseTerms: DEFAULT_PURCHASE_TERMS,
+    });
+    // Emailed to sign in their own PDF app: only signature, printed name and date stay editable.
+    return { ok: true, pdfBytes: await lockContractFieldsExceptSigning(pdfBytes), totalCents };
+  } catch (e) {
+    console.error("Failed to fill manual change order contract PDF:", e);
     return { ok: false, error: "Contract could not be prepared. Please try again.", status: 500 };
   }
 }

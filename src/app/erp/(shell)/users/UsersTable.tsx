@@ -43,6 +43,7 @@ const PERMISSION_ROWS: PermissionRow[] = [
   { label: "Mark a whole job complete (project page)", roles: PM_EST },
   { label: "Mark a whole unit turn complete (calendar card or the unit's Labor tab)", roles: [...PM_UP, "SUPERVISOR"] },
   { label: "Mark a whole change order complete (calendar or its page)", roles: ALL_ROLES },
+  { label: "Create and email change order contracts, upload the signed copy", roles: PM_EST },
   { label: "Set sub pay on the schedule", roles: PM_UP },
   { label: "Drag projects on the timeline to change dates", roles: PM_LEVEL },
   { label: "Contractors, Proposals and Quality Checks tabs on projects", roles: PM_EST },

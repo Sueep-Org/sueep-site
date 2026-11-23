@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getErpAuth } from "@/lib/erpAuth";
+import { getErpAuth, canSeeJobCosts } from "@/lib/erpAuth";
 import { costLaborLogs, sumLineCosts } from "@/lib/erp/laborCost";
 import { ChangeOrderDetailEditor } from "./ChangeOrderDetailEditor";
 import { ChangeOrderSigningSection, type ContractItem } from "./ChangeOrderSigningSection";
+import type { CoContractPrefill } from "./CreateCoContractForm";
 import type { ContractorRow } from "./ChangeOrderContractorsSection";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +30,16 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
     }),
     prisma.project.findUnique({
       where: { id },
-      select: { id: true, jobTitle: true, laborRateCard: true },
+      select: {
+        id: true,
+        jobTitle: true,
+        laborRateCard: true,
+        // For Create contract's starting values (client, address, who it goes to)
+        clientCompany: { select: { name: true } },
+        building: { select: { address: true } },
+        workOrderRecord: { select: { siteAddress: true } },
+        contacts: { where: { email: { not: null } }, orderBy: [{ isPrimary: "desc" }, { fullName: "asc" }], select: { fullName: true, email: true } },
+      },
     }),
     prisma.employee.findMany({
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
@@ -47,6 +57,7 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
         docusealSubmissionId: true,
         signedAt: true,
         signedDocumentUrl: true,
+        sentAt: true,
       },
     }),
     prisma.changeOrderMaterialEntry.findMany({
@@ -214,7 +225,28 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
     docusealSubmissionId: c.docusealSubmissionId,
     signedAt: c.signedAt?.toISOString() ?? null,
     signedDocumentUrl: c.signedDocumentUrl,
+    sentAt: c.sentAt?.toISOString() ?? null,
   }));
+
+  // Create contract (Signing tab): roles that see job costs, starting from this change order.
+  const dayKey = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : "");
+  const contractPrefill: CoContractPrefill | null =
+    auth && canSeeJobCosts(auth.role) && changeOrder
+      ? {
+          coTitle: changeOrder.title,
+          scope: changeOrder.description ?? "",
+          startDateKey: dayKey(changeOrder.startDate),
+          endDateKey: dayKey(changeOrder.endDate),
+          laborRateCard: project?.laborRateCard ?? null,
+          totalCents: changeOrder.contractValueCents,
+          cleaners: changeOrder.estLaborers,
+          foremen: changeOrder.estSupervisors,
+          days: changeOrder.estimatedDays,
+          clientCompany: project?.clientCompany?.name ?? "",
+          clientAddress: project?.workOrderRecord?.siteAddress ?? project?.building?.address ?? "",
+          contacts: (project?.contacts ?? []).map((c) => ({ name: c.fullName, email: c.email! })),
+        }
+      : null;
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 px-4 sm:px-0">
@@ -236,6 +268,8 @@ export default async function ChangeOrderDetailPage({ params }: PageProps) {
             projectId={id}
             changeOrderId={changeOrderId}
             initialContracts={initialContracts}
+            coStatus={changeOrder.status}
+            prefill={contractPrefill}
           />
         }
       />

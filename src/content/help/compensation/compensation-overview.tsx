@@ -65,6 +65,16 @@ export function CompensationOverview() {
               <strong>Also change the hours and note on every later repeat</strong> to change the ones after it too. Removing one asks whether to
               remove just that one, or that one and every later one, which stops the repeat (earlier ones stay).
             </LI>
+            <LI>
+              <strong>Holding a sub&apos;s pay.</strong> Open a contractor&apos;s row and click <strong>Hold</strong> on a pay
+              line, with an optional reason. It comes out of that period and moves to <strong>Sub pay on hold</strong> under
+              the table, which shows on every period until it&apos;s released. This works on past periods too: if a sub
+              wasn&apos;t paid out for a line, go back to that period with <strong>◀</strong>, hold the line, then click{" "}
+              <strong>Release</strong>. Release asks for the date to pay it on (today unless you change it) and shows which
+              pay period that is. The line then shows in that period marked <strong>released from hold</strong> with its
+              original date. Holding never changes the job&apos;s cost or the line&apos;s own date. Hold it again to take a
+              released line back out.
+            </LI>
           </UL>
           <Callout type="info">
             The gear icon (top right) lets you change the <strong>pay period anchor</strong> date

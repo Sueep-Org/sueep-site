@@ -1252,6 +1252,16 @@ model ChangeOrderContractorAssignment {
   setOnSchedule Boolean @default(false)
   subPayDays    ChangeOrderDayAssignment[] @relation("CoDaySubPay")
 
+  /// Pay held by hand on the Payroll page (subPayHold.ts). While held and not
+  /// released, payroll leaves it out of every period. Released, it's paid in
+  /// the period holding payReleasedAt instead of its own date.
+  payHeldAt     DateTime?
+  payHeldBy     String?
+  payHoldNote   String?
+  /// The date it's paid on once released (UTC-midnight date label)
+  payReleasedAt DateTime?
+  payReleasedBy String?
+
   @@index([changeOrderId])
   @@index([contractorId])
 }
@@ -1314,6 +1324,13 @@ model ChangeOrderContract {
   docusealSubmissionId Int?
   signedAt             DateTime?
   signedDocumentUrl    String?
+  /// A contract made in the ERP (Create contract on the change order) and
+  /// emailed to the client: the unsigned PDF as a data URL, and who it went to.
+  /// signingStatus is EMAILED until the signed copy is uploaded (then SIGNED).
+  unsignedPdfUrl       String?
+  sentAt               DateTime?
+  sentTo               String?
+  sentBy               String?
 
   @@index([changeOrderId])
   @@index([docusealSubmissionId])
@@ -2706,6 +2723,16 @@ model ContractorAssignment {
   /// days left (see subPay.ts).
   setOnSchedule Boolean @default(false)
   subPayDays    ProjectDayAssignment[] @relation("DaySubPay")
+
+  /// Pay held by hand on the Payroll page (subPayHold.ts). While held and not
+  /// released, payroll leaves it out of every period. Released, it's paid in
+  /// the period holding payReleasedAt instead of its own date.
+  payHeldAt     DateTime?
+  payHeldBy     String?
+  payHoldNote   String?
+  /// The date it's paid on once released (UTC-midnight date label)
+  payReleasedAt DateTime?
+  payReleasedBy String?
 
   /// SOV items this assignment's work covers. A contractor can be responsible
   /// for multiple line items.

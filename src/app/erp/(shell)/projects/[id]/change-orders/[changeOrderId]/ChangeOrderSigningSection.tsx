@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { CreateCoContractForm, type CoContractPrefill } from "./CreateCoContractForm";
 
 export type ContractItem = {
   id: string;
@@ -12,6 +13,8 @@ export type ContractItem = {
   docusealSubmissionId: number | null;
   signedAt: string | null;
   signedDocumentUrl: string | null;
+  /** When a contract made here was emailed (Create contract) */
+  sentAt?: string | null;
 };
 
 function StatusBadge({ status }: { status: string | null }) {
@@ -19,6 +22,8 @@ function StatusBadge({ status }: { status: string | null }) {
     return <span className="rounded px-2 py-0.5 text-[10px] font-semibold uppercase bg-green-100 text-green-700">Signed</span>;
   if (status === "SENT")
     return <span className="rounded px-2 py-0.5 text-[10px] font-semibold uppercase bg-blue-100 text-blue-700">Awaiting Signature</span>;
+  if (status === "EMAILED")
+    return <span className="rounded px-2 py-0.5 text-[10px] font-semibold uppercase bg-blue-100 text-blue-700">Emailed, waiting for signed copy</span>;
   if (status === "UPLOADED")
     return <span className="rounded px-2 py-0.5 text-[10px] font-semibold uppercase bg-yellow-100 text-yellow-700">Not Sent Yet</span>;
   return null;
@@ -29,13 +34,38 @@ function ContractRow({
   projectId,
   changeOrderId,
   onRemove,
+  onSigned,
 }: {
   contract: ContractItem;
   projectId: string;
   changeOrderId: string;
   onRemove: (id: string) => void;
+  onSigned: (id: string, signedAt: string) => void;
 }) {
   const [removeError, setRemoveError] = useState("");
+  const [signedOpen, setSignedOpen] = useState(false);
+  const [signedFile, setSignedFile] = useState<File | null>(null);
+  const [signedDate, setSignedDate] = useState("");
+  const [signedBusy, setSignedBusy] = useState(false);
+  const [signedError, setSignedError] = useState("");
+
+  async function uploadSigned() {
+    if (!signedFile) return setSignedError("Pick the signed PDF.");
+    setSignedBusy(true);
+    setSignedError("");
+    try {
+      const fd = new FormData();
+      fd.append("file", signedFile);
+      if (signedDate) fd.append("signedAt", signedDate);
+      const res = await fetch(base, { method: "PATCH", body: fd });
+      const d = (await res.json().catch(() => ({}))) as { error?: string; signedAt?: string };
+      if (!res.ok) return setSignedError(d.error ?? "Upload failed");
+      onSigned(contract.id, d.signedAt ?? new Date().toISOString());
+      setSignedOpen(false);
+    } finally {
+      setSignedBusy(false);
+    }
+  }
   const base = `/api/erp/projects/${projectId}/change-orders/${changeOrderId}/contracts/${contract.id}`;
 
   async function handleRemove() {
@@ -63,6 +93,9 @@ function ContractRow({
             <span className="text-xs text-gray-500">
               · {new Date(contract.signedAt).toLocaleDateString("en-US")}
             </span>
+          )}
+          {contract.signingStatus === "EMAILED" && contract.sentAt && (
+            <span className="text-xs text-gray-500">· sent {new Date(contract.sentAt).toLocaleDateString("en-US")}</span>
           )}
         </div>
 
@@ -94,6 +127,15 @@ function ContractRow({
               Finish Sending in DocuSeal →
             </a>
           )}
+          {contract.signingStatus === "EMAILED" && !signedOpen && (
+            <button
+              type="button"
+              onClick={() => setSignedOpen(true)}
+              className="rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700"
+            >
+              Upload signed copy
+            </button>
+          )}
           <button
             type="button"
             onClick={handleRemove}
@@ -104,6 +146,25 @@ function ContractRow({
         </div>
       </div>
       {removeError && <p className="text-xs text-red-500" role="alert">{removeError}</p>}
+      {signedOpen && (
+        <div className="space-y-2 rounded-md border border-green-200 bg-green-50 p-3">
+          <p className="text-xs font-medium text-green-900">The client&apos;s signed copy. Saving it marks the change order Approved.</p>
+          <input type="file" accept="application/pdf" onChange={(e) => { setSignedFile(e.target.files?.[0] ?? null); setSignedError(""); }} className="block w-full text-xs text-gray-600" />
+          <label className="block text-xs text-gray-600">
+            Signed on (optional)
+            <input type="date" value={signedDate} onChange={(e) => setSignedDate(e.target.value)} className="mt-1 block rounded-md border border-gray-300 bg-white px-2 py-1 text-xs" />
+          </label>
+          {signedError && <p className="text-xs text-red-500" role="alert">{signedError}</p>}
+          <div className="flex gap-2">
+            <button type="button" disabled={signedBusy} onClick={() => void uploadSigned()} className="rounded-md bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50">
+              {signedBusy ? "Saving…" : "Save signed copy"}
+            </button>
+            <button type="button" onClick={() => setSignedOpen(false)} className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -112,11 +173,19 @@ export function ChangeOrderSigningSection({
   projectId,
   changeOrderId,
   initialContracts,
+  coStatus,
+  prefill,
 }: {
   projectId: string;
   changeOrderId: string;
   initialContracts: ContractItem[];
+  /** The change order's status: a signed copy coming back moves DRAFT or SUBMITTED to APPROVED */
+  coStatus: string;
+  /** Create contract's starting values; null for roles that can't create contracts */
+  prefill: CoContractPrefill | null;
 }) {
+  const [creating, setCreating] = useState(false);
+  const [notice, setNotice] = useState("");
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -136,6 +205,22 @@ export function ChangeOrderSigningSection({
     const id = setInterval(() => router.refresh(), 15000);
     return () => clearInterval(id);
   }, [hasPending, router]);
+
+  async function markSigned(id: string, signedAt: string) {
+    setContracts((cs) => cs.map((c) => (c.id === id ? { ...c, signingStatus: "SIGNED", signedAt } : c)));
+    // Through the change order route, so its usual approval email goes out.
+    if (coStatus === "DRAFT" || coStatus === "SUBMITTED") {
+      const res = await fetch(`/api/erp/projects/${projectId}/change-orders/${changeOrderId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "APPROVED" }),
+      });
+      setNotice(res.ok ? "Signed copy saved. The change order is now Approved." : "Signed copy saved, but the change order couldn't be set to Approved. Change its status on the Details tab.");
+    } else {
+      setNotice("Signed copy saved.");
+    }
+    router.refresh();
+  }
 
   function removeContract(id: string) {
     setContracts((cs) => cs.filter((c) => c.id !== id));
@@ -226,11 +311,22 @@ export function ChangeOrderSigningSection({
           projectId={projectId}
           changeOrderId={changeOrderId}
           onRemove={removeContract}
+          onSigned={(cid, at) => void markSigned(cid, at)}
         />
       ))}
 
       <div className={contracts.length > 0 ? "pt-1" : ""}>
+        {notice && <p className="mb-2 rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-800" role="status">{notice}</p>}
         <div className="flex flex-wrap items-center gap-3">
+          {prefill && !creating && (
+            <button
+              type="button"
+              onClick={() => { setCreating(true); setNotice(""); }}
+              className="inline-flex items-center gap-2 rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700"
+            >
+              Create contract
+            </button>
+          )}
           <label
             htmlFor="co-contract-upload"
             className={`inline-flex cursor-pointer items-center gap-2 rounded-md bg-pink-600 px-4 py-2 text-sm font-semibold text-white hover:bg-pink-500 ${uploading ? "opacity-50 pointer-events-none" : ""}`}
@@ -264,6 +360,20 @@ export function ChangeOrderSigningSection({
           Send for Signing: upload the unsigned PDF, then place fields and send it from DocuSeal. Status updates here automatically. Upload Signed: the PDF is already signed.
         </p>
         {uploadError && <p className="mt-2 text-xs text-red-400" role="alert">{uploadError}</p>}
+        {creating && prefill && (
+          <CreateCoContractForm
+            projectId={projectId}
+            changeOrderId={changeOrderId}
+            prefill={prefill}
+            onCancel={() => setCreating(false)}
+            onSent={(c, warning) => {
+              setContracts((cs) => [...cs, c]);
+              setCreating(false);
+              setNotice(warning ?? `Contract emailed to ${c.customerEmail}. When they send it back signed, use Upload signed copy on its row.`);
+              router.refresh();
+            }}
+          />
+        )}
 
         {!uploading && showPresigned && (
           <div className="mt-4 rounded-lg border-2 border-green-200 bg-green-50 p-4 space-y-3">
