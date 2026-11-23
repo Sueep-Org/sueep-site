@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getErpAuth, canSeeFinancials } from "@/lib/erpAuth";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { JANITORIAL_BILLING_SEGMENTS } from "@/lib/erp/billingStatus";
@@ -35,6 +36,9 @@ function latest(dates: (Date | null | undefined)[]): Date | null {
  * since the work didn't happen that day. Split by Billing tab.
  */
 export async function GET() {
+  // Same roles as Project Billing's roles; the middleware only checks someone is signed in.
+  const auth = await getErpAuth();
+  if (!auth || !canSeeFinancials(auth.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const today = todayEasternAsUtcMidnight();
   const postConPipelineId = parseHubSpotPipelineStageMap()?.postConstruction.pipelineId ?? null;
   const tabFor = (p: { segment: string; hubspotPipelineId: string | null }) =>

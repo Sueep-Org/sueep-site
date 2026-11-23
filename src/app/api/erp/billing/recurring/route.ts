@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
+import { getErpAuth, canSeeFinancials } from "@/lib/erpAuth";
 import { prisma } from "@/lib/prisma";
 import { periodTotalCents } from "@/lib/erp/recurringContracts";
 import { loadBuildingBillingPreferences } from "@/lib/erp/invoiceDestination";
 
 export async function GET(req: Request) {
+  // Same roles as Project Billing's roles; the middleware only checks someone is signed in.
+  const auth = await getErpAuth();
+  if (!auth || !canSeeFinancials(auth.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { searchParams } = new URL(req.url);
   const startParam = searchParams.get("start");
   const endParam = searchParams.get("end");

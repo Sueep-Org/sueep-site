@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 
-export type HelpArticleCard = { slug: string; title: string; description: string; category: string };
+export type HelpArticleCard = { slug: string; title: string; description: string; category: string; keywords?: string[] };
 export type HelpCategory = { name: string; articles: HelpArticleCard[] };
 
 const iconProps = { className: "h-5 w-5", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor", strokeWidth: 1.5 } as const;
@@ -41,10 +41,32 @@ const categoryIcons: Record<string, ReactNode> = {
   ),
 };
 
-/** Every word typed has to appear somewhere in the title, description, or category. */
-function matches(article: HelpArticleCard, words: string[]): boolean {
-  const text = `${article.title} ${article.description} ${article.category}`.toLowerCase();
-  return words.every((w) => text.includes(w));
+/** Lowercase words, split on anything that isn't a letter or digit. "Auto-draft" gives "auto", "draft" and "autodraft". */
+function words(text: string): string[] {
+  const out: string[] = [];
+  for (const chunk of text.toLowerCase().split(/\s+/)) {
+    const parts = chunk.split(/[^a-z0-9]+/).filter(Boolean);
+    out.push(...parts);
+    if (parts.length > 1) out.push(parts.join(""));
+  }
+  return out;
+}
+
+/** True when some word in `pool` starts with `w`, so "lien" finds "liens" but not "client". */
+const hasWord = (pool: string[], w: string) => pool.some((p) => p.startsWith(w));
+
+/**
+ * 0 when the article doesn't match. Every typed word has to start a word in
+ * the title, description, category or keywords. Higher scores (an exact
+ * keyword, then words found in the title) sort first.
+ */
+function score(article: HelpArticleCard, typed: string[], phrase: string): number {
+  const title = words(article.title);
+  const all = [...title, ...words(`${article.description} ${article.category} ${(article.keywords ?? []).join(" ")}`)];
+  if (!typed.every((w) => hasWord(all, w))) return 0;
+  // A keyword that is exactly what was typed (e.g. "change order") puts the article on top.
+  const exactKeyword = (article.keywords ?? []).some((k) => k.toLowerCase() === phrase) ? 2 : 0;
+  return 1 + exactKeyword + typed.filter((w) => hasWord(title, w)).length;
 }
 
 function ArticleLink({ article, showCategory }: { article: HelpArticleCard; showCategory?: boolean }) {
@@ -64,8 +86,15 @@ function ArticleLink({ article, showCategory }: { article: HelpArticleCard; show
  * (or, while searching, just the matching articles). */
 export function HelpSearch({ categories }: { categories: HelpCategory[] }) {
   const [query, setQuery] = useState("");
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-  const results = words.length ? categories.flatMap((c) => c.articles).filter((a) => matches(a, words)) : [];
+  const typed = words(query);
+  const results = typed.length
+    ? categories
+        .flatMap((c) => c.articles)
+        .map((a) => ({ a, s: score(a, typed, query.trim().toLowerCase().replace(/\s+/g, " ")) }))
+        .filter((r) => r.s > 0)
+        .sort((x, y) => y.s - x.s)
+        .map((r) => r.a)
+    : [];
 
   return (
     <div>
@@ -77,13 +106,13 @@ export function HelpSearch({ categories }: { categories: HelpCategory[] }) {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search help articles"
+          placeholder="Search help, e.g. invoice, clock in, password"
           aria-label="Search help articles"
           className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
         />
       </div>
 
-      {words.length > 0 ? (
+      {typed.length > 0 ? (
         results.length === 0 ? (
           <p className="py-10 text-center text-sm text-gray-500">No articles match &ldquo;{query.trim()}&rdquo;.</p>
         ) : (

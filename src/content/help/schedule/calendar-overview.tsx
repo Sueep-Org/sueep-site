@@ -41,7 +41,7 @@ export function ScheduleCalendarOverview() {
             </LI>
             <LI>
               <strong>Dashed chip (red) with a red ⚠:</strong> the same as above, except the day
-              has already passed and it never got logged. This flags a missed assignment.
+              has already passed and it never got logged. This flags a missed assignment. Marking the day complete (or finishing the whole job) clears it.
             </LI>
             <LI>
               <strong>Amber warning chip (⚠):</strong> a project starting today or soon that has
@@ -202,6 +202,22 @@ export function ScheduleCalendarOverview() {
             anyway (e.g. splitting a shift), but it won&apos;t happen silently.
           </Callout>
           A <strong>View project</strong> link at the bottom takes you to the full project page.
+          <Callout type="info">
+            <strong>Marking a day complete.</strong> <strong>Mark day complete</strong> on the card records that this
+            day&apos;s work is done: who marked it and when. That day&apos;s chip fades and gets a green ✓. On a job that runs several days in a row (one bar across the days), each finished day&apos;s part of the bar fades, and the bar&apos;s title gets the ✓ once every day of it is done. When the whole job (or change order) is complete, every one of its days counts as done: its chips show a solid green circle with a white ✓ instead, also faded. Marking a day never
+            closes the job. If the day was scheduled for SOV lines that are still open, it lists them so you can
+            tick any that are finished too: those are marked complete on that day and become ready to bill. Leave
+            them unticked to mark only the day. On a unit turn it lists scope items instead (Full clean, Paint and so on:
+            the ones planned for that day, or all of the unit&apos;s open scope if none were picked), and ticked items are
+            marked done on the unit. The unit itself is still finished on its project page, where the checklist rules
+            apply. <strong>Undo</strong> takes the day back but leaves ticked lines and items done (untick SOV lines on
+            the Financials tab, scope items under Work scope on the unit&apos;s Checklist tab). To finish the <em>whole job</em>, use{" "}
+            <strong>Mark job complete</strong> at the top of the project page. Unit turns and change orders are the
+            exceptions: their cards on the calendar also have <strong>Mark whole turn complete</strong> and{" "}
+            <strong>Mark whole change order complete</strong> (a turn still needs its quality checklist finished
+            first). Admins, Project Managers,
+            the Business Manager, Sales and Supervisors can mark days complete.
+          </Callout>
         </Step>
 
         <Step n={5} title="Moving a planned chip's date">

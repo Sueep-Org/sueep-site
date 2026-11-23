@@ -20,48 +20,83 @@ const ALL_ROLES: ErpRole[] = [...ROLES];
 // Same set as PM_LEVEL_ROLES in src/lib/erpRoles.ts.
 const PM_LEVEL: ErpRole[] = ["ADMIN", "PROJECT_MANAGER", "BUSINESS_MANAGER"];
 const PM_UP: ErpRole[] = [...PM_LEVEL, "SALES"];
-const FIELD: ErpRole[] = [...PM_LEVEL, "SALES", "SUPERVISOR"];
 const PM_EST: ErpRole[] = [...PM_LEVEL, "SALES", "ESTIMATION"];
+const ADMIN_BM: ErpRole[] = ["ADMIN", "BUSINESS_MANAGER"];
+const NOT_EMPLOYEE: ErpRole[] = ROLES.filter((r) => r !== "EMPLOYEE");
 
-const PERMISSION_ROWS: { label: string; roles: ErpRole[] }[] = [
-  { label: "Dashboard", roles: ALL_ROLES },
-  { label: "View projects", roles: ALL_ROLES },
-  { label: "View schedule", roles: ALL_ROLES },
-  { label: "Create new project", roles: PM_EST },
-  { label: "Add / edit labor logs", roles: FIELD },
-  { label: "Labor assignments", roles: FIELD },
-  { label: "Quality checks", roles: FIELD },
-  { label: "Contractor assignments", roles: PM_UP },
-  { label: "View job costs (contract value, costs, margins)", roles: PM_EST },
-  { label: "Set contractor pay on the schedule", roles: PM_UP },
-  { label: "Employees", roles: PM_UP },
-  // Payroll/Offshore Payroll: same set as canSeePayroll in src/lib/erpAuth.ts,
-  // the one place Sales is cut out of the money pages.
-  { label: "Payroll", roles: PM_LEVEL },
-  { label: "Offshore Payroll", roles: PM_LEVEL },
-  { label: "Commission & reimbursements", roles: PM_UP },
-  { label: "Project billing", roles: PM_UP },
-  { label: "Ready to Send (approve invoices)", roles: ["ADMIN", "BUSINESS_MANAGER"] },
-  { label: "Janitorial contracts", roles: PM_UP },
-  { label: "Property managers", roles: PM_UP },
-  { label: "Companies (view, pick on buildings and projects)", roles: PM_UP },
-  { label: "Edit companies and billing overrides", roles: ["ADMIN", "BUSINESS_MANAGER"] },
-  { label: "Win/Loss reports and GC scorecards", roles: PM_UP },
-  { label: "Insurance & COIs", roles: PM_UP },
-  { label: "Recruitment", roles: PM_UP },
-  { label: "Contractor verification", roles: PM_UP },
-  { label: "AI Estimator", roles: PM_EST },
-  { label: "Edit employee pay info", roles: PM_UP },
-  { label: "Finance dashboard", roles: PM_LEVEL },
-  { label: "Change cash forecast payment terms", roles: ["ADMIN", "BUSINESS_MANAGER"] },
-  { label: "Approve time off", roles: PM_LEVEL },
-  { label: "Management calendar", roles: PM_LEVEL },
-  { label: "Company info", roles: PM_LEVEL },
-  { label: "Notification settings", roles: PM_LEVEL },
-  { label: "Sub and property manager pages (turn off, activity)", roles: PM_LEVEL },
+/**
+ * What each role can do, as the code enforces it (checked 2026-11-23 against
+ * src/lib/erpAuth.ts and each page's own check). This table only describes
+ * the rules; change the code first, then this. Section rows have no roles.
+ */
+type PermissionRow = { label: string; roles: ErpRole[] } | { section: string };
+const PERMISSION_ROWS: PermissionRow[] = [
+  { section: "Projects" },
+  { label: "Dashboard, projects and schedule", roles: ALL_ROLES },
+  { label: "Projects: only their own by default (can switch to all)", roles: ["SUPERVISOR"] },
+  { label: "Project pages: only the Labor and Checklist tabs", roles: ["EMPLOYEE"] },
+  { label: "Create projects", roles: PM_EST },
+  { label: "Add and edit labor on projects", roles: NOT_EMPLOYEE },
+  { label: "Log hours on a building", roles: [...PM_UP, "SUPERVISOR"] },
+  { label: "Assign crews on the schedule", roles: ALL_ROLES },
+  { label: "Mark a day complete on the schedule", roles: [...PM_UP, "SUPERVISOR"] },
+  { label: "Mark a whole job complete (project page)", roles: PM_EST },
+  { label: "Mark a whole unit turn complete (calendar card or the unit's Labor tab)", roles: [...PM_UP, "SUPERVISOR"] },
+  { label: "Mark a whole change order complete (calendar or its page)", roles: ALL_ROLES },
+  { label: "Set sub pay on the schedule", roles: PM_UP },
+  { label: "Drag projects on the timeline to change dates", roles: PM_LEVEL },
+  { label: "Contractors, Proposals and Quality Checks tabs on projects", roles: PM_EST },
+  { label: "See contract value, costs and margins", roles: PM_EST },
+  { label: "See margin as a percent only", roles: ["SUPERVISOR"] },
+  { label: "Edit pricing packages", roles: PM_EST },
+  { label: "Override the quality checklist, safety check, background check and time off limits", roles: PM_UP },
+  { label: "Sub Reviews", roles: PM_LEVEL },
+  { label: "Deals board", roles: PM_EST },
+  { label: "Deals board settings (shared views, stage rules, bulk edit)", roles: ADMIN_BM },
+  { label: "Estimator", roles: PM_EST },
+  { label: "HubSpot sync", roles: PM_LEVEL },
+  { label: "Janitorial", roles: PM_UP },
+  { label: "Do janitorial quality checks", roles: ["ADMIN", "PROJECT_MANAGER"] },
   { label: "Listed as PM on the schedule", roles: ["PROJECT_MANAGER"] },
-  { label: "Janitorial quality checks (doing them)", roles: ["ADMIN", "PROJECT_MANAGER"] },
-  { label: "User management", roles: ["ADMIN"] },
+
+  { section: "Clients" },
+  { label: "Companies, Buildings list, Property Managers and Win/Loss", roles: PM_UP },
+  { label: "Edit companies and billing overrides", roles: ADMIN_BM },
+
+  { section: "Finance" },
+  { label: "Project Billing", roles: PM_UP },
+  { label: "Invoices", roles: PM_LEVEL },
+  { label: "Ready to Send (approve and send invoices, Auto-draft)", roles: ADMIN_BM },
+  { label: "QuickBooks page", roles: ADMIN_BM },
+  { label: "Connect QuickBooks, switch invoices between QuickBooks and HubSpot", roles: ["ADMIN"] },
+  { label: "Compensation: Payroll and Offshore Payroll", roles: PM_LEVEL },
+  { label: "Compensation: Commission and Reimbursements", roles: PM_UP },
+  { label: "Insurance & COIs", roles: PM_UP },
+  { label: "Finance dashboard and Overhead", roles: PM_LEVEL },
+  { label: "Ad spend", roles: PM_UP },
+  { label: "Change cash forecast payment terms", roles: ADMIN_BM },
+
+  { section: "Team" },
+  { label: "Employees", roles: PM_UP },
+  { label: "Edit employee pay, see SSNs", roles: PM_UP },
+  { label: "Approve time off (an Admin approves it for PM-level people)", roles: PM_LEVEL },
+  { label: "Recruitment (field)", roles: PM_UP },
+  { label: "Recruitment: office hiring and offer letters", roles: PM_LEVEL },
+  { label: "Edit offer letter templates", roles: ADMIN_BM },
+  { label: "Contractors list", roles: PM_UP },
+  { label: "A contractor's own page", roles: PM_EST },
+
+  { section: "Admin" },
+  { label: "Management calendar (all of it, and editing)", roles: PM_LEVEL },
+  { label: "Management calendar, Bids only (view)", roles: ["SALES", "ESTIMATION"] },
+  { label: "Settings", roles: ADMIN_BM },
+  { label: "Settings: Holidays", roles: ["ADMIN"] },
+  { label: "Sueep Info", roles: PM_LEVEL },
+  { label: "Sueep Info access log", roles: ["ADMIN"] },
+  { label: "Email Settings", roles: PM_LEVEL },
+  { label: "Franchise inquiries", roles: PM_LEVEL },
+  { label: "User Management: subs' and property managers' pages", roles: PM_LEVEL },
+  { label: "User Management: staff and roles", roles: ["ADMIN"] },
 ];
 
 type User = {
@@ -281,18 +316,26 @@ export function UsersTable({ users: initialUsers, currentUserId }: { users: User
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {PERMISSION_ROWS.map(({ label, roles }) => (
-                <tr key={label} className="hover:bg-gray-50">
-                  <td className="py-2 pr-4 text-gray-600">{label}</td>
-                  {ROLES.map((r) => (
-                    <td key={r} className="py-2 px-3 text-center">
-                      {roles.includes(r)
-                        ? <span className="inline-block h-4 w-4 rounded-full bg-emerald-500" title="Access granted" />
-                        : <span className="inline-block h-4 w-4 rounded-full bg-gray-200" title="No access" />}
+              {PERMISSION_ROWS.map((row) =>
+                "section" in row ? (
+                  <tr key={row.section}>
+                    <td colSpan={ROLES.length + 1} className="pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      {row.section}
                     </td>
-                  ))}
-                </tr>
-              ))}
+                  </tr>
+                ) : (
+                  <tr key={row.label} className="hover:bg-gray-50">
+                    <td className="py-2 pr-4 text-gray-600">{row.label}</td>
+                    {ROLES.map((r) => (
+                      <td key={r} className="py-2 px-3 text-center">
+                        {row.roles.includes(r)
+                          ? <span className="inline-block h-4 w-4 rounded-full bg-emerald-500" title="Access granted" />
+                          : <span className="inline-block h-4 w-4 rounded-full bg-gray-200" title="No access" />}
+                      </td>
+                    ))}
+                  </tr>
+                ),
+              )}
             </tbody>
           </table>
         </div>

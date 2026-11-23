@@ -25,6 +25,7 @@ import { ProjectLienEditor } from "./ProjectLienEditor";
 import { ProjectLaborSection } from "./ProjectLaborSection";
 import { ProjectContractorSection } from "./ProjectContractorSection";
 import { ProjectDeleteButton } from "./ProjectDeleteButton";
+import { MarkJobCompleteButton } from "./MarkJobCompleteButton";
 import { ProjectChangeOrdersSection } from "./ProjectChangeOrdersSection";
 import { SupervisorChangeOrderRequestForm } from "./SupervisorChangeOrderRequestForm";
 import { ProjectJobTitleEditor } from "./ProjectJobTitleEditor";
@@ -1129,7 +1130,21 @@ export default async function ProjectDetailPage({ params }: PageProps) {
               />
             )}
           </div>
-          {!isSupervisor && !isEmployee && <ProjectDeleteButton projectId={project.id} jobTitle={project.jobTitle} />}
+          {!isSupervisor && !isEmployee && (
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Whole jobs are completed here; the Schedule marks single days (turns and change orders can also be finished there). */}
+              <MarkJobCompleteButton
+                projectId={project.id}
+                jobTitle={project.jobTitle}
+                complete={project.status === "COMPLETE"}
+                completedAtIso={project.completedAt ? project.completedAt.toISOString() : null}
+                completedBy={project.completedBy ?? null}
+                defaultEndDateKey={project.projectEndDate ? project.projectEndDate.toISOString().slice(0, 10) : null}
+                openChangeOrders={changeOrders.filter((co) => !["COMPLETED", "BILLING", "REJECTED", "VOID"].includes(co.status)).length}
+              />
+              <ProjectDeleteButton projectId={project.id} jobTitle={project.jobTitle} />
+            </div>
+          )}
         </div>
       </div>
 

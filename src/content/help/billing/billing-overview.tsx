@@ -189,8 +189,10 @@ export function BillingOverview() {
       <H2>Jobs past their scheduled day</H2>
       <P>
         An amber bar at the top lists jobs and change orders whose last scheduled day has passed but nobody marked complete.
-        They are not billable until they are complete, so they don&apos;t appear in the tables. <strong>Mark complete</strong>{" "}
-        uses the last scheduled day as the end date.
+        They are not billable until they are complete, so they don&apos;t appear in the tables. For a job,{" "}
+        <strong>Open project to mark it complete</strong> takes you to the project, where{" "}
+        <strong>Mark job complete</strong> is at the top. A change order can be finished right here with{" "}
+        <strong>Mark change order complete</strong>, using its last scheduled day as the end date.
       </P>
 
       <H2>Liens</H2>

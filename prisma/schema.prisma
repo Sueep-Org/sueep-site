@@ -197,6 +197,7 @@ model Project {
   sov                   ProjectSOV?
   dayAssignments        ProjectDayAssignment[]
   dayRemovals           ScheduleDayRemoval[]
+  dayCompletions        ScheduleDayCompletion[]
   workerDayAssignments  ProjectWorkerDayAssignment[]
   scheduleSeries        ProjectScheduleSeries[]
   notes                 ProjectNote[]
@@ -1114,6 +1115,7 @@ model ProjectChangeOrder {
   coWorkerAssignments   ChangeOrderWorkerDayAssignment[]
   /// Days this CO was taken off the schedule for a reason (grayed out)
   scheduleDayRemovals   ScheduleDayRemoval[]
+  scheduleDayCompletions ScheduleDayCompletion[]
 
   hubspotSovInvoices HubSpotSovInvoice[]
 
@@ -1649,6 +1651,33 @@ model ScheduleDayRemoval {
   /// Who was covering the day, as plain text, since the assignment is gone
   coveredBy     String?
   removedByName String?
+
+  @@index([date])
+}
+
+/// A day marked complete on the schedule (one job's or one change order's day).
+/// Only a record of that day: completing the whole job or change order happens
+/// on its own page. Unmarking deletes the row.
+model ScheduleDayCompletion {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// Set when the day is a change order's (projectId is then the CO's project)
+  changeOrderId String?
+  changeOrder   ProjectChangeOrder? @relation(fields: [changeOrderId], references: [id], onDelete: Cascade)
+
+  /// The calendar date (midnight UTC, same as ProjectDayAssignment.date)
+  date DateTime
+
+  /// "p:<projectId>:<YYYY-MM-DD>" or "co:<changeOrderId>:<YYYY-MM-DD>", so a day is only marked once
+  key String @unique
+
+  /// Email and name of the ERP user who marked it
+  completedBy     String
+  completedByName String?
 
   @@index([date])
 }
