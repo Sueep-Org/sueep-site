@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { scheduleEditForbidden } from "@/lib/erp/scheduleAccess";
 import { prisma } from "@/lib/prisma";
 import { dayKey } from "@/lib/erp/schedule";
 import { isTurnoverScopeValue, turnoverScopeDisplayLabel } from "@/lib/erp/turnoverScope";
@@ -7,6 +8,8 @@ import { appUrl, resolveWorkerContact, scopeText, sendDayInvite } from "@/lib/er
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function DELETE(_req: Request, ctx: Ctx) {
+  const forbidden = await scheduleEditForbidden();
+  if (forbidden) return forbidden;
   const { id } = await ctx.params;
 
   const existing = await prisma.projectWorkerDayAssignment.findUnique({
@@ -61,6 +64,8 @@ export async function DELETE(_req: Request, ctx: Ctx) {
  * resends that worker's invite so it reflects the change — same "keep it
  * updated" rule every other schedule-notification path follows. */
 export async function PATCH(req: Request, ctx: Ctx) {
+  const forbidden = await scheduleEditForbidden();
+  if (forbidden) return forbidden;
   const { id } = await ctx.params;
   let body: Record<string, unknown>;
   try {

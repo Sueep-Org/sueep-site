@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { resolveLaborRateCents } from "@/lib/erp/laborRate";
 import { loadEmployeeJanitorialLabor } from "@/lib/erp/employeeJanitorialLabor";
-import { getErpAuth, canEditPayInfo } from "@/lib/erpAuth";
+import { getErpAuth, canEditPayInfo, canEditLabor } from "@/lib/erpAuth";
 
 /**
  * GET /api/erp/labor
@@ -227,6 +227,8 @@ export async function GET(request: NextRequest) {
  * Create a new labor entry
  */
 export async function POST(request: NextRequest) {
+  const laborAuth = await getErpAuth();
+  if (!laborAuth || !canEditLabor(laborAuth.role)) return NextResponse.json({ error: "You can't change labor entries." }, { status: 403 });
   try {
     const body = await request.json();
     const { 

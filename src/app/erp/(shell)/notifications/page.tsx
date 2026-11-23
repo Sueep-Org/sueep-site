@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { canManageNotifications, getErpAuth } from "@/lib/erpAuth";
 import { NOTIFICATIONS, defaultBackupPms, type EmailType } from "@/lib/notificationTypes";
-import { defaultSetting, loadAllSettings } from "@/lib/notificationSettings";
+import { defaultSetting, getDefaultNotifyEmails, loadAllSettings } from "@/lib/notificationSettings";
 import { NotificationsHeader } from "./NotificationsHeader";
 import { SettingsView, type SettingRow } from "./SettingsView";
 import { SaveDefaultsBanner } from "./SaveDefaultsBanner";
@@ -23,10 +23,11 @@ export default async function NotificationsPage() {
   if (!auth || !canManageNotifications(auth.role)) redirect("/erp");
 
   const weekAgo = new Date(Date.now() - WEEK_MS);
-  const [{ settings, backupPms, backupPmsCustomized }, lastSent, failed] = await Promise.all([
+  const [{ settings, backupPms, backupPmsCustomized }, lastSent, failed, defaultNotify] = await Promise.all([
     loadAllSettings(),
     prisma.emailLog.groupBy({ by: ["type"], where: { status: "SENT" }, _max: { createdAt: true } }),
     prisma.emailLog.groupBy({ by: ["type"], where: { status: "FAILED", createdAt: { gte: weekAgo } }, _count: { _all: true } }),
+    getDefaultNotifyEmails(),
   ]);
   const lastSentBy = new Map(lastSent.map((r) => [r.type, r._max.createdAt?.toISOString() ?? null]));
   const failedBy = new Map(failed.map((r) => [r.type, r._count._all]));
@@ -61,7 +62,7 @@ export default async function NotificationsPage() {
     <div className="space-y-6">
       <NotificationsHeader active="settings" failedCount={failed.reduce((n, r) => n + r._count._all, 0)} />
       {unsaved > 0 && <SaveDefaultsBanner count={unsaved} canSave={process.env.VERCEL_ENV === "production"} />}
-      <SettingsView rows={rows} backupPms={backupPms} backupPmsCustomized={backupDiffers} defaultBackupPms={defaultBackupPms()} />
+      <SettingsView rows={rows} backupPms={backupPms} backupPmsCustomized={backupDiffers} defaultBackupPms={defaultBackupPms()} defaultNotify={defaultNotify} />
     </div>
   );
 }

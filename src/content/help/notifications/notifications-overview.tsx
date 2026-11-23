@@ -51,6 +51,11 @@ export function NotificationsOverview() {
         <Step n={4} title="Backup PMs">
           The <strong>Backup PMs</strong> box at the top is who hears about a project when its PM can&apos;t be found.
           It&apos;s used by margin alerts, reschedule notices, and the daily turnover digest.
+          <br /><br />
+          Below it, <strong>Notify about new projects and change orders</strong> is who&apos;s ticked by default under
+          Notify employees when someone adds a project or change order (they can untick them), and who is always told
+          when a Supervisor adds a change order. Use the emails on their employee records. Until someone saves it, it
+          shows the people the ERP has always picked; click <strong>Save</strong> once to keep them.
         </Step>
 
         <Step n={5} title="The Email Log">

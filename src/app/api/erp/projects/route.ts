@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getDefaultNotifyEmails } from "@/lib/notificationSettings";
 import { prisma } from "@/lib/prisma";
 import { normalizeProjectSegment, PROJECT_SEGMENTS } from "@/lib/erp/projectSegments";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
@@ -96,20 +97,18 @@ export async function POST(req: Request) {
     }
 
     // Notification recipients aren't a supervisor's call to make — force the
-    // same people a PM's "notify" picker defaults to (Sergio, David,
-    // Jennifer), regardless of what (if anything) the request supplied. This
+    // same people a PM's "notify" picker defaults to (the Email Settings
+    // list), regardless of what (if anything) the request supplied. This
     // overrides rather than merely defaults, so it can't be widened or
     // narrowed by a tampered request either.
-    const alwaysNotify = await prisma.employee.findMany({
-      where: {
-        OR: [
-          { firstName: { equals: "Sergio", mode: "insensitive" } },
-          { firstName: { equals: "David", mode: "insensitive" }, lastName: { equals: "Rodriguez", mode: "insensitive" } },
-          { firstName: { equals: "Jennifer", mode: "insensitive" }, lastName: { equals: "Cortes-Loya", mode: "insensitive" } },
-        ],
-      },
-      select: { id: true },
-    });
+    // The list on Email Settings ("Notify about new projects and change orders"), matched by email.
+    const { emails: defaultNotifyEmails } = await getDefaultNotifyEmails();
+    const alwaysNotify = defaultNotifyEmails.length
+      ? await prisma.employee.findMany({
+          where: { OR: defaultNotifyEmails.map((email) => ({ email: { equals: email, mode: "insensitive" as const } })) },
+          select: { id: true },
+        })
+      : [];
     body.notifyEmployeeIds = alwaysNotify.map((e) => e.id);
   }
 

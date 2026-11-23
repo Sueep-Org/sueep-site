@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { scheduleEditForbidden } from "@/lib/erp/scheduleAccess";
 import { prisma } from "@/lib/prisma";
 import { dayKey } from "@/lib/erp/schedule";
 import { notifyProjectCrew, sendDayInvite, sendSubLeadInvite } from "@/lib/erp/scheduleInvites";
@@ -22,6 +23,8 @@ async function personName(email: string | null | undefined): Promise<string | nu
 }
 
 export async function DELETE(req: Request, ctx: Ctx) {
+  const forbidden = await scheduleEditForbidden();
+  if (forbidden) return forbidden;
   const { id } = await ctx.params;
 
   // Optional { reason, note }. Any reason except MISTAKE leaves a grayed-out

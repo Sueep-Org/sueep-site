@@ -1,7 +1,7 @@
 /** Reads and saves the Notifications page settings. Server only. */
 
 import { prisma } from "@/lib/prisma";
-import { BACKUP_PMS_KEY, NOTIFICATIONS, defaultBackupPms, type EmailType } from "./notificationTypes";
+import { BACKUP_PMS_KEY, DEFAULT_NOTIFY_KEY, NOTIFICATIONS, defaultBackupPms, type EmailType } from "./notificationTypes";
 
 export type ResolvedSetting = { enabled: boolean; to: string[]; cc: string[]; customized: boolean };
 
@@ -29,6 +29,38 @@ export async function getBackupPms(): Promise<string[]> {
     return row ? row.to : defaultBackupPms();
   } catch {
     return defaultBackupPms();
+  }
+}
+
+/**
+ * The people this list started as before it could be edited: found by name, as
+ * the forms used to do (Sergio, David Rodriguez, Jennifer Cortes-Loya). Only
+ * used until someone saves the list on Email Settings.
+ */
+async function legacyDefaultNotifyEmails(): Promise<string[]> {
+  const rows = await prisma.employee.findMany({
+    where: {
+      email: { not: null },
+      status: "ACTIVE",
+      OR: [
+        { firstName: { equals: "Sergio", mode: "insensitive" } },
+        { firstName: { equals: "David", mode: "insensitive" }, lastName: { equals: "Rodriguez", mode: "insensitive" } },
+        { firstName: { equals: "Jennifer", mode: "insensitive" }, lastName: { equals: "Cortes-Loya", mode: "insensitive" } },
+      ],
+    },
+    select: { email: true },
+  });
+  return [...new Set(rows.map((r) => r.email!.trim().toLowerCase()).filter(Boolean))];
+}
+
+/** Who is ticked by default under "Notify employees" on new projects and change orders (lowercased emails). */
+export async function getDefaultNotifyEmails(): Promise<{ emails: string[]; customized: boolean }> {
+  try {
+    const row = await prisma.notificationSetting.findUnique({ where: { type: DEFAULT_NOTIFY_KEY } });
+    if (row) return { emails: row.to.map((e) => e.trim().toLowerCase()), customized: true };
+    return { emails: await legacyDefaultNotifyEmails(), customized: false };
+  } catch {
+    return { emails: [], customized: false };
   }
 }
 

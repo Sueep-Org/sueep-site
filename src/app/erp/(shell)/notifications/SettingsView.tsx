@@ -57,11 +57,14 @@ export function SettingsView({
   backupPms,
   backupPmsCustomized,
   defaultBackupPms,
+  defaultNotify,
 }: {
   rows: SettingRow[];
   backupPms: string[];
   backupPmsCustomized: boolean;
   defaultBackupPms: string[];
+  /** Ticked by default under "Notify employees" on new projects and change orders */
+  defaultNotify: { emails: string[]; customized: boolean };
 }) {
   const [editing, setEditing] = useState<SettingRow | null>(null);
   const offCount = rows.filter((r) => !r.setting.enabled).length;
@@ -69,6 +72,7 @@ export function SettingsView({
   return (
     <div className="space-y-6">
       <BackupPmsCard current={backupPms} customized={backupPmsCustomized} defaults={defaultBackupPms} />
+      <DefaultNotifyCard current={defaultNotify.emails} customized={defaultNotify.customized} />
 
       {offCount > 0 && (
         <p className="text-sm text-gray-500">
@@ -285,6 +289,52 @@ function BackupPmsCard({ current, customized, defaults }: { current: string[]; c
         )}
       </div>
       {!customized && <p className="mt-1 text-[11px] text-gray-400">Default: {list(defaults)}</p>}
+      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+    </form>
+  );
+}
+
+/** Who is ticked by default under "Notify employees" on new projects and change orders. Was names in code until Nov 2026. */
+function DefaultNotifyCard({ current, customized }: { current: string[]; customized: boolean }) {
+  const router = useRouter();
+  const toast = useToast();
+  const [value, setValue] = useState(current.join(", "));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const dirty = value.replace(/\s/g, "") !== current.join(",");
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    const err = await save("DEFAULT_NOTIFY", { to: value });
+    setBusy(false);
+    if (err) return setError(err);
+    toast("Saved");
+    router.refresh();
+  }
+
+  return (
+    <form onSubmit={submit} className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center gap-1.5">
+        <h2 className="text-sm font-semibold text-gray-800">Notify about new projects and change orders</h2>
+        <InfoTip text="Ticked by default under Notify employees when someone adds a project or change order (they can untick them), and always notified when a Supervisor adds a change order. Use the emails on their employee records." />
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <input
+          className={`${inputClass.sm} min-w-[16rem] flex-1`}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          aria-label="Emails notified about new projects and change orders"
+          placeholder="name@sueep.com, other@sueep.com"
+        />
+        {dirty && (
+          <Button type="submit" size="xs" disabled={busy}>
+            Save
+          </Button>
+        )}
+      </div>
+      {!customized && <p className="mt-1 text-[11px] text-gray-400">Not saved yet: these are the people the ERP has always picked. Save to keep them.</p>}
       {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
     </form>
   );

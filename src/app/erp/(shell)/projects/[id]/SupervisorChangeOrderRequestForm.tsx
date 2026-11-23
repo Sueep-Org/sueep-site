@@ -37,26 +37,12 @@ const STATUS_COLORS: Record<SupervisorChangeOrderRow["status"], string> = {
   COMPLETED: "bg-emerald-100 text-emerald-700",
 };
 
-/** Finds the standing "notify on a new CO" recipients (Sergio, David
- * Rodriguez, Jennifer Cortes-Loya), same matching rule as the PM-facing
- * change order form's default selection, so supervisors always reach the
- * same people without being handed a full employee picker (they don't need
- * one, and it'd be one more place to accidentally expose the employee
- * list/financials). */
-function resolveDefaultNotifyIds(employees: EmployeeNotifyOption[]): string[] {
-  const ids: string[] = [];
-  for (const e of employees) {
-    if (!e.email) continue;
-    const name = `${e.firstName} ${e.lastName}`.toLowerCase();
-    if (
-      name === "david rodriguez" ||
-      name === "jennifer cortes-loya" ||
-      e.firstName.toLowerCase() === "sergio"
-    ) {
-      ids.push(e.id);
-    }
-  }
-  return ids;
+/** The standing "notify on a new CO" recipients: the "Notify about new projects
+ * and change orders" list on Email Settings, matched by email. Supervisors
+ * always reach the same people without being handed a full employee picker
+ * (they don't need one, and it'd be one more place to expose the employee list). */
+function resolveDefaultNotifyIds(employees: EmployeeNotifyOption[], emails: string[]): string[] {
+  return employees.filter((e) => e.email && emails.includes(e.email.trim().toLowerCase())).map((e) => e.id);
 }
 
 export function SupervisorChangeOrderRequestForm({
@@ -64,11 +50,14 @@ export function SupervisorChangeOrderRequestForm({
   defaultRequestedBy,
   employees = [],
   initialEntries,
+  defaultNotifyEmails = [],
 }: {
   projectId: string;
   defaultRequestedBy?: string;
   employees?: EmployeeNotifyOption[];
   initialEntries: SupervisorChangeOrderRow[];
+  /** Emails on Email Settings' "Notify about new projects and change orders" list, lowercased */
+  defaultNotifyEmails?: string[];
 }) {
   const router = useRouter();
   const [entries, setEntries] = useState(initialEntries);
@@ -77,7 +66,7 @@ export function SupervisorChangeOrderRequestForm({
   const [notifyResult, setNotifyResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [noCrewRequired, setNoCrewRequired] = useState(false);
 
-  const notifyIds = resolveDefaultNotifyIds(employees);
+  const notifyIds = resolveDefaultNotifyIds(employees, defaultNotifyEmails);
   const notifyNames = employees
     .filter((e) => notifyIds.includes(e.id))
     .map((e) => `${e.firstName} ${e.lastName}`.trim())

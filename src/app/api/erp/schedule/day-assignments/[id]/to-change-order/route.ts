@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { scheduleEditForbidden } from "@/lib/erp/scheduleAccess";
 import { prisma } from "@/lib/prisma";
 import { canSeeFinancials, getErpAuth } from "@/lib/erpAuth";
 import { loadPricingSettings } from "@/lib/pricingSettingsServer";
@@ -17,6 +18,8 @@ type Ctx = { params: Promise<{ id: string }> };
  * keeps its upcharge on the new change order's price.
  */
 export async function POST(req: Request, ctx: Ctx) {
+  const forbidden = await scheduleEditForbidden();
+  if (forbidden) return forbidden;
   const auth = await getErpAuth();
   if (!auth || !canSeeFinancials(auth.role)) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
   const { id } = await ctx.params;

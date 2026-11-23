@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { scheduleEditForbidden } from "@/lib/erp/scheduleAccess";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { dayKey } from "@/lib/erp/schedule";
@@ -34,6 +35,8 @@ function workerUpsertArgs(
 // ProjectChangeOrder instead of the parent Project. No series/repeat, COs
 // are assigned one day at a time for now.
 export async function POST(req: Request) {
+  const forbidden = await scheduleEditForbidden();
+  if (forbidden) return forbidden;
   let body: Record<string, unknown>;
   try {
     body = (await req.json()) as Record<string, unknown>;

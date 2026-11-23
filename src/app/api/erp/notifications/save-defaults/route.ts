@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { canManageNotifications, getErpAuth } from "@/lib/erpAuth";
-import { BACKUP_PMS_KEY, NOTIFICATIONS, defaultBackupPms, type EmailType } from "@/lib/notificationTypes";
-import { defaultSetting } from "@/lib/notificationSettings";
+import { BACKUP_PMS_KEY, DEFAULT_NOTIFY_KEY, NOTIFICATIONS, defaultBackupPms, type EmailType } from "@/lib/notificationTypes";
+import { defaultSetting, getDefaultNotifyEmails } from "@/lib/notificationSettings";
 
 export const runtime = "nodejs";
 
@@ -22,6 +22,7 @@ export async function POST() {
       return { type, enabled: d.enabled, to: d.to, cc: d.cc, updatedBy: auth.email };
     }),
     { type: BACKUP_PMS_KEY, enabled: true, to: defaultBackupPms(), cc: [], updatedBy: auth.email },
+    { type: DEFAULT_NOTIFY_KEY, enabled: true, to: (await getDefaultNotifyEmails()).emails, cc: [], updatedBy: auth.email },
   ];
   const { count } = await prisma.notificationSetting.createMany({ data: rows, skipDuplicates: true });
   return NextResponse.json({ ok: true, saved: count });

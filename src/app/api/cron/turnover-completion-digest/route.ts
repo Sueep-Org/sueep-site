@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { runsNowAtEasternHour } from "@/lib/erp/cronEastern";
 import { sendTurnoverCompletionDigest } from "@/lib/erp/turnoverCompletionDigest";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +22,8 @@ export async function GET(req: Request) {
   if (!secret || authHeader !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  // Listed at two UTC hours in vercel.json; only the 19:00 Eastern run does the work (daylight saving).
+  if (!runsNowAtEasternHour(req, 19)) return NextResponse.json({ skipped: "Runs at 19:00 Eastern; this was the other UTC hour" });
 
   const result = await sendTurnoverCompletionDigest();
   return NextResponse.json(result);

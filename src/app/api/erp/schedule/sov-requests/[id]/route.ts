@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { scheduleEditForbidden } from "@/lib/erp/scheduleAccess";
 import { prisma } from "@/lib/prisma";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -8,6 +9,8 @@ type Ctx = { params: Promise<{ id: string }> };
  * instead, deletable via the normal day-assignments route, so this only
  * matters for rows that already existed before that change). */
 export async function DELETE(_req: Request, ctx: Ctx) {
+  const forbidden = await scheduleEditForbidden();
+  if (forbidden) return forbidden;
   const { id } = await ctx.params;
   try {
     await prisma.projectSovScheduleRequest.delete({ where: { id } });

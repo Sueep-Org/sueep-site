@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { runsNowAtEasternHour } from "@/lib/erp/cronEastern";
 import { sendManagementReminders } from "@/lib/erp/managementReminders";
 import { sendQualityCheckReminders } from "@/lib/erp/janitorialQualityChecks";
 import { sendLienAlerts } from "@/lib/erp/lienAlerts";
@@ -24,6 +25,8 @@ export async function GET(req: Request) {
   if (!secret || authHeader !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  // Listed at two UTC hours in vercel.json; only the 8:00 Eastern run does the work (daylight saving).
+  if (!runsNowAtEasternHour(req, 8)) return NextResponse.json({ skipped: "Runs at 8:00 Eastern; this was the other UTC hour" });
 
   const result = await sendManagementReminders();
   const qualityChecks = await sendQualityCheckReminders();

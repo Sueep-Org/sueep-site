@@ -270,7 +270,10 @@ export function ScheduleCalendarOverview() {
         <Step n={8} title="Assigning ahead of time with the &quot;+&quot; button">
           For anything the event card doesn&apos;t cover (a brand-new assignment, a multi-day
           range, or a repeating weekly schedule), click the <strong>+</strong> button in the
-          top-right corner of any today-or-future day cell.
+          top-right corner of any today-or-future day cell. Only Admins, Project Managers, the Business Manager and
+          Sales can assign or move people on the schedule (the <strong>+</strong> button, dragging chips, and the
+          event card&apos;s fields). Everyone else sees the schedule read-only, but Supervisors can still mark days
+          complete.
           <Img src="/help/schedule_calendar_overview/schedule_calendar_overview_6.png" alt="Plus button on a day cell" size="sm" />
           Search for a project, pick a supervisor, and optionally set a time range (leave blank for
           an all-day event) or a repeating range. Click <strong>Assign supervisor</strong>.

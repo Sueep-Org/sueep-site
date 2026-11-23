@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getErpAuth, canEditLabor } from "@/lib/erpAuth";
 import { prisma } from "@/lib/prisma";
 import { dollarsToCents } from "@/lib/erp/money";
 import { markSovItemsCompleted, syncSovPercentDone } from "@/lib/sovSync";
@@ -8,6 +9,8 @@ import { resolveLaborRateCents } from "@/lib/erp/laborRate";
 type Ctx = { params: Promise<{ id: string; entryId: string }> };
 
 export async function PATCH(req: Request, ctx: Ctx) {
+  const laborAuth = await getErpAuth();
+  if (!laborAuth || !canEditLabor(laborAuth.role)) return NextResponse.json({ error: "You can't change labor entries." }, { status: 403 });
   const { id, entryId } = await ctx.params;
   const existing = await prisma.laborEntry.findUnique({ where: { id: entryId, projectId: id } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -125,6 +128,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
 }
 
 export async function DELETE(_req: Request, ctx: Ctx) {
+  const laborAuth = await getErpAuth();
+  if (!laborAuth || !canEditLabor(laborAuth.role)) return NextResponse.json({ error: "You can't change labor entries." }, { status: 403 });
   const { id, entryId } = await ctx.params;
   try {
     await prisma.laborEntry.delete({ where: { id: entryId, projectId: id } });

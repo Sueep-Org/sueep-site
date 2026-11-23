@@ -636,6 +636,7 @@ export function SchedulePlanner({
   initialDayRemovals = [],
   initialDayCompletions = [],
   canMarkDayComplete = false,
+  canAssign = false,
 }: {
   projects: ScheduleProject[];
   supervisors: Person[];
@@ -659,6 +660,8 @@ export function SchedulePlanner({
   initialDayCompletions?: ScheduleDayCompletionRow[];
   /** Admin, PM, Business Manager, Sales and Supervisors (canMarkScheduleDayComplete) */
   canMarkDayComplete?: boolean;
+  /** Admin, PM, Business Manager and Sales (canAssignSchedule): assign, move and remove days. Everyone else sees the schedule read-only. */
+  canAssign?: boolean;
 }) {
   const removalReasons = useAppLists().removalReasons;
   // Anchors the whole calendar (which month/day is "today") to Eastern time,
@@ -1862,25 +1865,27 @@ export function SchedulePlanner({
             )}
           </div>
 
-          <DuplicateToMoreDaysSection
-            projectId={p.id}
-            fromDateKey={k}
-            supervisorUserId={existingAssignment?.supervisorUserId ?? currentSupervisorId(p)}
-            projectManagerUserId={existingAssignment?.projectManagerUserId ?? ""}
-            supervisorContractorId={existingAssignment?.supervisorContractorId ?? ""}
-            sovItemIds={existingAssignment?.sovItemIds ?? []}
-            scopeItems={existingAssignment?.scopeItems ?? []}
-            changeOrderIds={existingAssignment?.changeOrderIds ?? []}
-            comment={existingAssignment?.comment ?? ""}
-            internalNote={existingAssignment?.internalNote ?? ""}
-            requesterName={existingAssignment?.requesterName ?? null}
-            requesterEmail={existingAssignment?.requesterEmail ?? null}
-            startTime={existingAssignment?.startTime ?? null}
-            endTime={existingAssignment?.endTime ?? null}
-            supervisors={supervisors}
-            projectEndDateKey={p.projectEndDate ? p.projectEndDate.slice(0, 10) : null}
-            onCreated={(created) => setDayAssignments((prev) => [...prev.filter((a) => !created.some((c) => c.id === a.id)), ...created])}
-          />
+          {canAssign ? (
+            <DuplicateToMoreDaysSection
+              projectId={p.id}
+              fromDateKey={k}
+              supervisorUserId={existingAssignment?.supervisorUserId ?? currentSupervisorId(p)}
+              projectManagerUserId={existingAssignment?.projectManagerUserId ?? ""}
+              supervisorContractorId={existingAssignment?.supervisorContractorId ?? ""}
+              sovItemIds={existingAssignment?.sovItemIds ?? []}
+              scopeItems={existingAssignment?.scopeItems ?? []}
+              changeOrderIds={existingAssignment?.changeOrderIds ?? []}
+              comment={existingAssignment?.comment ?? ""}
+              internalNote={existingAssignment?.internalNote ?? ""}
+              requesterName={existingAssignment?.requesterName ?? null}
+              requesterEmail={existingAssignment?.requesterEmail ?? null}
+              startTime={existingAssignment?.startTime ?? null}
+              endTime={existingAssignment?.endTime ?? null}
+              supervisors={supervisors}
+              projectEndDateKey={p.projectEndDate ? p.projectEndDate.slice(0, 10) : null}
+              onCreated={(created) => setDayAssignments((prev) => [...prev.filter((a) => !created.some((c) => c.id === a.id)), ...created])}
+            />
+          ) : null}
 
           {eventError ? <p className="mt-1.5 text-[10px] text-red-500">{eventError}</p> : null}
 
@@ -1924,6 +1929,7 @@ export function SchedulePlanner({
       <CoDayPopover
         co={co}
         dateKey={k}
+        canAssign={canAssign}
         dayComplete={{
           // A completed change order counts as every one of its days complete.
           done: coIsComplete(co.status) || isDayDone(`co:${co.id}:${k}`),
@@ -2377,6 +2383,8 @@ export function SchedulePlanner({
         </div>
         <p className="mt-0.5 text-[10px] text-gray-400">{CALENDAR_GROUP_LABEL[calendarSegmentGroup(p.segment)]}</p>
 
+        {/* Disabled (view only) for roles that can't change the schedule; Mark day complete and links stay outside. */}
+        <fieldset disabled={!canAssign} className="min-w-0">
         {eventKind === "planned" && eventAssignmentId ? (
           <div className="mt-2 space-y-1.5">
             <div className="text-[10px] font-medium text-gray-500">
@@ -2473,6 +2481,7 @@ export function SchedulePlanner({
           </div>
         )}
 
+        </fieldset>
         {renderDayCompleteControl(p, k)}
         <div className="mt-2 flex items-center gap-1.5">
           <Link
@@ -2483,6 +2492,7 @@ export function SchedulePlanner({
           </Link>
         </div>
 
+        <fieldset disabled={!canAssign} className="min-w-0">
         <div className="mt-3 border-t border-gray-100 pt-2.5">
           <label className="block text-[10px] font-medium text-gray-500">Coverage for this day</label>
           <div className="mt-0.5 grid grid-cols-3 gap-1.5">
@@ -2984,16 +2994,22 @@ export function SchedulePlanner({
           {eventWorkerError ? <p className="mt-1 text-[10px] text-red-500">{eventWorkerError}</p> : null}
         </div>
 
+        </fieldset>
+
         <div className="sticky -bottom-4 -mx-4 mt-3 border-t border-gray-100 bg-white px-4 py-2">
           {eventError || eventDayError ? <p className="mb-1 text-[10px] text-red-500">{eventError || eventDayError}</p> : null}
-          <button
-            type="button"
-            onClick={() => void handleEventCardSave(k, p)}
-            disabled={eventSaving || eventDaySaving}
-            className="w-full rounded bg-pink-600 px-2 py-1.5 text-[11px] font-medium text-white hover:bg-pink-500 disabled:opacity-50"
-          >
-            {eventSaving || eventDaySaving ? "Saving…" : "Save"}
-          </button>
+          {canAssign ? (
+            <button
+              type="button"
+              onClick={() => void handleEventCardSave(k, p)}
+              disabled={eventSaving || eventDaySaving}
+              className="w-full rounded bg-pink-600 px-2 py-1.5 text-[11px] font-medium text-white hover:bg-pink-500 disabled:opacity-50"
+            >
+              {eventSaving || eventDaySaving ? "Saving…" : "Save"}
+            </button>
+          ) : (
+            <p className="text-center text-[10px] text-gray-500">View only. An Admin, Project Manager, Business Manager or Sales can change who&apos;s on this day.</p>
+          )}
         </div>
         </div>
       </div>,
@@ -3861,7 +3877,7 @@ export function SchedulePlanner({
                     >
                       <button
                         type="button"
-                        draggable={draggableHere}
+                        draggable={canAssign && draggableHere}
                         onDragStart={draggableHere ? (e) => {
                           e.dataTransfer.setData("text/plain", co.id);
                           e.dataTransfer.effectAllowed = "move";
@@ -3991,7 +4007,7 @@ export function SchedulePlanner({
                     <li className={inMonth ? "group relative" : "relative"} style={seg ? laneLiStyle(seg) : undefined}>
                       <button
                         type="button"
-                        draggable
+                        draggable={canAssign}
                         onDragStart={(e) => {
                           e.dataTransfer.setData("text/plain", p.id);
                           e.dataTransfer.effectAllowed = "move";
@@ -4050,7 +4066,7 @@ export function SchedulePlanner({
                     <li className={inMonth ? "group relative" : "relative"} style={seg ? laneLiStyle(seg) : undefined}>
                       <button
                         type="button"
-                        draggable
+                        draggable={canAssign}
                         onDragStart={(e) => {
                           e.dataTransfer.setData("text/plain", p.id);
                           e.dataTransfer.effectAllowed = "move";
@@ -4202,7 +4218,7 @@ export function SchedulePlanner({
                   <li className={inMonth ? "group relative" : "relative"} style={seg ? laneLiStyle(seg) : undefined}>
                     <button
                       type="button"
-                      draggable
+                      draggable={canAssign}
                       onDragStart={(e) => {
                         e.dataTransfer.setData("text/plain", assignment.id);
                         e.dataTransfer.effectAllowed = "move";
@@ -4431,6 +4447,7 @@ export function SchedulePlanner({
                     }}
                     onDrop={(e) => {
                       e.preventDefault();
+                      if (!canAssign) return;
                       handleDropOnDay(k);
                     }}
                     className={`relative min-h-[92px] p-1.5 text-left ${holiday ? "bg-slate-100" : "bg-white"} ${isToday ? "ring-1 ring-inset ring-pink-400 bg-pink-50/40" : ""} ${dragOverDayKey === k ? "ring-2 ring-inset ring-pink-500 bg-pink-50" : ""}`}
@@ -4451,7 +4468,7 @@ export function SchedulePlanner({
                           {holiday}
                         </span>
                       ) : null}
-                      {isFutureOrToday ? (
+                      {isFutureOrToday && canAssign ? (
                         <button
                           type="button"
                           onClick={async () => {
@@ -4502,7 +4519,7 @@ export function SchedulePlanner({
                           <li key={`co-needs-${co.id}-${role}`} className={inMonth ? "group relative" : "relative"}>
                             <button
                               type="button"
-                              draggable
+                              draggable={canAssign}
                               onDragStart={(e) => {
                                 e.dataTransfer.setData("text/plain", co.id);
                                 e.dataTransfer.effectAllowed = "move";

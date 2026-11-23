@@ -282,7 +282,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "notifications/notifications-overview",
-    keywords: ["email settings", "email", "recipients", "turn off email", "cc", "email log", "failed email", "resend", "backup pm"],
+    keywords: ["email settings", "email", "recipients", "turn off email", "cc", "email log", "failed email", "resend", "backup pm", "notify employees", "default notify", "new project email", "change order email"],
     title: "Email Settings and the Email Log",
     category: "Team",
     description: "Turn ERP and website emails on or off, change who gets them, and check the Email Log.",

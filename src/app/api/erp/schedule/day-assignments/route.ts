@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { scheduleEditForbidden } from "@/lib/erp/scheduleAccess";
 import { applyNextDaySurcharge } from "@/lib/erp/nextDaySurcharge";
 import { prisma } from "@/lib/prisma";
 import { dayKey } from "@/lib/erp/schedule";
@@ -14,6 +15,8 @@ import { canSeeFinancials, getErpAuth } from "@/lib/erpAuth";
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 export async function POST(req: Request) {
+  const forbidden = await scheduleEditForbidden();
+  if (forbidden) return forbidden;
   let body: Record<string, unknown>;
   try {
     body = (await req.json()) as Record<string, unknown>;
