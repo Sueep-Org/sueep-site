@@ -1,6 +1,7 @@
 import { todayEasternKey, utcDateKey } from "./dates";
+import { isVoidedStatus } from "./billingStatus";
 
-export type ProjectLifecycle = "UPCOMING" | "ACTIVE" | "ON_HOLD" | "COMPLETED";
+export type ProjectLifecycle = "UPCOMING" | "ACTIVE" | "ON_HOLD" | "COMPLETED" | "VOIDED";
 
 /** Change order statuses that count as real, ongoing work — not a draft
  * (not yet committed), not dead (rejected/void), not finished (completed). */
@@ -18,12 +19,18 @@ export function hasActiveChangeOrder(changeOrders: { status: string }[]): boolea
  * just because of that. Same override for ON_HOLD: a project whose base
  * deal is on hold but has real work happening via a change order still
  * counts as ACTIVE, since it isn't actually sitting idle.
+ *
+ * A project whose billing status is Voided (voided on the project, the
+ * Billing page or its turnover request) is VOIDED whatever its status says:
+ * it won't be worked or billed, so it never counts as WIP.
  */
 export function deriveProjectLifecycle(
   status: string,
   projectDateIso: string | null,
-  hasActiveChangeOrder: boolean = false
+  hasActiveChangeOrder: boolean = false,
+  billingStatus: string | null = null
 ): ProjectLifecycle {
+  if (isVoidedStatus(billingStatus)) return "VOIDED";
   const s = status.toUpperCase();
   if (s === "COMPLETE" || s === "ARCHIVED") return "COMPLETED";
   if (s === "UPCOMING" && !hasActiveChangeOrder) return "UPCOMING";

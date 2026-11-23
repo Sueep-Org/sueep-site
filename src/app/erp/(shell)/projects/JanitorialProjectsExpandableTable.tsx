@@ -71,7 +71,7 @@ function janitorialRowDescription(_row: ProjectTableRow) {
 // David works units in: finish what's in progress, then what's coming up,
 // with wrapped-up units sorted to the bottom out of the way.
 function lifecycleRank(row: ProjectTableRow): number {
-  const lifecycle = deriveProjectLifecycle(row.status, row.projectDate, hasActiveChangeOrder(row.changeOrders));
+  const lifecycle = deriveProjectLifecycle(row.status, row.projectDate, hasActiveChangeOrder(row.changeOrders), row.billingStatus);
   if (lifecycle === "ACTIVE") return 0;
   if (lifecycle === "UPCOMING") return 1;
   return 2;

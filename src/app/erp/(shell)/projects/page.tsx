@@ -182,7 +182,7 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
   );
 
   const lifecycleRank = (p: (typeof projects)[number]) => {
-    const lifecycle = deriveProjectLifecycle(p.status, p.projectDate ? p.projectDate.toISOString() : null, hasActiveChangeOrder(p.changeOrders));
+    const lifecycle = deriveProjectLifecycle(p.status, p.projectDate ? p.projectDate.toISOString() : null, hasActiveChangeOrder(p.changeOrders), p.billingStatus);
     if (lifecycle === "ACTIVE") return 0;
     if (lifecycle === "UPCOMING") return 1;
     return 2;

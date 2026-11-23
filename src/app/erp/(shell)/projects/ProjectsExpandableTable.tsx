@@ -3,7 +3,7 @@
 import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
 import { centsToDollars } from "@/lib/erp/money";
-import { deriveProjectLifecycle, hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
+import { deriveProjectLifecycle, hasActiveChangeOrder, type ProjectLifecycle } from "@/lib/erp/projectLifecycle";
 import { getDescLine as getDescriptionLine } from "@/lib/erp/descLine";
 import { Modal, Button } from "@/app/erp/components/ui";
 import { billingStatusLabel, normalizeBillingStatus } from "@/lib/erp/billingStatus";
@@ -120,7 +120,8 @@ export const CO_STATUS_COLORS: Record<"DRAFT" | "SUBMITTED" | "APPROVED" | "REJE
   COMPLETED: "bg-emerald-100 text-emerald-700",
 };
 
-export function projectStateClasses(state: "COMPLETED" | "ACTIVE" | "UPCOMING" | "ON_HOLD"): { row: string; detail: string; sticky: string; titleLink: string } {
+export function projectStateClasses(state: ProjectLifecycle): { row: string; detail: string; sticky: string; titleLink: string } {
+  if (state === "VOIDED") return { row: "bg-white hover:bg-gray-50", detail: "bg-gray-50", sticky: "bg-white", titleLink: "text-gray-400 line-through hover:underline" };
   if (state === "COMPLETED") return { row: "bg-white hover:bg-gray-50", detail: "bg-gray-50", sticky: "bg-white", titleLink: "text-gray-500 hover:underline" };
   if (state === "UPCOMING") return { row: "bg-white hover:bg-gray-50", detail: "bg-gray-50", sticky: "bg-white", titleLink: "text-purple-600 hover:underline" };
   if (state === "ON_HOLD") return { row: "bg-white hover:bg-gray-50", detail: "bg-gray-50", sticky: "bg-white", titleLink: "text-amber-600 hover:underline" };
@@ -699,7 +700,7 @@ export function ProjectsExpandableTable({
             const groupMargin = groupTitle && groupRows.some((row) => row.contractValueCents != null) ? groupContract - groupActualCost : null;
             const groupMarginPct = groupMargin != null && groupContract ? `${Math.round((groupMargin / groupContract) * 100)}%` : null;
             const isOpen = openSet.has(p.id);
-            const state = deriveProjectLifecycle(p.status, p.projectDate, hasActiveChangeOrder(p.changeOrders));
+            const state = deriveProjectLifecycle(p.status, p.projectDate, hasActiveChangeOrder(p.changeOrders), p.billingStatus);
             const styles = projectStateClasses(state);
             const rowBg = i % 2 === 0 ? "bg-white hover:bg-gray-100" : "bg-gray-50 hover:bg-gray-100";
             const rowTitle = rowTitleForRow?.(p) ?? p.jobTitle;

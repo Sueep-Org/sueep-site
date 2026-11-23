@@ -9,7 +9,7 @@ import { JanitorialProjectsExpandableTable } from "./JanitorialProjectsExpandabl
 import { isBilledStatus } from "@/lib/erp/billingStatus";
 
 type Tab = "all" | "post-construction" | "janitorial" | "real-estate" | "manual";
-type Lifecycle = "ACTIVE" | "UPCOMING" | "COMPLETED" | "BILLING" | "ON_HOLD";
+type Lifecycle = "ACTIVE" | "UPCOMING" | "COMPLETED" | "BILLING" | "ON_HOLD" | "VOIDED";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "all", label: "All" },
@@ -25,6 +25,7 @@ const LIFECYCLE_FILTERS: { id: Lifecycle; label: string }[] = [
   { id: "ON_HOLD", label: "On Hold" },
   { id: "BILLING", label: "Billing" },
   { id: "COMPLETED", label: "Completed" },
+  { id: "VOIDED", label: "Voided" },
 ];
 
 type Props = {
@@ -99,7 +100,7 @@ export function ProjectsTabs({ rows, postConstructionPipelineId, janitorialPipel
   }
 
   function getLifecycle(row: ProjectTableRow): Lifecycle {
-    return deriveProjectLifecycle(row.status, row.projectDate, hasActiveChangeOrder(row.changeOrders)) as Lifecycle;
+    return deriveProjectLifecycle(row.status, row.projectDate, hasActiveChangeOrder(row.changeOrders), row.billingStatus) as Lifecycle;
   }
 
   function matchesLifecycle(row: ProjectTableRow, lc: Lifecycle): boolean {

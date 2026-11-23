@@ -31,6 +31,9 @@ type Props = {
   hasActiveChangeOrder?: boolean;
   completedAtIso?: string | null;
   completedBy?: string | null;
+  /** Billing status: Voided shows the lifecycle as Voided and locks it */
+  billingStatus?: string | null;
+  voidReason?: string | null;
 };
 
 function toInputDate(iso: string | null): string {
@@ -57,14 +60,16 @@ export function ProjectSetupEditor({
   hasActiveChangeOrder = false,
   completedAtIso = null,
   completedBy = null,
+  billingStatus = null,
+  voidReason = null,
 }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const currentLifecycle = useMemo(
-    () => deriveProjectLifecycle(status, projectDateIso, hasActiveChangeOrder),
-    [status, projectDateIso, hasActiveChangeOrder]
+    () => deriveProjectLifecycle(status, projectDateIso, hasActiveChangeOrder, billingStatus),
+    [status, projectDateIso, hasActiveChangeOrder, billingStatus]
   );
   const [lifecycle, setLifecycle] = useState<ProjectLifecycle>(currentLifecycle);
   const [startDate, setStartDate] = useState(toInputDate(projectDateIso));
@@ -192,12 +197,19 @@ export function ProjectSetupEditor({
               name="lifecycle"
               className={input}
               value={lifecycle}
+              disabled={currentLifecycle === "VOIDED"}
               onChange={(e) => handleLifecycleChange(e.target.value as ProjectLifecycle)}
             >
               <option value="UPCOMING">Upcoming</option>
               <option value="ACTIVE">WIP</option>
               <option value="COMPLETED">Completed</option>
+              {currentLifecycle === "VOIDED" ? <option value="VOIDED">Voided</option> : null}
             </select>
+            {currentLifecycle === "VOIDED" ? (
+              <p className="mt-1 text-[11px] text-gray-500">
+                Voided in billing{voidReason ? `: ${voidReason}` : ""}. Change the billing status to bring it back.
+              </p>
+            ) : null}
             {status === "COMPLETE" && completedAtIso ? (
               <p className="mt-1 text-[11px] text-gray-500">
                 Marked complete{" "}
