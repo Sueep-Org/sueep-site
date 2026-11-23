@@ -1132,7 +1132,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           </div>
           {!isSupervisor && !isEmployee && (
             <div className="flex flex-wrap items-center gap-2">
-              {/* The only place a whole job is completed; the Schedule marks single days. */}
+              {/* Whole jobs are completed here; the Schedule marks single days (turns and change orders can also be finished there). */}
               <MarkJobCompleteButton
                 projectId={project.id}
                 jobTitle={project.jobTitle}

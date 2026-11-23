@@ -36,8 +36,8 @@ export function ProjectsOverview() {
           supervisor, and start/end dates.
           <Callout type="info">
             When the whole job is finished, click <strong>Mark job complete</strong> at the top of the project page and
-            pick the end date. This is the only place a whole job is completed. On the Schedule you mark single days
-            done instead (<strong>Mark day complete</strong>). Once it&apos;s complete, the top of the page shows who
+            pick the end date. On the Schedule you mark single days done instead (<strong>Mark day complete</strong>);
+            only unit turns and change orders can also be finished from their calendar card. Once it&apos;s complete, the top of the page shows who
             completed it and when.
           </Callout>
           Each main point of contact has its own Name, Role, Email and Phone boxes. Use{" "}

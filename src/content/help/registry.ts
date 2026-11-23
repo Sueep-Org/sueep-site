@@ -244,7 +244,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "schedule/calendar-overview",
-    keywords: ["schedule", "calendar", "gantt", "assign", "crew", "reschedule", "drag", "supervisor", "job offer", "invite", "confirm", "mark day complete", "day complete", "day done", "finish day"],
+    keywords: ["schedule", "calendar", "gantt", "assign", "crew", "reschedule", "drag", "supervisor", "job offer", "invite", "confirm", "mark day complete", "day complete", "day done", "finish day", "mark turn complete", "finish turn", "unit complete"],
     title: "Using the Schedule Calendar",
     category: "Projects & Schedule",
     description: "How to read the calendar, filter it, and assign supervisors and workers to future days.",

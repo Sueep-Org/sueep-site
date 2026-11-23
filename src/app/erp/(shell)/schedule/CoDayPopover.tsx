@@ -728,7 +728,7 @@ export function CoDayPopover({
 
         <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-gray-100 pt-2.5">
           {dayComplete.done ? (
-            <span className="rounded bg-sky-100 px-2 py-1 text-[10px] font-semibold text-sky-800">
+            <span className="rounded bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700">
               ✓ Day complete{dayComplete.completedByName ? ` · ${dayComplete.completedByName}` : ""}
             </span>
           ) : null}

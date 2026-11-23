@@ -6,8 +6,8 @@ import { Button, Modal, inputClass, labelClass } from "@/app/erp/components/ui";
 import { todayEasternKey } from "@/lib/erp/dates";
 
 /**
- * The one place a whole job is marked complete (the schedule only marks single
- * days). Sets the end date and status COMPLETE in one PATCH; the API keeps its
+ * Marks a whole job complete. The schedule marks single days, except that unit
+ * turns and change orders can also be finished from their calendar card. Sets the end date and status COMPLETE in one PATCH; the API keeps its
  * own rules, like a turnover's checklist having to be finished first.
  */
 export function MarkJobCompleteButton({

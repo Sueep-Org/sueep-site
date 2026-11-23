@@ -107,9 +107,22 @@ const NEEDS_SUPERVISOR_CHIP_CLASS =
 // glance). Takes a plain boolean rather than the raw status string since
 // Project uses "COMPLETE" and ProjectChangeOrder uses "COMPLETED" — callers
 // normalize their own enum before passing this down.
-function CompletionStatusIcon({ complete }: { complete: boolean }) {
-  return complete ? (
-    <span aria-hidden title="Complete" className="shrink-0 text-emerald-700">
+function CompletionStatusIcon({ complete, dayComplete = false }: { complete: boolean; dayComplete?: boolean }) {
+  // Whole job (or change order) complete: a solid green badge. A day marked
+  // complete: a plain check. Both fade the chip (completionChipClass).
+  if (complete) {
+    return (
+      <span
+        aria-hidden
+        title="Whole job complete"
+        className="inline-flex h-3 w-3 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[8px] font-bold leading-none text-white"
+      >
+        ✓
+      </span>
+    );
+  }
+  return dayComplete ? (
+    <span aria-hidden title="Day complete" className="shrink-0 font-bold text-emerald-700">
       ✓
     </span>
   ) : (
@@ -120,15 +133,6 @@ function CompletionStatusIcon({ complete }: { complete: boolean }) {
       ⚙
     </span>
   );
-}
-
-/** "Day ✓" on a chip whose day was marked complete on the schedule. The green ✓ means the whole job is complete. */
-function DayDonePill({ done }: { done: boolean }) {
-  return done ? (
-    <span className="shrink-0 rounded bg-sky-100 px-1 text-[9px] font-bold text-sky-800" title="This day is marked complete">
-      Day ✓
-    </span>
-  ) : null;
 }
 
 /** Schedule day completions by key: "p:<projectId>:<YYYY-MM-DD>" or "co:<changeOrderId>:<YYYY-MM-DD>". */
@@ -772,10 +776,13 @@ export function SchedulePlanner({
   const [dayCompletions, setDayCompletions] = useState(() => new Map(initialDayCompletions.map((c) => [c.key, c])));
   const [dayCompleteSaving, setDayCompleteSaving] = useState<string | null>(null);
   const isDayDone = (key: string) => dayCompletions.has(key);
+  /** Every day a bar's title covers (from its first day k) is marked complete, so the title fades too. */
+  const barDaysDone = (prefix: "p" | "co", id: string, k: string, seg: LaneSegment) =>
+    Array.from({ length: Math.max(1, seg.labelSpanDays) }, (_, i) => addDaysKey(k, i)).every((d) => dayCompletions.has(`${prefix}:${id}:${d}`));
   /** Mark (or undo) one day of a job or change order complete. Never touches the job's own status. */
   // Open on a job's day card when the day has SOV lines still open: tick which to also mark complete.
   const [sovPicker, setSovPicker] = useState<{ key: string; picks: string[] } | null>(null);
-  async function toggleDayComplete(target: { projectId: string; changeOrderId?: string | null; dateKey: string; completeSovItemIds?: string[] }) {
+  async function toggleDayComplete(target: { projectId: string; changeOrderId?: string | null; dateKey: string; completeSovItemIds?: string[]; completeScopeItems?: string[] }) {
     const key = target.changeOrderId ? `co:${target.changeOrderId}:${target.dateKey}` : `p:${target.projectId}:${target.dateKey}`;
     const undo = dayCompletions.has(key);
     setDayCompleteSaving(key);
@@ -783,7 +790,13 @@ export function SchedulePlanner({
       const res = await fetch("/api/erp/schedule/day-completions", {
         method: undo ? "DELETE" : "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ projectId: target.projectId, changeOrderId: target.changeOrderId ?? null, date: target.dateKey, completeSovItemIds: target.completeSovItemIds ?? [] }),
+        body: JSON.stringify({
+          projectId: target.projectId,
+          changeOrderId: target.changeOrderId ?? null,
+          date: target.dateKey,
+          completeSovItemIds: target.completeSovItemIds ?? [],
+          completeScopeItems: target.completeScopeItems ?? [],
+        }),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string; completedByName?: string | null; completedAt?: string };
       if (!res.ok) {
@@ -797,49 +810,105 @@ export function SchedulePlanner({
         return next;
       });
       setSovPicker(null);
-      // SOV lines changed on the job: reload so their ✓ and the job's percent done show.
-      if (target.completeSovItemIds?.length) router.refresh();
+      // SOV lines or turn scope changed on the job: reload so their ✓ and the job's percent done show.
+      if (target.completeSovItemIds?.length || target.completeScopeItems?.length) router.refresh();
     } finally {
       setDayCompleteSaving(null);
     }
   }
+  /** Unit turns only: finish the whole turn from the calendar (other jobs are finished on the project page).
+   * Same request as the project page's Mark job complete; the API still requires the unit's checklist. */
+  async function handleMarkTurnComplete(p: ScheduleProject, k: string) {
+    if (
+      !(await confirm({
+        message: `Mark the whole turn "${p.jobTitle}" complete, with an end date of ${formatShortDate(k)}? This finishes the unit, not just this day.`,
+        danger: false,
+        confirmLabel: "Mark whole turn complete",
+      }))
+    )
+      return;
+    setEventSaving(true);
+    setEventError("");
+    try {
+      const res = await fetch(`/api/erp/projects/${p.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "COMPLETE", projectEndDate: k }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setEventError(data.error || "Could not mark the turn complete.");
+        return;
+      }
+      router.refresh();
+    } catch {
+      setEventError("Could not mark the turn complete.");
+    } finally {
+      setEventSaving(false);
+    }
+  }
+
   /** The day-complete control on a project's day cards, plus where the whole job gets finished. */
   function renderDayCompleteControl(p: ScheduleProject, k: string) {
+    const isTurn = p.segment === "JANITORIAL_TURNOVER_REQUESTS";
     const key = `p:${p.id}:${k}`;
     const done = dayCompletions.get(key);
-    // SOV lines this day was scheduled for that aren't complete yet.
-    const daySovIds = new Set(dayAssignments.filter((a) => a.projectId === p.id && a.dateKey === k).flatMap((a) => a.sovItemIds));
-    const openDaySovs = p.sovItems.filter((i) => daySovIds.has(i.id) && !i.completed);
+    // A whole job that's complete counts as every one of its days complete.
+    const jobDone = p.status === "COMPLETE";
+    // What could be finished with the day: SOV lines (post-construction) this day was scheduled for, or a
+    // turn's scope items (the day's picks, else everything contracted). Picks are "sov:<id>" / "scope:<value>".
+    const dayRows = dayAssignments.filter((a) => a.projectId === p.id && a.dateKey === k);
+    const daySovIds = new Set(dayRows.flatMap((a) => a.sovItemIds));
+    const dayScope = [...new Set(dayRows.flatMap((a) => a.scopeItems))];
+    const openOptions = [
+      ...p.sovItems.filter((i) => daySovIds.has(i.id) && !i.completed).map((i) => ({ pick: `sov:${i.id}`, label: i.description })),
+      ...(dayScope.length ? dayScope : (p.contractedScopeItems ?? []))
+        .filter((v) => !p.completedScopeItems.includes(v))
+        .map((v) => ({ pick: `scope:${v}`, label: turnoverScopeDisplayLabel(v, p.otherScopeDescription) })),
+    ];
+    const listsScope = openOptions.some((o) => o.pick.startsWith("scope:"));
     const picker = sovPicker?.key === key ? sovPicker : null;
+    const pickedSov = (picker?.picks ?? []).filter((x) => x.startsWith("sov:")).map((x) => x.slice(4));
+    const pickedScope = (picker?.picks ?? []).filter((x) => x.startsWith("scope:")).map((x) => x.slice(6));
     return (
       <div className="mt-2 space-y-1">
         {picker ? (
           <div className="rounded-md border border-sky-200 bg-sky-50 p-2">
-            <p className="text-[10px] font-semibold text-sky-900">Also mark this day&apos;s SOV lines complete? (optional)</p>
+            <p className="text-[10px] font-semibold text-sky-900">
+              {listsScope ? "Also mark finished scope items done? (optional)" : "Also mark this day's SOV lines complete? (optional)"}
+            </p>
             <div className="mt-1 space-y-0.5">
-              {openDaySovs.map((i) => (
-                <label key={i.id} className="flex cursor-pointer items-center gap-1.5 text-[10px] text-gray-700">
+              {openOptions.map((o) => (
+                <label key={o.pick} className="flex cursor-pointer items-center gap-1.5 text-[10px] text-gray-700">
                   <input
                     type="checkbox"
-                    checked={picker.picks.includes(i.id)}
+                    checked={picker.picks.includes(o.pick)}
                     onChange={(e) =>
-                      setSovPicker({ key, picks: e.target.checked ? [...picker.picks, i.id] : picker.picks.filter((x) => x !== i.id) })
+                      setSovPicker({ key, picks: e.target.checked ? [...picker.picks, o.pick] : picker.picks.filter((x) => x !== o.pick) })
                     }
                     className="h-3 w-3 rounded border-gray-300 text-sky-600"
                   />
-                  <span className="truncate">{i.description}</span>
+                  <span className="truncate">{o.label}</span>
                 </label>
               ))}
             </div>
-            <p className="mt-1 text-[9px] text-gray-500">Ticked lines are marked complete on {formatShortDate(k)} and become ready to bill. Undoing the day doesn&apos;t untick them.</p>
+            <p className="mt-1 text-[9px] text-gray-500">
+              {listsScope
+                ? "Ticked items are marked done on the unit (Checklist tab, Work scope). The unit itself is still finished on its project page. Undoing the day doesn't untick them."
+                : `Ticked lines are marked complete on ${formatShortDate(k)} and become ready to bill. Undoing the day doesn't untick them.`}
+            </p>
             <div className="mt-1.5 flex gap-1.5">
               <button
                 type="button"
-                onClick={() => void toggleDayComplete({ projectId: p.id, dateKey: k, completeSovItemIds: picker.picks })}
+                onClick={() => void toggleDayComplete({ projectId: p.id, dateKey: k, completeSovItemIds: pickedSov, completeScopeItems: pickedScope })}
                 disabled={dayCompleteSaving === key}
                 className="rounded bg-sky-600 px-2 py-1 text-[10px] font-medium text-white hover:bg-sky-500 disabled:opacity-50"
               >
-                {dayCompleteSaving === key ? "Saving…" : picker.picks.length ? `Mark day and ${picker.picks.length} line${picker.picks.length === 1 ? "" : "s"} complete` : "Mark day complete"}
+                {dayCompleteSaving === key
+                  ? "Saving…"
+                  : picker.picks.length
+                    ? `Mark day and ${picker.picks.length} ${listsScope ? "item" : "line"}${picker.picks.length === 1 ? "" : "s"} complete`
+                    : "Mark day complete"}
               </button>
               <button type="button" onClick={() => setSovPicker(null)} className="rounded border border-gray-200 px-2 py-1 text-[10px] text-gray-600 hover:bg-gray-50">
                 Cancel
@@ -848,16 +917,18 @@ export function SchedulePlanner({
           </div>
         ) : null}
         <div className="flex flex-wrap items-center gap-1.5">
-          {done ? (
-            <span className="rounded bg-sky-100 px-2 py-1 text-[10px] font-semibold text-sky-800">
+          {jobDone ? (
+            <span className="rounded bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700">✓ Day complete (the whole {isTurn ? "turn" : "job"} is complete)</span>
+          ) : done ? (
+            <span className="rounded bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700">
               ✓ Day complete{done.completedByName ? ` · ${done.completedByName}` : ""}
             </span>
           ) : null}
-          {canMarkDayComplete && !picker ? (
+          {canMarkDayComplete && !picker && !jobDone ? (
             <button
               type="button"
               onClick={() =>
-                !done && openDaySovs.length > 0
+                !done && openOptions.length > 0
                   ? setSovPicker({ key, picks: [] })
                   : void toggleDayComplete({ projectId: p.id, dateKey: k })
               }
@@ -872,7 +943,18 @@ export function SchedulePlanner({
             </button>
           ) : null}
         </div>
-        {p.status !== "COMPLETE" ? (
+        {p.status !== "COMPLETE" && isTurn ? (
+          canMarkDayComplete ? (
+            <button
+              type="button"
+              onClick={() => void handleMarkTurnComplete(p, k)}
+              disabled={eventSaving}
+              className="rounded border border-emerald-600 px-2 py-1 text-[10px] font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+            >
+              {eventSaving ? "Saving…" : "Mark whole turn complete"}
+            </button>
+          ) : null
+        ) : p.status !== "COMPLETE" ? (
           <p className="text-[10px] text-gray-500">
             Finished the whole job? Use <span className="font-medium">Mark job complete</span> on the{" "}
             <Link href={`/erp/projects/${p.id}`} className="text-pink-600 hover:underline">
@@ -880,9 +962,7 @@ export function SchedulePlanner({
             </Link>
             .
           </p>
-        ) : (
-          <p className="text-[10px] font-medium text-emerald-700">✓ The whole job is complete.</p>
-        )}
+        ) : null}
       </div>
     );
   }
@@ -1845,10 +1925,11 @@ export function SchedulePlanner({
         co={co}
         dateKey={k}
         dayComplete={{
-          done: isDayDone(`co:${co.id}:${k}`),
+          // A completed change order counts as every one of its days complete.
+          done: coIsComplete(co.status) || isDayDone(`co:${co.id}:${k}`),
           completedByName: dayCompletions.get(`co:${co.id}:${k}`)?.completedByName ?? null,
           saving: dayCompleteSaving === `co:${co.id}:${k}`,
-          onToggle: canMarkDayComplete ? () => void toggleDayComplete({ projectId: co.projectId, changeOrderId: co.id, dateKey: k }) : null,
+          onToggle: canMarkDayComplete && !coIsComplete(co.status) ? () => void toggleDayComplete({ projectId: co.projectId, changeOrderId: co.id, dateKey: k }) : null,
         }}
         parentProjectTitle={parentProject?.jobTitle}
         assignment={assignment}
@@ -3735,7 +3816,8 @@ export function SchedulePlanner({
                   // day whose date has already passed with nothing logged is
                   // a missed assignment, not just an upcoming plan — flagged
                   // red instead of gray.
-                  const isOverdue = isPlannedOnly && !isFutureOrToday;
+                  // Not flagged once the day (or the whole change order) is marked complete.
+                  const isOverdue = isPlannedOnly && !isFutureOrToday && !coIsComplete(co.status) && !isDayDone(`co:${co.id}:${k}`);
                   // A day with logged work never gets dragged, even when
                   // it's also the CO's own scheduled start/end day — real
                   // work already happened there, same rule a project's own
@@ -3767,8 +3849,7 @@ export function SchedulePlanner({
                   const chipContent = (
                     <>
                       {warningIcons}
-                      <CompletionStatusIcon complete={coIsComplete(co.status)} />
-                      <DayDonePill done={isDayDone(`co:${co.id}:${k}`)} />
+                      <CompletionStatusIcon complete={coIsComplete(co.status)} dayComplete={seg ? barDaysDone("co", co.id, k, seg) : isDayDone(`co:${co.id}:${k}`)} />
                       <span className="truncate">{co.title}</span>
                     </>
                   );
@@ -3795,7 +3876,7 @@ export function SchedulePlanner({
                           setDragOverDayKey(null);
                         } : undefined}
                         onClick={() => openCoPopover(k, co)}
-                        className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${draggableHere ? "cursor-grab active:cursor-grabbing" : ""} ${isPlannedOnly ? (isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS) : ""} ${needsSupervisor ? "border-2 border-amber-600 bg-amber-400 font-bold text-amber-950 hover:bg-amber-300" : CHANGE_ORDER_CHIP_CLASS} ${completionChipClass(coIsComplete(co.status))}`}
+                        className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${draggableHere ? "cursor-grab active:cursor-grabbing" : ""} ${isPlannedOnly ? (isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS) : ""} ${needsSupervisor ? "border-2 border-amber-600 bg-amber-400 font-bold text-amber-950 hover:bg-amber-300" : CHANGE_ORDER_CHIP_CLASS} ${completionChipClass(coIsComplete(co.status) || isDayDone(`co:${co.id}:${k}`))}`}
                         style={seg ? laneButtonStyle(seg) : undefined}
                       >
                         {seg ? (seg.labelSpanDays ? null : warningIcons) : chipContent}
@@ -3805,7 +3886,7 @@ export function SchedulePlanner({
                             seg,
                             chipContent,
                             needsSupervisor ? "font-bold text-amber-950" : "text-blue-800",
-                            coIsComplete(co.status),
+                            coIsComplete(co.status) || barDaysDone("co", co.id, k, seg),
                           )
                         : null}
                       {renderCoPopover(k, co)}
@@ -3901,8 +3982,7 @@ export function SchedulePlanner({
                   const chipContent = (
                     <>
                       <span aria-hidden>⚠</span>
-                      <CompletionStatusIcon complete={p.status === "COMPLETE"} />
-                      <DayDonePill done={isDayDone(`p:${p.id}:${k}`)} />
+                      <CompletionStatusIcon complete={p.status === "COMPLETE"} dayComplete={seg ? barDaysDone("p", p.id, k, seg) : isDayDone(`p:${p.id}:${k}`)} />
                       <span className="truncate" title={p.jobTitle}>{compactLabel ?? p.jobTitle}</span>
                     </>
                   );
@@ -3922,12 +4002,12 @@ export function SchedulePlanner({
                           setDragOverDayKey(null);
                         }}
                         onClick={() => openEventPopover(k, p, undefined, role)}
-                        className={`w-full cursor-grab active:cursor-grabbing ${NEEDS_SUPERVISOR_CHIP_CLASS} ${completionChipClass(p.status === "COMPLETE")}`}
+                        className={`w-full cursor-grab active:cursor-grabbing ${NEEDS_SUPERVISOR_CHIP_CLASS} ${completionChipClass(p.status === "COMPLETE" || isDayDone(`p:${p.id}:${k}`))}`}
                         style={seg ? laneButtonStyle(seg) : undefined}
                       >
                         {seg ? (seg.labelSpanDays ? null : <>{<span aria-hidden>⚠</span>}</>) : chipContent}
                       </button>
-                      {seg ? laneLabelOverlay(seg, chipContent, "font-bold text-amber-950", p.status === "COMPLETE") : null}
+                      {seg ? laneLabelOverlay(seg, chipContent, "font-bold text-amber-950", p.status === "COMPLETE" || barDaysDone("p", p.id, k, seg)) : null}
                       {inMonth ? (
                         <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                           <div className="font-semibold">{p.jobTitle}</div>
@@ -3956,12 +4036,12 @@ export function SchedulePlanner({
                   // the todayK filter was removed from
                   // computeProjectSpanMarkersByDay, didn't render at all past
                   // its own date).
-                  const isOverdue = !isFutureOrToday;
+                  // Not flagged once the day (or the whole job) is marked complete.
+                  const isOverdue = !isFutureOrToday && p.status !== "COMPLETE" && !isDayDone(`p:${p.id}:${k}`);
                   const chipContent = (
                     <>
                       {isOverdue ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : null}
-                      <CompletionStatusIcon complete={p.status === "COMPLETE"} />
-                      <DayDonePill done={isDayDone(`p:${p.id}:${k}`)} />
+                      <CompletionStatusIcon complete={p.status === "COMPLETE"} dayComplete={seg ? barDaysDone("p", p.id, k, seg) : isDayDone(`p:${p.id}:${k}`)} />
                       <span className="truncate">{compactLabel ?? p.jobTitle}</span>
                     </>
                   );
@@ -3981,12 +4061,12 @@ export function SchedulePlanner({
                           setDragOverDayKey(null);
                         }}
                         onClick={() => openEventPopover(k, p, undefined, role)}
-                        className={`flex w-full cursor-grab items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors active:cursor-grabbing ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS} ${completionChipClass(p.status === "COMPLETE")}`}
+                        className={`flex w-full cursor-grab items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors active:cursor-grabbing ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS} ${completionChipClass(p.status === "COMPLETE" || isDayDone(`p:${p.id}:${k}`))}`}
                         style={seg ? laneButtonStyle(seg) : undefined}
                       >
                         {seg ? (seg.labelSpanDays ? null : <>{isOverdue ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : null}</>) : chipContent}
                       </button>
-                      {seg ? laneLabelOverlay(seg, chipContent, groupTextClass(calendarSegmentGroup(p.segment)), p.status === "COMPLETE") : null}
+                      {seg ? laneLabelOverlay(seg, chipContent, groupTextClass(calendarSegmentGroup(p.segment)), p.status === "COMPLETE" || barDaysDone("p", p.id, k, seg)) : null}
                       <button
                         type="button"
                         onClick={(e) => {
@@ -4032,8 +4112,7 @@ export function SchedulePlanner({
                   ];
                   const chipContent = (
                     <>
-                      <CompletionStatusIcon complete={p.status === "COMPLETE"} />
-                      <DayDonePill done={isDayDone(`p:${p.id}:${k}`)} />
+                      <CompletionStatusIcon complete={p.status === "COMPLETE"} dayComplete={seg ? barDaysDone("p", p.id, k, seg) : isDayDone(`p:${p.id}:${k}`)} />
                       <span className="truncate">{compactLabel ?? p.jobTitle}</span>
                     </>
                   );
@@ -4043,12 +4122,12 @@ export function SchedulePlanner({
                       <button
                         type="button"
                         onClick={() => openLaborPopover(k, p)}
-                        className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${completionChipClass(p.status === "COMPLETE")}`}
+                        className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${completionChipClass(p.status === "COMPLETE" || isDayDone(`p:${p.id}:${k}`))}`}
                         style={seg ? laneButtonStyle(seg) : undefined}
                       >
                         {seg ? null : chipContent}
                       </button>
-                      {seg ? laneLabelOverlay(seg, chipContent, groupTextClass(calendarSegmentGroup(p.segment)), p.status === "COMPLETE") : null}
+                      {seg ? laneLabelOverlay(seg, chipContent, groupTextClass(calendarSegmentGroup(p.segment)), p.status === "COMPLETE" || barDaysDone("p", p.id, k, seg)) : null}
                       {renderLaborPopover(k, p)}
                       {inMonth ? (
                         <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
@@ -4078,7 +4157,8 @@ export function SchedulePlanner({
                 }
 
                 function renderPlannedChip(assignment: ScheduleDayAssignment, project: ScheduleProject, compactLabel?: string, seg?: LaneSegment) {
-                  const isOverdue = !isFutureOrToday;
+                  // Not flagged once the day (or the whole job) is marked complete.
+                  const isOverdue = !isFutureOrToday && project.status !== "COMPLETE" && !isDayDone(`p:${project.id}:${k}`);
                   const plannedWorkers = project.plannedWorkersByDay[k] ?? [];
                   const supervisor = assignment.supervisorUserId ? supervisors.find((s) => s.id === assignment.supervisorUserId) : null;
                   const pm = !supervisor && assignment.projectManagerUserId ? projectManagers.find((p) => p.id === assignment.projectManagerUserId) : null;
@@ -4105,8 +4185,7 @@ export function SchedulePlanner({
                       ) : noSupervisor ? (
                         <span aria-hidden title="No supervisor assigned" className="shrink-0 text-amber-950">⚠</span>
                       ) : null}
-                      <CompletionStatusIcon complete={project.status === "COMPLETE"} />
-                      <DayDonePill done={isDayDone(`p:${project.id}:${k}`)} />
+                      <CompletionStatusIcon complete={project.status === "COMPLETE"} dayComplete={seg ? barDaysDone("p", project.id, k, seg) : isDayDone(`p:${project.id}:${k}`)} />
                       {assignment.nextDayUpcharge ? (
                         <span
                           className="shrink-0 rounded bg-amber-200 px-1 text-[9px] font-bold text-amber-900"
@@ -4138,12 +4217,12 @@ export function SchedulePlanner({
                         noSupervisor
                           ? NO_SUPERVISOR_PLANNED_CHIP_CLASS
                           : `${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(project.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS}`
-                      } ${completionChipClass(project.status === "COMPLETE")}`}
+                      } ${completionChipClass(project.status === "COMPLETE" || isDayDone(`p:${project.id}:${k}`))}`}
                       style={seg ? laneButtonStyle(seg) : undefined}
                     >
                       {seg ? (seg.labelSpanDays ? null : <>{isOverdue ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : noSupervisor ? <span aria-hidden title="No supervisor assigned" className="shrink-0 text-amber-950">⚠</span> : null}</>) : chipContent}
                     </button>
-                    {seg ? laneLabelOverlay(seg, chipContent, noSupervisor ? "text-amber-950" : groupTextClass(calendarSegmentGroup(project.segment)), project.status === "COMPLETE") : null}
+                    {seg ? laneLabelOverlay(seg, chipContent, noSupervisor ? "text-amber-950" : groupTextClass(calendarSegmentGroup(project.segment)), project.status === "COMPLETE" || barDaysDone("p", project.id, k, seg)) : null}
                     {renderEventPopover(k, project)}
                     <button
                       type="button"
@@ -4622,12 +4701,12 @@ export function SchedulePlanner({
                     = in progress
                   </div>
                   <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
-                    <span aria-hidden className="text-emerald-700">✓</span>
-                    = whole job complete (faded)
+                    <span aria-hidden className="font-bold text-emerald-700">✓</span>
+                    = day complete (faded)
                   </div>
                   <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
-                    <span aria-hidden className="rounded bg-sky-100 px-1 text-[9px] font-bold text-sky-800">Day ✓</span>
-                    = that day is complete
+                    <span aria-hidden className="inline-flex h-3 w-3 items-center justify-center rounded-full bg-emerald-600 text-[8px] font-bold leading-none text-white">✓</span>
+                    = whole job complete, every day done (faded)
                   </div>
                 </div>
               </div>
