@@ -1159,6 +1159,17 @@ export function buildSubPortalCodeEmail(params: { firstName: string; code: strin
   `;
 }
 
+/** To an Admin/PM/Business Manager who asked for a sub's sign-in code on the sub's page. */
+export function buildSubPortalStaffCodeEmail(params: { subName: string; code: string }) {
+  return `
+    <h2 style="margin:0 0 12px;color:#E73C6E">Sign-in code for ${escapeHtml(params.subName)}'s page</h2>
+    <p>Someone opened ${escapeHtml(params.subName)}'s Sueep jobs page and asked to send the sign-in code to you.</p>
+    <p style="margin:20px 0;font-size:28px;font-weight:bold;letter-spacing:6px;color:#111827">${escapeHtml(params.code)}</p>
+    <p>It works for 15 minutes. Once it's entered, that phone or computer stays signed in to this sub's page.</p>
+    <p style="font-size:12px;color:#555">Didn't ask for this? Don't share the code. You can ignore this email.</p>
+  `;
+}
+
 /** To a sub: their portal, what it shows and how to open it. */
 export function buildSubPortalWelcomeEmail(params: { firstName: string; url: string; lang: Lang }) {
   const es = params.lang === "es";

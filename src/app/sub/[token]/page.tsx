@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { findSubByToken, isDeviceSignedIn } from "@/lib/erp/subPortalAccess";
+import { findSubByToken, isDeviceSignedIn, staffCodeRecipients } from "@/lib/erp/subPortalAccess";
 import { maskEmail } from "@/lib/erp/propertyManagerAccess";
 import { loadSubJobs } from "@/lib/erp/subPortalJobs";
 import { DECLINE_REASONS, portalOffers } from "@/lib/erp/subOffers";
@@ -49,7 +49,7 @@ export default async function SubPortalPage({ params }: PageProps) {
   const firstName = sub.name.split(" ")[0] || sub.name;
 
   if (!(await isDeviceSignedIn(sub.id))) {
-    return <SubSignIn token={token} firstName={firstName} maskedEmail={maskEmail(sub.email)} profileLang={sub.lang} />;
+    return <SubSignIn token={token} firstName={firstName} maskedEmail={maskEmail(sub.email)} profileLang={sub.lang} staff={await staffCodeRecipients()} />;
   }
 
   const [jobs, offers, checkIns, fixes, reviewResults] = await Promise.all([

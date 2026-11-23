@@ -9,8 +9,11 @@
 import { createHash, randomBytes, randomInt, timingSafeEqual } from "crypto";
 import { cookies, headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { buildSubPortalCodeEmail, buildSubPortalWelcomeEmail, sendEmail } from "@/lib/email";
+import { buildSubPortalCodeEmail, buildSubPortalStaffCodeEmail, buildSubPortalWelcomeEmail, sendEmail } from "@/lib/email";
+import { PM_LEVEL_ROLES } from "@/lib/erpRoles";
 import { parseLang, tr, type Lang } from "./language";
+import { maskEmail } from "./propertyManagerAccess";
+import { namesByEmail } from "./janitorialQualityChecks";
 
 const CODE_MINUTES = 15;
 const RESEND_SECONDS = 60;
@@ -70,7 +73,26 @@ export async function isDeviceSignedIn(contractorId: string): Promise<boolean> {
   return true;
 }
 
-export async function sendSignInCode(sub: LinkedSub): Promise<{ ok: true } | { error: string }> {
+const STAFF_ROLE_LABEL: Record<string, string> = { ADMIN: "Admin", PROJECT_MANAGER: "PM", BUSINESS_MANAGER: "Business Manager" };
+
+export type StaffCodeRecipient = { id: string; name: string; role: string };
+
+/** Sueep staff who can get a sub's sign-in code instead of the sub, so they can open the sub's page themselves. Names only, the page is public. */
+export async function staffCodeRecipients(): Promise<StaffCodeRecipient[]> {
+  const users = await prisma.erpUser.findMany({ where: { role: { in: [...PM_LEVEL_ROLES] } }, select: { id: true, email: true, role: true } });
+  const names = await namesByEmail(users.map((u) => u.email));
+  return users
+    .map((u) => ({ id: u.id, name: names.get(u.email.toLowerCase()) ?? u.email.split("@")[0]!, role: STAFF_ROLE_LABEL[u.role] ?? u.role }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Emails a sign-in code to the sub, or to the Admin/PM/Business Manager picked in staffUserId. Returns the masked address it went to. */
+export async function sendSignInCode(sub: LinkedSub, staffUserId?: string | null): Promise<{ ok: true; sentTo: string } | { error: string }> {
+  const staff = staffUserId
+    ? await prisma.erpUser.findFirst({ where: { id: staffUserId, role: { in: [...PM_LEVEL_ROLES] } }, select: { email: true } })
+    : null;
+  if (staffUserId && !staff) return { error: tr(sub.lang, { en: "That person can't get codes. Pick someone else.", es: "Esa persona no puede recibir códigos. Elige a otra." }) };
+
   const current = await prisma.contractor.findUnique({ where: { id: sub.id }, select: { portalCodeSentAt: true } });
   if (current?.portalCodeSentAt && Date.now() - current.portalCodeSentAt.getTime() < RESEND_SECONDS * 1000) {
     return { error: tr(sub.lang, { en: "A code was just sent. Wait a minute before asking for another.", es: "Acabamos de enviar un código. Espera un minuto antes de pedir otro." }) };
@@ -87,17 +109,25 @@ export async function sendSignInCode(sub: LinkedSub): Promise<{ ok: true } | { e
       portalCodeAttempts: 0,
     },
   });
-  if (process.env.NODE_ENV !== "production") console.log(`[sub sign-in] code for ${sub.email}: ${code}`);
+  const to = staff?.email ?? sub.email;
+  if (process.env.NODE_ENV !== "production") console.log(`[sub sign-in] code for ${to}: ${code}`);
 
-  const result = await sendEmail({
-    type: "SUB_PORTAL_SIGN_IN_CODE",
-    to: sub.email,
-    subject: tr(sub.lang, { en: `${code} is your Sueep sign-in code`, es: `${code} es tu código de Sueep` }),
-    html: buildSubPortalCodeEmail({ firstName: sub.name.split(" ")[0] || sub.name, code, lang: sub.lang }),
-    lang: sub.lang,
-  });
+  const result = staff
+    ? await sendEmail({
+        type: "SUB_PORTAL_SIGN_IN_CODE",
+        to: staff.email,
+        subject: `${code} is the sign-in code for ${sub.name}'s Sueep page`,
+        html: buildSubPortalStaffCodeEmail({ subName: sub.name, code }),
+      })
+    : await sendEmail({
+        type: "SUB_PORTAL_SIGN_IN_CODE",
+        to: sub.email,
+        subject: tr(sub.lang, { en: `${code} is your Sueep sign-in code`, es: `${code} es tu código de Sueep` }),
+        html: buildSubPortalCodeEmail({ firstName: sub.name.split(" ")[0] || sub.name, code, lang: sub.lang }),
+        lang: sub.lang,
+      });
   if (result === "NO_RECIPIENTS") return { error: tr(sub.lang, { en: "We couldn't send the code. Contact Sueep.", es: "No pudimos enviar el código. Contacta a Sueep." }) };
-  return { ok: true };
+  return { ok: true, sentTo: maskEmail(to) };
 }
 
 /** Checks the code and, when right, remembers this browser. */
