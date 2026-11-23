@@ -73,7 +73,7 @@ export function CompensationOverview() {
               <strong>Release</strong>. Release asks for the date to pay it on (today unless you change it) and shows which
               pay period that is. The line then shows in that period marked <strong>released from hold</strong> with its
               original date. Holding never changes the job&apos;s cost or the line&apos;s own date. Hold it again to take a
-              released line back out.
+              released line back out. You can also hold and release from the sub&apos;s profile, on the <strong>Work</strong> tab.
             </LI>
           </UL>
           <Callout type="info">

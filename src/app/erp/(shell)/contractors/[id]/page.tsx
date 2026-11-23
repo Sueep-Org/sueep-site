@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getErpAuth, canViewSsn, canEditPayInfo, isPmLevel } from "@/lib/erpAuth";
+import { getErpAuth, canViewSsn, canEditPayInfo, canSeePayroll, isPmLevel } from "@/lib/erpAuth";
 import { CONTRACTOR_MANUAL_SECTIONS, CONTRACTOR_PROFILE_EXTRA_SECTIONS, subFieldName } from "@/lib/erp/subcontractorQuestionnaire";
 import { backgroundCheckLabel } from "@/lib/erp/employees";
 import { maskAccountNumber } from "@/lib/erp/maskAccountNumber";
@@ -19,6 +19,7 @@ import { subCoverage } from "@/lib/erp/subCoverage";
 import { loadJobRequirements, subGaps } from "@/lib/erp/subRequirements";
 import { ContractorSsnSection } from "./ContractorSsnSection";
 import { ContractorLaborSection } from "./ContractorLaborSection";
+import { loadContractorWork, workBuildingOptions, workRowJson, workTotals } from "@/lib/erp/contractorWork";
 import { ContractorBackgroundCheckSection } from "./ContractorBackgroundCheckSection";
 import { TimeOffSection, type TimeOffRow } from "@/app/erp/components/TimeOffSection";
 import { erpRoleForEmail, timeOffReviewBlock } from "@/lib/erp/timeOff";
@@ -104,44 +105,16 @@ export default async function ContractorDetailPage({ params }: PageProps) {
   // work. Fetched in full and merged here, same as /api/erp/contractor-labor
   // does for subsequent pages, so the initial load and "Load more" agree on
   // ordering.
+  // Work history rows (contractorWork.ts), the same rows "Load more" pages through.
   const workPromise = Promise.all([
-    prisma.contractorAssignment.findMany({
-      where: { contractorId: contractor.id },
-      select: {
-        id: true,
-        projectId: true,
-        role: true,
-        startDate: true,
-        endDate: true,
-        assignedDate: true,
-        costCents: true,
-        taskDescription: true,
-        createdAt: true,
-        project: { select: { id: true, jobTitle: true } },
-        building: { select: { id: true, name: true } },
-      },
-    }),
-    prisma.changeOrderContractorAssignment.findMany({
-      where: { contractorId: contractor.id },
-      select: {
-        id: true,
-        role: true,
-        startDate: true,
-        endDate: true,
-        assignedDate: true,
-        costCents: true,
-        notes: true,
-        createdAt: true,
-        changeOrder: { select: { id: true, title: true, project: { select: { id: true, jobTitle: true } } } },
-      },
-    }),
+    loadContractorWork({ contractorId: contractor.id }),
     prisma.contractorAssignment.groupBy({ by: ["projectId"], where: { contractorId: contractor.id, projectId: { not: null } } }),
     prisma.changeOrderContractorAssignment.findMany({
       where: { contractorId: contractor.id },
       select: { changeOrder: { select: { projectId: true } } },
       distinct: ["changeOrderId"],
     }),
-  ]).then(async ([assignments, coAssignments, laborProjectGroups, coProjectRows]) => {
+  ]).then(async ([workRows, laborProjectGroups, coProjectRows]) => {
     const laborProjectIds = new Set([
       ...laborProjectGroups.map((g) => g.projectId).filter((pid): pid is string => pid != null),
       ...coProjectRows.map((r) => r.changeOrder.projectId),
@@ -153,7 +126,7 @@ export default async function ContractorDetailPage({ params }: PageProps) {
           orderBy: { jobTitle: "asc" },
         })
       : [];
-    return { assignments, coAssignments, laborProjects };
+    return { workRows, laborProjects };
   });
   const ratingsPromise = showProposals
     ? Promise.all([
@@ -279,7 +252,7 @@ export default async function ContractorDetailPage({ params }: PageProps) {
     paperwork.length === 0 ? "None required yet" : `${uploadedPaperworkCount}/${paperwork.length} uploaded`;
   const documentsTone = paperwork.length === 0 ? "neutral" : uploadedPaperworkCount === paperwork.length ? "complete" : "warning";
 
-  const { assignments, coAssignments, laborProjects } = await workPromise;
+  const { workRows, laborProjects } = await workPromise;
 
   // Ratings tab: scores, every rating, and the jobs a rating can be about
   // (jobs they worked plus jobs they bid on).
@@ -310,54 +283,10 @@ export default async function ContractorDetailPage({ params }: PageProps) {
       })()
     : null;
 
-  const combinedLaborRows = [
-    ...assignments.map((a) => ({
-      id: a.id,
-      source: "PROJECT" as const,
-      projectId: a.project?.id ?? null,
-      projectTitle: a.project?.jobTitle ?? null,
-      buildingName: a.building?.name ?? null,
-      changeOrderTitle: null as string | null,
-      role: a.role,
-      date: a.startDate ?? a.assignedDate ?? a.endDate,
-      endDate: a.endDate,
-      costCents: a.costCents,
-      taskDescription: a.taskDescription,
-      createdAt: a.createdAt,
-    })),
-    ...coAssignments.map((a) => ({
-      id: a.id,
-      source: "CHANGE_ORDER" as const,
-      projectId: a.changeOrder.project.id,
-      projectTitle: a.changeOrder.project.jobTitle,
-      buildingName: null as string | null,
-      changeOrderTitle: a.changeOrder.title,
-      role: a.role,
-      date: a.startDate ?? a.assignedDate ?? a.endDate,
-      endDate: a.endDate,
-      costCents: a.costCents,
-      taskDescription: a.notes,
-      createdAt: a.createdAt,
-    })),
-  ].sort((a, b) => {
-    const dateDiff = (b.date?.getTime() ?? 0) - (a.date?.getTime() ?? 0);
-    return dateDiff !== 0 ? dateDiff : b.createdAt.getTime() - a.createdAt.getTime();
-  });
-  const assignmentTotalCount = combinedLaborRows.length;
-
-  const laborRows = combinedLaborRows.slice(0, CONTRACTOR_LABOR_PAGE_SIZE).map((a) => ({
-    id: a.id,
-    source: a.source,
-    projectId: a.projectId,
-    projectTitle: a.projectTitle,
-    buildingName: a.buildingName,
-    changeOrderTitle: a.changeOrderTitle,
-    role: a.role,
-    date: a.date?.toISOString() ?? null,
-    endDate: a.endDate?.toISOString() ?? null,
-    costCents: a.costCents,
-    taskDescription: a.taskDescription,
-  }));
+  const assignmentTotalCount = workRows.length;
+  const laborRows = workRows.slice(0, CONTRACTOR_LABOR_PAGE_SIZE).map(workRowJson);
+  const laborBuildings = workBuildingOptions(workRows);
+  const laborTotals = workTotals(workRows);
   const initialLaborHasMore = assignmentTotalCount > CONTRACTOR_LABOR_PAGE_SIZE;
 
   const upcomingTimeOff = contractor.timeOff.filter((t) => t.status !== "DENIED" && t.endDate >= new Date()).length;
@@ -662,6 +591,9 @@ export default async function ContractorDetailPage({ params }: PageProps) {
               initialEntries={laborRows}
               initialHasMore={initialLaborHasMore}
               projectOptions={laborProjects}
+              buildingOptions={laborBuildings}
+              initialTotals={laborTotals}
+              canHoldPay={!!auth && canSeePayroll(auth.role)}
             />
               <CollapsibleSection title="Time off" status={timeOffStatus} tone="neutral">
                 <TimeOffSection

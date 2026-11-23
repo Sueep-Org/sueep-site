@@ -175,7 +175,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "workers/adding-contractors",
-    keywords: ["contractor", "sub", "subcontractor", "w9", "insurance", "workers comp", "coi", "compliance", "background check", "language", "delete"],
+    keywords: ["contractor", "sub", "subcontractor", "w9", "insurance", "workers comp", "coi", "compliance", "background check", "language", "delete", "work history", "building", "sort", "hold pay"],
     title: "Adding Contractors",
     category: "Team",
     description: "How to register contractors in our system to be added onto projects",
