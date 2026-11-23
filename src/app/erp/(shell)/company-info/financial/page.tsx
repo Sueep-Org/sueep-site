@@ -10,7 +10,7 @@ import { FinancialYears } from "./FinancialYears";
 import { OtherDocuments } from "./OtherDocuments";
 
 export const metadata: Metadata = {
-  title: "Company Info: Financial",
+  title: "Sueep Info: Financial",
 };
 
 export const dynamic = "force-dynamic";

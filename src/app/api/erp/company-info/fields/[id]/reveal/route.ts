@@ -5,7 +5,7 @@ import { decryptSecret, MissingEncryptionKeyError } from "@/lib/erp/secretBox";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-/** The only place a sensitive Company Info value leaves the server. Every
+/** The only place a sensitive Sueep Info value leaves the server. Every
  * call is logged with who asked and whether they viewed or copied it. */
 export async function POST(req: Request, ctx: Ctx) {
   const auth = await getErpAuth();

@@ -123,7 +123,7 @@ export function SendingInvoices() {
         Every approved invoice that the ERP couldn&apos;t deliver by itself waits here until someone finishes it, so nothing
         is forgotten, along with portal invoices the client sent back. The count also shows on the dashboard&apos;s Money
         tab (Needs action, Ready to Send). Each row shows the invoice number, client, total and the reason. Sent-back
-        invoices come first, then missed cutoffs, then cutoffs coming up, then the rest. Click a row to see each line&apos;s amount and the portal login to use (saved on Company Info).
+        invoices come first, then missed cutoffs, then cutoffs coming up, then the rest. Click a row to see each line&apos;s amount and the portal login to use (saved on Sueep Info).
         Its ... menu has the portal link (<strong>Open Procore</strong> and so on), <strong>Invoice PDF</strong>,{" "}
         <strong>Open in QuickBooks</strong>, the <strong>Client pay link</strong> and the <strong>Company page</strong>.
       </P>

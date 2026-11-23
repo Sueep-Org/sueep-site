@@ -529,6 +529,27 @@ function ClipboardIcon({ className = iconCls }: IconProps) {
   );
 }
 
+/** One-path outline icon in the same 24x24 / stroke style as the icons above. */
+function outlineIcon(d: string) {
+  function Icon({ className = iconCls }: IconProps) {
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+        <path strokeLinecap="round" strokeLinejoin="round" d={d} />
+      </svg>
+    );
+  }
+  return Icon;
+}
+
+// Separate icons so no two menu items share one (UX_CLEANUP_PLAN polish).
+const EnvelopeIcon = outlineIcon("M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75");
+const KeyIcon = outlineIcon("M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z");
+const CheckBadgeIcon = outlineIcon("M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z");
+const PaperAirplaneIcon = outlineIcon("M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5");
+const ChartBarIcon = outlineIcon("M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z");
+const ArrowsRightLeftIcon = outlineIcon("M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5");
+const ClipboardListIcon = outlineIcon("M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z");
+
 interface NavItem {
   href: string;
   label: string;
@@ -547,7 +568,7 @@ const projectGroupItems: NavItem[] = [
   // New projects are started from the Projects page's New project button.
   { href: "/erp/projects", label: "Projects", roles: ALL, icon: FolderIcon },
   { href: "/erp/schedule", label: "Schedule", roles: ALL, icon: CalendarIcon },
-  { href: "/erp/sub-reviews", label: "Sub Reviews", roles: PM_ADMIN, icon: ClipboardIcon },
+  { href: "/erp/sub-reviews", label: "Sub Reviews", roles: PM_ADMIN, icon: CheckBadgeIcon },
   { href: "/erp/pipeline", label: "Deals", roles: PM_EST, icon: ColumnsIcon },
   { href: "/erp/janitorial", label: "Janitorial", roles: PM_SALES, icon: BroomIcon },
 ];
@@ -557,7 +578,7 @@ const clientGroupItems: NavItem[] = [
   { href: "/erp/companies", label: "Companies", roles: PM_SALES, icon: BuildingIcon },
   { href: "/erp/buildings", label: "Buildings", roles: PM_SALES, icon: ApartmentIcon },
   { href: "/erp/property-managers", label: "Property Managers", roles: PM_SALES, icon: IdCardIcon },
-  { href: "/erp/win-loss", label: "Win/Loss", roles: PM_SALES, icon: DocumentIcon },
+  { href: "/erp/win-loss", label: "Win/Loss", roles: PM_SALES, icon: ChartBarIcon },
 ];
 
 const billingGroupItems: NavItem[] = [
@@ -565,13 +586,13 @@ const billingGroupItems: NavItem[] = [
     href: "/erp/billing",
     label: "Project Billing",
     roles: PM_SALES,
-    icon: DocumentIcon,
+    icon: ClipboardListIcon,
   },
   {
     href: "/erp/ready-to-send",
     label: "Ready to Send",
     roles: ["ADMIN", "BUSINESS_MANAGER"],
-    icon: DocumentIcon,
+    icon: PaperAirplaneIcon,
   },
   {
     href: "/erp/invoices",
@@ -583,7 +604,7 @@ const billingGroupItems: NavItem[] = [
     href: "/erp/quickbooks",
     label: "QuickBooks",
     roles: ["ADMIN", "BUSINESS_MANAGER"],
-    icon: DocumentIcon,
+    icon: ArrowsRightLeftIcon,
   },
 ];
 
@@ -635,11 +656,11 @@ const adminGroupItems: NavItem[] = [
     href: "/erp/users",
     label: "User Management",
     roles: PM_ADMIN,
-    icon: IdCardIcon,
+    icon: KeyIcon,
   },
   {
     href: "/erp/company-info",
-    label: "Company Info",
+    label: "Sueep Info",
     roles: PM_ADMIN,
     icon: ClipboardIcon,
   },
@@ -648,7 +669,7 @@ const adminGroupItems: NavItem[] = [
     // The inbox is "Notifications"; this page is which emails go out and to whom.
     label: "Email Settings",
     roles: PM_ADMIN,
-    icon: BellIcon,
+    icon: EnvelopeIcon,
   },
   {
     // Leads from people wanting to buy a franchise, not staff, so not under Team.

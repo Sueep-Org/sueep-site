@@ -53,7 +53,7 @@ const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const CALENDAR_GROUP_LABEL: Record<CalendarSegmentGroup, string> = {
   POST_CONSTRUCTION: "Post-construction",
-  JANITORIAL_TURNOVER_REQUESTS: "Janitorial turnover requests",
+  JANITORIAL_TURNOVER_REQUESTS: "Unit turnovers",
   REAL_ESTATE: "Real estate",
   OTHER: "Other",
 };

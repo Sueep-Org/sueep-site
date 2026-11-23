@@ -1,5 +1,5 @@
 /**
- * Company Info page: the boss's "General information" sheet as cards of
+ * Sueep Info page: the boss's "General information" sheet as cards of
  * label/value rows. Pure helpers shared by the page and its API routes.
  */
 

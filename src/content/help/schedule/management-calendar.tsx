@@ -49,7 +49,7 @@ export function ManagementCalendar() {
               contractors&apos; profiles. People with no date of birth don&apos;t show.
             </LI>
             <LI>
-              <strong>Company licenses and IDs:</strong> expiration dates on Company Info, like contractor licenses and MBE/WBE
+              <strong>Company licenses and IDs:</strong> expiration dates on Sueep Info, like contractor licenses and MBE/WBE
               certifications.
             </LI>
             <LI>

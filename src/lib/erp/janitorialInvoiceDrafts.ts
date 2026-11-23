@@ -46,6 +46,16 @@ export function billingDateKey(periodStart: Date, billingDay: number): string {
   return utcDateKey(new Date(Date.UTC(y, m, Math.min(billingDay, last))));
 }
 
+/** Next month (this or next) whose billing day hasn't passed, and when its draft appears. */
+export function nextDraftKey(todayKey: string, billingDay: number, leadDays: number): string {
+  const [y, m] = todayKey.split("-").map(Number) as [number, number];
+  for (const start of [new Date(Date.UTC(y, m - 1, 1)), new Date(Date.UTC(y, m, 1))]) {
+    const key = billingDateKey(start, billingDay);
+    if (key >= todayKey) return addDaysKey(key, -leadDays);
+  }
+  return addDaysKey(billingDateKey(new Date(Date.UTC(y, m + 1, 1)), billingDay), -leadDays);
+}
+
 export function monthLabel(periodStart: Date): string {
   return periodStart.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 }

@@ -9,7 +9,7 @@ export function ReadyToSendHelp() {
         Admins and the Business Manager can open it. For how it fits with the other billing pages, read{" "}
         <A href="/erp/help/billing/how-invoicing-works">Start Here: How Billing Works</A>.
       </P>
-      <P>It has four tabs. An amber dot on a tab means something there needs you.</P>
+      <P>It has three tabs. An amber dot on a tab means something there needs you.</P>
       <UL>
         <LI>
           <strong>Ready to bill:</strong> finished work with no invoice yet, to pick and draft. Covered here.
@@ -20,9 +20,6 @@ export function ReadyToSendHelp() {
         <LI>
           <strong>Needs sending:</strong> approved invoices that still have to reach the client. Covered in{" "}
           <A href="/erp/help/billing/sending-invoices">Sending Invoices: Email, Portals and Needs Sending</A>.
-        </LI>
-        <LI>
-          <strong>Contracts:</strong> which janitorial contracts are drafted automatically. Covered here.
         </LI>
       </UL>
       <Callout type="info">
@@ -167,10 +164,11 @@ export function ReadyToSendHelp() {
         second invoice or customer from a repeat.
       </P>
 
-      <H2>Contracts: drafting janitorial months automatically</H2>
+      <H2>Drafting janitorial months automatically</H2>
       <P>
-        The Contracts tab lists every janitorial contract with its monthly amount, billing day and the date its next draft will
-        appear.
+        Auto-draft is set per contract: open the contract (Janitorial in the menu) and go to its <strong>Billing</strong> tab.
+        The <strong>Monthly invoice</strong> box there shows when the next draft will appear. The Janitorial contracts list
+        has an Auto-draft column to see them all at once. Only Admins and the Business Manager can change it.
       </P>
       <UL>
         <LI>

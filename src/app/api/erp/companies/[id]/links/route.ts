@@ -4,7 +4,7 @@ import { getErpAuth, canEditCompanies } from "@/lib/erpAuth";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-/** Link or unlink a property manager, COI holder or Company Info login
+/** Link or unlink a property manager, COI holder or Sueep Info login
  * (their billing portal) to this company. Their own records are left alone.
  * Body: { kind, targetId, linked }. */
 export async function POST(req: Request, ctx: Ctx) {

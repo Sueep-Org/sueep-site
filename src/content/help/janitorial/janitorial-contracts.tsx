@@ -108,7 +108,7 @@ export function JanitorialContracts() {
       </UL>
       <H3>Invoicing a month</H3>
       <P>
-        With <strong>Auto-draft</strong> on (Contracts tab of Ready to Send), the ERP drafts each month&apos;s invoice 3 days
+        With <strong>Auto-draft</strong> on (the contract&apos;s Billing tab, Monthly invoice box), the ERP drafts each month&apos;s invoice 3 days
         before the billing day: the monthly amount first, then one line per extra. Approving it marks the month{" "}
         <strong>Billed</strong>, and it turns <strong>Paid</strong> when the payment is recorded in QuickBooks. You can also
         change the status by hand here or on Project Billing → Recurring. Commission only counts once a month is Paid. See{" "}

@@ -17,7 +17,7 @@ export const PROJECT_SEGMENTS = [
     COMMERCIAL_PAINTING: "Commercial painting",
     COMMERCIAL_CLEANING: "Commercial cleaning",
     CHANGE_ORDER: "Change order",
-    JANITORIAL_TURNOVER_REQUESTS: "Janitorial turnover requests",
+    JANITORIAL_TURNOVER_REQUESTS: "Unit turnovers",
     REAL_ESTATE: "Real estate",
     OTHER: "Other",
   };

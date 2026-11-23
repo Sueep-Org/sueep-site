@@ -1,6 +1,6 @@
 /**
  * SSNs and bank numbers are encrypted in the database (secretBox.ts,
- * ERP_ENCRYPTION_KEY), the same way Company Info's logins are. This runs on
+ * ERP_ENCRYPTION_KEY), the same way Sueep Info's logins are. This runs on
  * the shared Prisma client (src/lib/prisma.ts), so every save of these models
  * encrypts and every read decrypts, and app code keeps working with plain
  * values. A copy of the database alone shows nothing.

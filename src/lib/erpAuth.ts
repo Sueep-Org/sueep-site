@@ -92,7 +92,7 @@ export function canRescheduleOnTimeline(role: ErpRole): boolean {
   return isPmLevel(role);
 }
 
-/** Company Info page (our IDs, licenses, bank info, website logins): view,
+/** Sueep Info page (our IDs, licenses, bank info, website logins): view,
  * edit, and reveal encrypted values. Every reveal is logged. */
 export function canManageCompanyInfo(role: ErpRole): boolean {
   return isPmLevel(role);
@@ -130,7 +130,7 @@ export function canApproveInvoices(role: ErpRole): boolean {
   return role === "ADMIN" || role === "BUSINESS_MANAGER";
 }
 
-/** Company Info's Access log tab: who revealed or copied which locked value. */
+/** Sueep Info's Access log tab: who revealed or copied which locked value. */
 export function canViewCompanyInfoAccessLog(role: ErpRole): boolean {
   return role === "ADMIN";
 }

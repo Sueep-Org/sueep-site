@@ -296,7 +296,7 @@ export const registry: ArticleEntry[] = [
     slug: "billing/ready-to-send",
     title: "Ready to Send: Drafting and Approving Invoices",
     category: "Billing",
-    description: "Draft invoices from finished work and janitorial months, edit lines, approve them into QuickBooks, and turn on Auto-draft.",
+    description: "Draft invoices from finished work and janitorial months, edit lines, approve them into QuickBooks, and set up Auto-draft on janitorial contracts.",
     order: 3,
     component: ReadyToSendHelp,
     roles: ["ADMIN", "BUSINESS_MANAGER"],
@@ -473,7 +473,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "company-info/company-info-overview",
-    title: "Company Info",
+    title: "Sueep Info",
     category: "Team",
     description: "Our IDs, licenses, banking, financial statements, and website logins: where they live and how locked values work.",
     order: 8,

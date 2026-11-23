@@ -7,7 +7,7 @@ import { CompanyInfoHeader } from "../CompanyInfoTabs";
 import { AccessLogTable } from "./AccessLogTable";
 
 export const metadata: Metadata = {
-  title: "Company Info: Access log",
+  title: "Sueep Info: Access log",
 };
 
 export const dynamic = "force-dynamic";

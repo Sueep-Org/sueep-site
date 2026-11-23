@@ -35,7 +35,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
   if (!auth || !canViewCompanies(auth.role)) redirect("/erp");
   const { id } = await params;
   const canEdit = canEditCompanies(auth.role);
-  // Logins live on Company Info, so the same roles see them here.
+  // Logins live on Sueep Info, so the same roles see them here.
   const showLogins = canManageCompanyInfo(auth.role);
 
   const company = await prisma.clientCompany.findUnique({

@@ -12,7 +12,7 @@ const REVEAL_MS = 30_000;
 
 type Editing = { row: CompanyInfoRow } | { section: CompanyInfoSection; label?: string };
 
-/** Label/value cards for one Company Info tab, with search when `searchable`. */
+/** Label/value cards for one Sueep Info tab, with search when `searchable`. */
 export function FieldCards({ rows, tab, searchable = false }: { rows: CompanyInfoRow[]; tab: CompanyInfoTab; searchable?: boolean }) {
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<Editing | null>(null);

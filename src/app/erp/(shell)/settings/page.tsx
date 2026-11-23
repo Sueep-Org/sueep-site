@@ -31,7 +31,7 @@ type PageProps = { searchParams: Promise<{ tab?: string }> };
 const OTHER_PAGES = [
   { href: "/erp/users", label: "User Management", info: "Who can sign in and their role.", adminOnly: true },
   { href: "/erp/notifications", label: "Email Settings", info: "Which emails go out and who gets them." },
-  { href: "/erp/company-info", label: "Company Info", info: "Company IDs, licenses and logins." },
+  { href: "/erp/company-info", label: "Sueep Info", info: "Company IDs, licenses and logins." },
 ];
 
 const shortDate = (d: Date) =>

@@ -104,7 +104,7 @@ export function HowInvoicingWorks() {
             </TD>
           </tr>
           <tr>
-            <TD>Ready to Send: Ready to bill, To approve, Contracts</TD>
+            <TD>Ready to Send: Ready to bill, To approve; a janitorial contract&apos;s Billing tab</TD>
             <TD>Make drafts, check and edit them, approve them. Turn on Auto-draft for janitorial contracts.</TD>
             <TD>
               <A href="/erp/help/billing/ready-to-send">Ready to Send: Drafting and Approving Invoices</A>

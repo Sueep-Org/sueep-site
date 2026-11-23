@@ -26,7 +26,7 @@ export function CreatingATurnoverRequest() {
         <Step n={2} title="Creating a request yourself, from New Project">
           Project Managers, Admins, and Sales can also create a turnover request directly, without going
           through the public form. Go to <strong>New Project</strong>, and set Segment to{" "}
-          <strong>Janitorial turnover requests</strong>.
+          <strong>Unit turnovers</strong>.
           <Img src="/help/turnover/turnover_3.png" alt="New Project form for a turnover" />
           <UL>
             <LI>

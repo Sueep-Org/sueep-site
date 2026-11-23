@@ -20,6 +20,8 @@ export type ContractRow = {
   /** "YYYY-MM-DD" earliest quality check not marked done */
   nextCheck: string | null;
   salesperson: string | null;
+  /** Monthly invoice drafted automatically on Ready to Send (set on the contract's Billing tab) */
+  autoDraft: boolean;
 };
 
 type StatusFilter = "current" | "ended" | "all";
@@ -84,12 +86,13 @@ export function ContractsTable({ rows, marginMonthLabel, today }: { rows: Contra
                 <th className="px-4 py-3">Expires</th>
                 <th className="px-4 py-3">Next check</th>
                 <th className="px-4 py-3">Salesperson</th>
+                <th className="px-4 py-3">Auto-draft</th>
               </tr>
             </thead>
             <tbody>
               {visible.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
                     {rows.length === 0
                       ? "No janitorial contracts yet."
                       : q
@@ -153,6 +156,9 @@ export function ContractsTable({ rows, marginMonthLabel, today }: { rows: Contra
                       {r.status === "ENDED" ? <span className="text-gray-400">-</span> : <NextCheckCell date={r.nextCheck} today={today} />}
                     </td>
                     <td className="px-4 py-3 text-gray-600">{r.salesperson ?? <span className="text-gray-400">Unassigned</span>}</td>
+                    <td className="px-4 py-3">
+                      {r.autoDraft ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">On</span> : <span className="text-xs text-gray-400">Off</span>}
+                    </td>
                   </tr>
                 ))
               )}

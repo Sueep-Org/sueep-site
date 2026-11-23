@@ -30,7 +30,7 @@ export function HubSpotSyncPanel({ id }: HubSpotSyncPanelProps) {
       setPreview(
         n === 0
           ? "HubSpot search: 0 deals in your configured stages right now. Move a test deal into Quote Approved / Confirmed / Awarded (or WIP) and sync again."
-          : `HubSpot search: ${n} deal(s) in configured stages - click Sync to copy them into Projects.`,
+          : `HubSpot search: ${n} deal(s) in configured stages. Click Sync deals from HubSpot to copy them into Projects.`,
       );
     } catch {
       setPreviewError("Could not load HubSpot preview.");
@@ -91,27 +91,9 @@ export function HubSpotSyncPanel({ id }: HubSpotSyncPanelProps) {
     >
       <h2 className="text-base font-semibold text-gray-900">Sync deals from HubSpot</h2>
       <p className="mt-1 text-xs text-gray-600">
-        Pull deals from your three pipelines (stages you configured in{" "}
-        <code className="text-gray-700">HUBSPOT_PIPELINE_STAGE_MAP</code>) into ERP projects. They then show on Projects and Schedule. For janitorial, leave{" "}
-        <code className="text-gray-700">workCompleted</code> empty to keep only active deals (Awarded + Signed).
+        Deals sync into ERP projects on their own whenever they change in HubSpot. Use this if a deal is missing from
+        Projects or Schedule. Setup notes are in HANDOVER.md.
       </p>
-      <ol className="mt-3 list-decimal space-y-1 pl-4 text-[11px] text-gray-600">
-        <li>
-          In Vercel, set <code className="text-gray-700">HUBSPOT_PIPELINE_STAGE_MAP</code> (see{" "}
-          <code className="text-gray-700">.env.example</code>). Use{" "}
-          <a href="/api/erp/hubspot/pipelines" className="text-pink-600 hover:underline" target="_blank" rel="noreferrer">
-            /api/erp/hubspot/pipelines
-          </a>{" "}
-          (while logged in) to copy pipeline and stage IDs.
-        </li>
-        <li>
-          <code className="text-gray-700">HUBSPOT_ACCESS_TOKEN</code> must be set on Vercel.
-        </li>
-        <li>
-          <span className="font-medium text-gray-700">Deploying does not import deals.</span> Open this dashboard after deploy and click Sync (or call{" "}
-          <code className="text-gray-700">POST /api/erp/hubspot/sync</code>).
-        </li>
-      </ol>
       {previewError ? (
         <p className="mt-3 text-xs text-amber-600" role="status">
           HubSpot preview: {previewError}

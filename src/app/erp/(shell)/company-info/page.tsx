@@ -10,7 +10,7 @@ import { CompanyInfoHeader } from "./CompanyInfoTabs";
 import { FieldCards } from "./FieldCards";
 
 export const metadata: Metadata = {
-  title: "Company Info",
+  title: "Sueep Info",
 };
 
 export const dynamic = "force-dynamic";
