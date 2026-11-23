@@ -85,7 +85,9 @@ export function PropertyManagerLinks() {
       </UL>
       <Callout type="warning">
         A unit&apos;s status comes from its project. If a finished unit isn&apos;t marked <strong>Complete</strong>, the property
-        manager sees it as still being worked on. Keep unit projects up to date.
+        manager sees it as still being worked on. Keep unit projects up to date: finish a unit with{" "}
+        <strong>Mark whole turn complete</strong> on its Schedule card or <strong>Mark job complete</strong> on its page.
+        Marking a single day complete doesn&apos;t change what they see.
       </Callout>
 
       <H2>A new request comes in</H2>
@@ -313,7 +315,7 @@ export function PropertyManagerLinks() {
           </tr>
           <tr>
             <TD>They see a finished unit as still being worked on</TD>
-            <TD>Mark that unit project Complete.</TD>
+            <TD>Finish the unit: Mark whole turn complete on its Schedule card, or Mark job complete on its page.</TD>
           </tr>
           <tr>
             <TD>They need a change after the deadline</TD>

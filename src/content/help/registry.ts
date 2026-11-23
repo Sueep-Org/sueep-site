@@ -95,7 +95,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "turnover/creating-a-request",
-    keywords: ["turnover", "unit", "unit turn", "move out", "scope", "new building", "checklist", "bedrooms", "work order"],
+    keywords: ["turnover", "unit", "unit turn", "move out", "scope", "new building", "checklist", "bedrooms", "work order", "finish unit", "unit complete", "mark turn complete"],
     title: "Creating a Turnover Request",
     category: "Turnovers & Buildings",
     description: "How to create and manage a turnover or regular cleaning request.",
@@ -372,7 +372,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "turnover/property-manager-links",
-    keywords: ["property manager", "pm portal", "private link", "turnover request", "weekly email", "monday email", "book", "cancel"],
+    keywords: ["property manager", "pm portal", "private link", "turnover request", "weekly email", "monday email", "book", "cancel", "unit still in progress", "finish unit"],
     title: "Property Manager Links",
     category: "Turnovers & Buildings",
     description: "Give property managers a private turnover page, confirm requests from their page and the website form, and handle cancels and new dates.",

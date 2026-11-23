@@ -102,7 +102,9 @@ export function CreatingATurnoverRequest() {
             This checklist gates two different things at two different thresholds, on the unit&apos;s{" "}
             <strong>Labor</strong> tab: logging any labor at all needs the checklist at least 75%
             complete, and checking <strong>Mark unit as completed</strong> needs it{" "}
-            <strong>fully</strong> checked off. A Sueep PM can override either one.
+            <strong>fully</strong> checked off. A Sueep PM can override either one. The full-checklist rule
+            also applies to the other two ways to finish a unit: <strong>Mark job complete</strong> at the top of its
+            page, and <strong>Mark whole turn complete</strong> on its card on the Schedule.
           </Callout>
         </Step>
       </Steps>
