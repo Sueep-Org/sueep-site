@@ -22,15 +22,15 @@
     },
     {
       "path": "/api/cron/schedule-nudge-morning",
-      "schedule": "0 12 * * *"
+      "schedule": "0 12,13 * * *"
     },
     {
       "path": "/api/cron/schedule-nudge-midday",
-      "schedule": "0 17 * * *"
+      "schedule": "0 17,18 * * *"
     },
     {
       "path": "/api/cron/turnover-completion-digest",
-      "schedule": "0 23 * * *"
+      "schedule": "0 23,0 * * *"
     },
     {
       "path": "/api/cron/delete-denied-candidates",
@@ -42,19 +42,19 @@
     },
     {
       "path": "/api/cron/property-manager-weekly",
-      "schedule": "30 11 * * 1"
+      "schedule": "30 11,12 * * 1"
     },
     {
       "path": "/api/cron/property-manager-reminders",
-      "schedule": "30 13 * * 1-5"
+      "schedule": "30 13,14 * * 1-5"
     },
     {
       "path": "/api/cron/sub-co-reminders",
-      "schedule": "35 13 * * 1-5"
+      "schedule": "35 13,14 * * 1-5"
     },
     {
       "path": "/api/cron/management-reminders",
-      "schedule": "0 12 * * *"
+      "schedule": "0 12,13 * * *"
     },
     {
       "path": "/api/cron/email-log-cleanup",
@@ -62,15 +62,15 @@
     },
     {
       "path": "/api/cron/email-failure-alert",
-      "schedule": "0 13 * * *"
+      "schedule": "0 13,14 * * *"
     },
     {
       "path": "/api/cron/schedule-confirmations",
-      "schedule": "0 18 * * *"
+      "schedule": "0 18,19 * * *"
     },
     {
       "path": "/api/cron/offer-letter-reminders",
-      "schedule": "5 12 * * *"
+      "schedule": "5 12,13 * * *"
     },
     {
       "path": "/api/cron/deal-stage-steps",

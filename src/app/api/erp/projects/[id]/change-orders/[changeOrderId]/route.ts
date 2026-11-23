@@ -7,7 +7,7 @@ import { centsToDollars } from "@/lib/erp/money";
 import { notifyProjectRescheduled } from "@/lib/erp/notifyReschedule";
 import { notifyReadyToBill } from "@/lib/erp/notifyReadyToBill";
 import { paidDayToTimestamp } from "@/lib/erp/payPeriods";
-import { getErpAuth } from "@/lib/erpAuth";
+import { getErpAuth, canEditLabor } from "@/lib/erpAuth";
 
 type Ctx = { params: Promise<{ id: string; changeOrderId: string }> };
 
@@ -199,6 +199,10 @@ export async function PATCH(req: Request, ctx: Ctx) {
     data.endDate = data.completedAt;
   }
 
+  if (Array.isArray(body.laborers)) {
+    const laborAuth = await getErpAuth();
+    if (!laborAuth || !canEditLabor(laborAuth.role)) return NextResponse.json({ error: "You can't change labor entries." }, { status: 403 });
+  }
   const laborersRaw = Array.isArray(body.laborers)
     ? (body.laborers as unknown[]).flatMap((l) => {
         if (typeof l !== "object" || l === null) return [];

@@ -31,7 +31,7 @@ import {
 import { SchedulePlanner } from "./SchedulePlanner";
 import { crewOf } from "@/lib/erp/subCrew";
 import { isPmLevel } from "@/lib/erpRoles";
-import { canMarkScheduleDayComplete } from "@/lib/erpAuth";
+import { canMarkScheduleDayComplete, canAssignSchedule } from "@/lib/erpAuth";
 import { loadAllSubScoresCached } from "@/lib/erp/subBidStats";
 import type { SubScores } from "@/lib/erp/subScores";
 import { SubStaffProvider } from "./SubOfferBox";
@@ -953,6 +953,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
           .filter((c) => visibleProjects.some((p) => p.id === c.projectId))
           .map((c) => ({ key: c.key, completedByName: c.completedByName, completedAt: c.createdAt.toISOString() }))}
         canMarkDayComplete={canMarkScheduleDayComplete(auth?.role ?? "EMPLOYEE")}
+        canAssign={canAssignSchedule(auth?.role ?? "EMPLOYEE")}
       />
       </SubStaffProvider>
 

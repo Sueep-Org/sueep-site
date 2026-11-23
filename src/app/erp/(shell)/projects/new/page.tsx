@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getDefaultNotifyEmails } from "@/lib/notificationSettings";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
@@ -92,6 +93,7 @@ export default async function NewProjectPage() {
         initialScheduleBuildings={scheduleBuildings}
         janitorialPipelineId={cfg?.janitorial.pipelineId || null}
         employees={employees}
+        defaultNotifyEmails={(await getDefaultNotifyEmails()).emails}
         canEditPricing={auth ? canEditPricing(auth.role) : false}
       />
     </div>

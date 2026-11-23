@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { scheduleEditForbidden } from "@/lib/erp/scheduleAccess";
 import { prisma } from "@/lib/prisma";
 import { notifyProjectRescheduled } from "@/lib/erp/notifyReschedule";
 
@@ -10,6 +11,8 @@ import { notifyProjectRescheduled } from "@/lib/erp/notifyReschedule";
  * [id] does for a plain project-date reschedule.
  */
 export async function POST(req: Request) {
+  const forbidden = await scheduleEditForbidden();
+  if (forbidden) return forbidden;
   let body: Record<string, unknown>;
   try {
     body = (await req.json()) as Record<string, unknown>;

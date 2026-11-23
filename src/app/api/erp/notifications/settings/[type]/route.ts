@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { canManageNotifications, getErpAuth } from "@/lib/erpAuth";
-import { BACKUP_PMS_KEY, NOTIFICATIONS, isEmailType, parseEmailList } from "@/lib/notificationTypes";
+import { BACKUP_PMS_KEY, NOTIFICATIONS, isEmailType, parseEmailList, DEFAULT_NOTIFY_KEY } from "@/lib/notificationTypes";
 import { getBackupPms, getNotificationSetting } from "@/lib/notificationSettings";
 
 export const runtime = "nodejs";
@@ -27,6 +27,17 @@ export async function PUT(req: Request, ctx: Ctx) {
     const to = parseEmailList(body.to ?? (await getBackupPms()));
     if (!to) return NextResponse.json({ error: "Check the email addresses" }, { status: 400 });
     if (!to.length) return NextResponse.json({ error: "Keep at least one backup PM" }, { status: 400 });
+    await prisma.notificationSetting.upsert({
+      where: { type },
+      update: { to, updatedBy: auth.email },
+      create: { type, to, updatedBy: auth.email },
+    });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (type === DEFAULT_NOTIFY_KEY) {
+    const to = parseEmailList(body.to ?? "");
+    if (!to) return NextResponse.json({ error: "Check the email addresses" }, { status: 400 });
     await prisma.notificationSetting.upsert({
       where: { type },
       update: { to, updatedBy: auth.email },

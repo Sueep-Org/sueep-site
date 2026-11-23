@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { scheduleEditForbidden } from "@/lib/erp/scheduleAccess";
 import { prisma } from "@/lib/prisma";
 import { dayKey } from "@/lib/erp/schedule";
 import { isScheduleRemovalReason } from "@/lib/erp/scheduleRemovals";
@@ -12,6 +13,8 @@ import { getErpAuth } from "@/lib/erpAuth";
 // cleared (start also clears requestedDate, which the calendar falls back
 // to), then any reason except MISTAKE leaves a grayed-out ScheduleDayRemoval.
 export async function POST(req: Request) {
+  const forbidden = await scheduleEditForbidden();
+  if (forbidden) return forbidden;
   const body = (await req.json().catch(() => null)) as
     | { changeOrderId?: unknown; dateKey?: unknown; reason?: unknown; note?: unknown; coveredBy?: unknown }
     | null;

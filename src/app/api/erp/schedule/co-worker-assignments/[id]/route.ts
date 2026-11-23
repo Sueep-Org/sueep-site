@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { scheduleEditForbidden } from "@/lib/erp/scheduleAccess";
 import { prisma } from "@/lib/prisma";
 import { dayKey } from "@/lib/erp/schedule";
 import { resolveWorkerContact, sendDayInvite } from "@/lib/erp/scheduleInvites";
@@ -6,6 +7,8 @@ import { resolveWorkerContact, sendDayInvite } from "@/lib/erp/scheduleInvites";
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function DELETE(_req: Request, ctx: Ctx) {
+  const forbidden = await scheduleEditForbidden();
+  if (forbidden) return forbidden;
   const { id } = await ctx.params;
 
   const existing = await prisma.changeOrderWorkerDayAssignment.findUnique({

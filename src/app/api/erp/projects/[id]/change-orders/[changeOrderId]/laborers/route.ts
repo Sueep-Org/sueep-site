@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getErpAuth, canEditLabor } from "@/lib/erpAuth";
 import { prisma } from "@/lib/prisma";
 import { dollarsToCents } from "@/lib/erp/money";
 import { resolveLaborRateCents } from "@/lib/erp/laborRate";
@@ -8,6 +9,8 @@ type Ctx = { params: Promise<{ id: string; changeOrderId: string }> };
 const OTHER_VALUE = "__other__";
 
 export async function POST(req: Request, ctx: Ctx) {
+  const laborAuth = await getErpAuth();
+  if (!laborAuth || !canEditLabor(laborAuth.role)) return NextResponse.json({ error: "You can't change labor entries." }, { status: 403 });
   const { id, changeOrderId } = await ctx.params;
 
   const changeOrder = await prisma.projectChangeOrder.findFirst({

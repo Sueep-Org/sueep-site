@@ -222,6 +222,16 @@ export function canSeeMarginOnly(role: ErpRole): boolean {
   return role === "SUPERVISOR";
 }
 
+/** Add, edit or delete labor entries on projects and change orders (API). Everyone but Employees, same as the screens. */
+export function canEditLabor(role: ErpRole): boolean {
+  return role !== "EMPLOYEE";
+}
+
+/** Schedule: assign or change who's on a day (coverage, workers, removed days, series, next day, invites). */
+export function canAssignSchedule(role: ErpRole): boolean {
+  return isPmLevel(role) || role === "SALES";
+}
+
 /** Schedule: mark one day of a job or change order complete (not the whole job, which is done on its page). */
 export function canMarkScheduleDayComplete(role: ErpRole): boolean {
   return isPmLevel(role) || role === "SALES" || role === "SUPERVISOR";

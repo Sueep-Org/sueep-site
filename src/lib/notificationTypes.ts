@@ -683,6 +683,9 @@ export function isEmailType(v: unknown): v is EmailType {
 
 /** Not an email: who the "backup PMs" fallback reaches. Stored like a setting. */
 export const BACKUP_PMS_KEY = "BACKUP_PMS";
+/** Not an email: who is ticked by default under "Notify employees" on new projects and change orders,
+ * and always notified when a Supervisor adds one. Stored like a setting; see getDefaultNotifyEmails. */
+export const DEFAULT_NOTIFY_KEY = "DEFAULT_NOTIFY";
 export const defaultBackupPms = () => [env("DOCUSEAL_SUEEP_SIGNER_EMAIL", "david@sueep.com"), "jennifer@sueep.com"];
 
 export const NOTIFICATION_GROUPS: NotificationGroup[] = ["Projects & schedule", "Turnovers", "Billing", "People", "Insurance", "Reminders", "Website", "Admin"];

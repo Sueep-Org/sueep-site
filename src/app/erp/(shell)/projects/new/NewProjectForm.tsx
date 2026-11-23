@@ -244,6 +244,8 @@ interface NewProjectFormProps {
   initialScheduleBuildings?: ScheduleBuildingOption[];
   janitorialPipelineId?: string | null;
   employees?: EmployeeOption[];
+  /** Emails ticked by default under Notify employees (Email Settings), lowercased */
+  defaultNotifyEmails?: string[];
   initialSegment?: string;
   lockedSegment?: boolean;
   allowErpDataFetch?: boolean;
@@ -515,6 +517,7 @@ export function NewProjectForm({
   initialScheduleBuildings = [],
   janitorialPipelineId = null,
   employees = [],
+  defaultNotifyEmails = [],
   initialSegment = "COMMERCIAL_CLEANING",
   lockedSegment = false,
   allowErpDataFetch = true,
@@ -541,19 +544,11 @@ export function NewProjectForm({
   const [projectEndDateHint, setProjectEndDateHint] = useState("");
   const [nextDayUpcharge, setNextDayUpcharge] = useState(false);
   const notifiableEmployees = useMemo(() => employees.filter((e) => e.email), [employees]);
-  const defaultNotifyIds = useMemo(() => {
-    const ids: string[] = [];
-    for (const e of notifiableEmployees) {
-      const name = `${e.firstName} ${e.lastName}`.toLowerCase();
-      if (
-        name === "david rodriguez" ||
-        name === "jennifer cortes-loya" ||
-        e.firstName.toLowerCase() === "sergio"
-      )
-        ids.push(e.id);
-    }
-    return ids;
-  }, [notifiableEmployees]);
+  // Ticked by default: the "Notify about new projects and change orders" list on Email Settings.
+  const defaultNotifyIds = useMemo(
+    () => notifiableEmployees.filter((e) => defaultNotifyEmails.includes((e.email ?? "").trim().toLowerCase())).map((e) => e.id),
+    [notifiableEmployees, defaultNotifyEmails],
+  );
   const [notifyEmployeeIds, setNotifyEmployeeIds] = useState<string[]>(() => defaultNotifyIds);
   const [serviceType, setServiceType] = useState("");
   const [customType, setCustomType] = useState("");

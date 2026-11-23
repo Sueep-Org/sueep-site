@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { getDefaultNotifyEmails } from "@/lib/notificationSettings";
 import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
@@ -112,6 +113,8 @@ function groupProjectTabs(flat: { label: string; content: React.ReactNode }[]): 
 export default async function ProjectDetailPage({ params }: PageProps) {
   const { id } = await params;
   const auth = await getErpAuth();
+  // Ticked by default under Notify employees on change orders (Email Settings).
+  const { emails: defaultNotifyEmails } = await getDefaultNotifyEmails();
   const isSupervisor = auth?.role === "SUPERVISOR";
   const isEmployee = auth?.role === "EMPLOYEE";
   const canEditSOV = !!auth && canEditPricing(auth.role);
@@ -924,6 +927,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             content: isSupervisor ? (
               <SupervisorChangeOrderRequestForm
                 projectId={project.id}
+                defaultNotifyEmails={defaultNotifyEmails}
                 defaultRequestedBy={project.supervisor ?? ""}
                 initialEntries={changeOrderRowsForSupervisor}
                 employees={laborEmployees.map((e) => ({
@@ -937,6 +941,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
               <div className="space-y-6">
                 <ProjectChangeOrdersSection
                   projectId={project.id}
+                  defaultNotifyEmails={defaultNotifyEmails}
                   initialEntries={changeOrderRows}
                   employees={laborEmployees.map((e) => ({
                     id: e.id,

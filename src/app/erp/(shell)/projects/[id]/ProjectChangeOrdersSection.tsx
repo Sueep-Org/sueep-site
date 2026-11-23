@@ -184,6 +184,7 @@ export function ProjectChangeOrdersSection({
   laborRateCard,
   isEmployee = false,
   canEditPricing = false,
+  defaultNotifyEmails = [],
 }: {
   projectId: string;
   initialEntries: ProjectChangeOrderRow[];
@@ -195,6 +196,8 @@ export function ProjectChangeOrdersSection({
    * financials are gated from Employee. */
   isEmployee?: boolean;
   canEditPricing?: boolean;
+  /** Emails ticked by default under Notify employees (Email Settings), lowercased */
+  defaultNotifyEmails?: string[];
 }) {
   const router = useRouter();
   const { coPriceRates, coDayHours } = usePricingSettings();
@@ -220,20 +223,10 @@ export function ProjectChangeOrdersSection({
   const titleRef = useRef<HTMLInputElement>(null);
   const days = changeOrderDayCount(startDate, endDate);
 
-  const defaultNotifyIds = useState(() => {
-    const ids: string[] = [];
-    for (const e of notifiableEmployees) {
-      const name = `${e.firstName} ${e.lastName}`.toLowerCase();
-      if (
-        name === "david rodriguez" ||
-        name === "jennifer cortes-loya" ||
-        e.firstName.toLowerCase() === "sergio"
-      ) {
-        ids.push(e.id);
-      }
-    }
-    return ids;
-  })[0];
+  // Ticked by default: the "Notify about new projects and change orders" list on Email Settings.
+  const defaultNotifyIds = useState(() =>
+    notifiableEmployees.filter((e) => defaultNotifyEmails.includes((e.email ?? "").trim().toLowerCase())).map((e) => e.id),
+  )[0];
 
   const [notifyEmployeeIds, setNotifyEmployeeIds] = useState<string[]>(defaultNotifyIds);
   const [notifyResult, setNotifyResult] = useState<{ ok: boolean; msg: string } | null>(null);

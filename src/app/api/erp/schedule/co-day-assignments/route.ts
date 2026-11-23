@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { scheduleEditForbidden } from "@/lib/erp/scheduleAccess";
 import { prisma } from "@/lib/prisma";
 import { dayKey } from "@/lib/erp/schedule";
 import { appUrl, notifyChangeOrderCrew, sendDayInvite, sendSubLeadInvite } from "@/lib/erp/scheduleInvites";
@@ -17,6 +18,8 @@ const CO_STATUS_EXCLUDED = ["REJECTED", "VOID"];
 // and no SOV/scope pickers, unlike the project route — COs are assigned one
 // day at a time for now.
 export async function POST(req: Request) {
+  const forbidden = await scheduleEditForbidden();
+  if (forbidden) return forbidden;
   let body: Record<string, unknown>;
   try {
     body = (await req.json()) as Record<string, unknown>;
