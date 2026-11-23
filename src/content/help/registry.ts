@@ -65,7 +65,7 @@ export type ArticleEntry = {
 export const registry: ArticleEntry[] = [
   {
     slug: "contracts/uploading-a-contract",
-    keywords: ["docuseal", "sign", "signature", "e-sign", "pdf", "upload signed", "send for signing", "agreement"],
+    keywords: ["docuseal", "sign", "signature", "e-sign", "pdf", "upload signed", "send for signing", "agreement", "create contract", "change order contract"],
     title: "Uploading a Contract",
     category: "Projects & Schedule",
     description: "How to upload a contract PDF and send it for signing through DocuSeal.",
