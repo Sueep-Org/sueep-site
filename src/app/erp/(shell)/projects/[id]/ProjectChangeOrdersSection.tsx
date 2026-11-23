@@ -1,5 +1,6 @@
 "use client";
 
+import { changeOrderStatusLabel } from "@/lib/erp/changeOrderStatus";
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -412,7 +413,7 @@ export function ProjectChangeOrdersSection({
             <select id="co-status" name="status" defaultValue="DRAFT" className={input}>
               {STATUSES.filter((s) => !NOTE_STATUSES.includes(s)).map((status) => (
                 <option key={status} value={status}>
-                  {status.charAt(0) + status.slice(1).toLowerCase()}
+                  {changeOrderStatusLabel(status)}
                 </option>
               ))}
             </select>
@@ -661,7 +662,7 @@ function ChangeOrderEditor({
                 onChange={(e) => setStatus(e.target.value as ProjectChangeOrderRow["status"])}
               >
                 {STATUSES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
+                  <option key={s} value={s}>{changeOrderStatusLabel(s)}</option>
                 ))}
               </select>
             </div>

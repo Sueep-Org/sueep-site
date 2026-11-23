@@ -22,7 +22,7 @@ export function CreatingAProject() {
           From here you can create commercial painting, commercial cleaning, change order,
           janitorial turnover request, and other projects.
           <br></br>
-          For information on <A href="/erp/help/projects/creating-a-change-order">change</A> orders or <A href="/erp/help/turnover/creating-a-request">janitorial turnover requests</A> visit their seperate tutorials.
+          For information on <A href="/erp/help/projects/creating-a-change-order">change</A> orders or <A href="/erp/help/turnover/creating-a-request">unit turnovers</A> see their own guides.
           <br></br>
           Commercial painting and commercial cleaning follow the same creation process and the
           same detail-page view, so they&apos;re covered together here.

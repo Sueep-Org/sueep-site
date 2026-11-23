@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
 
 /**
  * AES-256-GCM for values that must never sit in the database as plain text
- * (Company Info's EIN, tax IDs, bank numbers, and later website logins).
+ * (Sueep Info's EIN, tax IDs, bank numbers, and later website logins).
  * A copy of the database alone shows nothing without ERP_ENCRYPTION_KEY.
  *
  * Stored as "v1:<iv>:<tag>:<ciphertext>", all base64, so the format can

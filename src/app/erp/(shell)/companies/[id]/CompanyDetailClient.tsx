@@ -342,11 +342,11 @@ export function ProjectsSection({
 
 type LinkedLogin = { id: string; name: string; url: string | null; username: string | null; hasPassword: boolean };
 
-/** How long a revealed password stays on screen, same as Company Info. */
+/** How long a revealed password stays on screen, same as Sueep Info. */
 const REVEAL_MS = 30_000;
 
-/** Company Info logins this company's billing portal uses. Passwords come
- * from Company Info's logged reveal route; nothing is stored per company. */
+/** Sueep Info logins this company's billing portal uses. Passwords come
+ * from Sueep Info's logged reveal route; nothing is stored per company. */
 export function PortalLoginsSection({
   companyId,
   canLink,
@@ -427,10 +427,10 @@ export function PortalLoginsSection({
       <div className="flex items-center justify-between gap-3">
         <h2 className="flex items-center gap-1 text-sm font-semibold text-gray-900">
           Portal logins
-          <InfoTip text="Logins saved on Company Info that we use for this company's billing portal. One login can serve several companies. Every Reveal and Copy is logged." />
+          <InfoTip text="Logins saved on Sueep Info that we use for this company's billing portal. One login can serve several companies. Every Reveal and Copy is logged." />
         </h2>
         <Link href="/erp/company-info/logins" className="text-xs text-pink-600 hover:underline">
-          Manage on Company Info
+          Manage on Sueep Info
         </Link>
       </div>
       {logins.length === 0 ? (
@@ -487,7 +487,7 @@ export function PortalLoginsSection({
         </ul>
       )}
       {canLink && options.length > 0 && (
-        <SearchableSelect value="" onChange={(v) => void setLink(v, true)} options={options} allLabel="Link a login from Company Info…" className="mt-2" disabled={busy} />
+        <SearchableSelect value="" onChange={(v) => void setLink(v, true)} options={options} allLabel="Link a login from Sueep Info…" className="mt-2" disabled={busy} />
       )}
     </section>
   );

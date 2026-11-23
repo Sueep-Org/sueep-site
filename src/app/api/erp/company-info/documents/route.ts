@@ -14,7 +14,7 @@ import {
 export const runtime = "nodejs";
 
 /**
- * Adds a Company Info document. Multipart form: kind, year (P&L and balance
+ * Adds a Sueep Info document. Multipart form: kind, year (P&L and balance
  * sheet), label (Other), and either file or link. A new P&L or balance
  * sheet replaces that year's old one.
  */

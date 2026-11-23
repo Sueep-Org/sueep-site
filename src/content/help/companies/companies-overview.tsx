@@ -12,8 +12,8 @@ export function CompaniesOverview() {
         <LI>Admins, Project Managers, the Business Manager, and Sales can see companies and pick one on a building or project.</LI>
         <LI>Only Admins and the Business Manager can edit a company, its contacts and billing, and billing overrides.</LI>
         <LI>
-          Portal logins (Procore, Coupa...) are saved once on Company Info &gt; Logins and linked to each company that uses them.
-          Anyone who can open Company Info can reveal them. Every Reveal and Copy is logged.
+          Portal logins (Procore, Coupa...) are saved once on Sueep Info &gt; Logins and linked to each company that uses them.
+          Anyone who can open Sueep Info can reveal them. Every Reveal and Copy is logged.
         </LI>
       </UL>
 
@@ -31,11 +31,11 @@ export function CompaniesOverview() {
           approved invoice for them still hasn&apos;t been sent or uploaded close to it.
         </Step>
         <Step n={4} title="Contacts and logins">
-          On the company page, add contacts. If they use a portal, save the login on Company Info &gt; Logins first, then use{" "}
-          <strong>Link a login from Company Info</strong>. One Procore login can be linked to every GC that uses it.
+          On the company page, add contacts. If they use a portal, save the login on Sueep Info &gt; Logins first, then use{" "}
+          <strong>Link a login from Sueep Info</strong>. One Procore login can be linked to every GC that uses it.
         </Step>
       </Steps>
-      <Callout type="warning">Never put passwords in Billing instructions or Notes. Those are not encrypted. Save them on Company Info &gt; Logins.</Callout>
+      <Callout type="warning">Never put passwords in Billing instructions or Notes. Those are not encrypted. Save them on Sueep Info &gt; Logins.</Callout>
 
       <H2>Buildings and projects</H2>
       <P>

@@ -8,15 +8,15 @@ const TABS = [
   { id: "access-log", label: "Access log", href: "/erp/company-info/access-log", adminOnly: true },
 ] as const;
 
-/** Title and tab bar shared by every Company Info tab. */
+/** Title and tab bar shared by every Sueep Info tab. */
 export function CompanyInfoHeader({ active, showAccessLog }: { active: (typeof TABS)[number]["id"]; showAccessLog: boolean }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <h1 className="text-2xl font-semibold text-gray-900">Company Info</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Sueep Info</h1>
         <InfoTip text="Our IDs, licenses, and company details for vendor forms and bids. Admins, PMs and the Business Manager only. Locked values are encrypted, and every reveal is logged." />
       </div>
-      <nav className="flex gap-1 overflow-x-auto border-b border-gray-200" aria-label="Company Info sections">
+      <nav className="flex gap-1 overflow-x-auto border-b border-gray-200" aria-label="Sueep Info sections">
         {TABS.filter((t) => !("adminOnly" in t) || showAccessLog).map((t) => {
           const isActive = t.id === active;
           return (

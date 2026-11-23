@@ -84,6 +84,7 @@ export default async function JanitorialPage() {
         expirationDate: c.expirationDate ? utcDateKey(c.expirationDate) : null,
         nextCheck: c.qualityChecks[0] ? utcDateKey(c.qualityChecks[0].scheduledDate) : null,
         salesperson: c.commissionEmployee ? `${c.commissionEmployee.firstName} ${c.commissionEmployee.lastName}`.trim() : null,
+        autoDraft: c.autoDraftInvoices,
       };
     });
 

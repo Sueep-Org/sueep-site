@@ -92,7 +92,7 @@ export async function loadLienFactSheet(
   const d = row.deadline;
   const lines = (project.sov?.items ?? []).map((i) => i.description.trim()).filter(Boolean);
   const defaultWork = lines.length > 0 ? `Post-construction cleaning labor and materials, including: ${lines.slice(0, 8).join("; ")}${lines.length > 8 ? "; and related work" : ""}.` : "Post-construction cleaning labor and materials.";
-  // Company Info's address box is free text and can hold several addresses
+  // Sueep Info's address box is free text and can hold several addresses
   // and private notes. Only a plain single address is used as the starting
   // value; anything else is left for the person to type on the review form.
   const savedAddress = company.find((c) => c.label === "Company address")?.value?.trim() ?? "";

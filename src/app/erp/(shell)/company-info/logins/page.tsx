@@ -7,7 +7,7 @@ import { CompanyInfoHeader } from "../CompanyInfoTabs";
 import { LoginsTable } from "./LoginsTable";
 
 export const metadata: Metadata = {
-  title: "Company Info: Logins",
+  title: "Sueep Info: Logins",
 };
 
 export const dynamic = "force-dynamic";

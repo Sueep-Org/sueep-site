@@ -144,6 +144,7 @@ Both scripts skip rows that are already done, so re-running them is harmless.
 | Site is down or broken after a deploy | Vercel → Deployments | **Promote** the last good deployment, then debug |
 | "Reconnect QuickBooks" banner | ERP → QuickBooks | Token expired or revoked. Section 5 |
 | Invoices not showing paid | Vercel cron logs for `hubspot-invoice-sync` / `hubspot-unit-invoices` | HubSpot token revoked/rotated (update `HUBSPOT_ACCESS_TOKEN`, redeploy) or HubSpot API errors |
+| New HubSpot deals don't become ERP projects | ERP → HubSpot sync (`/erp/hubspot`, PM/Business Manager/Admin) shows which deals would sync | Deals sync when HubSpot's webhook fires, not on deploy or a timer. Check `HUBSPOT_ACCESS_TOKEN`, and `HUBSPOT_PIPELINE_STAGE_MAP` (pipeline and stage IDs, see `.env.example`; `/api/erp/hubspot/pipelines` lists the IDs while signed in). For janitorial, leave `workCompleted` empty to keep only active deals. **Sync deals from HubSpot** on that page runs it by hand |
 | Emails not arriving | ERP → Email Log; resend.com logs | Resend key, domain DNS for `mail.sueep.com`, or the recipient was changed on the Notifications page |
 | All crons 401 | Vercel cron logs | `CRON_SECRET` changed without a redeploy |
 | Nobody can sign in | Firebase console; `ERP_SESSION_SECRET` | Firebase config, or the session secret changed (everyone is signed out once, which is expected) |
@@ -155,7 +156,7 @@ Both scripts skip rows that are already done, so re-running them is harmless.
 Details and next phases are in each plan in `sueep-plans` (see its README status table).
 
 **Sprint (SPRINT_NOV_2026.md):**
-1. **Invoicing only through the ERP (QuickBooks cutover).** The production switch is already on **QuickBooks** (AppSetting `qboInvoiceDrafts.production=true`, next number 1412, checked Nov 19). Still open: the Intuit app questionnaire set to "writes data", and Edwin confirming HubSpot's own invoice sync is off. After that, remove the HubSpot backup drafting path and the "until the cutover" notes in help articles.
+1. **Invoicing only through the ERP (QuickBooks cutover).** The production switch (now on the QuickBooks page, Admin only) is already on **QuickBooks** (AppSetting `qboInvoiceDrafts.production=true`, next number 1412, checked Nov 19). Still open: the Intuit app questionnaire set to "writes data", and Edwin confirming HubSpot's own invoice sync is off. After that, remove the HubSpot backup drafting path and the "until the cutover" notes in help articles.
 2. **Change order contracts in the ERP.** Email PDF + upload the signed copy is built. Next: a signing link from the ERP.
 3. **Business settings page.** Phases 1, 2, 3, 4A, 5 and 6 are built; 4B waits on "Save all" in production. See SETTINGS_PLAN.md.
 

@@ -16,7 +16,7 @@ import { deliveryCutoffText, loadDeliveryCutoffs } from "@/lib/erp/billingCutoff
 import { loadPayApp } from "@/lib/erp/payAppLines";
 import { namesByEmail } from "@/lib/erp/janitorialQualityChecks";
 import { CLAIM_TEXT, billingDateKey, draftLines, linesTotal, monthLabel } from "@/lib/erp/janitorialInvoiceDrafts";
-import { ReadyToSend, type BillableGroupRow, type ContractSetting, type DeliveryRow, type DraftRecipientsRow, type DraftRow, type MonthRow, type QboTestRow } from "./ReadyToSend";
+import { ReadyToSend, type BillableGroupRow, type DeliveryRow, type DraftRecipientsRow, type DraftRow, type MonthRow, type QboTestRow } from "./ReadyToSend";
 import { withHubSpotId } from "@/lib/erp/invoiceLinkSource";
 import { qboEnvironment } from "@/lib/erp/qboClient";
 import { BillingFlowBar } from "@/app/erp/components/BillingFlowBar";
@@ -60,16 +60,6 @@ function recipientsRow(d: InvoiceDestination | null, groupType: string, contacts
   };
 }
 
-/** Next month (this or next) whose billing day hasn't passed, and when its draft appears. */
-function nextDraftKey(todayKey: string, billingDay: number, leadDays: number): string {
-  const [y, m] = todayKey.split("-").map(Number) as [number, number];
-  for (const start of [new Date(Date.UTC(y, m - 1, 1)), new Date(Date.UTC(y, m, 1))]) {
-    const key = billingDateKey(start, billingDay);
-    if (key >= todayKey) return addDaysKey(key, -leadDays);
-  }
-  return addDaysKey(billingDateKey(new Date(Date.UTC(y, m + 1, 1)), billingDay), -leadDays);
-}
-
 export default async function ReadyToSendPage() {
   const auth = await getErpAuth();
   if (!auth || !canApproveInvoices(auth.role)) redirect("/erp");
@@ -91,7 +81,7 @@ export default async function ReadyToSendPage() {
   };
 
   const qboEnv = qboEnvironment();
-  const [draftRows0, failed, discarded, contracts, billable, itemDrafts, waitingDeliveries, toQuickBooks, qboDrafts, qboTests] = await Promise.all([
+  const [draftRows0, failed, discarded, billable, itemDrafts, waitingDeliveries, toQuickBooks, qboDrafts, qboTests] = await Promise.all([
     prisma.hubSpotContractInvoice.findMany({
       where: { draftedByErp: true, status: "draft" },
       select: { hubspotInvoiceId: true, amountCents: true, invoiceDate: true, dueDate: true, period: { select: periodSelect } },
@@ -105,11 +95,6 @@ export default async function ReadyToSendPage() {
       where: { draftDiscardedAt: { gte: new Date(Date.now() - 60 * 86_400_000) }, billingStatus: "NOT_BILLED", hubspotInvoices: { none: {} } },
       select: periodSelect,
       orderBy: { draftDiscardedAt: "desc" },
-    }),
-    prisma.recurringContract.findMany({
-      where: { status: "ACTIVE" },
-      select: { id: true, autoDraftInvoices: true, invoiceLabel: true, billingDayOfMonth: true, monthlyRateCents: true, buildingId: true, building: { select: { name: true, hubspotDealId: true } } },
-      orderBy: { building: { name: "asc" } },
     }),
     loadBillableGroups(),
     loadWaitingItemDrafts(),
@@ -254,7 +239,7 @@ export default async function ReadyToSendPage() {
     when: (t.approvedAt ?? t.updatedAt).toISOString(),
   }));
 
-  // Portal logins (from Company Info) linked to each client company on Needs sending.
+  // Portal logins (from Sueep Info) linked to each client company on Needs sending.
   const companyIds = [...new Set(waitingDeliveries.map((d) => d.clientCompanyId).filter((x): x is string => !!x))];
   const loginLinks = companyIds.length
     ? await prisma.clientCompanyLogin.findMany({ where: { companyId: { in: companyIds } }, select: { companyId: true, login: { select: { name: true } } } })
@@ -311,17 +296,6 @@ export default async function ReadyToSendPage() {
     items: g.items.map((i) => ({ key: i.key, kind: i.kind, title: i.title, lineDescription: i.lineDescription, cents: i.cents, doneKey: i.doneKey, href: i.href })),
   }));
 
-  const contractRows: ContractSetting[] = contracts.map((c) => ({
-    id: c.id,
-    building: c.building.name,
-    label: c.invoiceLabel ?? "",
-    autoDraft: c.autoDraftInvoices,
-    billingDay: c.billingDayOfMonth,
-    monthlyRateCents: c.monthlyRateCents,
-    // QuickBooks drafts don't need a deal.
-    hasDeal: toQuickBooks || !!c.building.hubspotDealId,
-    nextDraftKey: nextDraftKey(todayKey, c.billingDayOfMonth, leadDays),
-  }));
 
   return (
     <div className="space-y-4">
@@ -342,7 +316,6 @@ export default async function ReadyToSendPage() {
         billable={billableRows}
         failed={failed.map(monthRow)}
         discarded={discarded.map(monthRow)}
-        contracts={contractRows}
         qbo={{ environment: qboEnv, on: toQuickBooks, tests: qboTestRows }}
       />
     </div>

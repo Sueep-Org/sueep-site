@@ -97,7 +97,7 @@ export type DeliveryRow = {
   qboUrl: string | null;
   link: string | null;
   lines: { name: string; description: string; amountCents: number }[];
-  /** Company Info logins linked to the client company */
+  /** Sueep Info logins linked to the client company */
   logins: string[];
   approvedAt: string;
 };
@@ -125,8 +125,8 @@ function draftUrl(d: DraftRow): string {
 /** A draft with a blocker (e.g. no client company) can't be approved; the blocker is its hover text. */
 const canApprove = (d: DraftRow) => !d.blocked;
 
-type Tab = "approve" | "bill" | "sending" | "contracts";
-const TABS: Tab[] = ["approve", "bill", "sending", "contracts"];
+type Tab = "approve" | "bill" | "sending";
+const TABS: Tab[] = ["approve", "bill", "sending"];
 
 /** ?tab=bill&pick=SOV:123 from Project Billing's Bill it link. */
 function urlParams(): { tab: Tab | null; pick: string | null } {
@@ -135,17 +135,6 @@ function urlParams(): { tab: Tab | null; pick: string | null } {
   const tab = p.get("tab") as Tab | null;
   return { tab: tab && TABS.includes(tab) ? tab : null, pick: p.get("pick") };
 }
-
-export type ContractSetting = {
-  id: string;
-  building: string;
-  label: string;
-  autoDraft: boolean;
-  billingDay: number;
-  monthlyRateCents: number;
-  hasDeal: boolean;
-  nextDraftKey: string;
-};
 
 function fmtDay(key: string | null): string {
   if (!key) return "Not set";
@@ -164,7 +153,6 @@ export function ReadyToSend({
   billable,
   failed,
   discarded,
-  contracts,
   qbo,
 }: {
   drafts: DraftRow[];
@@ -172,7 +160,6 @@ export function ReadyToSend({
   billable: BillableGroupRow[];
   failed: MonthRow[];
   discarded: MonthRow[];
-  contracts: ContractSetting[];
   qbo: QboDraftsInfo;
 }) {
   const router = useRouter();
@@ -306,7 +293,6 @@ export function ReadyToSend({
     { key: "bill", label: "Ready to bill", count: billableCount },
     { key: "approve", label: "To approve", count: drafts.length, alert: failed.length > 0 },
     { key: "sending", label: "Needs sending", count: deliveries.length, alert: deliveries.length > 0 },
-    { key: "contracts", label: "Contracts" },
   ];
 
   return (
@@ -354,7 +340,7 @@ export function ReadyToSend({
               <Button size="xs" variant="ghost" disabled={busy !== null} onClick={() => void draftNow()}>
                 {busy === "draft-now" ? "Checking…" : "Draft due months now"}
               </Button>
-              <InfoTip align="right" text="Runs the same check as the daily run: drafts any month that's due for contracts with Auto-draft on." />
+              <InfoTip align="right" text="Runs the same check as the daily run: drafts any month that's due for contracts with Auto-draft on (set on each janitorial contract's Billing tab)." />
             </span>
           </div>
 
@@ -533,7 +519,6 @@ export function ReadyToSend({
 
       {tab === "sending" && <NeedsSending rows={deliveries} />}
 
-      {tab === "contracts" && <ContractSettings contracts={contracts} toQuickBooks={qbo.on} />}
 
       {editing && <EditDraft draft={editing} onClose={() => setEditing(null)} />}
       {editingLines && <EditLines draft={editingLines} onClose={() => setEditingLines(null)} />}
@@ -600,79 +585,6 @@ function RowMenu({ label, items, disabled }: { label: string; items: MenuItem[];
         </div>
       )}
     </div>
-  );
-}
-
-function ContractSettings({ contracts, toQuickBooks }: { contracts: ContractSetting[]; toQuickBooks: boolean }) {
-  const router = useRouter();
-  const toast = useToast();
-  const [labels, setLabels] = useState<Record<string, string>>(() => Object.fromEntries(contracts.map((c) => [c.id, c.label])));
-
-  async function patch(id: string, body: Record<string, unknown>) {
-    const { ok, data } = await call(`/api/erp/invoice-drafts/contracts/${id}`, "PATCH", body);
-    if (!ok) toast(String(data.error ?? "Could not save."));
-    router.refresh();
-  }
-
-  return (
-    <section className="space-y-2">
-      <h2 className="flex items-center gap-1 text-sm font-semibold text-gray-900">
-        Janitorial contracts
-        <InfoTip
-          text={`Turn Auto-draft on one contract at a time. Turn it on only once nobody makes that contract's invoice by hand in ${toQuickBooks ? "QuickBooks or HubSpot" : "HubSpot"}, or the month gets two invoices.`}
-        />
-      </h2>
-      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
-        <table className="w-full min-w-[720px] text-sm">
-          <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
-            <tr>
-              <th className="px-3 py-2 font-medium">Auto-draft</th>
-              <th className="px-3 py-2 font-medium">Building</th>
-              <th className="px-3 py-2 font-medium">
-                <span className="inline-flex items-center gap-1">
-                  Invoice label
-                  <InfoTip text='Shown as "Recurring cleaning <label>" on the invoice. Blank uses the building name.' />
-                </span>
-              </th>
-              <th className="px-3 py-2 text-right font-medium">Monthly</th>
-              <th className="px-3 py-2 font-medium">Billing day</th>
-              <th className="px-3 py-2 font-medium">Next draft</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {contracts.map((c) => (
-              <tr key={c.id}>
-                <td className="px-3 py-2">
-                  <input
-                    type="checkbox"
-                    aria-label={`Auto-draft ${c.building}`}
-                    checked={c.autoDraft}
-                    disabled={!c.hasDeal && !c.autoDraft}
-                    onChange={(e) => void patch(c.id, { autoDraftInvoices: e.target.checked })}
-                  />
-                </td>
-                <td className="px-3 py-2 text-gray-900">
-                  {c.building}
-                  {!c.hasDeal && <span className="ml-2 text-xs text-red-700">No HubSpot deal linked</span>}
-                </td>
-                <td className="px-3 py-2">
-                  <input
-                    value={labels[c.id] ?? ""}
-                    placeholder={c.building}
-                    onChange={(e) => setLabels((l) => ({ ...l, [c.id]: e.target.value }))}
-                    onBlur={() => (labels[c.id] ?? "") !== c.label && void patch(c.id, { invoiceLabel: labels[c.id] ?? "" })}
-                    className={`${inputClass.sm} w-48`}
-                  />
-                </td>
-                <td className="px-3 py-2 text-right tabular-nums text-gray-900">{centsToDollars(c.monthlyRateCents)}</td>
-                <td className="px-3 py-2 text-gray-700">{c.billingDay}</td>
-                <td className="px-3 py-2 text-gray-700">{c.autoDraft ? fmtDay(c.nextDraftKey) : <span className="text-gray-400">Off</span>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
   );
 }
 

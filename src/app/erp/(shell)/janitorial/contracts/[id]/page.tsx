@@ -2,7 +2,11 @@ import Link from "next/link";
 import { billingPageHref } from "@/lib/erp/billingStatus";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getErpAuth, canManageJanitorial } from "@/lib/erpAuth";
+import { getErpAuth, canManageJanitorial, canApproveInvoices } from "@/lib/erpAuth";
+import { ContractInvoiceSettings } from "./ContractInvoiceSettings";
+import { nextDraftKey } from "@/lib/erp/janitorialInvoiceDrafts";
+import { loadAlertSettings } from "@/lib/erp/alertSettingsServer";
+import { draftsGoToQuickBooks } from "@/lib/erp/qboInvoiceDrafts";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 import { centsToDollars } from "@/lib/erp/money";
 import { todayEasternKey, utcDateKey } from "@/lib/erp/dates";
@@ -34,12 +38,12 @@ export default async function JanitorialContractPage({ params }: PageProps) {
   if (!auth || !canManageJanitorial(auth.role)) redirect("/erp");
   const { id } = await params;
 
-  const [contract, employees, latestGpsClockIn, checkers] = await Promise.all([
+  const [contract, employees, latestGpsClockIn, checkers, alertSettings, toQuickBooks] = await Promise.all([
     prisma.recurringContract.findUnique({
       where: { id },
       include: {
         building: {
-          select: { id: true, name: true, address: true, pmName: true, pmEmail: true, pmPhone: true, latitude: true, longitude: true, geocodeStatus: true },
+          select: { id: true, name: true, address: true, pmName: true, pmEmail: true, pmPhone: true, latitude: true, longitude: true, geocodeStatus: true, hubspotDealId: true },
         },
         periods: {
           orderBy: { periodStart: "desc" },
@@ -67,6 +71,8 @@ export default async function JanitorialContractPage({ params }: PageProps) {
       select: { clockInAt: true, employee: { select: { firstName: true, lastName: true } } },
     }),
     loadCheckers(),
+    loadAlertSettings(),
+    draftsGoToQuickBooks(),
   ]);
   if (!contract) notFound();
   const assigneeNames = await namesByEmail(contract.qualityChecks.flatMap((q) => (q.assignedUser ? [q.assignedUser.email] : [])));
@@ -268,6 +274,20 @@ export default async function JanitorialContractPage({ params }: PageProps) {
           {
             label: "Billing",
             content: (
+              <>
+              <ContractInvoiceSettings
+                contractId={contract.id}
+                buildingName={contract.building.name}
+                autoDraft={contract.autoDraftInvoices}
+                label={contract.invoiceLabel ?? ""}
+                hasDeal={toQuickBooks || !!contract.building.hubspotDealId}
+                toQuickBooks={toQuickBooks}
+                nextDraftLabel={(() => {
+                  const [y, m, d] = nextDraftKey(todayEasternKey(), contract.billingDayOfMonth, alertSettings.janitorialDraftLeadDays).split("-").map(Number);
+                  return new Date(y!, m! - 1, d!).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+                })()}
+                canEdit={canApproveInvoices(auth.role)}
+              />
               <ContractMonthsTable
                 contractId={contract.id}
                 laborByPeriod={laborByPeriod}
@@ -291,6 +311,7 @@ export default async function JanitorialContractPage({ params }: PageProps) {
                   })),
                 }))}
               />
+              </>
             ),
           },
         ]}

@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { changeOrderStatusLabel } from "./changeOrderStatus";
 import { prisma } from "@/lib/prisma";
 import type { JobTabRow } from "@/app/erp/(shell)/_dashboard/JobTabs";
 import type { DashboardCardData } from "@/app/erp/(shell)/_dashboard/DashboardCard";
@@ -132,7 +133,6 @@ function coMissingEstimate(co: OpenChangeOrder): boolean {
   return co.estimatedCostCents == null && co.estLaborCents == null && co.estMaterialCents == null;
 }
 
-const CO_STATUS_LABEL: Record<string, string> = { DRAFT: "Draft", SUBMITTED: "Submitted", APPROVED: "Approved" };
 
 export async function loadWaitingOnMe(): Promise<DashboardCardData> {
   const [projects, changeOrders] = await Promise.all([loadWaitingProjects(), loadOpenChangeOrders()]);
@@ -160,7 +160,7 @@ export async function loadWaitingOnMe(): Promise<DashboardCardData> {
       id: co.id,
       href: `/erp/projects/${co.project.id}/change-orders/${co.id}`,
       title: co.title,
-      note: `${co.project.jobTitle} · ${CO_STATUS_LABEL[co.status] ?? co.status} · ${plural(waited, "day")} old`,
+      note: `${co.project.jobTitle} · ${changeOrderStatusLabel(co.status)} · ${plural(waited, "day")} old`,
       value: missing ? "No estimate" : "Estimated",
       negative: missing,
     };

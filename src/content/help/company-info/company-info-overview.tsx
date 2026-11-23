@@ -5,7 +5,7 @@ export function CompanyInfoOverview() {
     <>
       <H2>Overview</H2>
       <P>
-        Company Info (<strong>ERP → Company Info</strong>) is the one place for Sueep&apos;s own details: tax IDs, licenses,
+        Sueep Info (<strong>ERP → Sueep Info</strong>) is the one place for Sueep&apos;s own details: tax IDs, licenses,
         certifications, banking, financial statements, and the logins to the websites we use. It replaces the
         &quot;General information&quot; Google Sheet. Only Admins, PMs and the Business Manager can see it.
       </P>
@@ -87,12 +87,12 @@ export function CompanyInfoOverview() {
         </Step>
 
         <Step n={5} title="Access log (Admins only)">
-          Lists every Reveal and Copy across Company Info, newest first: who, when, which value, and whether it was viewed or
+          Lists every Reveal and Copy across Sueep Info, newest first: who, when, which value, and whether it was viewed or
           copied. Search by person or item.
         </Step>
 
         <Step n={6} title="Expiration reminders">
-          Every expiration date on Company Info shows on <strong>Schedule → Management</strong> under{" "}
+          Every expiration date on Sueep Info shows on <strong>Schedule → Management</strong> under{" "}
           <strong>Company licenses and IDs</strong>, with reminder emails 30 and 7 days before. Change the reminder days in that
           calendar&apos;s categories.
         </Step>

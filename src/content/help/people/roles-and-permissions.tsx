@@ -20,13 +20,13 @@ export function RolesAndPermissions() {
           <tr>
             <TD>Admin</TD>
             <TD>
-              Everything, plus users, the Company Info access log, connecting QuickBooks, and switching invoices between
+              Everything, plus users, the Sueep Info access log, connecting QuickBooks, and switching invoices between
               QuickBooks and the HubSpot backup (on the QuickBooks page).
             </TD>
           </tr>
           <tr>
             <TD>Project Manager</TD>
-            <TD>Runs jobs and crews: projects, schedule, payroll, employees, billing, janitorial, companies, Company Info.</TD>
+            <TD>Runs jobs and crews: projects, schedule, payroll, employees, billing, janitorial, companies, Sueep Info.</TD>
           </tr>
           <tr>
             <TD>Business Manager</TD>

@@ -1,5 +1,6 @@
 "use client";
 
+import { changeOrderStatusLabel } from "@/lib/erp/changeOrderStatus";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -506,7 +507,7 @@ export function ChangeOrderDetailEditor({
                 <div>
                   <label className={label} htmlFor="co-status">Status</label>
                   <select id="co-status" className={input} value={status} onChange={(e) => setStatus(e.target.value as Status)}>
-                    {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    {STATUSES.map((s) => <option key={s} value={s}>{changeOrderStatusLabel(s)}</option>)}
                   </select>
                 </div>
                 {needsNote ? (
