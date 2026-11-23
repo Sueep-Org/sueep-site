@@ -14,7 +14,7 @@ export default async function HelpIndexPage() {
     ...Object.keys(byCategory).filter((c) => !categoryOrder.includes(c)),
   ].map((name) => ({
     name,
-    articles: byCategory[name].map((a) => ({ slug: a.slug, title: a.title, description: a.description, category: a.category })),
+    articles: byCategory[name].map((a) => ({ slug: a.slug, title: a.title, description: a.description, category: a.category, keywords: a.keywords ?? [] })),
   }));
 
   return (

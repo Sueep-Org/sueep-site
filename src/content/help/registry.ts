@@ -54,6 +54,8 @@ export type ArticleEntry = {
   title: string;
   category: string;
   description: string;
+  /** Extra words people might search for: synonyms and terms from the article text. Searched with the title and description. */
+  keywords?: string[];
   order: number;
   component: ComponentType;
   /** If set, only users whose role appears in this list can see this article. */
@@ -63,6 +65,7 @@ export type ArticleEntry = {
 export const registry: ArticleEntry[] = [
   {
     slug: "contracts/uploading-a-contract",
+    keywords: ["docuseal", "sign", "signature", "e-sign", "pdf", "upload signed", "send for signing", "agreement"],
     title: "Uploading a Contract",
     category: "Projects & Schedule",
     description: "How to upload a contract PDF and send it for signing through DocuSeal.",
@@ -72,6 +75,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "projects/creating-a-project",
+    keywords: ["new project", "create", "job", "manual", "segment", "post-construction", "painting", "cleaning"],
     title: "Creating a Project",
     category: "Projects & Schedule",
     description: "How to manually create a new project in the ERP.",
@@ -81,6 +85,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "projects/hubspot-sync",
+    keywords: ["hubspot", "deal", "sync", "import", "closed lost", "missing project", "crm", "webhook"],
     title: "HubSpot Sync: How Deals Become Projects",
     category: "Projects & Schedule",
     description: "How HubSpot deals sync into the ERP and which fields are affected.",
@@ -90,6 +95,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "turnover/creating-a-request",
+    keywords: ["turnover", "unit", "unit turn", "move out", "scope", "new building", "checklist", "bedrooms", "work order"],
     title: "Creating a Turnover Request",
     category: "Turnovers & Buildings",
     description: "How to create and manage a turnover or regular cleaning request.",
@@ -99,6 +105,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "sops/onboarding-new-employee",
+    keywords: ["onboarding", "hire", "new hire", "paperwork", "i9", "w4", "candidate", "add employee", "documents"],
     title: "Onboarding a New Employee",
     category: "Team",
     description: "Standard process for onboarding a new employee into the ERP.",
@@ -108,6 +115,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "projects/creating-a-change-order",
+    keywords: ["change order", "co", "extra work", "add on", "udr", "pool", "grill", "reject", "void", "notify"],
     title: "Creating a Change Order",
     category: "Projects & Schedule",
     description: "How to create a change order for a post-construction project in the ERP",
@@ -117,6 +125,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "projects/projects-overview",
+    keywords: ["project page", "tabs", "overview", "financials", "safety checklist", "sov", "schedule of values", "client", "layout"],
     title: "Projects Overview",
     category: "Projects & Schedule",
     description: "Overview of the projects table, project details page, and editing projects.",
@@ -126,6 +135,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "workers/labor-logs",
+    keywords: ["labor", "hours", "clock in", "clock out", "timesheet", "time", "worker", "commute", "transportation", "log hours"],
     title: "Inputting Labor Logs",
     category: "Projects & Schedule",
     description: "How to enter, edit, and sort through labor logs on projects and change orders.",
@@ -135,6 +145,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "workers/adding-employees",
+    keywords: ["employee", "new employee", "hourly", "salary", "pay rate", "time off", "pto", "vacation", "sick", "ssn", "documents", "language", "delete"],
     title: "Adding and Managing Employees",
     category: "Team",
     description: "How to enter employees into the system and manage their documentation",
@@ -144,6 +155,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "projects/material-logs",
+    keywords: ["materials", "supplies", "paint", "cleaning products", "receipt", "cost", "expense"],
     title: "Logging Materials",
     category: "Projects & Schedule",
     description: "How to log materials bought on projects",
@@ -153,6 +165,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "projects/sub-proposals",
+    keywords: ["bid", "bids", "proposal", "quote", "sub", "subcontractor", "margin", "awarded"],
     title: "Sub Bids (Proposals)",
     category: "Projects & Schedule",
     description: "Log the bids subs give on a job on the Proposals tab and see the margin each one leaves us.",
@@ -162,6 +175,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "workers/adding-contractors",
+    keywords: ["contractor", "sub", "subcontractor", "w9", "insurance", "workers comp", "coi", "compliance", "background check", "language", "delete"],
     title: "Adding Contractors",
     category: "Team",
     description: "How to register contractors in our system to be added onto projects",
@@ -171,6 +185,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "workers/logging-contractors",
+    keywords: ["contractor", "sub", "subcontractor", "cost", "contractor pay", "log"],
     title: "Assigning Contractors to Projects",
     category: "Team",
     description: "How to log contractors on projects much like you add laborers",
@@ -180,6 +195,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "workers/sub-ratings-and-bidders",
+    keywords: ["rating", "score", "stars", "bidder", "sub", "quality", "reliability", "confidence", "pricing score"],
     title: "Rating Subs and Bidders",
     category: "Team",
     description: "Star ratings for subs (confidence and pricing), the Bidders tab for subs without a profile, and moving their bids onto a new profile.",
@@ -189,6 +205,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "workers/sub-portal",
+    keywords: ["sub portal", "sub", "subcontractor", "job offer", "check in", "check out", "photos", "late", "off site", "spanish", "language", "fixes"],
     title: "The Sub Portal: Offers, Check-ins, Photos and Reviews",
     category: "Team",
     description: "Give a sub their jobs page, send job offers, what happens on the day (check-in, photos, check-out), reviewing their work, and the rules on Settings, Subs.",
@@ -198,6 +215,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "people/roles-and-permissions",
+    keywords: ["role", "permission", "access", "who can", "admin", "business manager", "supervisor", "sales", "estimation", "user"],
     title: "Roles and Permissions: Who Can Do What",
     category: "Getting Started",
     description: "What each role can see and do, including the Business Manager.",
@@ -206,6 +224,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "people/office-hiring",
+    keywords: ["hiring", "recruiting", "recruitment", "job opening", "job ad", "candidate", "interview", "office"],
     title: "Office Hiring (Recruitment)",
     category: "Team",
     description: "Office job openings, candidates, stages, and what job ads cost.",
@@ -215,6 +234,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "people/offer-letters",
+    keywords: ["offer letter", "offer", "template", "hire", "commission", "signed", "decline"],
     title: "Offer Letters",
     category: "Team",
     description: "Offer letter templates, commission tables, sending a letter and recording the signed copy.",
@@ -224,6 +244,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "schedule/calendar-overview",
+    keywords: ["schedule", "calendar", "gantt", "assign", "crew", "reschedule", "drag", "supervisor", "job offer", "invite", "confirm"],
     title: "Using the Schedule Calendar",
     category: "Projects & Schedule",
     description: "How to read the calendar, filter it, and assign supervisors and workers to future days.",
@@ -232,6 +253,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "schedule/management-calendar",
+    keywords: ["management calendar", "reminder", "expiring", "expiration", "bids", "billing cutoff", "time off", "pto", "birthday", "event", "due date"],
     title: "Management Calendar",
     category: "Projects & Schedule",
     description: "Insurance expirations, time off, deadlines and your own events in one calendar, with email reminders.",
@@ -241,6 +263,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "notifications/my-notifications",
+    keywords: ["notifications", "inbox", "emails", "unread", "alerts"],
     title: "Your Notifications Inbox",
     category: "Getting Started",
     description: "Every ERP email sent to you in one list, with unread counts.",
@@ -249,6 +272,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "settings/settings-overview",
+    keywords: ["settings", "rates", "prices", "pricing", "holidays", "upcharge", "commission rate", "payroll", "alerts", "lists", "dropdown", "default"],
     title: "Settings",
     category: "Team",
     description: "Change prices, payroll and commission rules, payment terms, and see who changed what.",
@@ -258,6 +282,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "notifications/notifications-overview",
+    keywords: ["email settings", "email", "recipients", "turn off email", "cc", "email log", "failed email", "resend", "backup pm"],
     title: "Email Settings and the Email Log",
     category: "Team",
     description: "Turn ERP and website emails on or off, change who gets them, and check the Email Log.",
@@ -267,6 +292,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "compensation/compensation-overview",
+    keywords: ["payroll", "pay", "commission", "reimbursement", "offshore", "salary", "pay period", "add hours", "overtime", "paycheck"],
     title: "Compensation Overview",
     category: "Pay & Finance",
     description: "How Payroll, Offshore Payroll, Commission, Bids, and Reimbursements work.",
@@ -276,6 +302,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "projects/quality-checks",
+    keywords: ["quality check", "inspection", "sign off", "signature", "evidence photos", "pm approval", "qc"],
     title: "Project Quality Checks",
     category: "Projects & Schedule",
     description: "How to create, view, and edit quality checks from a project's Quality Checks tab.",
@@ -285,6 +312,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "billing/billing-overview",
+    keywords: ["billing", "project billing", "not billed", "billed", "paid", "void", "bill it", "lien", "csv", "export"],
     title: "Project Billing: Billed and Paid Status",
     category: "Billing",
     description: "The Project Billing page: finished work by tab, billing status, Bill it, filters, Billed via and lien deadlines.",
@@ -294,6 +322,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "billing/ready-to-send",
+    keywords: ["ready to send", "invoice", "draft", "approve", "auto-draft", "janitorial billing", "due date", "edit invoice", "switch", "hubspot backup"],
     title: "Ready to Send: Drafting and Approving Invoices",
     category: "Billing",
     description: "Draft invoices from finished work and janitorial months, edit lines, approve them into QuickBooks, and set up Auto-draft on janitorial contracts.",
@@ -303,6 +332,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "billing/how-invoicing-works",
+    keywords: ["invoice", "invoicing", "billing", "steps", "statuses", "who can", "overview", "hubspot backup"],
     title: "Start Here: How Billing Works",
     category: "Billing",
     description: "The whole path from finished work to a paid invoice, which billing page does what, who can do what, and what each status means.",
@@ -312,6 +342,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "billing/sending-invoices",
+    keywords: ["send invoice", "email invoice", "portal", "procore", "coupa", "upload", "needs sending", "recipients", "cutoff", "pay app", "resubmit"],
     title: "Sending Invoices: Email, Portals and Needs Sending",
     category: "Billing",
     description: "What happens after Approve: the invoice email, recipients, portal uploads with proof, the pay app, portal status, sent back and resubmit, and cutoff warnings.",
@@ -321,6 +352,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "billing/invoices-and-payments",
+    keywords: ["invoices", "payment", "paid", "unpaid", "overdue", "follow up", "short pay", "retainage", "collections", "ar", "accounts receivable"],
     title: "Invoices Page and Getting Paid",
     category: "Billing",
     description: "Find any invoice, its PDF and History, record payments so work turns Paid, log follow-ups, explain short pays, and fix invoices that need linking.",
@@ -330,6 +362,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "billing/quickbooks-setup",
+    keywords: ["quickbooks", "qbo", "connect", "reconnect", "sync", "customer", "products", "money owed", "month close", "accounting"],
     title: "QuickBooks Page and Invoice Setup",
     category: "Billing",
     description: "The QuickBooks connection and nightly sync, Invoice setup for customers and products, and the Money owed check.",
@@ -339,6 +372,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "turnover/property-manager-links",
+    keywords: ["property manager", "pm portal", "private link", "turnover request", "weekly email", "monday email", "book", "cancel"],
     title: "Property Manager Links",
     category: "Turnovers & Buildings",
     description: "Give property managers a private turnover page, confirm requests from their page and the website form, and handle cancels and new dates.",
@@ -348,6 +382,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "turnover/sub-change-orders",
+    keywords: ["sub change order", "co request", "property manager approval", "approve", "deny", "surcharge", "sub pay"],
     title: "Sub Change Orders on Turnovers",
     category: "Turnovers & Buildings",
     description: "Subs ask for change orders from their schedule email with photos, property managers approve by email, and approved ones become change orders.",
@@ -357,6 +392,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "companies/companies-overview",
+    keywords: ["company", "client", "gc", "general contractor", "billing contact", "invoice recipients", "portal login", "procore", "password", "contacts"],
     title: "Companies and Billing Info",
     category: "Deals & Clients",
     description: "Client companies, how each wants to be billed, and where a building's or project's invoices go.",
@@ -366,6 +402,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "sales/win-loss",
+    keywords: ["win", "loss", "win rate", "lost", "why we lose", "gc scorecard", "price", "sq ft", "report"],
     title: "Win/Loss and GC Scorecards",
     category: "Deals & Clients",
     description: "Post-construction win rates by quarter, GC and job size, why we lose, and stale quotes.",
@@ -375,6 +412,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "sales/pipeline-guide",
+    keywords: ["deals", "pipeline", "sales", "follow up", "next step", "lost reason", "job walk", "weekly", "process"],
     title: "Deals Guide: Win More Jobs",
     category: "Deals & Clients",
     description: "Why we have the Deals board and what to do with it: a one-time clean up, the Monday routine, and what to do when a deal is lost.",
@@ -384,6 +422,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "sales/pipeline-board",
+    keywords: ["deals", "pipeline", "board", "hubspot", "stage", "forecast", "new deal", "mark lost", "clone", "filters"],
     title: "Deals Board",
     category: "Deals & Clients",
     description: "Post-construction and janitorial HubSpot deals as cards by stage, with GC, dates, stale quotes and price flags.",
@@ -393,6 +432,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "buildings/buildings-overview",
+    keywords: ["building", "property", "units", "pricing package", "property manager", "building contact", "log hours", "address"],
     title: "Buildings Overview",
     category: "Turnovers & Buildings",
     description: "How to add a building, manage its units, log hours, and set its pricing package.",
@@ -401,6 +441,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "janitorial/getting-started",
+    keywords: ["janitorial", "janitor", "recurring", "contract", "clock in", "start here", "monthly"],
     title: "Janitorial: Getting Started",
     category: "Janitorial",
     description: "The whole janitorial cycle in order, one short step each, plus quick answers for covers, holidays and missed clock-ins.",
@@ -410,6 +451,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "janitorial/janitorial-contracts",
+    keywords: ["janitorial contract", "recurring", "monthly price", "renew", "expiration", "pricing calculator", "profit", "auto-draft", "pause", "end contract"],
     title: "Janitorial Contracts: Setup, Pricing and Billing",
     category: "Janitorial",
     description: "Create a contract, price it with the calculator, renew, pause or end it, and manage its billing months and profit.",
@@ -419,6 +461,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "janitorial/scheduling-and-hours",
+    keywords: ["janitor", "shift", "schedule", "clock in", "clock in link", "hours", "today", "late", "location", "gps", "timesheet"],
     title: "Janitorial Scheduling, Clock-In and Hours",
     category: "Janitorial",
     description: "Put janitors on the calendar, send clock-in links, watch the Today tab, and check hours before payroll.",
@@ -428,6 +471,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "janitorial/quality-checks",
+    keywords: ["janitorial quality", "site visit", "inspection", "key areas", "visit summary", "needs attention"],
     title: "Janitorial Quality Checks",
     category: "Janitorial",
     description: "Schedule site visits, check each key area on your phone, and send the property manager a visit summary.",
@@ -437,6 +481,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "finance/finance-dashboard",
+    keywords: ["finance", "dashboard", "revenue", "costs", "profit", "net profit", "margin", "p&l", "overhead", "budget", "report"],
     title: "Finance Dashboard",
     category: "Pay & Finance",
     description: "What each number on the dashboard's Finance tab means and how it's calculated: revenue, costs, net profit, billed vs paid, and future revenue.",
@@ -446,6 +491,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "finance/ad-spend",
+    keywords: ["ads", "ad spend", "meta", "facebook", "instagram", "marketing", "leads", "cost per lead", "campaign"],
     title: "Ad Spend (Facebook & Instagram)",
     category: "Pay & Finance",
     description: "What we spend on Meta ads, cost per lead by campaign and month, picking dates, and how it lines up with QuickBooks.",
@@ -455,6 +501,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "insurance/insurance-overview",
+    keywords: ["insurance", "policy", "policies", "certificate holder", "coi", "renewal", "umbrella", "coverage", "expiring"],
     title: "Insurance & COIs",
     category: "Insurance & COIs",
     description: "Our insurance policies, certificate holders, COI requests, and the COIs given out on each project.",
@@ -464,6 +511,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "insurance/coi-quick-start",
+    keywords: ["coi", "certificate of insurance", "coverdash", "gc request", "insurance certificate", "additional insured", "how to"],
     title: "COI Quick Start",
     category: "Insurance & COIs",
     description: "A GC asks for a COI: the 5 steps, keeping COIs current, subs, and insurance words in plain English.",
@@ -473,6 +521,7 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "company-info/company-info-overview",
+    keywords: ["sueep info", "company info", "tax id", "ein", "license", "logins", "password", "bank", "encrypted", "access log", "expiration"],
     title: "Sueep Info",
     category: "Team",
     description: "Our IDs, licenses, banking, financial statements, and website logins: where they live and how locked values work.",
