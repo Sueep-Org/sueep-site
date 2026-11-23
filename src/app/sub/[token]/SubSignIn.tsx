@@ -3,17 +3,34 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { tr, type Lang } from "@/lib/erp/language";
+import type { StaffCodeRecipient } from "@/lib/erp/subPortalAccess";
 import { LangToggle, useSubLang } from "./useSubLang";
 
-export function SubSignIn({ token, firstName, maskedEmail, profileLang }: { token: string; firstName: string; maskedEmail: string; profileLang: Lang }) {
+export function SubSignIn({
+  token,
+  firstName,
+  maskedEmail,
+  profileLang,
+  staff,
+}: {
+  token: string;
+  firstName: string;
+  maskedEmail: string;
+  profileLang: Lang;
+  /** Admins, PMs and Business Managers who can get the code instead, to open this page themselves. */
+  staff: StaffCodeRecipient[];
+}) {
   const router = useRouter();
   const [lang, setLang] = useSubLang(profileLang);
   const [sent, setSent] = useState(false);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [showStaff, setShowStaff] = useState(false);
+  const [staffUserId, setStaffUserId] = useState("");
+  const [sentTo, setSentTo] = useState(maskedEmail);
 
-  async function post(path: "code" | "verify", body?: unknown): Promise<boolean> {
+  async function post(path: "code" | "verify", body?: unknown): Promise<Record<string, unknown> | null> {
     setError("");
     setBusy(true);
     try {
@@ -25,19 +42,23 @@ export function SubSignIn({ token, firstName, maskedEmail, profileLang }: { toke
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(data.error ?? tr(lang, { en: "Something went wrong. Try again.", es: "Algo salió mal. Intenta de nuevo." }));
-        return false;
+        return null;
       }
-      return true;
+      return data;
     } catch {
       setError(tr(lang, { en: "Couldn't connect. Check your internet and try again.", es: "No hay conexión. Revisa tu internet e intenta de nuevo." }));
-      return false;
+      return null;
     } finally {
       setBusy(false);
     }
   }
 
-  async function sendCode() {
-    if (await post("code")) {
+  // Resending goes to whoever got the last code.
+  async function sendCode(toStaffUserId: string | null) {
+    const data = await post("code", toStaffUserId ? { staffUserId: toStaffUserId } : {});
+    if (data) {
+      setSentTo(typeof data.sentTo === "string" ? data.sentTo : maskedEmail);
+      setStaffUserId(toStaffUserId ?? "");
       setSent(true);
       setCode("");
     }
@@ -68,17 +89,50 @@ export function SubSignIn({ token, firstName, maskedEmail, profileLang }: { toke
             </p>
             <button
               type="button"
-              onClick={sendCode}
+              onClick={() => void sendCode(null)}
               disabled={busy}
               className="mt-4 w-full rounded-md bg-pink-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-pink-500 disabled:opacity-50"
             >
               {busy ? tr(lang, { en: "Sending…", es: "Enviando…" }) : tr(lang, { en: "Email me a code", es: "Envíame un código" })}
             </button>
+            {staff.length > 0 &&
+              (!showStaff ? (
+                <button type="button" onClick={() => setShowStaff(true)} className="mt-3 w-full text-center text-xs text-gray-500 hover:text-pink-600">
+                  {tr(lang, { en: "Sueep staff? Send the code to an Admin, PM or Business Manager", es: "¿Personal de Sueep? Envía el código a un Admin, PM o Business Manager" })}
+                </button>
+              ) : (
+                <div className="mt-4 border-t border-gray-100 pt-4">
+                  <label htmlFor="sub-staff" className="block text-xs font-medium text-gray-600">
+                    {tr(lang, { en: "Send the code to", es: "Enviar el código a" })}
+                  </label>
+                  <select
+                    id="sub-staff"
+                    value={staffUserId}
+                    onChange={(e) => setStaffUserId(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
+                  >
+                    <option value="">{tr(lang, { en: "Pick a person…", es: "Elige una persona…" })}</option>
+                    {staff.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.role})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => void sendCode(staffUserId)}
+                    disabled={busy || !staffUserId}
+                    className="mt-2 w-full rounded-md border border-pink-600 px-4 py-2 text-sm font-medium text-pink-700 hover:bg-pink-50 disabled:opacity-50"
+                  >
+                    {busy ? tr(lang, { en: "Sending…", es: "Enviando…" }) : tr(lang, { en: "Send code to them", es: "Enviarles el código" })}
+                  </button>
+                </div>
+              ))}
           </>
         ) : (
           <form onSubmit={verify}>
             <p className="mt-2 text-sm text-gray-600">
-              {tr(lang, { en: "We sent a code to", es: "Enviamos un código a" })} <span className="font-medium text-gray-900">{maskedEmail}</span>.{" "}
+              {tr(lang, { en: "We sent a code to", es: "Enviamos un código a" })} <span className="font-medium text-gray-900">{sentTo}</span>.{" "}
               {tr(lang, { en: "It works for 15 minutes.", es: "Sirve por 15 minutos." })}
             </p>
             <label htmlFor="sub-code" className="mt-4 block text-xs font-medium text-gray-600">
@@ -102,7 +156,7 @@ export function SubSignIn({ token, firstName, maskedEmail, profileLang }: { toke
             >
               {busy ? tr(lang, { en: "Checking…", es: "Revisando…" }) : tr(lang, { en: "Continue", es: "Continuar" })}
             </button>
-            <button type="button" onClick={sendCode} disabled={busy} className="mt-3 w-full text-center text-xs text-gray-500 hover:text-pink-600 disabled:opacity-50">
+            <button type="button" onClick={() => void sendCode(staffUserId || null)} disabled={busy} className="mt-3 w-full text-center text-xs text-gray-500 hover:text-pink-600 disabled:opacity-50">
               {tr(lang, { en: "Didn't get it? Send a new code", es: "¿No te llegó? Envía un código nuevo" })}
             </button>
           </form>
