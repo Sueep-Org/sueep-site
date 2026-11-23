@@ -57,7 +57,7 @@ export function RolesAndPermissions() {
         <LI>Edit companies, their contacts and billing, and billing overrides on buildings and projects.</LI>
         <LI>Link client portal logins to companies.</LI>
         <LI>
-          Draft, edit, approve and discard invoices on <strong>Ready to send</strong>, and finish the Needs sending list (mark
+          Draft, edit, approve and discard invoices on <strong>Ready to Send</strong>, and finish the Needs sending list (mark
           uploaded with proof, mark sent, resubmit sent-back invoices). Drafts waiting also show on the dashboard&apos;s{" "}
           <strong>Money</strong> tab under Needs action.
         </LI>

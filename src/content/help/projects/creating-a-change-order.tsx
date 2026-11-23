@@ -87,7 +87,6 @@ export function CreatingAChangeOrder() {
                 <br /><br />
                 Signing tab: for more on contracts, see the <A href="/erp/help/contracts/uploading-a-contract">Uploading a Contract</A> tutorial.
                 <Img src="/help/change_order/details_5.png" alt="Signing tab" />
-                <strong>That&apos;s all! For any more information check out the other help center articles or message the tech dev team!</strong>
             </Step>
 
         </Steps>

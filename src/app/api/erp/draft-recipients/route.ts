@@ -5,7 +5,7 @@ import { resetDraftRecipients, setDraftRecipients, type RecipientDraftKind } fro
 const KINDS: RecipientDraftKind[] = ["month", "items", "qbo"];
 
 /**
- * Who a waiting draft on Ready to send is emailed to.
+ * Who a waiting draft on Ready to Send is emailed to.
  * Body: { kind, rowId, to: string[], cc: string[], forFuture?: boolean } or { kind, rowId, reset: true }.
  */
 export async function PUT(req: Request) {

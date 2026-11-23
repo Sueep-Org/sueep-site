@@ -59,17 +59,17 @@ export type InvoiceListRow = {
   daysLate: number;
   paidDate: string | null;
   payments: { date: string | null; cents: number; ref: string | null }[];
-  /** How it reached the client, when the ERP sent it, and its history since Ready to send */
+  /** How it reached the client, when the ERP sent it, and its history since Ready to Send */
   sent: {
     deliveryId: string;
     /** "Waiting to be uploaded" or "Waiting to be sent" while on Needs sending, else null */
     waiting: string | null;
     /** Uploads only: where the client's portal has it */
     portal: { status: PortalStatus; label: string; method: string; at: string | null; reason: string | null } | null;
-    /** What happened to it after Ready to send, oldest first: approved, emailed or uploaded, portal status changes */
+    /** What happened to it after Ready to Send, oldest first: approved, emailed or uploaded, portal status changes */
     events: InvoiceEvent[];
   } | null;
-  /** Made by the ERP in QuickBooks (Ready to send), not through HubSpot */
+  /** Made by the ERP in QuickBooks (Ready to Send), not through HubSpot */
   fromErp: boolean;
   /** Dated since the ERP tracks billing but not tied to any ERP work yet */
   needsLinking: boolean;
@@ -335,7 +335,7 @@ export async function loadInvoiceList(): Promise<InvoiceListRow[]> {
       ...e,
     });
     const portal = method ?? "the portal";
-    const out: InvoiceEvent[] = [ev(d.createdAt, { what: "Approved on Ready to send", by: nameOf(d.approvedByEmail), detail: null, tone: null }, false)];
+    const out: InvoiceEvent[] = [ev(d.createdAt, { what: "Approved on Ready to Send", by: nameOf(d.approvedByEmail), detail: null, tone: null }, false)];
     if (d.emailedAt) out.push(ev(d.emailedAt, { what: `Emailed to ${d.sentTo.join(", ")}`, by: null, detail: null, tone: null }, false));
     if (d.doneAt) {
       const what = d.doneAs === "UPLOADED" ? `Uploaded to ${portal}` : d.doneAs === "SENT" ? "Sent by hand" : "Uploaded or sent by hand";
@@ -445,7 +445,7 @@ export async function loadInvoiceList(): Promise<InvoiceListRow[]> {
   }
 
   // Invoices the ERP knows that aren't in the nightly QuickBooks copy yet:
-  // - made by the ERP in QuickBooks (Ready to send) since the last sync: listed normally right away;
+  // - made by the ERP in QuickBooks (Ready to Send) since the last sync: listed normally right away;
   // - HubSpot invoices from the last few days: still on their way to QuickBooks, listed normally;
   // - older HubSpot invoices: they never reached QuickBooks (since QuickBooks' list starts).
   const firstQboDate = qboInvoices.reduce<string | null>((m, q) => (q.txnDate && (!m || q.txnDate < m) ? q.txnDate : m), null);

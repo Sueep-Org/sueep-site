@@ -15,7 +15,7 @@ export function CreatingATurnoverRequest() {
         <Step n={1} title="How most requests come in">
           Property managers send requests through the website form (sueep.com/turnover-requests)
           or their own private page. They fill in the unit, the work, and a start date.
-          <Img src="/help/turnover/turnover_1.png" alt="Material Log" />
+          <Img src="/help/turnover/turnover_1.png" alt="Website request form" />
           Nothing is created right away. Each request waits on{" "}
           <strong>Property Managers → Requests</strong> until someone confirms it, and confirming
           makes the project, linked to the building and unit. See{" "}
@@ -27,7 +27,7 @@ export function CreatingATurnoverRequest() {
           PMs, Admins, and Sales can also create a turnover request directly, without going
           through the public form. Go to <strong>New Project</strong>, and set Segment to{" "}
           <strong>Janitorial turnover requests</strong>.
-          <Img src="/help/turnover/turnover_3.png" alt="Material Log" />
+          <Img src="/help/turnover/turnover_3.png" alt="New Project form for a turnover" />
           <UL>
             <LI>
               Pick the building from the dropdown, or choose <strong>Add new building...</strong>{" "}
@@ -57,7 +57,7 @@ export function CreatingATurnoverRequest() {
           <strong>Layout</strong> tab. This is where you edit the unit&apos;s scope, bedrooms,
           bathrooms, square footage, and which services are included (full clean, full paint,
           touch-up paint, carpet cleaning, ceiling paint, and so on).
-          <Img src="/help/turnover/turnover_2.png" alt="Material Log" />
+          <Img src="/help/turnover/turnover_2.png" alt="Unit Layout tab" />
           Click <strong>Save</strong> when you&apos;re done. The price updates automatically based
           on the building&apos;s pricing package and the scope you&apos;ve selected.
           <Callout type="info">
@@ -73,11 +73,10 @@ export function CreatingATurnoverRequest() {
         </Step>
 
         <Step n={5} title="Quality checking a unit">
-          Turnover units don&apos;t use the standalone Quality Checks page or its own tab (every
-          other project type gets a &quot;Quality Checks&quot; tab, turnover units don&apos;t). For
-          a turnover unit, the quality check <strong>is</strong> its <strong>Checklist</strong> tab,
-          right on the unit&apos;s own project page.
-          <Img src="/help/turnover/turnover_4.png" alt="Material Log" />
+          Every other project type has a &quot;Quality Checks&quot; tab, but turnover units
+          don&apos;t. For a turnover unit, the quality check <strong>is</strong> its{" "}
+          <strong>Checklist</strong> tab, right on the unit&apos;s own project page.
+          <Img src="/help/turnover/turnover_4.png" alt="Unit Checklist tab" />
           That tab has, in order:
           <UL>
             <LI>

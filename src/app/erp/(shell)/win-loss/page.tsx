@@ -12,7 +12,7 @@ import { PriceDots } from "./PriceDots";
 import { LossTrend } from "./LossTrend";
 import { DetailTabs } from "@/app/erp/components/DetailTabs";
 
-export const metadata: Metadata = { title: "Win/loss" };
+export const metadata: Metadata = { title: "Win/Loss" };
 export const dynamic = "force-dynamic";
 
 const pct = (x: number | null) => (x == null ? "-" : `${Math.round(x * 100)}%`);
@@ -353,7 +353,7 @@ export default async function WinLossPage({ searchParams }: { searchParams: Prom
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="flex items-center gap-1 text-2xl font-semibold text-gray-900">
-          Win/loss
+          Win/Loss
           <InfoTip text="Post-construction bids from HubSpot, counted by when they came in. Read live from HubSpot; changes show within a couple of minutes." />
         </h1>
         {/* The filter scopes everything below it; this says what's picked. */}

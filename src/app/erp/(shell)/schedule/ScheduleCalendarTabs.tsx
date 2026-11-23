@@ -2,9 +2,10 @@ import Link from "next/link";
 
 // Add future calendars here: one entry plus a branch in page.tsx.
 // The Gantt lives under the Projects calendar, not on its own tab.
+// Projects is first because it's the one /erp/schedule opens on.
 const CALENDARS = [
-  { id: "master", label: "Master", href: "/erp/schedule?calendar=master" },
   { id: "projects", label: "Projects", href: "/erp/schedule" },
+  { id: "master", label: "Master", href: "/erp/schedule?calendar=master" },
   { id: "janitorial", label: "Janitorial Contracts", href: "/erp/schedule?calendar=janitorial" },
   { id: "management", label: "Management", href: "/erp/schedule?calendar=management" },
 ] as const;

@@ -35,7 +35,7 @@ export async function GET(req: Request) {
     results.push({ contractId: contract.id, buildingId: contract.buildingId, ...result });
   }
 
-  // HubSpot drafts for contracts with auto-draft on (Ready to send page).
+  // HubSpot drafts for contracts with auto-draft on (Ready to Send page).
   // Kept separate so a HubSpot problem never stops the months above.
   let drafts: unknown;
   try {

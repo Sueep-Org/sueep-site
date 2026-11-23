@@ -22,7 +22,7 @@ import { qboEnvironment } from "@/lib/erp/qboClient";
 import { BillingFlowBar } from "@/app/erp/components/BillingFlowBar";
 import { draftContent, draftsGoToQuickBooks, type QboDraftLine, suggestedNextInvoiceNumber, loadRecentQboTests, loadWaitingQboDrafts, qboInvoiceUrl } from "@/lib/erp/qboInvoiceDrafts";
 
-export const metadata: Metadata = { title: "Ready to send" };
+export const metadata: Metadata = { title: "Ready to Send" };
 export const dynamic = "force-dynamic";
 
 const groupHref = (type: string, id: string) => (type === "PROJECT" ? `/erp/projects/${id}` : `/erp/buildings/${id}`);
@@ -328,7 +328,7 @@ export default async function ReadyToSendPage() {
     <div className="space-y-4">
       <BillingFlowBar current="send" />
       <h1 className="flex items-center gap-1 text-2xl font-semibold text-gray-900">
-        Ready to send
+        Ready to Send
         <InfoTip
           text={
             toQuickBooks

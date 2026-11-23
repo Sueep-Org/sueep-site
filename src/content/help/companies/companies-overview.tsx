@@ -27,7 +27,7 @@ export function CompaniesOverview() {
         </Step>
         <Step n={3} title="Billing">
           Method, send to, cc, cutoff day, how often and payment terms. The cutoff day puts each of their active jobs on the
-          Management calendar&apos;s Billing cutoffs, with a reminder to the PM 5 days before, and warns on Ready to send when an
+          Management calendar&apos;s Billing cutoffs, with a reminder to the PM 5 days before, and warns on Ready to Send when an
           approved invoice for them still hasn&apos;t been sent or uploaded close to it.
         </Step>
         <Step n={4} title="Contacts and logins">
@@ -56,7 +56,7 @@ export function CompaniesOverview() {
       <H3>Where invoices go</H3>
       <P>
         The billing method decides what happens when an invoice is approved on{" "}
-        <A href="/erp/help/billing/ready-to-send">Ready to send</A>: Email and RealPage email are emailed to Send to and Cc;
+        <A href="/erp/help/billing/ready-to-send">Ready to Send</A>: Email and RealPage email are emailed to Send to and Cc;
         Procore, Coupa and vendor portals go on the Needs sending list for someone to upload; Other, or no method, goes on
         Needs sending to send by hand. Set a method and Send to for every client you bill, so their invoices go out by
         themselves. See <A href="/erp/help/billing/sending-invoices">Sending Invoices</A> for what happens after Approve.
@@ -74,7 +74,7 @@ export function CompaniesOverview() {
         building overrides <strong>Send to</strong> and keeps JAG&apos;s cc and everything else.
       </P>
       <P>
-        Recipients can also be changed for a single invoice on Ready to send with <strong>Edit recipients</strong>, which
+        Recipients can also be changed for a single invoice on Ready to Send with <strong>Edit recipients</strong>, which
         offers the company&apos;s contacts. Ticking <strong>Also use for future invoices</strong> there saves the list as the
         building&apos;s or job&apos;s override.
       </P>

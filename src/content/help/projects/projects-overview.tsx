@@ -49,7 +49,7 @@ export function ProjectsOverview() {
           services are included (clean, paint, carpet cleaning, and so on). This scope is what
           drives the unit&apos;s price against the building&apos;s pricing package. Click{" "}
           <strong>Save</strong> when you&apos;re done.
-          <Img src="/help/turnover/turnover_3.png" alt="Material Log" />
+          <Img src="/help/turnover/turnover_3.png" alt="New Project form for a turnover" />
           See <A href="/erp/help/turnover/creating-a-request">Creating a Turnover Request</A> for
           more on how this scope feeds into pricing.
         </Step>
@@ -100,7 +100,7 @@ export function ProjectsOverview() {
           For janitorial turnover units, this tab is the unit&apos;s full quality checklist,
           tracking what&apos;s been completed before the unit can be marked done. Other project
           types get a simpler generic checklist.
-          <Img src="/help/turnover/turnover_4.png" alt="Material Log" />
+          <Img src="/help/turnover/turnover_4.png" alt="Unit Checklist tab" />
         </Step>
 
         <Step n={7} title="Other tabs you may see">

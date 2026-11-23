@@ -1,12 +1,13 @@
-import { Callout, H2, P, UL, LI } from "@/app/erp/components/help/HelpComponents";
+import { A, Callout, H2, P, UL, LI } from "@/app/erp/components/help/HelpComponents";
 
 export function HubSpotSync() {
   return (
     <>
       <H2>Overview</H2>
       <P>
-        The ERP automatically pulls deals from HubSpot at regular intervals and creates or updates
-        corresponding projects. You can also trigger a manual sync from the HubSpot panel.
+        Whenever a deal is created or changed in HubSpot, the ERP syncs its deals and creates or
+        updates the matching projects. Project Managers, Business Managers and Admins can also run a
+        sync by hand on the <A href="/erp/hubspot">HubSpot sync</A> page.
       </P>
 
       <H2>What gets synced</H2>

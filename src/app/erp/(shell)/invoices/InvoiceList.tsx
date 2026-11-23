@@ -35,7 +35,7 @@ const FIXES: { key: Fix; label: string; hint: string; match: (r: InvoiceListRow)
 function isShortPaid(r: InvoiceListRow): boolean {
   return r.balanceCents > 0 && r.balanceCents < r.totalCents;
 }
-/** ?filter= values from links (dashboard, flow bar, Ready to send) */
+/** ?filter= values from links (dashboard, flow bar, Ready to Send) */
 const URL_FILTERS: Record<string, Partial<Filters>> = {
   unpaid: { status: "UNPAID" },
   overdue: { status: "OVERDUE" },
@@ -564,7 +564,7 @@ function InvoiceDetails({ r, showQuickBooks, canEdit, onLink }: { r: InvoiceList
           ) : (
             <div>{r.subCustomer ?? "Not linked to a building or job in the ERP"}</div>
           )}
-          {r.fromErp && <div className="text-gray-500">Made on Ready to send</div>}
+          {r.fromErp && <div className="text-gray-500">Made on Ready to Send</div>}
         </div>
         <div className="space-y-1">
           <div className="font-semibold uppercase tracking-wide text-gray-400">History</div>
@@ -607,7 +607,7 @@ function InvoiceDetails({ r, showQuickBooks, canEdit, onLink }: { r: InvoiceList
 
 /**
  * Everything that happened to an invoice, oldest first: its date, approval on
- * Ready to send, emailed or uploaded (with proof), portal status changes and
+ * Ready to Send, emailed or uploaded (with proof), portal status changes and
  * payments from QuickBooks.
  */
 function InvoiceHistory({ r, canEdit }: { r: InvoiceListRow; canEdit: boolean }) {
@@ -718,7 +718,7 @@ function PortalStatusControl({
       toast(String(data.error ?? "Could not save."));
       return;
     }
-    toast(status === "SENT_BACK" ? "Marked sent back. It's on Ready to send to resubmit." : `Marked ${PORTAL_STATUS_LABELS[status].toLowerCase()}.`);
+    toast(status === "SENT_BACK" ? "Marked sent back. It's on Ready to Send to resubmit." : `Marked ${PORTAL_STATUS_LABELS[status].toLowerCase()}.`);
     setSendingBack(false);
     setReason("");
     router.refresh();
@@ -726,7 +726,7 @@ function PortalStatusControl({
 
   const at = portal.at ? new Date(portal.at).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : null;
   const tone = portal.status === "SENT_BACK" ? "text-red-700" : portal.status === "APPROVED" ? "text-emerald-700" : "text-gray-700";
-  // Sent back is fixed with Resubmit on Ready to send, not here.
+  // Sent back is fixed with Resubmit on Ready to Send, not here.
   const choices = paid || portal.status === "SENT_BACK" ? [] : PORTAL_PICKABLE.filter((s) => s !== portal.status);
 
   return (
@@ -737,7 +737,7 @@ function PortalStatusControl({
         {portal.status === "SENT_BACK" && portal.reason && <div className="text-red-700">{portal.reason}</div>}
         {portal.status === "SENT_BACK" && (
           <a href="/erp/ready-to-send" className="font-medium text-pink-600 hover:underline">
-            Resubmit on Ready to send
+            Resubmit on Ready to Send
           </a>
         )}
       </div>

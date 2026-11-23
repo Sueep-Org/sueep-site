@@ -1,7 +1,7 @@
 /**
  * Writing invoices in HubSpot: create a draft, set its lines, open it, or
  * delete it. Drafts never reach QuickBooks; opening one does (HubSpot syncs
- * open invoices), so only the Ready to send page's Approve calls openInvoice.
+ * open invoices), so only the Ready to Send page's Approve calls openInvoice.
  * Needs crm.objects.invoices.write and crm.objects.line_items.write.
  */
 import { hubspotFetch } from "./client";

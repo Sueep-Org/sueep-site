@@ -5,7 +5,7 @@ export function ReadyToSendHelp() {
     <>
       <H2>What this page is</H2>
       <P>
-        <strong>Ready to send</strong> (left menu, under Billing) is where invoices are drafted, checked and approved. Only
+        <strong>Ready to Send</strong> (left menu, under Billing) is where invoices are drafted, checked and approved. Only
         Admins and the Business Manager can open it. For how it fits with the other billing pages, read{" "}
         <A href="/erp/help/billing/how-invoicing-works">Start Here: How Billing Works</A>.
       </P>

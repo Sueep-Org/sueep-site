@@ -13,7 +13,7 @@ import { prisma } from "@/lib/prisma";
 
 export const QBO_ITEM_MAP_KEY = "qboItemMap";
 
-/** The kinds of line the ERP puts on an invoice (Ready to send). */
+/** The kinds of line the ERP puts on an invoice (Ready to Send). */
 export const LINE_KINDS = [
   { key: "TURN", label: "Turnovers", example: "Turn Over, Unit 14", words: ["turn"] },
   { key: "SOV", label: "Post-construction lines", example: "Final Cleaning Building 3", words: ["post", "construction", "final", "rough"] },

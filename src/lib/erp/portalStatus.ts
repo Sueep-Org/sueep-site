@@ -19,7 +19,7 @@ export const PORTAL_STATUS_LABELS: Record<PortalStatus, string> = {
 /** Statuses someone can pick from the Invoices page. Submitted and Resubmitted come from Mark uploaded and Resubmit. */
 export const PORTAL_PICKABLE: readonly PortalStatus[] = ["UNDER_REVIEW", "APPROVED", "SENT_BACK"];
 
-/** On Ready to send's Needs sending: not with the client yet, or sent back by the client to fix and resubmit. */
+/** On Ready to Send's Needs sending: not with the client yet, or sent back by the client to fix and resubmit. */
 export const DELIVERY_WAITING_WHERE = {
   OR: [{ status: { in: ["NEEDS_UPLOAD", "NEEDS_SENDING"] } }, { portalStatus: "SENT_BACK" }],
 } satisfies Prisma.InvoiceDeliveryWhereInput;

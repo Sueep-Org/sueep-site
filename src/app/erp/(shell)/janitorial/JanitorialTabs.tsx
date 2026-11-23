@@ -1,8 +1,9 @@
 import Link from "next/link";
 
+// Contracts is first because it's the one /erp/janitorial opens on.
 const TABS = [
-  { id: "today", label: "Today", href: "/erp/janitorial/today" },
   { id: "contracts", label: "Contracts", href: "/erp/janitorial" },
+  { id: "today", label: "Today", href: "/erp/janitorial/today" },
   { id: "hours", label: "Hours", href: "/erp/janitorial/hours" },
 ] as const;
 

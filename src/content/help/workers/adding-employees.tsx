@@ -57,7 +57,6 @@ export function AddingEmployees() {
                 <br></br><br></br>
                 There&apos;s also a <strong>Delete employee</strong> button on the General Info tab, if you ever need to remove someone entirely.
 
-                <strong>Thats all! For any more information check out the other help center articles or message the tech dev team!</strong>
 
             </Step>
         </Steps>

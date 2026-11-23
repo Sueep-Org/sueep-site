@@ -92,7 +92,7 @@ export default async function NewProjectPage() {
         <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-gray-900">New project</h1>
-            <p className="mt-1 text-sm text-gray-500">Match fields from your PM spreadsheet; more modules can layer on later.</p>
+            <p className="mt-1 text-sm text-gray-500">Pick the segment first. The rest of the form changes to match.</p>
           </div>
         </div>
       </div>

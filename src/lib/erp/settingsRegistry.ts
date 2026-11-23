@@ -290,7 +290,7 @@ const ALERT_DEFS: NumberSettingDef[] = [
   alert(ALERT_KEYS.dealsClosedDays, "Sales and estimating", "Deals board shows won and lost deals from the last", "Older closed deals are hidden on the Deals board unless All is picked.", 90, 7, 730, "days"),
   alert(ALERT_KEYS.dealsCleanupDays, "Sales and estimating", "Suggest closing out a deal after it sits in a stage for", "Deals in the same stage this long get a clean-up flag on the Deals board.", 180, 14, 1000, "days"),
   alert(ALERT_KEYS.billingCutoffRemindDays, "Billing", "Remind the PM this many days before a billing cutoff", "Days before a job's billing cutoff that the PM gets the reminder email to update progress.", 5, 1, 30, "days"),
-  alert(ALERT_KEYS.janitorialDraftLeadDays, "Billing", "Draft janitorial invoices this many days before the billing day", "A janitorial contract's monthly invoice draft shows on Ready to send this many days before its billing day.", 3, 0, 28, "days"),
+  alert(ALERT_KEYS.janitorialDraftLeadDays, "Billing", "Draft janitorial invoices this many days before the billing day", "A janitorial contract's monthly invoice draft shows on Ready to Send this many days before its billing day.", 3, 0, 28, "days"),
   alert(ALERT_KEYS.sovMismatchDollars, "Billing", "Flag a schedule of values that differs from the contract by more than", "Finance dashboard: jobs whose SOV lines add up to more than this away from the contract value are listed to fix.", 1000, 1, 1_000_000, "", "$"),
   alert(ALERT_KEYS.payrollLagDays, "Cash forecast", "Payroll is paid this many days after a pay period ends", "Used by the dashboard cash forecast to place payroll on the right week.", 5, 0, 21, "days"),
 ];
@@ -582,7 +582,7 @@ export const EDITOR_SETTINGS = [
     tab: "payroll",
     section: "Pay periods and benefits",
     label: "Health insurance",
-    info: "Who is on the company health plan and each person's monthly premium. Also on the Payroll page.",
+    info: "Who is on the company health plan and each person's monthly premium. Also on Compensation's Payroll tab.",
   },
 ] as const satisfies readonly { id: string; tab: SettingsTab; section?: string; first?: boolean; label: string; info: string }[];
 export type EditorSettingId = (typeof EDITOR_SETTINGS)[number]["id"];

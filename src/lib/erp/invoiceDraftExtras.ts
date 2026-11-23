@@ -1,5 +1,5 @@
 /**
- * Two extras on Ready to send drafts, for both janitorial months and picked
+ * Two extras on Ready to Send drafts, for both janitorial months and picked
  * finished work:
  * - Set the due date when the client company has no payment terms (with
  *   terms, the due date is always invoice date + terms).

@@ -151,7 +151,7 @@ export function costBreakdown(m: FinanceMonth): { label: string; cents: number; 
     { group: "OFFICE", label: "Commission", cents: m.commissionCents, hint: "Commission, when marked paid" },
     { group: "OFFICE", label: "Hiring ads", cents: m.hiringAdsCents, hint: "Job ads (LinkedIn, Indeed...) on office openings, in the month posted" },
     { group: "INSURANCE_TAXES", label: "Insurance", cents: m.insuranceCents, hint: "Policy premiums spread over each term, plus audit bills or refunds on their date" },
-    { group: "INSURANCE_TAXES", label: "Payroll taxes", cents: m.payrollTaxCents, hint: "Employer Social Security, Medicare and unemployment on employees' pay, same as the Payroll page" },
+    { group: "INSURANCE_TAXES", label: "Payroll taxes", cents: m.payrollTaxCents, hint: "Employer Social Security, Medicare and unemployment on employees' pay, same as Compensation's Payroll tab" },
     { group: "INSURANCE_TAXES", label: "Health insurance", cents: m.healthCents, hint: "Sueep's share of each person's health plan premium" },
     // Overhead only QuickBooks knows about (estimated for months it isn't done for).
     ...QBO_GROUPS.map((g) => ({ group: "QUICKBOOKS" as const, label: QBO_GROUP_LABELS[g].label, cents: m.qboGroups[g], hint: `From QuickBooks: ${QBO_GROUP_LABELS[g].hint}` })),

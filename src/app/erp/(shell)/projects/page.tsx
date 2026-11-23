@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { parseHubSpotPipelineStageMap } from "@/lib/hubspot/pipelineStages";
 import { deriveProjectLifecycle, hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
 import { getErpAuth, canSeeJobCosts as checkFinancials, canSeeMarginOnly as checkMarginOnly } from "@/lib/erpAuth";
+import { isPmLevel } from "@/lib/erpRoles";
 import { getSupervisorProjectScope } from "@/lib/erp/supervisorScope";
 import { costLaborLogs, sumLineCosts } from "@/lib/erp/laborCost";
 import { changeOrderValueCents, computeProjectActualsWithChangeOrders } from "@/lib/erp/projectMargin";
@@ -404,7 +405,7 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
       </div>
       {isSupervisor && scope === "mine" && supervisorScope?.unlinked && (
         <p className="text-xs text-amber-600">
-          Not linked to an ERP supervisor account or employee record, showing all projects. Ask an admin to assign you in the project Setup tab.
+          Not linked to an ERP supervisor account or employee record, showing all projects. Ask an admin to pick you under Assigned Supervisor on the project&apos;s Overview tab.
         </p>
       )}
 
@@ -425,11 +426,15 @@ export default async function ErpProjectsPage({ searchParams }: PageProps) {
               No projects yet.{" "}
               <Link href="/erp/projects/new" className="text-pink-600 hover:underline">
                 Create one
-              </Link>{" "}
-              or import from HubSpot under{" "}
-              <Link href="/erp/hubspot" className="text-pink-600 hover:underline">
-                HubSpot sync
               </Link>
+              {isPmLevel(auth?.role) ? (
+                <>
+                  {" "}or import from HubSpot under{" "}
+                  <Link href="/erp/hubspot" className="text-pink-600 hover:underline">
+                    HubSpot sync
+                  </Link>
+                </>
+              ) : null}
               .
             </>
           )}

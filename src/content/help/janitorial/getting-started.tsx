@@ -43,7 +43,7 @@ export function JanitorialGettingStarted() {
           <A href="/erp/help/compensation/compensation-overview">Compensation Overview</A>.
         </Step>
         <Step n={7} title="Each month: bill the client">
-          The month is added on the billing day. With <strong>Auto-draft</strong> on, its invoice is drafted on Ready to send
+          The month is added on the billing day. With <strong>Auto-draft</strong> on, its invoice is drafted on Ready to Send
           3 days before; approving it marks the month Billed, and it turns Paid when the payment is recorded in QuickBooks.
           See <A href="/erp/help/billing/how-invoicing-works">Start Here: How Billing Works</A>.
         </Step>

@@ -1,5 +1,5 @@
 /**
- * Ready to send drafts that live in the ERP and become QuickBooks invoices
+ * Ready to Send drafts that live in the ERP and become QuickBooks invoices
  * on Approve (ERP_QBO_INVOICING_PLAN.md Phase 3).
  *
  * A per-server switch decides where new drafts go: HubSpot (as before) or
@@ -51,7 +51,7 @@ export type QboDraftLine = {
 const switchKey = (env: QboEnvironment) => `qboInvoiceDrafts.${env}`;
 const counterKey = (env: QboEnvironment) => `qboNextInvoiceNumber.${env}`;
 
-/** True when this server drafts new Ready to send invoices for QuickBooks instead of HubSpot. */
+/** True when this server drafts new Ready to Send invoices for QuickBooks instead of HubSpot. */
 export async function draftsGoToQuickBooks(): Promise<boolean> {
   return (await prisma.appSetting.findUnique({ where: { key: switchKey(qboEnvironment()) } }))?.value === "true";
 }
@@ -183,7 +183,7 @@ export function draftContent(d: LoadedQboDraft, paymentTermsDays: number | null)
   return { lines, totalCents: total(lines), invoiceDateKey, dueDateKey, subtitle };
 }
 
-/** This server's waiting drafts, for Ready to send. */
+/** This server's waiting drafts, for Ready to Send. */
 export async function loadWaitingQboDrafts() {
   return prisma.qboInvoiceDraft.findMany({ where: { environment: qboEnvironment(), status: "DRAFT" }, include: draftInclude, orderBy: { createdAt: "asc" } });
 }

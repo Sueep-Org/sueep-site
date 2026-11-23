@@ -1,5 +1,5 @@
 /**
- * Who a waiting draft is emailed to, set on Ready to send. Saved on the draft
+ * Who a waiting draft is emailed to, set on Ready to Send. Saved on the draft
  * (a janitorial month's HubSpot draft keeps it on the month); Approve uses it
  * instead of the billing settings (withDraftRecipients). "Also use for future
  * invoices" saves it as the building's or job's billing override too.

@@ -40,7 +40,7 @@ export function HowInvoicingWorks() {
             <TD>HubSpot</TD>
             <TD>
               Sales deals only. Older invoices made in HubSpot still show in the ERP. HubSpot is only used for new invoices if an
-              Admin switches Ready to send to the HubSpot backup.
+              Admin switches Ready to Send to the HubSpot backup.
             </TD>
           </tr>
         </tbody>
@@ -58,7 +58,7 @@ export function HowInvoicingWorks() {
           draft stays in the ERP. Nothing is sent yet.
         </Step>
         <Step n={3} title="Someone checks it">
-          On <strong>Ready to send</strong>, an Admin or the Business Manager opens the draft and checks the lines, the total,
+          On <strong>Ready to Send</strong>, an Admin or the Business Manager opens the draft and checks the lines, the total,
           the due date and who it goes to. Lines, amounts and recipients can be changed here.
         </Step>
         <Step n={4} title="Approve">
@@ -104,14 +104,14 @@ export function HowInvoicingWorks() {
             </TD>
           </tr>
           <tr>
-            <TD>Ready to send: To approve, Ready to bill, Contracts</TD>
+            <TD>Ready to Send: To approve, Ready to bill, Contracts</TD>
             <TD>Make drafts, check and edit them, approve them. Turn on Auto-draft for janitorial contracts.</TD>
             <TD>
               <A href="/erp/help/billing/ready-to-send">Ready to Send: Drafting and Approving Invoices</A>
             </TD>
           </tr>
           <tr>
-            <TD>Ready to send: Needs sending</TD>
+            <TD>Ready to Send: Needs sending</TD>
             <TD>
               Finish invoices that could not be emailed: portal uploads (with proof), missing addresses, failed emails, and
               portal invoices sent back to resubmit. Warns before a client&apos;s billing cutoff.
@@ -156,13 +156,13 @@ export function HowInvoicingWorks() {
           <tr>
             <TD>Admin</TD>
             <TD>
-              Everything below, plus connecting QuickBooks and switching Ready to send between QuickBooks and the HubSpot backup.
+              Everything below, plus connecting QuickBooks and switching Ready to Send between QuickBooks and the HubSpot backup.
             </TD>
           </tr>
           <tr>
             <TD>Business Manager</TD>
             <TD>
-              Ready to send (draft, edit, approve, discard, Needs sending, mark uploaded, resubmit), the QuickBooks page and
+              Ready to Send (draft, edit, approve, discard, Needs sending, mark uploaded, resubmit), the QuickBooks page and
               Invoice setup, editing company billing settings, the Overdue tab. On the Invoices page: set portal status, log
               follow-ups and explain short pays.
             </TD>
@@ -225,7 +225,7 @@ export function HowInvoicingWorks() {
 
       <H2>The HubSpot backup</H2>
       <P>
-        If QuickBooks cannot be used, an Admin can switch Ready to send to <strong>HubSpot (backup)</strong>. New drafts are
+        If QuickBooks cannot be used, an Admin can switch Ready to Send to <strong>HubSpot (backup)</strong>. New drafts are
         then made in HubSpot and reach QuickBooks only while HubSpot&apos;s own invoice sync is on. Everything else on the
         billing pages works the same. See{" "}
         <A href="/erp/help/billing/ready-to-send">Ready to Send: Drafting and Approving Invoices</A> for switching.

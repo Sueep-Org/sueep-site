@@ -13,10 +13,11 @@ export function ScheduleCalendarOverview() {
         or each worker&apos;s jobs over time.
       </P>
       <P>
-        Tabs at the top switch between calendars. <strong>Master</strong> puts projects,
-        janitorial shifts and (for Admins and PMs) management items on one month view; click a
-        chip to open it, and use the Projects / Janitorial / Management buttons to hide a layer.{" "}
-        <strong>Projects</strong> is everything described below. <strong>Janitorial Contracts</strong> shows recurring janitorial shifts,
+        Tabs at the top switch between calendars. <strong>Projects</strong>, where Schedule opens,
+        is everything described below. <strong>Master</strong> puts projects, janitorial shifts and
+        (for Admins and PMs) management items on one month view; click a chip to open it, and use
+        the Projects / Janitorial / Management buttons to hide a layer.{" "}
+        <strong>Janitorial Contracts</strong> shows recurring janitorial shifts,
         see{" "}
         <A href="/erp/help/janitorial/scheduling-and-hours">Janitorial Scheduling, Clock-In and Hours</A>. Admins and PMs
         also see <strong>Management</strong>, for insurance expirations, time off and company

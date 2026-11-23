@@ -15,7 +15,7 @@ function Title() {
   return (
     <h2 className="flex items-center gap-1 text-sm font-semibold text-gray-900">
       Scorecard
-      <InfoTip text="Bids from HubSpot (changes show within a couple of minutes) and payment speed from the ERP's invoices. More on the Win/loss page." />
+      <InfoTip text="Bids from HubSpot (changes show within a couple of minutes) and payment speed from the ERP's invoices. More on the Win/Loss page." />
     </h2>
   );
 }

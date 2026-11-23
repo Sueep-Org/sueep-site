@@ -4,7 +4,7 @@ import { decryptSecret, encryptSecret } from "./secretBox";
 /**
  * The ERP's QuickBooks Online connection (QUICKBOOKS_PLAN.md Phase 1):
  * OAuth 2.0 sign-in, token refresh, disconnect, and requests with retries.
- * Reads use qboGet. The only write is qboPost, used by Ready to send to
+ * Reads use qboGet. The only write is qboPost, used by Ready to Send to
  * create invoices and customers (ERP_QBO_INVOICING_PLAN.md Phase 3).
  *
  * Env: QBO_CLIENT_ID, QBO_CLIENT_SECRET, QBO_ENVIRONMENT (sandbox |
