@@ -66,7 +66,7 @@ export const loadJobStatuses = cache(async (): Promise<JobStatus[]> => {
     prisma.project.findMany({
       where: { status: { notIn: ["COMPLETE", "COMPLETED", "ARCHIVED", "CANCELLED"] } },
       select: {
-        id: true, jobTitle: true, status: true, projectDate: true, projectEndDate: true,
+        id: true, jobTitle: true, status: true, projectDate: true, projectEndDate: true, billingStatus: true,
         turnoverRequestId: true, recurringContractPeriodId: true,
         contractValueCents: true, estLaborCents: true, estMaterialCents: true, estTravelCents: true, estHours: true,
         actualLaborCents: true, actualMaterialCents: true, actualTravelCents: true,
@@ -97,7 +97,7 @@ export const loadJobStatuses = cache(async (): Promise<JobStatus[]> => {
 
   // Active = what the rest of the ERP calls Active (not upcoming, not on hold).
   const active = projects.filter(
-    (p) => deriveProjectLifecycle(p.status, p.projectDate?.toISOString() ?? null, hasActiveChangeOrder(p.changeOrders)) === "ACTIVE",
+    (p) => deriveProjectLifecycle(p.status, p.projectDate?.toISOString() ?? null, hasActiveChangeOrder(p.changeOrders), p.billingStatus) === "ACTIVE",
   );
   const actuals = await computeProjectActualsWithChangeOrders(active);
 

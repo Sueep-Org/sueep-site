@@ -50,7 +50,9 @@ export type PmUnit = {
   pendingChange: { id: string; kind: "CANCEL" | "RESCHEDULE"; newStart: string | null } | null;
 };
 
-const LIFECYCLE_STATUS = { UPCOMING: "SCHEDULED", ACTIVE: "IN_PROGRESS", ON_HOLD: "ON_HOLD", COMPLETED: "DONE" } as const;
+// VOIDED never comes back here: billing status isn't passed in, so property
+// managers see a voided unit the same as before. Listed only to cover the type.
+const LIFECYCLE_STATUS = { UPCOMING: "SCHEDULED", ACTIVE: "IN_PROGRESS", ON_HOLD: "ON_HOLD", COMPLETED: "DONE", VOIDED: "IN_PROGRESS" } as const;
 
 function layoutLabel(tr: { bedrooms: number | null; bathrooms: number | null; isPartialTurn: boolean; partialTurnLayout: string | null }): string | null {
   if (tr.bedrooms == null && tr.bathrooms == null) return null;

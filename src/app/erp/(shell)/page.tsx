@@ -121,7 +121,7 @@ function describeProjectActivity(p: ActivityProject): { text: string; dot: strin
   if (billing === "BILLED") return { text: "Sent to billing", dot: "bg-blue-400" };
   if (p.percentInvoiced > 0) return { text: `${Math.round(p.percentInvoiced)}% invoiced`, dot: "bg-sky-400" };
   if (p.percentDone > 0) return { text: `${Math.round(p.percentDone)}% done`, dot: "bg-violet-400" };
-  if (deriveProjectLifecycle(status, p.projectDate?.toISOString() ?? null, hasActiveChangeOrder(p.changeOrders)) === "UPCOMING") {
+  if (deriveProjectLifecycle(status, p.projectDate?.toISOString() ?? null, hasActiveChangeOrder(p.changeOrders), p.billingStatus) === "UPCOMING") {
     return { text: "Scheduled to start", dot: "bg-violet-400" };
   }
   return { text: "In progress", dot: "bg-emerald-400" };
@@ -683,7 +683,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
           prisma.project.findMany({
             select: {
               id: true, jobTitle: true, status: true, projectDate: true, projectEndDate: true, supervisorUserId: true,
-              contractValueCents: true, segment: true,
+              contractValueCents: true, segment: true, billingStatus: true,
               recurringContractPeriodId: true, turnoverRequestId: true,
               _count: { select: { laborEntries: true } },
               changeOrders: {
@@ -785,7 +785,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
         let wipCount = 0, upcomingCount = 0;
         let wipValue = 0;
         for (const p of allProjects) {
-          const lc = deriveProjectLifecycle(p.status, p.projectDate?.toISOString() ?? null, hasActiveChangeOrder(p.changeOrders));
+          const lc = deriveProjectLifecycle(p.status, p.projectDate?.toISOString() ?? null, hasActiveChangeOrder(p.changeOrders), p.billingStatus);
           if (lc === "ACTIVE") { wipCount++; wipValue += p.contractValueCents ?? 0; }
           else if (lc === "UPCOMING") upcomingCount++;
         }

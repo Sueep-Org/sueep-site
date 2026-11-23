@@ -17,8 +17,10 @@ export function ProjectsOverview() {
           <Img src="/help/projects_overview/projects_overview_2.png" alt="Segment filter tabs" />
           On the top right there&apos;s a search bar where you can search projects by name.
           <Img src="/help/projects_overview/projects_overview_3.png" alt="Project search bar" />
-          There&apos;s also a status filter for a project&apos;s stage: Upcoming, WIP, Billing, or
-          Completed. A project&apos;s row is colored to match its current stage.
+          There&apos;s also a status filter for a project&apos;s stage: Upcoming, WIP, On Hold, Billing,
+          Completed, or Voided. A project&apos;s row is colored to match its current stage. A project whose billing
+          status is <strong>Voided</strong> (voided on the project, the Billing page or its turnover request) shows as
+          Voided, crossed out, never WIP, and doesn&apos;t count toward WIP on the dashboard.
           <Img src="/help/projects_overview/projects_overview_4.png" alt="Status filter" />
           Clicking a project&apos;s row expands it to show its recent labor logs. See{" "}
           <A href="/erp/help/workers/labor-logs">Inputting Labor Logs</A> for more. A project&apos;s
@@ -32,7 +34,7 @@ export function ProjectsOverview() {
           <Img src="/help/projects_overview/details_5.5.png" alt="Expanded project row" />
           This tab combines what used to be two separate tabs. It has the project&apos;s work
           order fields (name, address, service type, main points of contact, and any notes to the
-          PM), plus its setup fields: lifecycle (Upcoming, WIP, or Completed), segment, PM,
+          PM), plus its setup fields: lifecycle (Upcoming, WIP, or Completed; a voided project shows <strong>Voided</strong> and can&apos;t be changed here until its billing status is changed), segment, PM,
           supervisor, and start/end dates.
           <Callout type="info">
             When the whole job is finished, click <strong>Mark job complete</strong> at the top of the project page and

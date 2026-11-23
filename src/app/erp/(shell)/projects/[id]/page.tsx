@@ -635,6 +635,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             hasActiveChangeOrder={hasActiveChangeOrder(changeOrders)}
             completedAtIso={project.completedAt ? project.completedAt.toISOString() : null}
             completedBy={project.completedBy ?? null}
+            billingStatus={project.billingStatus ?? null}
+            voidReason={project.voidReason ?? null}
           />
           {invoiceDestination && (
             <>

@@ -30,6 +30,7 @@ export async function getUnscheduledActiveProjectsToday(): Promise<ScheduleNudge
         id: true,
         jobTitle: true,
         status: true,
+        billingStatus: true,
         projectDate: true,
         supervisor: true,
         description: true,
@@ -79,7 +80,7 @@ export async function getUnscheduledActiveProjectsToday(): Promise<ScheduleNudge
     });
 
   return projects
-    .filter((p) => deriveProjectLifecycle(p.status, p.projectDate?.toISOString() ?? null, hasActiveChangeOrder(p.changeOrders)) === "ACTIVE")
+    .filter((p) => deriveProjectLifecycle(p.status, p.projectDate?.toISOString() ?? null, hasActiveChangeOrder(p.changeOrders), p.billingStatus) === "ACTIVE")
     .filter((p) => !scheduledIds.has(p.id) && !coScheduledToday(p))
     .map((p) => ({
       id: p.id,
