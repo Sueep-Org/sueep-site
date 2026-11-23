@@ -153,6 +153,9 @@ export type ProjectChangeOrderRow = {
 };
 
 
+/** Common janitorial change orders: one click fills the title (moved here from New Project). */
+const TITLE_PRESETS = ["UDR", "Pool", "Grill Cleaning"] as const;
+
 const STATUSES: ProjectChangeOrderRow["status"][] = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID", "BILLING", "COMPLETED"];
 /** Statuses that need a written reason (the API enforces it too). */
 const NOTE_STATUSES: ProjectChangeOrderRow["status"][] = ["REJECTED", "VOID"];
@@ -213,6 +216,7 @@ export function ProjectChangeOrdersSection({
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [nextDayUpcharge, setNextDayUpcharge] = useState(false);
+  const titleRef = useRef<HTMLInputElement>(null);
   const days = changeOrderDayCount(startDate, endDate);
 
   const defaultNotifyIds = useState(() => {
@@ -384,7 +388,22 @@ export function ProjectChangeOrdersSection({
             <label className={label} htmlFor="co-title">
               Title *
             </label>
-            <input id="co-title" name="title" required className={input} placeholder="Add two extra prep coats in lobby" />
+            <input id="co-title" ref={titleRef} name="title" required className={input} placeholder="Add two extra prep coats in lobby" />
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
+              Common:
+              {TITLE_PRESETS.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => {
+                    if (titleRef.current) titleRef.current.value = t;
+                  }}
+                  className="rounded-full border border-gray-300 bg-white px-2 py-0.5 text-gray-700 hover:bg-gray-100"
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
           </div>
           <div>
             <label className={label} htmlFor="co-status">
@@ -393,13 +412,13 @@ export function ProjectChangeOrdersSection({
             <select id="co-status" name="status" defaultValue="DRAFT" className={input}>
               {STATUSES.filter((s) => !NOTE_STATUSES.includes(s)).map((status) => (
                 <option key={status} value={status}>
-                  {status}
+                  {status.charAt(0) + status.slice(1).toLowerCase()}
                 </option>
               ))}
             </select>
           </div>
           <div>
-            <label className={label}>PM</label>
+            <label className={label}>Sueep PM</label>
             <PmCombobox employees={employees} value={pmSupervisor} onChange={setPmSupervisor} />
           </div>
           <div>

@@ -134,10 +134,12 @@ export default async function BuildingDetailPage({ params, searchParams }: PageP
           // resetting to "All" — same mechanism the project detail page's
           // "← Projects" link uses.
           <ProjectsBackLink label="Back to projects" />
-        ) : (
+        ) : auth && canViewCompanies(auth.role) ? (
           <Link href="/erp/buildings" className="text-xs text-pink-600 hover:underline">
             Back to buildings
           </Link>
+        ) : (
+          <ProjectsBackLink label="Back to projects" />
         )}
         <div className="mt-2">
           <h1 className="text-2xl font-semibold text-gray-900">{building.name}</h1>

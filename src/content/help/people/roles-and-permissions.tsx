@@ -21,7 +21,7 @@ export function RolesAndPermissions() {
             <TD>Admin</TD>
             <TD>
               Everything, plus users, the Company Info access log, connecting QuickBooks, and switching invoices between
-              QuickBooks and the HubSpot backup.
+              QuickBooks and the HubSpot backup (on the QuickBooks page).
             </TD>
           </tr>
           <tr>
@@ -57,7 +57,7 @@ export function RolesAndPermissions() {
         <LI>Edit companies, their contacts and billing, and billing overrides on buildings and projects.</LI>
         <LI>Link client portal logins to companies.</LI>
         <LI>
-          Draft, edit, approve and discard invoices on <strong>Ready to send</strong>, and finish the Needs sending list (mark
+          Draft, edit, approve and discard invoices on <strong>Ready to Send</strong>, and finish the Needs sending list (mark
           uploaded with proof, mark sent, resubmit sent-back invoices). Drafts waiting also show on the dashboard&apos;s{" "}
           <strong>Money</strong> tab under Needs action.
         </LI>

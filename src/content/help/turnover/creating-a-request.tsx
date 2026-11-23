@@ -6,7 +6,7 @@ export function CreatingATurnoverRequest() {
       <H2>Overview</H2>
       <P>
         Turnover requests track a unit&apos;s scope of work and drive its pricing. Clients send
-        them through the website form or their private property manager page, and PMs can also
+        them through the website form or their private property manager page, and Sueep project managers can also
         create one directly from New Project. The same scope can be edited from inside the ERP
         afterward.
       </P>
@@ -15,7 +15,7 @@ export function CreatingATurnoverRequest() {
         <Step n={1} title="How most requests come in">
           Property managers send requests through the website form (sueep.com/turnover-requests)
           or their own private page. They fill in the unit, the work, and a start date.
-          <Img src="/help/turnover/turnover_1.png" alt="Material Log" />
+          <Img src="/help/turnover/turnover_1.png" alt="Website request form" />
           Nothing is created right away. Each request waits on{" "}
           <strong>Property Managers → Requests</strong> until someone confirms it, and confirming
           makes the project, linked to the building and unit. See{" "}
@@ -24,14 +24,14 @@ export function CreatingATurnoverRequest() {
         </Step>
 
         <Step n={2} title="Creating a request yourself, from New Project">
-          PMs, Admins, and Sales can also create a turnover request directly, without going
+          Project Managers, Admins, and Sales can also create a turnover request directly, without going
           through the public form. Go to <strong>New Project</strong>, and set Segment to{" "}
           <strong>Janitorial turnover requests</strong>.
-          <Img src="/help/turnover/turnover_3.png" alt="Material Log" />
+          <Img src="/help/turnover/turnover_3.png" alt="New Project form for a turnover" />
           <UL>
             <LI>
               Pick the building from the dropdown, or choose <strong>Add new building...</strong>{" "}
-              to create one on the spot (name, address, and PM contact).
+              to create one on the spot (name, address, and property manager contact).
             </LI>
             <LI>
               A new building also shows its price table, filled with standard prices. Change any
@@ -57,7 +57,7 @@ export function CreatingATurnoverRequest() {
           <strong>Layout</strong> tab. This is where you edit the unit&apos;s scope, bedrooms,
           bathrooms, square footage, and which services are included (full clean, full paint,
           touch-up paint, carpet cleaning, ceiling paint, and so on).
-          <Img src="/help/turnover/turnover_2.png" alt="Material Log" />
+          <Img src="/help/turnover/turnover_2.png" alt="Unit Layout tab" />
           Click <strong>Save</strong> when you&apos;re done. The price updates automatically based
           on the building&apos;s pricing package and the scope you&apos;ve selected.
           <Callout type="info">
@@ -73,11 +73,10 @@ export function CreatingATurnoverRequest() {
         </Step>
 
         <Step n={5} title="Quality checking a unit">
-          Turnover units don&apos;t use the standalone Quality Checks page or its own tab (every
-          other project type gets a &quot;Quality Checks&quot; tab, turnover units don&apos;t). For
-          a turnover unit, the quality check <strong>is</strong> its <strong>Checklist</strong> tab,
-          right on the unit&apos;s own project page.
-          <Img src="/help/turnover/turnover_4.png" alt="Material Log" />
+          Every other project type has a &quot;Quality Checks&quot; tab, but turnover units
+          don&apos;t. For a turnover unit, the quality check <strong>is</strong> its{" "}
+          <strong>Checklist</strong> tab, right on the unit&apos;s own project page.
+          <Img src="/help/turnover/turnover_4.png" alt="Unit Checklist tab" />
           That tab has, in order:
           <UL>
             <LI>
@@ -103,7 +102,7 @@ export function CreatingATurnoverRequest() {
             This checklist gates two different things at two different thresholds, on the unit&apos;s{" "}
             <strong>Labor</strong> tab: logging any labor at all needs the checklist at least 75%
             complete, and checking <strong>Mark unit as completed</strong> needs it{" "}
-            <strong>fully</strong> checked off. A PM can override either one.
+            <strong>fully</strong> checked off. A Sueep PM can override either one.
           </Callout>
         </Step>
       </Steps>

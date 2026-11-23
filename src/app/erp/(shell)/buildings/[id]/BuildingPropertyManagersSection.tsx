@@ -3,7 +3,7 @@ import { InfoTip } from "@/app/erp/components/ui";
 
 export type BuildingPropertyManager = { id: string; name: string; email: string; active: boolean; lastSeenAt: string | null };
 
-/** Who has a property manager link for this building, on the building's Details tab. */
+/** The building's property managers: who gets its emails and can book its turnovers. On the building's Details tab. */
 export function BuildingPropertyManagersSection({
   buildingId,
   managers,
@@ -21,8 +21,8 @@ export function BuildingPropertyManagersSection({
     <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <h2 className="flex items-center gap-1 text-sm font-semibold text-gray-900">
-          Property manager links
-          <InfoTip text="Outside property managers who can see and book this building's turnovers on their private page." />
+          Property managers
+          <InfoTip text="Who gets this building's emails (turnover updates, change order approvals, janitorial summaries). They can also see and book its turnovers on their private page." wide />
         </h2>
         <Link
           href={`/erp/property-managers?add=${buildingId}`}
@@ -32,7 +32,11 @@ export function BuildingPropertyManagersSection({
         </Link>
       </div>
       {managers.length === 0 ? (
-        <p className="mt-2 text-sm text-gray-500">Nobody has a link for this building yet.</p>
+        <p className="mt-2 text-sm text-gray-500">
+          {contactEmail
+            ? `None yet. Until one is added, emails go to the building contact${contactName ? `, ${contactName}` : ""} (${contactEmail}).`
+            : "None yet, so this building's emails have nowhere to go. Click Add."}
+        </p>
       ) : (
         <ul className="mt-2 divide-y divide-gray-100 text-sm">
           {managers.map((m) => (
@@ -55,9 +59,10 @@ export function BuildingPropertyManagersSection({
           ))}
         </ul>
       )}
-      {!contactHasLink && (
+      {!contactHasLink && managers.length > 0 && (
         <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          The building contact{contactName ? `, ${contactName},` : ""} doesn&apos;t have a link yet. Click Add to set one up.
+          The building contact{contactName ? `, ${contactName},` : ""} isn&apos;t on this list, so they don&apos;t get this building&apos;s
+          emails. Click Add if they should.
         </p>
       )}
     </section>

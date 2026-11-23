@@ -7,6 +7,7 @@ import { buildTurnoverRequestEmailHtml, sendEmail } from "@/lib/email";
 import { getNotificationSetting } from "@/lib/notificationSettings";
 import { canonicalUnitName } from "@/lib/erp/unitNamesDb";
 import { parseDate } from "@/lib/erp/dates";
+import { buildingPropertyManagers } from "@/lib/erp/propertyManagers";
 
 type RequestBody = Record<string, unknown>;
 
@@ -174,8 +175,9 @@ export async function POST(req: Request) {
       sueepPmName,
     });
 
-    // The building's PM and the Sueep PM; the Notifications page's list only when neither is on file.
-    const found = [building.pmEmail?.trim(), sueepPmEmail].filter((to): to is string => Boolean(to));
+    // The building's property managers and the Sueep PM; the Notifications page's list only when neither is on file.
+    const managerEmails = (await buildingPropertyManagers(building.id)).map((m) => m.email);
+    const found = [...managerEmails, sueepPmEmail].filter((to): to is string => Boolean(to));
     const recipients = Array.from(new Set(found.length ? found : setting.to));
     await Promise.all(recipients.map((to) => sendEmail({
       type: "TURNOVER_REQUEST_CREATED",

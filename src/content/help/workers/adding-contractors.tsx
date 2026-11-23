@@ -10,7 +10,7 @@ export function AddingContractors() {
         <H2>Steps</H2>
         <Steps>
             <Step n={1} title="Navigate to the contractor page">
-                First you must navigate to the <strong>Contractor Verification</strong> tab.
+                First you must open <strong>Contractors</strong> (under Team in the menu).
                 <Img src="/help/add_contractor/contractor_1.png" alt="Contractor" />
                 To add a new contractor click the add contractor button which will bring up a input for their name and email.
                 <Img src="/help/add_contractor/contractor_2.png" alt="Contractor" />
@@ -47,7 +47,6 @@ export function AddingContractors() {
                 <Img src="/help/add_contractor/contractor_7.png" alt="Contractor" />
                 Finally is the contract signing tab. For more information on contract signing navigate to the <A href="/erp/help/contracts/uploading-a-contract">Uploading a Contract</A> help page.
                 <Img src="/help/add_contractor/contractor_8.png" alt="Contractor" />
-                <strong>Thats all! For any more information check out the other help center articles or message the tech dev team!</strong>
             </Step>
             <Step n={3} title="Insurance">
                 On the <strong>Compliance</strong> tab, <strong>Insurance &amp; Workers Comp</strong> tracks the

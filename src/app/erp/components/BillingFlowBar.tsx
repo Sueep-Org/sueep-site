@@ -40,7 +40,7 @@ export function useBillingFlow(): BillingFlow | null {
 type Step = { key: "billing" | "send" | "invoices"; label: string; href: string; note: string | null; alert: boolean };
 
 /**
- * Project Billing → Ready to send → Invoices, with one number each, on top of
+ * Project Billing → Ready to Send → Invoices, with one number each, on top of
  * all three pages so it's clear where work goes next. Hidden when the person
  * can only open one of them.
  */
@@ -60,7 +60,7 @@ export function BillingFlowBar({ current }: { current: Step["key"] }) {
       ? [
           {
             key: "send" as const,
-            label: "Ready to send",
+            label: "Ready to Send",
             href: "/erp/ready-to-send",
             note: [flow.toApprove ? `${flow.toApprove} to approve` : null, flow.needsSending ? `${flow.needsSending} to send` : null].filter(Boolean).join(" · ") || null,
             alert: !!flow.needsSending,

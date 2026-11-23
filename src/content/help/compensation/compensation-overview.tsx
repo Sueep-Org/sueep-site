@@ -43,7 +43,7 @@ export function CompensationOverview() {
               approved unpaid time off (an Unpaid entry, or days past the 15-day limit an Admin
               made unpaid): those days come off the salary, shown in amber under the gross pay.{" "}
               <strong>Janitorial Contract</strong> rows are paid from their janitorial hours (the
-              same live numbers as <strong>Janitorial Contracts → Hours</strong>: clocked time, corrections,
+              same live numbers as <strong>Janitorial → Hours</strong>: clocked time, corrections,
               or their scheduled hours when they didn&apos;t clock in) plus any project hours, at
               their hourly rate, with weekly overtime. Long janitorial shifts have an unpaid break taken off (both set under Settings, Payroll). Click <strong>See janitorial shifts</strong> under someone&apos;s hours to open their shifts for that pay period on the Janitorial Hours tab. The janitorial schedule is the only source for
               these hours: a Janitorial Contract employee with no janitorial shifts in the period gets no

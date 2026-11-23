@@ -16,10 +16,11 @@ export function BuildingsOverview() {
       <H2>Steps</H2>
       <Steps>
         <Step n={1} title="Adding a building">
-          Click <strong>Add building</strong> on the list page. Only name and address are
-          required, builder and the property manager&apos;s name, email, and phone are optional
-          and can be filled in later. To give that property manager their own turnover calendar, see{" "}
-          <A href="/erp/help/turnover/property-manager-links">Property Manager Links</A>.
+          Open <strong>Buildings</strong> (under Projects, Clients in the menu) and click{" "}
+          <strong>Add building</strong>. Only name and address are required. The building contact
+          (name, email, phone) is optional and is only used for emails until a property manager is
+          added on the building&apos;s Details tab. Property managers get the building&apos;s emails and their
+          own turnover page, see <A href="/erp/help/turnover/property-manager-links">Property Manager Links</A>.
           <ImgPlaceholder label="Add building form" />
         </Step>
 
@@ -27,8 +28,8 @@ export function BuildingsOverview() {
           A building&apos;s own page opens on the <strong>Details</strong> tab: its profile fields,
           plus a HubSpot deal search (used to match older HubSpot invoices, and by the HubSpot invoice backup), and (for
           roles that can edit pricing) who earns commission on this building&apos;s turnover work.
-          Below that, <strong>Property manager links</strong> shows which property managers have a
-          private page for this building, with <strong>+ Add</strong> to set one up, and a shared{" "}
+          Below that, <strong>Property managers</strong> shows who gets this building&apos;s emails and has a
+          private page for it, with <strong>+ Add</strong> to set one up, and a shared{" "}
           <strong>Notes</strong> section the whole team can post to.
           <ImgPlaceholder label="Building Details tab" />
           <Callout type="info">
@@ -79,7 +80,7 @@ export function BuildingsOverview() {
 
         <Step n={6} title="Janitorial Contract tab">
           Shows whether this building has a recurring monthly janitorial contract, and its monthly
-          rate. Contracts are created and managed on the Janitorial Contracts page, see{" "}
+          rate. Contracts are created and managed on the Janitorial page, see{" "}
           <A href="/erp/help/janitorial/janitorial-contracts">Janitorial Contracts: Setup, Pricing and Billing</A>.
         </Step>
       </Steps>

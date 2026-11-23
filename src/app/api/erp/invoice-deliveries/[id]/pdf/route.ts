@@ -5,7 +5,7 @@ import { qboGetPdf } from "@/lib/erp/qboClient";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-/** QuickBooks' PDF of an invoice on Ready to send, for portal uploads. */
+/** QuickBooks' PDF of an invoice on Ready to Send, for portal uploads. */
 export async function GET(_req: Request, ctx: Ctx) {
   const auth = await getErpAuth();
   if (!auth || !canApproveInvoices(auth.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });

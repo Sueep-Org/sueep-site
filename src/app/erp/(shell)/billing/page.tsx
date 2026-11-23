@@ -1820,7 +1820,7 @@ export default function BillingPage() {
         <BillingFlowBar current="billing" />
         <h1 className="flex items-center gap-1 text-2xl font-semibold text-gray-900">
           Project Billing
-          <InfoTip text="Every piece of work and whether it's billed and paid. Finished work that isn't billed goes to Ready to send (Bill it). Invoice numbers open the invoice on the Invoices page." />
+          <InfoTip text="Every piece of work and whether it's billed and paid. Finished work that isn't billed goes to Ready to Send (Bill it). Invoice numbers open the invoice on the Invoices page." />
         </h1>
       </div>
 

@@ -115,7 +115,7 @@ export function SubPortal() {
         </LI>
       </UL>
       <P>
-        Photos show on the project&apos;s <strong>Sub Photos</strong> tab, and on turnovers at the top of the Checklist tab
+        Photos show on the project&apos;s <strong>Sub Reviews</strong> tab (under Quality &amp; Safety), and on turnovers at the top of the Checklist tab
         too.
       </P>
 
@@ -140,7 +140,7 @@ export function SubPortal() {
       </UL>
       <P>
         Business Managers and Admins can review any day. PMs review their own days and days with no PM. Supervisors
-        don&apos;t review. The Contractors page has a <strong>Reviews</strong> tab with every open review.
+        don&apos;t review. The Contractors page also has a <strong>Sub Reviews</strong> button that opens the same list.
       </P>
 
       <H2>6. Scores</H2>

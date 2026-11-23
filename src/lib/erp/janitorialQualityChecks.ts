@@ -10,6 +10,7 @@ import { buildQualityCheckEmail, buildQualityCheckSummaryEmail, buildQualityTeam
 import { addDaysKey } from "./managementCalendar";
 import { todayEasternKey, utcDateKey } from "./dates";
 import { needsAttention, parseAreaResults } from "./janitorialQualityShared";
+import { buildingPropertyManagers } from "./propertyManagers";
 import { dateLocale, parseLang, tr, type Lang } from "./language";
 
 /** Roles that can be picked to do a check. */
@@ -260,32 +261,16 @@ export async function noticesForJanitor(employeeId: string, todayKey: string = t
     .filter((n) => n.areas.length || n.teamUpdates);
 }
 
-/** Who can get the summary: property managers with a link to the building, plus the building's own contact if different. */
+/** Who can get the summary: the building's linked property managers, else its typed-in contact (buildingPropertyManagers). */
 export async function summaryRecipients(contractId: string) {
-  const contract = await prisma.recurringContract.findUnique({
-    where: { id: contractId },
-    select: {
-      building: {
-        select: {
-          pmName: true,
-          pmEmail: true,
-          propertyManagers: { where: { propertyManager: { active: true } }, select: { propertyManager: { select: { id: true, name: true, email: true } } } },
-        },
-      },
-    },
-  });
+  const contract = await prisma.recurringContract.findUnique({ where: { id: contractId }, select: { buildingId: true } });
   if (!contract) return [];
-  const list: { email: string; name: string; source: "link" | "building"; managerId: string | null }[] = contract.building.propertyManagers.map(({ propertyManager: m }) => ({
+  return (await buildingPropertyManagers(contract.buildingId)).map((m) => ({
     email: m.email,
     name: m.name,
-    source: "link",
+    source: (m.id ? "link" : "building") as "link" | "building",
     managerId: m.id,
   }));
-  const pmEmail = contract.building.pmEmail?.trim();
-  if (pmEmail && !list.some((r) => r.email.toLowerCase() === pmEmail.toLowerCase())) {
-    list.push({ email: pmEmail, name: contract.building.pmName?.trim() || pmEmail, source: "building", managerId: null });
-  }
-  return list;
 }
 
 export type SummaryOptions = { message: string; includeNotes: boolean; includeDiscussion: boolean; includePhotos: boolean };

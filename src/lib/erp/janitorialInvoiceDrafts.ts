@@ -6,7 +6,7 @@
  * contract per month, the base amount as line 1 and each extra as its own
  * line. It is linked to the month right away (HubSpotContractInvoice), so
  * the deal invoice sync leaves it alone. Someone with canApproveInvoices
- * reviews it on Ready to send, then approves (opens it in HubSpot, which
+ * reviews it on Ready to Send, then approves (opens it in HubSpot, which
  * sends it to QuickBooks, and marks the month BILLED) or discards it.
  *
  * Never two drafts for one month: a month is skipped once it has any linked
@@ -87,7 +87,7 @@ function labelFor(p: LoadedPeriod): string {
 
 /**
  * Company payment terms decide the due date. Without terms it's the date
- * someone set on the draft (Ready to send), else due on receipt, same as
+ * someone set on the draft (Ready to Send), else due on receipt, same as
  * today's invoices.
  */
 async function dueDateFor(buildingId: string, invoiceDateKey: string, setDueKey: string | null = null): Promise<string> {

@@ -19,7 +19,7 @@ const categoryIcons: Record<string, ReactNode> = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 21V4.5a.75.75 0 01.75-.75h9a.75.75 0 01.75.75V21M4.5 21h15M4.5 21H3M19.5 21H21M14.25 21v-4.5a.75.75 0 00-.75-.75h-3a.75.75 0 00-.75.75V21M7.5 7.5h1.5M7.5 11h1.5M7.5 14.5h1.5M12 7.5h1.5M12 11h1.5M15.75 3.75H19.5a.75.75 0 01.75.75V21" />
     </svg>
   ),
-  "Janitorial Contracts": (
+  "Janitorial": (
     <svg {...iconProps}>
       <g transform="rotate(35 12 12)" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 2.5V12" />

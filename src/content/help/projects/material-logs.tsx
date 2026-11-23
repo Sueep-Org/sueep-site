@@ -5,28 +5,23 @@ export function MaterialsLog() {
         <>
         <H2>Overview</H2>
         <P>
-            The materials log lets you track all materials purchased for a project. For each entry you record the date, category, item name, quantity, unit, and total cost. Once added, entries appear in a filterable table where you can search by item name or filter by date, and edit or delete any log. The total cost shown in the top right updates based on your active filters and feeds directly into the actual material cost on the project&apos;s Financials tab.
+            The materials log tracks what was bought for a project. Each entry has a date, category, item, quantity, unit and cost. Entries show in a table below the form, where you can filter by date or item and edit or delete any entry. The total cost of the log feeds the actual material cost on the project&apos;s Financials summary.
         </P>
 
         <H2>Steps</H2>
         <Steps>
-            <Step n={1} title="Navigate to your desired project">
-                First go to the projects page and navigate to your desired project and click on the title of it.
-                <br></br><br></br>
-                This will bring you to the projects detail page. We will then navigate to the materials tab on that page.
+            <Step n={1} title="Open the project's Materials tab">
+                Open the project from the Projects page. In the tab bar, open the <strong>Financials</strong> menu and pick <strong>Materials</strong>.
             </Step>
 
-            <Step n={2} title="Add and manage your projects materials">
-                <Img src="/help/materials/materials_1.png" alt="Material Log" />
-                From here you can add the date you got the materials, category (Cleaning products or Paint), item, quanitity, total cost, unti, and any extra notes.
-                <br></br><br></br>
-                Once you click add material it will add into the material log below. Here you can filter materials by date or item name. You can also delete and edit logs.
-                In the top right corner you will see the total cost of all materials based on your filtering.
-                <Img src="/help/materials/materials_1.png" alt="Material Log" />
-                <Callout type="info">The total cost for materials here is what populates into actual material cost on the Financials tab.</Callout>
-                <br></br><br></br>
-                <strong>Thats all! For any more information check out the other help center articles or message the tech dev team!</strong>
-            
+            <Step n={2} title="Add an entry">
+                <Img src="/help/materials/materials_1.png" alt="Materials tab" />
+                Under <strong>Add material entry</strong>, fill in the date, category (Cleaning products or Paint), item and cost. Quantity, unit and notes are optional. The entry is added to the table below.
+            </Step>
+
+            <Step n={3} title="Find, edit or delete entries">
+                Use <strong>Filter by date</strong> or <strong>Filter by item</strong> to narrow the table. While a filter is on, the top right shows the total of what&apos;s showing. Each row can be edited or deleted.
+                <Callout type="info">The full total, not the filtered one, is what counts as the project&apos;s actual material cost.</Callout>
             </Step>
         </Steps>
         </>

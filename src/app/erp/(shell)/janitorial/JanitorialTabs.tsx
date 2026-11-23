@@ -1,17 +1,18 @@
 import Link from "next/link";
 
+// Contracts is first because it's the one /erp/janitorial opens on.
 const TABS = [
-  { id: "today", label: "Today", href: "/erp/janitorial/today" },
   { id: "contracts", label: "Contracts", href: "/erp/janitorial" },
+  { id: "today", label: "Today", href: "/erp/janitorial/today" },
   { id: "hours", label: "Hours", href: "/erp/janitorial/hours" },
 ] as const;
 
-/** Title, tab bar, and an optional main action, shared by every Janitorial Contracts tab. */
+/** Title, tab bar, and an optional main action, shared by every Janitorial tab. */
 export function JanitorialHeader({ active, action }: { active: (typeof TABS)[number]["id"]; action?: React.ReactNode }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-gray-900">Janitorial Contracts</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Janitorial</h1>
         {action}
       </div>
       <nav className="flex gap-1 border-b border-gray-200" aria-label="Janitorial sections">

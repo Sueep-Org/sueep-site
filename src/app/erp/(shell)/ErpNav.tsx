@@ -58,6 +58,25 @@ function BuildingIcon({ className = iconCls }: IconProps) {
     </svg>
   );
 }
+/** An apartment block: what Buildings lists, unlike Companies' storefront building. */
+function ApartmentIcon({ className = iconCls }: IconProps) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.75}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21"
+      />
+    </svg>
+  );
+}
 /** A leaning broom: handle, binding, and bristles, tilted like it's sweeping. */
 function BroomIcon({ className = iconCls }: IconProps) {
   return (
@@ -530,12 +549,13 @@ const projectGroupItems: NavItem[] = [
   { href: "/erp/schedule", label: "Schedule", roles: ALL, icon: CalendarIcon },
   { href: "/erp/sub-reviews", label: "Sub Reviews", roles: PM_ADMIN, icon: ClipboardIcon },
   { href: "/erp/pipeline", label: "Deals", roles: PM_EST, icon: ColumnsIcon },
-  { href: "/erp/janitorial", label: "Janitorial Contracts", roles: PM_SALES, icon: BroomIcon },
+  { href: "/erp/janitorial", label: "Janitorial", roles: PM_SALES, icon: BroomIcon },
 ];
 
 /** Who we work for, and how we're doing with them. A subsection of Projects. */
 const clientGroupItems: NavItem[] = [
   { href: "/erp/companies", label: "Companies", roles: PM_SALES, icon: BuildingIcon },
+  { href: "/erp/buildings", label: "Buildings", roles: PM_SALES, icon: ApartmentIcon },
   { href: "/erp/property-managers", label: "Property Managers", roles: PM_SALES, icon: IdCardIcon },
   { href: "/erp/win-loss", label: "Win/Loss", roles: PM_SALES, icon: DocumentIcon },
 ];

@@ -312,7 +312,7 @@ export function JanitorialCalendar({ initialContractId = "" }: { initialContract
           {data && data.canEdit && data.contracts.length === 0 && (
             <span>
               No active janitorial contracts yet. Create one on the{" "}
-              <Link href="/erp/janitorial" className="text-pink-600 hover:underline">Janitorial Contracts page</Link> first.
+              <Link href="/erp/janitorial" className="text-pink-600 hover:underline">Janitorial page</Link> first.
             </span>
           )}
         </div>

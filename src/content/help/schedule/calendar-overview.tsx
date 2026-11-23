@@ -13,10 +13,11 @@ export function ScheduleCalendarOverview() {
         or each worker&apos;s jobs over time.
       </P>
       <P>
-        Tabs at the top switch between calendars. <strong>Master</strong> puts projects,
-        janitorial shifts and (for Admins and PMs) management items on one month view; click a
-        chip to open it, and use the Projects / Janitorial / Management buttons to hide a layer.{" "}
-        <strong>Projects</strong> is everything described below. <strong>Janitorial Contracts</strong> shows recurring janitorial shifts,
+        Tabs at the top switch between calendars. <strong>Projects</strong>, where Schedule opens,
+        is everything described below. <strong>Master</strong> puts projects, janitorial shifts and
+        (for Admins and PMs) management items on one month view; click a chip to open it, and use
+        the Projects / Janitorial / Management buttons to hide a layer.{" "}
+        <strong>Janitorial</strong> shows recurring janitorial shifts,
         see{" "}
         <A href="/erp/help/janitorial/scheduling-and-hours">Janitorial Scheduling, Clock-In and Hours</A>. Admins and PMs
         also see <strong>Management</strong>, for insurance expirations, time off and company
@@ -167,7 +168,7 @@ export function ScheduleCalendarOverview() {
               <strong>Before and after photos:</strong> after checking in, the sub takes before and after photos from the
               same card (camera only, stamped with the time). The sub running the day can&apos;t check out until they
               have the number set on Settings, Subs. The card shows <strong>Photos: 1/2 before, 0/2 after</strong> and{" "}
-              <strong>View</strong> opens them on the project&apos;s Sub Photos tab (under Quality &amp; Safety; turnovers
+              <strong>View</strong> opens them on the project&apos;s Sub Reviews tab (under Quality &amp; Safety; turnovers
               also show them at the top of the Checklist tab). If they can&apos;t take them, a PM, Business Manager or
               Admin can click <strong>Let them check out without</strong> and give a reason, which stays with the day.
             </LI>

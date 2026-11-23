@@ -11,7 +11,7 @@
  * - Anything else (no Send to, method Other, daily email limit reached, send
  *   failed): Needs sending, with the reason.
  * Each invoice gets one InvoiceDelivery row; Needs upload and Needs sending
- * stay on Ready to send until someone marks them done or emails again.
+ * stay on Ready to Send until someone marks them done or emails again.
  *
  * Invoices the ERP made in QuickBooks (ERP_QBO_INVOICING_PLAN.md Phase 4)
  * go the same way, with QuickBooks' PDF attached. A sandbox (local dev)
@@ -285,7 +285,7 @@ export async function markDeliveryDone(deliveryId: string, email: string, detail
 /**
  * Under review, Approved or Sent back, picked on the Invoices page after
  * checking the portal. Sent back needs the reason and emails the uploader,
- * and the invoice goes back on Ready to send to resubmit.
+ * and the invoice goes back on Ready to Send to resubmit.
  */
 export async function setPortalStatus(deliveryId: string, email: string, status: unknown, note: string | null): Promise<{ ok: true } | { error: string }> {
   if (!isPortalStatus(status) || !PORTAL_PICKABLE.includes(status)) return { error: "Pick Under review, Approved or Sent back." };

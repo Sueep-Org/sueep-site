@@ -8,7 +8,7 @@ import { qboEnvironment } from "@/lib/erp/qboClient";
 import { DELIVERY_WAITING_WHERE } from "@/lib/erp/portalStatus";
 
 /**
- * The billing flow bar (Project Billing, Ready to send, Invoices): what this
+ * The billing flow bar (Project Billing, Ready to Send, Invoices): what this
  * person can open and one number per step. Steps they can't open come back null.
  */
 export async function GET() {

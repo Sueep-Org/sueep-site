@@ -18,18 +18,18 @@ export function InputtingLaborLogs() {
           <UL>
             <LI>
               <A href="/erp/help/projects/creating-a-change-order">Change orders</A>, on their own{" "}
-              <strong>Laborers</strong> tab.
+              <strong>Labor</strong> tab.
             </LI>
             <LI>
-              <A href="/erp/help/projects/projects-overview">Projects</A>, on their own{" "}
-              <strong>Labor</strong> tab.
+              <A href="/erp/help/projects/projects-overview">Projects</A>, on the <strong>Labor</strong> menu&apos;s{" "}
+              <strong>Hourly</strong> tab.
             </LI>
           </UL>
           The two work almost the same way, with one difference noted in Step 3.
         </Step>
 
         <Step n={2} title="Adding a labor entry">
-          On the Labor (or Laborers) tab, click the <strong>+</strong> button to open the entry
+          On the Labor (or Hourly) tab, click the <strong>+</strong> button to open the entry
           form.
           <Img src="/help/labor_logs/labor_table.png" alt="Recent labor entries shown from the projects table" />
           <Img src="/help/labor_logs/labor_form.png" alt="Recent labor entries shown from the projects table" />

@@ -5,17 +5,17 @@ export function ReadyToSendHelp() {
     <>
       <H2>What this page is</H2>
       <P>
-        <strong>Ready to send</strong> (left menu, under Billing) is where invoices are drafted, checked and approved. Only
+        <strong>Ready to Send</strong> (left menu, under Billing) is where invoices are drafted, checked and approved. Only
         Admins and the Business Manager can open it. For how it fits with the other billing pages, read{" "}
         <A href="/erp/help/billing/how-invoicing-works">Start Here: How Billing Works</A>.
       </P>
       <P>It has four tabs. An amber dot on a tab means something there needs you.</P>
       <UL>
         <LI>
-          <strong>To approve:</strong> drafts waiting to be checked and approved. Covered here.
+          <strong>Ready to bill:</strong> finished work with no invoice yet, to pick and draft. Covered here.
         </LI>
         <LI>
-          <strong>Ready to bill:</strong> finished work with no invoice yet, to pick and draft. Covered here.
+          <strong>To approve:</strong> drafts waiting to be checked and approved. Covered here.
         </LI>
         <LI>
           <strong>Needs sending:</strong> approved invoices that still have to reach the client. Covered in{" "}
@@ -189,7 +189,8 @@ export function ReadyToSendHelp() {
 
       <H2>Switching to the HubSpot backup (Admins)</H2>
       <P>
-        The <strong>...</strong> menu at the top right of the page says where new invoices go and lets an Admin switch.
+        The top right of Ready to Send says where new invoices go. An Admin switches it on the <strong>QuickBooks</strong>{" "}
+        page (Finance in the menu), under <strong>New invoices go to</strong>.
       </P>
       <UL>
         <LI>

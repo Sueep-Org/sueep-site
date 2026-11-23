@@ -55,7 +55,7 @@ export function UploadingAContract() {
 
         <div id="Contractor-Details-Nav">
         <Step n={5} title="Navigating to Contractor Details">
-          Navigate to the contractor verification tab and click on the name of the contractor you want to send a contract
+          Open Contractors (under Team in the menu) and click on the name of the contractor you want to send a contract
           <Img src="/help/contracts/contractor_details_1.png" alt="Contractors page" />
           Then just navigate to the signing tab! You can skip to <SkipTo href="#Contract-Signing-How">contract</SkipTo> signing now
           <Img src="/help/contracts/contractor_details_2.png" alt="Contractor details page" />

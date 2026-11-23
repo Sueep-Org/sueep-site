@@ -129,7 +129,7 @@ export default async function JanitorialContractPage({ params }: PageProps) {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Link href="/erp/janitorial" className="text-xs text-pink-600 hover:underline">
-            ← Janitorial Contracts
+            ← Janitorial
           </Link>
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-semibold text-gray-900">{contract.building.name}</h1>

@@ -639,7 +639,7 @@ export function ProjectsExpandableTable({
         <thead className="sticky top-0 z-10 border-b border-gray-300 text-xs uppercase">
           <tr className="bg-gray-200 text-gray-700">
             <th className="w-[280px] min-w-[280px] px-3 py-2 font-semibold">Job</th>
-            <th className="w-[130px] min-w-[130px] px-3 py-2 font-semibold">PM</th>
+            <th className="w-[130px] min-w-[130px] px-3 py-2 font-semibold">Sueep PM</th>
             {canSeeFinancials && (
               <th className="px-3 py-2 font-semibold" title="Base contract plus change orders. Margin is based on this.">
                 Total

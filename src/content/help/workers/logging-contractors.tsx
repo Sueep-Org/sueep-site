@@ -5,24 +5,21 @@ export function LoggingContractors() {
         <>
          <H2>Overview</H2>
         <P>
-            Contractor logs let you track which contractors worked on a project, their role, cost, and dates. Logs are added directly from the project detail page and can be edited or removed at any time.
+            Contractor logs track which contractors worked on a project, their role, cost and dates. They&apos;re added from the project&apos;s page and can be edited or removed at any time.
         </P>
         <Steps>
-            <Step n={1} title="Navigating to Contractors">
-                To log a contractors work you must first have them <A href="/erp/help/workers/adding-contractors">registered</A>. 
+            <Step n={1} title="Open the project's Contractors tab">
+                The contractor has to be <A href="/erp/help/workers/adding-contractors">added to the ERP</A> first.
                 <br></br><br></br>
-                Then you can navigate to the desired project and click on the title to open up the details page. From there navigate to the <strong>contractors</strong> tab.
-                <Img src="/help/log_contractors/contractor_logs_1.png" alt="Contractor" />
+                Open the project from the Projects page. In the tab bar, open the <strong>Labor</strong> menu and pick <strong>Contractors</strong>.
+                <Img src="/help/log_contractors/contractor_logs_1.png" alt="Project Contractors tab" />
             </Step>
 
-            <Step n={2} title="Enter their information">
-                From the <strong>Contractors</strong> tab you can add information to their log such as role, cost, start and end dates, and any extra notes.
+            <Step n={2} title="Add the contractor">
+                Under <strong>Add contractor</strong>, pick the contractor and fill in their role, cost, start and end dates. If the project has Schedule of Values items, tick the ones this contractor worked on. Otherwise type the task.
                 <br></br><br></br>
-                Once entered this information will appear in the contractors table right below the entry box.
-                <Img src="/help/log_contractors/contractor_logs_2.png" alt="Contractor" />
-                Once information is entered it can still be edited or deleted.
-                <br></br><br></br>
-                <strong>Thats all! For any more information check out the other help center articles or message the tech dev team!</strong>
+                Click <strong>Add contractor</strong>. The entry shows in the table below, where it can be edited or deleted.
+                <Img src="/help/log_contractors/contractor_logs_2.png" alt="Contractor log table" />
             </Step>
         </Steps>
         </>

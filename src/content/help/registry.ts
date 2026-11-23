@@ -402,7 +402,7 @@ export const registry: ArticleEntry[] = [
   {
     slug: "janitorial/getting-started",
     title: "Janitorial: Getting Started",
-    category: "Janitorial Contracts",
+    category: "Janitorial",
     description: "The whole janitorial cycle in order, one short step each, plus quick answers for covers, holidays and missed clock-ins.",
     order: 1,
     component: JanitorialGettingStarted,
@@ -411,7 +411,7 @@ export const registry: ArticleEntry[] = [
   {
     slug: "janitorial/janitorial-contracts",
     title: "Janitorial Contracts: Setup, Pricing and Billing",
-    category: "Janitorial Contracts",
+    category: "Janitorial",
     description: "Create a contract, price it with the calculator, renew, pause or end it, and manage its billing months and profit.",
     order: 2,
     component: JanitorialContracts,
@@ -420,7 +420,7 @@ export const registry: ArticleEntry[] = [
   {
     slug: "janitorial/scheduling-and-hours",
     title: "Janitorial Scheduling, Clock-In and Hours",
-    category: "Janitorial Contracts",
+    category: "Janitorial",
     description: "Put janitors on the calendar, send clock-in links, watch the Today tab, and check hours before payroll.",
     order: 3,
     component: JanitorialSchedulingAndHours,
@@ -429,7 +429,7 @@ export const registry: ArticleEntry[] = [
   {
     slug: "janitorial/quality-checks",
     title: "Janitorial Quality Checks",
-    category: "Janitorial Contracts",
+    category: "Janitorial",
     description: "Schedule site visits, check each key area on your phone, and send the property manager a visit summary.",
     order: 4,
     component: JanitorialQualityChecks,

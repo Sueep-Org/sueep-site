@@ -16,7 +16,7 @@ export function JanitorialSchedulingAndHours() {
 
       <H2>The janitorial calendar</H2>
       <P>
-        <strong>Schedule → Janitorial Contracts</strong>, or <strong>Open in calendar</strong> from a contract&apos;s Schedule
+        <strong>Schedule → Janitorial</strong>, or <strong>Open in calendar</strong> from a contract&apos;s Schedule
         tab. It works like the Projects calendar: one chip per shift with the start time, janitor and building. Several
         janitors at one building on the same day are grouped into one chip with a count; click it to see each person. Use the
         arrows to change months and the filter icon to show one building or janitor.
@@ -106,7 +106,7 @@ export function JanitorialSchedulingAndHours() {
 
       <H2>Today tab</H2>
       <P>
-        <strong>Janitorial Contracts → Today</strong> is a live view of today&apos;s shifts, refreshed every minute, so
+        <strong>Janitorial → Today</strong> is a live view of today&apos;s shifts, refreshed every minute, so
         problems get fixed while the shift is still on.
       </P>
       <UL>
@@ -125,7 +125,7 @@ export function JanitorialSchedulingAndHours() {
 
       <H2>Hours tab</H2>
       <P>
-        <strong>Janitorial Contracts → Hours</strong> shows every shift for the week, grouped by janitor, with where its hours
+        <strong>Janitorial → Hours</strong> shows every shift for the week, grouped by janitor, with where its hours
         came from:
       </P>
       <UL>

@@ -1,6 +1,7 @@
 import { projectSubPhotos, type StaffPhoto, type StaffPhotoDay } from "@/lib/erp/subPhotos";
 import { photoAreaLabel } from "@/lib/erp/subPhotoAreas";
 import { formatMiles } from "@/lib/erp/janitorialHours";
+import Link from "next/link";
 import { InfoTip } from "@/app/erp/components/ui";
 
 /**
@@ -86,7 +87,8 @@ function DayCard({ day }: { day: StaffPhotoDay }) {
   );
 }
 
-export async function SubPhotosPanel({ projectId, hideWhenEmpty = false }: { projectId: string; hideWhenEmpty?: boolean }) {
+/** showReviewsLink: link to the Sub Reviews page, for roles that can open it (PM level). */
+export async function SubPhotosPanel({ projectId, hideWhenEmpty = false, showReviewsLink = false }: { projectId: string; hideWhenEmpty?: boolean; showReviewsLink?: boolean }) {
   const days = await projectSubPhotos(projectId);
   if (days.length === 0 && hideWhenEmpty) return null;
   return (
@@ -94,6 +96,11 @@ export async function SubPhotosPanel({ projectId, hideWhenEmpty = false }: { pro
       <div className="flex items-center gap-1.5">
         <h2 className="text-sm font-semibold text-gray-900">Photos from subs</h2>
         <InfoTip text="Before and after photos subs take from the Today tab of their jobs page, after checking in. Each is stamped with the time it was taken; Off site means the phone was farther from the job than the distance on Settings, Subs. The minimum needed to check out is set there too." />
+        {showReviewsLink && (
+          <Link href="/erp/sub-reviews" className="ml-auto text-xs font-medium text-pink-600 hover:underline">
+            All Sub Reviews →
+          </Link>
+        )}
       </div>
       {days.length === 0 ? (
         <p className="rounded-lg border border-dashed border-gray-300 bg-white px-4 py-6 text-center text-sm text-gray-500">

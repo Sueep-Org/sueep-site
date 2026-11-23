@@ -125,7 +125,7 @@ export function canSeeInvoices(role: ErpRole): boolean {
   return isPmLevel(role);
 }
 
-/** Ready to send: review, edit, approve and discard auto-drafted invoices. */
+/** Ready to Send: review, edit, approve and discard auto-drafted invoices. */
 export function canApproveInvoices(role: ErpRole): boolean {
   return role === "ADMIN" || role === "BUSINESS_MANAGER";
 }

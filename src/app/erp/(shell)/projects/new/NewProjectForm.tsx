@@ -7,7 +7,8 @@ import { PROJECT_SEGMENT_OPTIONS } from "@/lib/erp/projectSegments";
 
 // Real estate is no longer a segment new projects can be created under.
 // It's only still selectable on existing real-estate projects' own setup editor.
-const CREATABLE_SEGMENT_OPTIONS = PROJECT_SEGMENT_OPTIONS.filter((opt) => opt.value !== "REAL_ESTATE");
+// Change orders are added from the project's own Change Orders tab, not here.
+const CREATABLE_SEGMENT_OPTIONS = PROJECT_SEGMENT_OPTIONS.filter((opt) => opt.value !== "REAL_ESTATE" && opt.value !== "CHANGE_ORDER");
 import { getTurnoverPricingPackage, TURNOVER_UNIT_LAYOUTS, type TurnoverPricingPackage } from "@/lib/turnoverPricingPackages";
 import { BuildingPricingPackageEditor } from "@/app/erp/(shell)/buildings/BuildingPricingPackageEditor";
 import { computeTurnoverPricing } from "@/lib/turnoverPricing";
@@ -15,10 +16,8 @@ import { parseBuildingNameFromDealName, parseAddressFromDealName } from "@/lib/h
 import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 import { HolidayHint } from "@/app/erp/components/HolidayHint";
-import { changeOrderDayCount, getChangeOrderLaborRates } from "@/lib/changeOrderLaborRates";
 import { usePricingSettings } from "@/app/components/PricingSettingsProvider";
-import { isNextDayStart, nextDayCountInRange, nextDayUpchargeLabel } from "@/lib/nextDayUpcharge";
-import { ChangeOrderLaborEstimator } from "../[id]/ChangeOrderLaborEstimator";
+import { nextDayUpchargeLabel } from "@/lib/nextDayUpcharge";
 import { UnitNameInput } from "@/app/erp/components/UnitNameInput";
 import { unitNameKey } from "@/lib/erp/unitNames";
 
@@ -222,6 +221,8 @@ interface BuildingOption {
   pmPhone?: string | null;
   pricingPackage?: unknown;
   existingUnitNumbers?: string[];
+  /** Active property managers linked on the Property Managers page. They get the building's emails. */
+  linkedManagers?: { name: string; email: string }[];
 }
 
 interface ScheduleBuildingOption {
@@ -229,16 +230,6 @@ interface ScheduleBuildingOption {
   jobTitle: string;
   description?: string | null;
   supervisor?: string | null;
-}
-
-interface ProjectOption {
-  id: string;
-  jobTitle: string;
-  segment?: string | null;
-  hubspotPipelineId?: string | null;
-  /** This project's Labor rates override (see Project.laborRateCard) — used
-   * to price a change order being created for it here. */
-  laborRateCard?: unknown;
 }
 
 interface EmployeeOption {
@@ -252,7 +243,6 @@ interface NewProjectFormProps {
   initialBuildings?: BuildingOption[];
   initialScheduleBuildings?: ScheduleBuildingOption[];
   janitorialPipelineId?: string | null;
-  allProjects?: ProjectOption[];
   employees?: EmployeeOption[];
   initialSegment?: string;
   lockedSegment?: boolean;
@@ -279,77 +269,6 @@ function extractAddressFromScheduleProject(project?: ScheduleBuildingOption | nu
 
   if (!addressLine) return "";
   return addressLine.replace(/^(building\s+address|property\s+address|address)\s*:\s*/i, "").trim();
-}
-
-const CO_STATUSES = ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "VOID"] as const;
-const JANITORIAL_CO_REQUEST_TYPES = ["UDR", "Pool", "Grill Cleaning"] as const;
-
-function ProjectSearchDropdown({
-  projects,
-  value,
-  onChange,
-}: {
-  projects: ProjectOption[];
-  value: string;
-  onChange: (id: string) => void;
-}) {
-  const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const selected = projects.find((p) => p.id === value);
-
-  const filtered = query.trim()
-    ? projects.filter((p) => p.jobTitle.toLowerCase().includes(query.toLowerCase()))
-    : projects;
-
-  useEffect(() => {
-    function onMouseDown(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setQuery("");
-      }
-    }
-    document.addEventListener("mousedown", onMouseDown);
-    return () => document.removeEventListener("mousedown", onMouseDown);
-  }, []);
-
-  return (
-    <div ref={containerRef} className="relative mt-1">
-      <input
-        type="text"
-        autoComplete="off"
-        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-pink-500 focus:outline-none focus:ring-1 focus:ring-pink-500"
-        placeholder={selected ? selected.jobTitle : "Search projects…"}
-        value={open ? query : (selected?.jobTitle ?? "")}
-        onFocus={() => { setQuery(""); setOpen(true); }}
-        onChange={(e) => { setQuery(e.target.value); setOpen(true); if (value) onChange(""); }}
-        onKeyDown={(e) => { if (e.key === "Escape") { setOpen(false); setQuery(""); } }}
-      />
-      {open && (
-        <ul className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg text-sm">
-          {filtered.length === 0 ? (
-            <li className="px-3 py-2 text-gray-400">No projects found</li>
-          ) : (
-            filtered.map((p) => (
-              <li
-                key={p.id}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  onChange(p.id);
-                  setQuery("");
-                  setOpen(false);
-                }}
-                className={`cursor-pointer px-3 py-2 hover:bg-pink-50 hover:text-pink-700 ${p.id === value ? "font-medium text-pink-700" : "text-gray-900"}`}
-              >
-                {p.jobTitle}
-              </li>
-            ))
-          )}
-        </ul>
-      )}
-    </div>
-  );
 }
 
 function PmSearchDropdown({
@@ -595,7 +514,6 @@ export function NewProjectForm({
   initialBuildings = [],
   initialScheduleBuildings = [],
   janitorialPipelineId = null,
-  allProjects = [],
   employees = [],
   initialSegment = "COMMERCIAL_CLEANING",
   lockedSegment = false,
@@ -618,32 +536,10 @@ export function NewProjectForm({
   const [segment, setSegment] = useState(initialSegment);
   const [currentStep, setCurrentStep] = useState(1);
 
-  // Change order state
-  const [coProjectId, setCoProjectId] = useState("");
-  const [coRequestType, setCoRequestType] = useState("");
-  const [coTitle, setCoTitle] = useState("");
-  const [coStatus, setCoStatus] = useState<typeof CO_STATUSES[number]>("DRAFT");
-  const [coRequestedBy, setCoRequestedBy] = useState("");
-  const [coComments, setCoComments] = useState("");
-  // "Pricing" block — see ChangeOrderLaborEstimator.
-  const [coEstCleanerCount, setCoEstCleanerCount] = useState("");
-  const [coEstSupervisorCount, setCoEstSupervisorCount] = useState("");
-  const [coNoCrewRequired, setCoNoCrewRequired] = useState(false);
-  const [coContractValue, setCoContractValue] = useState("");
-  const [coEstLabor, setCoEstLabor] = useState("");
-  // Next day upcharge, added on top of the price (see nextDayUpcharge.ts). One for a change order, one for all the units.
-  const [coNextDayUpcharge, setCoNextDayUpcharge] = useState(false);
-  const [coStartDate, setCoStartDate] = useState("");
   // Only for the holiday note; the start/end inputs stay uncontrolled.
   const [projectDateHint, setProjectDateHint] = useState("");
   const [projectEndDateHint, setProjectEndDateHint] = useState("");
-  const [coEndDate, setCoEndDate] = useState("");
-  const coDays = changeOrderDayCount(coStartDate, coEndDate);
   const [nextDayUpcharge, setNextDayUpcharge] = useState(false);
-  const coLaborRates = coProjectId
-    ? getChangeOrderLaborRates(allProjects.find((p) => p.id === coProjectId)?.laborRateCard, pricingSettings.coPriceRates)
-    : null;
-
   const notifiableEmployees = useMemo(() => employees.filter((e) => e.email), [employees]);
   const defaultNotifyIds = useMemo(() => {
     const ids: string[] = [];
@@ -659,7 +555,6 @@ export function NewProjectForm({
     return ids;
   }, [notifiableEmployees]);
   const [notifyEmployeeIds, setNotifyEmployeeIds] = useState<string[]>(() => defaultNotifyIds);
-  const [notifyResult, setNotifyResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [serviceType, setServiceType] = useState("");
   const [customType, setCustomType] = useState("");
 
@@ -746,10 +641,6 @@ export function NewProjectForm({
 
   const isTurnover = segment === "JANITORIAL_TURNOVER_REQUESTS";
   const isMultiStep = lockedSegment && isTurnover;
-  const isChangeOrder = segment === "CHANGE_ORDER";
-  const isChildWorkRequest = isChangeOrder;
-  const childWorkRequestProjects = allProjects;
-  const childRequestNoun = "change order";
 
   useEffect(() => {
     if (!allowErpDataFetch) {
@@ -825,6 +716,7 @@ export function NewProjectForm({
   const normalizedBeds = normalizeBeds(bedroomsToNumber(unitScopes[0]?.bedrooms ?? "1"));
   const normalizedBathrooms = bathroomsToNumber(unitScopes[0]?.bathrooms ?? "1");
   const selectedBuilding = useMemo(() => buildings.find((b) => b.id === buildingProjectId) ?? null, [buildings, buildingProjectId]);
+  const linkedManagers = selectedBuilding?.linkedManagers ?? [];
   const pricingPackage = useMemo(
     () => getTurnoverPricingPackage(isAddingBuilding ? newBuildingPricing : selectedBuilding?.pricingPackage, pricingSettings.turnoverPackage),
     [selectedBuilding, isAddingBuilding, newBuildingPricing, pricingSettings.turnoverPackage]
@@ -938,9 +830,12 @@ export function NewProjectForm({
     if (step === 1) {
       if (!buildingProjectId) return "Please select a building.";
       if (!buildingAddress.trim()) return "Please select or enter a building address.";
-      if (!pmName.trim()) return "PM name is required.";
-      if (!pmEmail.trim()) return "PM email is required.";
-      if (!pmPhone.trim()) return "PM phone is required.";
+      // A building with linked property managers already has someone to email.
+      if (!linkedManagers.length) {
+        if (!pmName.trim()) return "Property manager name is required.";
+        if (!pmEmail.trim()) return "Property manager email is required.";
+        if (!pmPhone.trim()) return "Property manager phone is required.";
+      }
     }
     if (step === 2) {
       if (unitScopes.some((unit) => !unit.startDate)) return "Start date is required for every unit.";
@@ -950,8 +845,8 @@ export function NewProjectForm({
       if (unresolvedDuplicate) return "Confirm the duplicate unit number warning above before continuing.";
     }
     if (step === 3) {
-      if (!sueepPmName.trim()) return "SUEEP PM name is required.";
-      if (!sueepPmEmail.trim()) return "SUEEP PM email is required.";
+      if (!sueepPmName.trim()) return "Pick the Sueep project manager.";
+      if (!sueepPmEmail.trim()) return "The Sueep project manager has no email on their employee record.";
     }
     return "";
   }
@@ -1023,60 +918,6 @@ export function NewProjectForm({
     };
   }, [unitScopes, unitCount, buildingName, pricingPackage, nextDayUpcharge, pricingSettings.nextDayPct, pricingSettings.turnoverPackage]);
 
-  async function onSubmitChangeOrder(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError("");
-    setNotifyResult(null);
-    if (!coProjectId) { setError("Please select a project."); return; }
-    if (!coTitle.trim()) { setError("Title is required."); return; }
-    if (coStartDate && coEndDate && coEndDate < coStartDate) { setError("End date must be on or after the start date."); return; }
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/erp/projects/${coProjectId}/change-orders`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          title: coTitle.trim(),
-          status: coStatus,
-          requestedBy: coRequestedBy.trim() || undefined,
-          description: coComments.trim() || undefined,
-          estLaborers: coEstCleanerCount.trim() || undefined,
-          estSupervisors: coEstSupervisorCount.trim() || undefined,
-          noCrewRequired: coNoCrewRequired,
-          // No hours input anymore — every change order estimate assumes a
-          // flat day per person (Settings, Pricing), times the days in the range.
-          estHours: String(pricingSettings.coDayHours * coDays),
-          estimatedDays: coStartDate ? coDays : undefined,
-          contractValue: coContractValue.trim() || undefined,
-          estLabor: coEstLabor.trim() || undefined,
-          nextDayUpcharge: coNextDayUpcharge,
-          startDate: coStartDate || undefined,
-          endDate: coEndDate || undefined,
-        }),
-      });
-      const data = (await res.json()) as { id?: string; error?: string };
-      if (!res.ok) { setError(data.error || `Failed to create ${childRequestNoun}`); setLoading(false); return; }
-
-      if (data.id && notifyEmployeeIds.length > 0) {
-        try {
-          await fetch(`/api/erp/projects/${coProjectId}/change-orders/${data.id}/notify`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ employeeIds: notifyEmployeeIds }),
-          });
-        } catch {
-          // Non-fatal — proceed to redirect
-        }
-      }
-
-      router.push(`/erp/projects/${coProjectId}`);
-    } catch {
-      setError("Network error");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
@@ -1141,7 +982,8 @@ export function NewProjectForm({
     const payload: Record<string, unknown> = {
       segment,
       jobTitle: isTurnover ? generatedTurnoverTitle : finalJobTitle || fd.get("jobTitle") || undefined,
-      supervisor: isTurnover ? pmName.trim() || undefined : supervisorName.trim() || undefined,
+      // On a turnover this is the Sueep PM, never the property manager (pmName).
+      supervisor: isTurnover ? sueepPmName.trim() || undefined : supervisorName.trim() || undefined,
       description: turnoverDescription || undefined,
       projectDate: isTurnover ? turnoverStartDate || undefined : fd.get("projectDate") || undefined,
       projectEndDate: isTurnover ? turnoverEndDate || undefined : fd.get("projectEndDate") || undefined,
@@ -1189,7 +1031,6 @@ export function NewProjectForm({
       materialsAdditional: unitScopes.some((unit) => unit.materialsAdditional),
       fullClean: unitScopes.some((unit) => unit.fullClean),
       carpetCleaning: unitScopes.some((unit) => unit.carpetCleaning),
-      supervisorSignOff: isTurnover ? pmName.trim() || undefined : supervisorName.trim() || undefined,
       pricing: {
         packageLabel: packagePricing.packageLabel,
         unitCount: packagePricing.unitCount,
@@ -1225,134 +1066,6 @@ export function NewProjectForm({
     }
   }
 
-  if (isChildWorkRequest) {
-    return (
-      <form onSubmit={onSubmitChangeOrder} className="w-full space-y-6 rounded-lg border border-gray-200 bg-gray-50 p-4 sm:p-6">
-        <div>
-          <label className={label} htmlFor="co-segment">Segment</label>
-          <select id="co-segment" className={input} value={segment} onChange={(e) => setSegment(e.target.value)}>
-            {CREATABLE_SEGMENT_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className={label}>Project *</label>
-          <ProjectSearchDropdown
-            projects={childWorkRequestProjects}
-            value={coProjectId}
-            onChange={setCoProjectId}
-          />
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div>
-            <label className={label} htmlFor="co-request-type">Request type</label>
-            <select
-              id="co-request-type"
-              className={input}
-              value={coRequestType}
-              onChange={(e) => {
-                const next = e.target.value;
-                setCoRequestType(next);
-                if (next && (!coTitle.trim() || JANITORIAL_CO_REQUEST_TYPES.includes(coTitle as typeof JANITORIAL_CO_REQUEST_TYPES[number]))) {
-                  setCoTitle(next);
-                }
-              }}
-            >
-              <option value="">Custom</option>
-              {JANITORIAL_CO_REQUEST_TYPES.map((type) => (
-                <option key={type} value={type}>{type}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={label} htmlFor="co-title">Title *</label>
-            <input id="co-title" required className={input} value={coTitle} onChange={(e) => setCoTitle(e.target.value)} placeholder="e.g. UDR" />
-          </div>
-          <div>
-            <label className={label} htmlFor="co-status">Status</label>
-            <select id="co-status" className={input} value={coStatus} onChange={(e) => setCoStatus(e.target.value as typeof CO_STATUSES[number])}>
-              {CO_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className={label} htmlFor="co-requested-by">Requested by</label>
-            <input id="co-requested-by" className={input} value={coRequestedBy} onChange={(e) => setCoRequestedBy(e.target.value)} />
-          </div>
-          <div>
-            <label className={label} htmlFor="co-start-date">Start date</label>
-            <input
-              id="co-start-date"
-              type="date"
-              className={input}
-              value={coStartDate}
-              onChange={(e) => {
-                setCoStartDate(e.target.value);
-                // Ticks the upcharge for today or tomorrow, still untickable
-                setCoNextDayUpcharge(isNextDayStart(e.target.value));
-                if (coEndDate && e.target.value && coEndDate < e.target.value) setCoEndDate(e.target.value);
-              }}
-            />
-            <HolidayHint value={coStartDate} />
-          </div>
-          <div>
-            <label className={label} htmlFor="co-end-date">End date</label>
-            <input id="co-end-date" type="date" className={input} value={coEndDate} min={coStartDate || undefined} onChange={(e) => setCoEndDate(e.target.value)} />
-            <HolidayHint value={coEndDate} />
-          </div>
-          <div className="sm:col-span-3">
-            <label className={label} htmlFor="co-comments">Comments</label>
-            <textarea id="co-comments" rows={3} className={input} value={coComments} onChange={(e) => setCoComments(e.target.value)} />
-          </div>
-        </div>
-
-        <ChangeOrderLaborEstimator
-          pricingRates={coLaborRates}
-          cleanerCount={coEstCleanerCount}
-          onCleanerCountChange={setCoEstCleanerCount}
-          supervisorCount={coEstSupervisorCount}
-          onSupervisorCountChange={setCoEstSupervisorCount}
-          noCrewRequired={coNoCrewRequired}
-          onNoCrewRequiredChange={setCoNoCrewRequired}
-          contractValue={coContractValue}
-          onContractValueChange={setCoContractValue}
-          estLabor={coEstLabor}
-          onEstLaborChange={setCoEstLabor}
-          days={coDays}
-          nextDayUpcharge={coNextDayUpcharge}
-          nextDayDays={nextDayCountInRange(coStartDate, coEndDate)}
-          onNextDayUpchargeChange={setCoNextDayUpcharge}
-          autoFill
-          disabled={loading}
-        />
-
-        {notifiableEmployees.length > 0 && (
-          <div>
-            <label className={label}>Notify employees</label>
-            <NotifyMultiSelect
-              employees={notifiableEmployees}
-              selectedIds={notifyEmployeeIds}
-              onChange={(ids) => { setNotifyEmployeeIds(ids); setNotifyResult(null); }}
-            />
-          </div>
-        )}
-        {error ? <p className="text-sm text-red-600" role="alert">{error}</p> : null}
-        {notifyResult && (
-          <p className={`text-xs ${notifyResult.ok ? "text-green-600" : "text-red-500"}`} role="status">
-            {notifyResult.msg}
-          </p>
-        )}
-        <div className="flex gap-3">
-          <Button size="md" className="w-full sm:w-auto" type="submit" disabled={loading}>
-            {loading ? "Saving…" : `Create ${childRequestNoun}`}
-          </Button>
-        </div>
-      </form>
-    );
-  }
-
   return (
     <form ref={formRef} onSubmit={onSubmit} className="w-full space-y-6 rounded-lg border border-gray-200 bg-gray-50 p-4 sm:p-6">
       {submitted && successMessage ? (
@@ -1380,6 +1093,7 @@ export function NewProjectForm({
                   </option>
                 ))}
               </select>
+              <p className="mt-1 text-xs text-gray-500">Change orders are added on the project&apos;s Change Orders tab.</p>
             </div>
             {isTurnover && (
               <div className="flex items-end sm:col-start-3 sm:justify-end">
@@ -1591,10 +1305,23 @@ export function NewProjectForm({
                 onChange={setNewBuildingPricing}
               />
             ) : null}
+            {linkedManagers.length > 0 ? (
+              <div className="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700">
+                <span className="font-medium text-gray-900">Property managers:</span>{" "}
+                {linkedManagers.map((m) => `${m.name} (${m.email})`).join(", ")}
+                <p className="mt-0.5 text-xs text-gray-500">
+                  They get this building&apos;s emails. Change who on{" "}
+                  <a href="/erp/property-managers" target="_blank" rel="noopener noreferrer" className="text-pink-600 hover:underline">
+                    Property Managers
+                  </a>
+                  .
+                </p>
+              </div>
+            ) : (
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="min-w-0">
                 <label className={label} htmlFor="pmName">
-                  PM name
+                  Property manager name
                 </label>
                 <input
                   id="pmName"
@@ -1607,7 +1334,7 @@ export function NewProjectForm({
               </div>
               <div className="min-w-0">
                 <label className={label} htmlFor="pmEmail">
-                  PM email
+                  Property manager email
                 </label>
                 <input
                   id="pmEmail"
@@ -1621,7 +1348,7 @@ export function NewProjectForm({
               </div>
               <div className="min-w-0">
                 <label className={label} htmlFor="pmPhone">
-                  PM phone
+                  Property manager phone
                 </label>
                 <input
                   id="pmPhone"
@@ -1633,6 +1360,7 @@ export function NewProjectForm({
                 />
               </div>
             </div>
+            )}
           </div>
 
           <div className={isMultiStep && currentStep !== 2 ? "hidden" : "space-y-3"}>
@@ -2010,7 +1738,7 @@ export function NewProjectForm({
               <>
                 <div className="min-w-0">
                   <label className={label} htmlFor="sueepPmName">
-                    SUEEP PM
+                    Sueep project manager
                   </label>
                   <PmSearchDropdown
                     employees={notifiableEmployees}
@@ -2109,7 +1837,7 @@ export function NewProjectForm({
               <NotifyMultiSelect
                 employees={notifiableEmployees}
                 selectedIds={notifyEmployeeIds}
-                onChange={(ids) => { setNotifyEmployeeIds(ids); setNotifyResult(null); }}
+                onChange={setNotifyEmployeeIds}
               />
             </div>
           )}

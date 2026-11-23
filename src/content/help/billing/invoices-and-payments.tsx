@@ -13,7 +13,7 @@ export function InvoicesAndPayments() {
       <H2>The Invoices page</H2>
       <P>
         Every invoice, newest first, like HubSpot&apos;s old invoice list: every invoice in QuickBooks since January last year
-        (read every morning with its payments), invoices just approved on Ready to send, and older HubSpot invoices that never
+        (read every morning with its payments), invoices just approved on Ready to Send, and older HubSpot invoices that never
         reached QuickBooks.
       </P>
       <UL>
@@ -40,7 +40,7 @@ export function InvoicesAndPayments() {
             </LI>
             <LI>
               <strong>History:</strong> everything that happened to it, oldest first: the invoice date, who approved it on
-              Ready to send, who it was emailed to or who uploaded it (with the portal number, note and a{" "}
+              Ready to Send, who it was emailed to or who uploaded it (with the portal number, note and a{" "}
               <strong>Proof</strong> link to the screenshot), portal status changes such as sent back and resubmitted,
               follow-ups, the short pay reason, and each payment with its reference (check number and so on). Red means sent
               back, green means approved or paid.
@@ -204,7 +204,7 @@ export function InvoicesAndPayments() {
         </LI>
       </UL>
       <Callout type="tip">
-        Make invoices on Ready to send rather than straight in QuickBooks. Invoices made there are linked to their work
+        Make invoices on Ready to Send rather than straight in QuickBooks. Invoices made there are linked to their work
         automatically, so they never need linking by hand.
       </Callout>
     </>

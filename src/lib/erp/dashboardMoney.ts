@@ -240,11 +240,11 @@ function readyToBillSection(items: BillItem[], todayKey: string): CardSection {
   };
 }
 
-// ── Ready to send (auto-drafted invoices) ────────────────────────────────
+// ── Ready to Send (auto-drafted invoices) ────────────────────────────────
 
 type WaitingDraft = { id: string; title: string; note: string; cents: number; cutoff?: DeliveryCutoff };
 
-/** Waiting on Ready to send: approved invoices still to upload or send, then drafts (janitorial months and picked finished work). */
+/** Waiting on Ready to Send: approved invoices still to upload or send, then drafts (janitorial months and picked finished work). */
 const loadWaitingDrafts = cache(async (): Promise<WaitingDraft[]> => {
   const [months, items] = await Promise.all([
     prisma.hubSpotContractInvoice.findMany({
@@ -288,7 +288,7 @@ const loadWaitingDrafts = cache(async (): Promise<WaitingDraft[]> => {
 function readyToSendSection(drafts: WaitingDraft[]): CardSection {
   return {
     key: "ready-to-send",
-    label: "Ready to send",
+    label: "Ready to Send",
     alertCount: drafts.length,
     rows: drafts.map((d) => ({
       id: d.id,

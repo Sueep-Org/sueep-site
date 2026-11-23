@@ -86,7 +86,7 @@ export function FinanceDashboard() {
           passes the weekly overtime hours (counting all their projects and janitorial shifts, 40 to start), each hour past
           that also costs the overtime extra (50% to start) of that week&apos;s average hourly rate. Both are under Settings,
           Payroll. It also includes labor typed on a project that has no labor logs, and hours
-          added by hand on the Payroll page (<strong>+ Add hours</strong>, for hourly work not on any project), which count as
+          added by hand on Compensation&apos;s Payroll tab (<strong>+ Add hours</strong>, for hourly work not on any project), which count as
           overhead since they aren&apos;t part of a job.
         </LI>
         <LI>
@@ -185,7 +185,7 @@ export function FinanceDashboard() {
 
       <H2>Commission</H2>
       <UL>
-        <LI>Uses the same rules as the Commission tab on the Payroll page, so the two always match.</LI>
+        <LI>Uses the same rules as the Commission tab on Compensation, so the two always match.</LI>
         <LI><strong>Earned (these dates)</strong>: commission that became due in the selected dates. A deal is due once it and all its change orders are paid, and a janitorial contract month once that month is paid.</LI>
         <LI><strong>Paid (these dates)</strong>: commission marked paid in the selected dates. This is the Commission line in Where the money went (under Office and salaries).</LI>
         <LI><strong>Owed (all time)</strong>: everything earned but not marked paid yet, from any date. It doesn&apos;t change with the dates picked, so it can be more than Earned (for example, commission from July still unpaid while viewing August on).</LI>

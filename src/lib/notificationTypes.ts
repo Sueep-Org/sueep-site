@@ -513,14 +513,14 @@ export const NOTIFICATIONS = {
   INVOICE_PREVIEW: def({
     label: "Invoice preview",
     group: "Billing",
-    when: "Someone clicks Email me a preview on a draft on Ready to send",
+    when: "Someone clicks Email me a preview on a draft on Ready to Send",
     automatic: "Only the person who clicked it",
     alwaysOn: true,
   }),
   INVOICE_TO_CLIENT: def({
     label: "Invoice to client",
     group: "Billing",
-    when: "Someone approves an invoice on Ready to send for a client billed by email. Has the invoice PDF and the pay link.",
+    when: "Someone approves an invoice on Ready to Send for a client billed by email. Has the invoice PDF and the pay link.",
     automatic: "The client company's Send to and Cc (or the building's or project's billing override, or recipients set on the invoice)",
     sender: "sueep",
     // An approved invoice must reach the client, so it can't be switched off.

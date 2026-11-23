@@ -53,7 +53,7 @@ export function JanitorialQualityChecks() {
 
       <H2>The visit summary</H2>
       <P>
-        Pick who gets it (property managers with a link to the building, the building contact, or any email), edit the
+        Pick who gets it (the building&apos;s property managers, or its building contact if none are linked yet, or any email), edit the
         message, and choose whether to include area notes, what you discussed and photos. Each area&apos;s Good or Needs
         attention is always included. Check the preview, then send, or skip and send it later from the check.
       </P>

@@ -17,7 +17,7 @@ import {
   type BillingOverride,
 } from "./clientCompanies";
 
-/** "draft": recipients set on the waiting draft on Ready to send */
+/** "draft": recipients set on the waiting draft on Ready to Send */
 export type DestinationSource = "project" | "building" | "company" | "draft";
 
 export type Sourced<T> = { value: T; source: DestinationSource | null; sourceName: string | null };
@@ -63,7 +63,7 @@ function pick<T>(levels: Level[], get: (l: Level) => T, isSet: (v: T) => boolean
 
 export type DraftRecipients = { to: string[]; cc: string[] };
 
-/** A draft's own recipients, when someone set them on Ready to send. */
+/** A draft's own recipients, when someone set them on Ready to Send. */
 export function draftRecipients(d: { recipientsSetAt: Date | null; sendTo: string[]; cc: string[] }): DraftRecipients | null {
   return d.recipientsSetAt ? { to: d.sendTo, cc: d.cc } : null;
 }

@@ -18,7 +18,7 @@ export function QuickBooksSetup() {
           page and Paid status all come from this.
         </LI>
         <LI>
-          <strong>Writes</strong> only when an invoice is approved on Ready to send: the invoice, and its customer or
+          <strong>Writes</strong> only when an invoice is approved on Ready to Send: the invoice, and its customer or
           sub-customer the first time. It never edits, voids or deletes anything already in QuickBooks.
         </LI>
       </UL>

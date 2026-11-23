@@ -73,9 +73,9 @@ export function SubChangeOrders() {
       </P>
       <Callout type="tip">Changing a building&apos;s prices only changes new requests. Requests already sent keep their prices.</Callout>
 
-      <H2>The CO Requests tab</H2>
+      <H2>Requests from subs</H2>
       <P>
-        On a turnover unit, the <strong>CO Requests</strong> tab lists every request from subs, newest first. Admins, Project
+        On a turnover unit, <strong>Change Orders → Requests from subs</strong> lists every request from subs, newest first. Admins, Project
         Managers and the Business Manager can see it. The dashboard&apos;s <strong>Sub change orders to review</strong> card
         lists units with requests waiting on the office.
       </P>
@@ -91,7 +91,7 @@ export function SubChangeOrders() {
           <tr>
             <TD>Needs office</TD>
             <TD>An Other line needs a price, or the building has no property manager email.</TD>
-            <TD>Type the sub pay and charge, press Save changes, then Send to property manager. Or add an email on the building.</TD>
+            <TD>Type the sub pay and charge, press Save changes, then Send to property manager. Or add a property manager on the building&apos;s Details tab.</TD>
           </tr>
           <tr>
             <TD>Not emailed yet</TD>

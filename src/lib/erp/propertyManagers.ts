@@ -118,3 +118,36 @@ export async function defaultSueepContact(staffEmail: string): Promise<{ name: s
   }
   return { name: "", phone: "", email: staffEmail.toLowerCase() };
 }
+
+export type BuildingContact = {
+  /** PropertyManager id, or null for the building's typed-in contact */
+  id: string | null;
+  name: string;
+  email: string;
+  contact: { name: string | null; phone: string | null; email: string | null } | null;
+};
+
+/**
+ * Who a building's property manager emails go to. The Property Managers list
+ * is the source: the building's active linked property managers. The typed-in
+ * contact on the building (Building.pmName/pmEmail) is only a fallback for
+ * buildings nobody has linked yet (UX_CLEANUP_PLAN item 7).
+ */
+export async function buildingPropertyManagers(buildingId: string | null | undefined): Promise<BuildingContact[]> {
+  if (!buildingId) return [];
+  const [links, building] = await Promise.all([
+    prisma.propertyManagerBuilding.findMany({
+      where: { buildingId, propertyManager: { active: true } },
+      select: { propertyManager: { select: { id: true, name: true, email: true, sueepContactName: true, sueepContactPhone: true, sueepContactEmail: true } } },
+      orderBy: { propertyManager: { name: "asc" } },
+    }),
+    prisma.building.findUnique({ where: { id: buildingId }, select: { pmName: true, pmEmail: true } }),
+  ]);
+  const fromLinks = links
+    .map((l) => l.propertyManager)
+    .filter((m) => m.email)
+    .map((m) => ({ id: m.id, name: m.name, email: m.email, contact: { name: m.sueepContactName, phone: m.sueepContactPhone, email: m.sueepContactEmail } }));
+  if (fromLinks.length) return fromLinks;
+  const email = building?.pmEmail?.trim();
+  return email ? [{ id: null, name: building?.pmName?.trim() || email, email, contact: null }] : [];
+}

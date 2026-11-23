@@ -1444,8 +1444,8 @@ export function buildInvoiceSentBackEmail(params: { invoice: string; client: str
     <h2 style="margin:0 0 12px;color:#E73C6E">Invoice sent back</h2>
     <p><strong>${escapeHtml(params.invoice)}</strong>${params.client ? ` for ${escapeHtml(params.client)}` : ""} was sent back in ${escapeHtml(params.portal)}. ${escapeHtml(params.by)} marked it.</p>
     <p style="padding:10px 12px;background:#fef3c7;border-radius:6px">${escapeHtml(params.reason)}</p>
-    <p>Fix it in the portal, then click Resubmit on Ready to send.</p>
-    <p style="margin:20px 0"><a href="${escapeHtml(params.url)}" style="${BUTTON_STYLE}">Open Ready to send</a></p>
+    <p>Fix it in the portal, then click Resubmit on Ready to Send.</p>
+    <p style="margin:20px 0"><a href="${escapeHtml(params.url)}" style="${BUTTON_STYLE}">Open Ready to Send</a></p>
   `;
 }
 

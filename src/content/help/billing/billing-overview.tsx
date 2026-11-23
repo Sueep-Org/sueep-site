@@ -7,12 +7,12 @@ export function BillingOverview() {
       <P>
         <strong>Project Billing</strong> (left menu, under Billing) lists every piece of finished work and whether it is{" "}
         <strong>Not billed</strong>, <strong>Billed</strong>, <strong>Paid</strong> or <strong>Voided</strong>. It is the first of the billing steps:
-        Project Billing → Ready to send → Invoices. For how the steps fit together, read{" "}
+        Project Billing → Ready to Send → Invoices. For how the steps fit together, read{" "}
         <A href="/erp/help/billing/how-invoicing-works">Start Here: How Billing Works</A>.
       </P>
       <P>
         Admins, Project Managers, the Business Manager and Sales can open it. Making and approving invoices happens on{" "}
-        <A href="/erp/help/billing/ready-to-send">Ready to send</A>, not here.
+        <A href="/erp/help/billing/ready-to-send">Ready to Send</A>, not here.
       </P>
       <ImgPlaceholder label="Project Billing page with tabs and date range" />
 
@@ -65,7 +65,7 @@ export function BillingOverview() {
         <LI>
           <strong>Voided</strong> is for work that won&apos;t be billed or paid, for example the client refuses to pay or it
           doesn&apos;t need an invoice. Picking it asks why, and the reason shows when you hover the pill. Voided work leaves
-          Not billed, Ready to send, lien warnings and the total, and counts as $0 revenue on the Finance dashboard (its costs
+          Not billed, Ready to Send, lien warnings and the total, and counts as $0 revenue on the Finance dashboard (its costs
           still count). Pick another status to undo it. See <strong>Voiding work or an invoice</strong> below.
         </LI>
         <LI>
@@ -110,7 +110,7 @@ export function BillingOverview() {
       <H2>Bill it</H2>
       <P>
         Admins and the Business Manager see <strong>Bill it →</strong> on finished work that is Not billed and has no invoice.
-        It opens Ready to send on the Ready to bill tab with that line already ticked, so you can draft its invoice.
+        It opens Ready to Send on the Ready to bill tab with that line already ticked, so you can draft its invoice.
       </P>
 
       <H2>Invoices on a line</H2>
@@ -119,7 +119,7 @@ export function BillingOverview() {
         <A href="/erp/help/billing/invoices-and-payments">Invoices page</A>, with its balance, payments and PDF.
       </P>
       <UL>
-        <LI>Invoices approved on Ready to send are linked to their lines automatically.</LI>
+        <LI>Invoices approved on Ready to Send are linked to their lines automatically.</LI>
         <LI>
           Older HubSpot invoices were matched to lines automatically, one invoice per line. To change a match, or to link more
           than one invoice to a line (for example a line billed in parts), open the job or building, go to its{" "}

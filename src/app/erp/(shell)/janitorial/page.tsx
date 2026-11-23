@@ -12,7 +12,7 @@ import { ContractsTable, type ContractRow } from "./ContractsTable";
 import { StatStrip } from "./StatStrip";
 
 export const metadata: Metadata = {
-  title: "Janitorial Contracts",
+  title: "Janitorial",
 };
 
 export const dynamic = "force-dynamic";

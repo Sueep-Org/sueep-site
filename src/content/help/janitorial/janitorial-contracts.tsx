@@ -7,7 +7,7 @@ export function JanitorialContracts() {
       <P>
         Setting up a janitorial contract, pricing it, keeping it current, and its billing months and profit. Each contract
         belongs to one building and bills a flat monthly price. Admins, Project Managers, the Business Manager and Sales can
-        open <strong>Janitorial Contracts</strong> (left menu). New to it? Start with{" "}
+        open <strong>Janitorial</strong> (left menu). New to it? Start with{" "}
         <A href="/erp/help/janitorial/getting-started">Janitorial: Getting Started</A>. Scheduling janitors and their hours
         are in <A href="/erp/help/janitorial/scheduling-and-hours">Janitorial Scheduling, Clock-In and Hours</A>.
       </P>
@@ -108,7 +108,7 @@ export function JanitorialContracts() {
       </UL>
       <H3>Invoicing a month</H3>
       <P>
-        With <strong>Auto-draft</strong> on (Contracts tab of Ready to send), the ERP drafts each month&apos;s invoice 3 days
+        With <strong>Auto-draft</strong> on (Contracts tab of Ready to Send), the ERP drafts each month&apos;s invoice 3 days
         before the billing day: the monthly amount first, then one line per extra. Approving it marks the month{" "}
         <strong>Billed</strong>, and it turns <strong>Paid</strong> when the payment is recorded in QuickBooks. You can also
         change the status by hand here or on Project Billing → Recurring. Commission only counts once a month is Paid. See{" "}

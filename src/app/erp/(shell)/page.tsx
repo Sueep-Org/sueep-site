@@ -485,7 +485,7 @@ export default async function ErpDashboardPage({ searchParams }: PageProps) {
               <div className="border-b border-gray-100 px-4 py-3">
                 <h2 className="text-sm font-semibold text-gray-900" title="Yesterday through 5 days out">My projects</h2>
                 {scope.unlinked && (
-                  <p className="mt-0.5 text-xs text-amber-600">Not linked to an ERP supervisor account or employee record - showing all projects. Ask an admin to assign you in the project Setup tab.</p>
+                  <p className="mt-0.5 text-xs text-amber-600">Not linked to an ERP supervisor account or employee record - showing all projects. Ask an admin to pick you under Assigned Supervisor on the project&apos;s Overview tab.</p>
                 )}
               </div>
               {visibleDayEntries.length === 0 ? (

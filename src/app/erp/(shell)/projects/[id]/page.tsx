@@ -81,7 +81,10 @@ const PROJECT_TAB_GROUPS: { label: string; members: Record<string, string> }[] =
     members: { Financials: "Summary", Materials: "Materials", "Pricing Package": "Pricing Package", "Invoices & Quotes": "Invoices & Quotes", Proposals: "Proposals", Liens: "Liens" },
   },
   { label: "Labor", members: { Labor: "Hourly", Contractors: "Contractors" } },
-  { label: "Quality & Safety", members: { Checklist: "Checklist", "Sub Photos": "Sub Photos", "Safety Checklist": "Safety Checklist", "Quality Checks": "Quality Checks" } },
+  // Sub Photos shows as Sub Reviews (same as the menu page); the key stays for ?tab= links in the schedule.
+  { label: "Quality & Safety", members: { Checklist: "Checklist", "Sub Photos": "Sub Reviews", "Safety Checklist": "Safety Checklist", "Quality Checks": "Quality Checks" } },
+  // Keeps "CO Requests" as the URL key: links in emails already sent use it (subCoOutcome.ts).
+  { label: "Change Orders", members: { "Change Orders": "Change orders", "CO Requests": "Requests from subs" } },
 ];
 
 /** Folds the flat tab list into PROJECT_TAB_GROUPS, each group sitting where its first tab was. */
@@ -893,7 +896,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           },
         ]
       : []),
-    { label: "Sub Photos", content: <SubPhotosPanel projectId={project.id} /> },
+    { label: "Sub Photos", content: <SubPhotosPanel projectId={project.id} showReviewsLink={isPmLevel(auth?.role)} /> },
     ...(isPostConstruction
       ? [
           {

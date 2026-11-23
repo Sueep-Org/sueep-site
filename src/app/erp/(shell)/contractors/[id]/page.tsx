@@ -387,7 +387,7 @@ export default async function ContractorDetailPage({ params }: PageProps) {
     <div className="space-y-4">
       <div>
         <Link href="/erp/contractors" className="text-xs text-pink-600 hover:underline">
-          ← Contractor Verification
+          ← Contractors
         </Link>
         <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
