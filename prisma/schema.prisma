@@ -22,6 +22,10 @@ model Project {
   segment String @default("COMMERCIAL")
   /// ACTIVE | ON_HOLD | COMPLETE | ARCHIVED
   status  String @default("ACTIVE")
+  /// When and by whom status last went to COMPLETE (an ERP user's email, or
+  /// "HubSpot sync"). Cleared when the job is reopened.
+  completedAt DateTime?
+  completedBy String?
 
   /// Primary / job-start date shown on PM dashboard
   projectDate    DateTime?

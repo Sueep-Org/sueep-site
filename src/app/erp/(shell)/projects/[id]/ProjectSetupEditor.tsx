@@ -29,6 +29,8 @@ type Props = {
   projectDateIso: string | null;
   projectEndDateIso: string | null;
   hasActiveChangeOrder?: boolean;
+  completedAtIso?: string | null;
+  completedBy?: string | null;
 };
 
 function toInputDate(iso: string | null): string {
@@ -53,6 +55,8 @@ export function ProjectSetupEditor({
   projectDateIso,
   projectEndDateIso,
   hasActiveChangeOrder = false,
+  completedAtIso = null,
+  completedBy = null,
 }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -194,6 +198,13 @@ export function ProjectSetupEditor({
               <option value="ACTIVE">WIP</option>
               <option value="COMPLETED">Completed</option>
             </select>
+            {status === "COMPLETE" && completedAtIso ? (
+              <p className="mt-1 text-[11px] text-gray-500">
+                Marked complete{" "}
+                {new Date(completedAtIso).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/New_York" })}
+                {completedBy ? ` by ${completedBy}` : ""}
+              </p>
+            ) : null}
           </div>
           <div>
             <label className={label} htmlFor="ps-segment">Segment</label>

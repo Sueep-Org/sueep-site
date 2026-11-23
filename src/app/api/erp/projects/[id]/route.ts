@@ -303,6 +303,16 @@ export async function PATCH(req: Request, ctx: Ctx) {
     data.turnoverCompletedAt = data.projectEndDate;
   }
 
+  // Who completed the job, so a wrong "complete" can be traced back.
+  if (data.status === "COMPLETE" && existing.status !== "COMPLETE") {
+    const auth = await getErpAuth();
+    data.completedAt = new Date();
+    data.completedBy = auth?.email ?? null;
+  } else if (data.status !== undefined && data.status !== "COMPLETE" && existing.status === "COMPLETE") {
+    data.completedAt = null;
+    data.completedBy = null;
+  }
+
   try {
     const project = await prisma.project.update({ where: { id }, data: data as object });
 
