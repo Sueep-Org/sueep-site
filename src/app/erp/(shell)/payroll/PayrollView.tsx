@@ -5,9 +5,9 @@ import Link from "next/link";
 import { Button, InfoTip, Modal, useConfirm, useToast } from "@/app/erp/components/ui";
 import { EmployeeCombobox, type EmployeeOption } from "@/app/erp/components/EmployeeCombobox";
 import { splitHoursOverWorkingDays } from "@/lib/erp/manualHours";
-import { DEFAULT_PAYROLL_ANCHOR, anchorDate, biweeklyIndex, biweeklyRange, payPeriodForDay } from "@/lib/erp/payPeriods";
-import { todayEasternKey } from "@/lib/erp/dates";
+import { DEFAULT_PAYROLL_ANCHOR, anchorDate, biweeklyIndex, biweeklyRange } from "@/lib/erp/payPeriods";
 import type { HeldSubPayLine, SubPayLineKind } from "@/lib/erp/subPayHold";
+import { SubPayHoldDialog, type SubPayHoldTarget } from "@/app/erp/components/SubPayHoldDialog";
 import type { EmployerTax } from "@/lib/erp/employerTax";
 import { EmployerTaxRatesModal } from "./EmployerTaxRatesModal";
 import { HealthInsuranceModal } from "./HealthInsuranceModal";
@@ -341,9 +341,7 @@ export function PayrollView({ employees = [] }: { employees?: EmployeeOption[] }
   const [taxRatesOpen, setTaxRatesOpen] = useState(false);
   const [healthOpen, setHealthOpen] = useState(false);
   const [held, setHeld] = useState<HeldSubPayLine[]>([]);
-  const [holding, setHolding] = useState<{ line: ContractorLine; name: string; note: string } | null>(null);
-  const [releasing, setReleasing] = useState<{ line: HeldSubPayLine; payDate: string } | null>(null);
-  const [savingHold, setSavingHold] = useState(false);
+  const [holdTarget, setHoldTarget] = useState<SubPayHoldTarget | null>(null);
 
   // Load anchor from API on mount
   useEffect(() => {
@@ -391,35 +389,6 @@ export function PayrollView({ employees = [] }: { employees?: EmployeeOption[] }
     return () => { cancelled = true; };
   }, [reloadKey]);
 
-  async function saveSubPayHold(body: Record<string, unknown>, done: string): Promise<boolean> {
-    setSavingHold(true);
-    try {
-      const res = await fetch("/api/erp/payroll/sub-pay-hold", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) { toast(d.error ?? "Could not save", "error"); return false; }
-      toast(done, "success");
-      setReloadKey((k) => k + 1);
-      return true;
-    } finally {
-      setSavingHold(false);
-    }
-  }
-
-  async function confirmHold() {
-    if (!holding) return;
-    const ok = await saveSubPayHold({ action: "hold", kind: holding.line.kind, id: holding.line.id, note: holding.note }, "Pay put on hold.");
-    if (ok) setHolding(null);
-  }
-
-  async function confirmRelease() {
-    if (!releasing) return;
-    const ok = await saveSubPayHold({ action: "release", kind: releasing.line.kind, id: releasing.line.id, payDate: releasing.payDate }, "Pay released.");
-    if (ok) setReleasing(null);
-  }
 
   async function saveAnchor(draft: string): Promise<string | null> {
     try {
@@ -947,7 +916,7 @@ export function PayrollView({ employees = [] }: { employees?: EmployeeOption[] }
                         <tr className="border-b border-gray-200 bg-gray-50">
                           <td colSpan={5} className="px-4 pb-4 pt-1">
                             <PayrollRowDetails row={row} start={start} end={end} onEditManual={openEdit} onRemoveManual={removeManualHours}
-                              onHoldLine={(line) => setHolding({ line, name: row.name, note: "" })} />
+                              onHoldLine={(line) => setHoldTarget({ mode: "hold", kind: line.kind, id: line.id, amountCents: line.amountCents, label: `${row.name}, ${line.title}`, date: line.date })} />
                           </td>
                         </tr>
                       )}
@@ -1006,7 +975,7 @@ export function PayrollView({ employees = [] }: { employees?: EmployeeOption[] }
                   </td>
                   <td className="px-2 py-2 text-right tabular-nums text-gray-800">{fmt(l.amountCents)}</td>
                   <td className="px-4 py-2 text-right">
-                    <button type="button" onClick={() => setReleasing({ line: l, payDate: todayEasternKey() })}
+                    <button type="button" onClick={() => setHoldTarget({ mode: "release", kind: l.kind, id: l.id, amountCents: l.amountCents, label: `${l.contractorName}, ${l.title}`, date: l.date })}
                       className="rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">
                       Release
                     </button>
@@ -1018,60 +987,7 @@ export function PayrollView({ employees = [] }: { employees?: EmployeeOption[] }
         </section>
       )}
 
-      <Modal open={!!holding} onClose={() => setHolding(null)} size="sm">
-        {holding && (
-          <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); confirmHold(); }}>
-            <div>
-              <h2 className="text-base font-semibold text-gray-900">Hold pay</h2>
-              <p className="mt-1 text-sm text-gray-600">
-                {fmt(holding.line.amountCents)} for {holding.name}, {holding.line.title}
-                {holding.line.date ? ` (${formatDate(new Date(`${holding.line.date}T00:00:00Z`))})` : ""}.
-                It comes out of this period and waits under Sub pay on hold until you release it.
-              </p>
-            </div>
-            <label className="block text-xs font-medium text-gray-600">
-              Reason <span className="font-normal text-gray-400">(optional)</span>
-              <input type="text" value={holding.note} autoFocus placeholder="e.g. Not paid out on the Nov 14 run"
-                onChange={(e) => setHolding((h) => h && { ...h, note: e.target.value })} className={manualInputCls} />
-            </label>
-            <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setHolding(null)} className="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100">Cancel</button>
-              <Button size="sm" type="submit" disabled={savingHold}>{savingHold ? "Saving..." : "Hold pay"}</Button>
-            </div>
-          </form>
-        )}
-      </Modal>
-
-      <Modal open={!!releasing} onClose={() => setReleasing(null)} size="sm">
-        {releasing && (() => {
-          const valid = /^\d{4}-\d{2}-\d{2}$/.test(releasing.payDate);
-          const period = valid ? payPeriodForDay(releasing.payDate, anchorISO) : null;
-          return (
-            <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); confirmRelease(); }}>
-              <div>
-                <h2 className="text-base font-semibold text-gray-900">Release pay</h2>
-                <p className="mt-1 text-sm text-gray-600">
-                  {fmt(releasing.line.amountCents)} for {releasing.line.contractorName}, {releasing.line.title}.
-                </p>
-              </div>
-              <label className="block text-xs font-medium text-gray-600">
-                Pay it on
-                <input type="date" required value={releasing.payDate}
-                  onChange={(e) => setReleasing((r) => r && { ...r, payDate: e.target.value })} className={manualInputCls} />
-              </label>
-              {period && (
-                <p className="text-xs text-gray-500">
-                  Goes in the {formatDate(period.start)} – {formatDate(period.end)} pay period.
-                </p>
-              )}
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setReleasing(null)} className="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100">Cancel</button>
-                <Button size="sm" type="submit" disabled={savingHold || !valid}>{savingHold ? "Saving..." : "Release"}</Button>
-              </div>
-            </form>
-          );
-        })()}
-      </Modal>
+      <SubPayHoldDialog target={holdTarget} onClose={() => setHoldTarget(null)} onDone={() => setReloadKey((k) => k + 1)} />
 
       {/* Summary */}
       {data && filteredRows.length > 0 && (
