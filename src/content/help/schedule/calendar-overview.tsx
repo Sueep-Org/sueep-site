@@ -48,6 +48,12 @@ export function ScheduleCalendarOverview() {
               never had a supervisor assigned and has no logged work yet. It&apos;s rendered above
               the other chips in the cell so it can&apos;t be missed.
             </LI>
+            <LI>
+              <strong>Status icon at the start of each chip:</strong> ⚙ means in progress. A green ✓ with the chip
+              faded means that day is marked complete (on a multi-day bar, the ✓ shows once every day of the bar
+              is done). A solid green circle with a white ✓ means the whole job or change order is complete, so
+              every one of its days counts as done. See <em>Marking a day complete</em> below.
+            </LI>
           </UL>
           <Callout type="warning">
             The two ⚠ symbols mean different things, even though they look similar. <strong>Amber</strong>{" "}
