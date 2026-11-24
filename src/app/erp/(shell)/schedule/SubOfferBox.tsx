@@ -189,6 +189,31 @@ function SubPhotosLine({ checkIn }: { checkIn: DayCheckIn }) {
   );
 }
 
+/** The sub's end-of-day wrap-up (subWrapUps.ts): what they said wasn't done, or that it was all done. */
+function WrapUpLine({ checkIn }: { checkIn: DayCheckIn }) {
+  const w = checkIn.wrapUp;
+  if (!w) {
+    if (checkIn.wrapUpReminderAt) return <p className="mt-1 text-[10px] font-medium text-red-600">No wrap-up yet, reminded and PM emailed {clock(checkIn.wrapUpReminderAt)}</p>;
+    if (checkIn.wrapUpEmailAt) return <p className="mt-1 text-[10px] text-gray-500">Wrap-up asked {clock(checkIn.wrapUpEmailAt)}, not sent yet</p>;
+    return null;
+  }
+  const notDone = w.items.filter((i) => !i.done);
+  const detail = [
+    ...w.items.map((i) => `${i.done ? "Done" : "Not done"}: ${i.label}${i.reason ? ` (${i.reason})` : ""}`),
+    ...(w.note ? [`Note: ${w.note}`] : []),
+  ].join("\n");
+  return (
+    <p className={`mt-1 flex flex-wrap items-center gap-x-1 text-[10px] ${notDone.length ? "font-medium text-red-600" : "text-emerald-700"}`}>
+      <span>
+        {notDone.length
+          ? `Not done: ${notDone.map((i) => `${i.label}${i.reason ? ` (${i.reason})` : ""}`).join("; ")}`
+          : `Wrapped up: all ${w.items.length} done`}
+      </span>
+      <InfoTip text={detail} wide />
+    </p>
+  );
+}
+
 /** Whether the sub running the day checked in and out from their portal (subCheckIns.ts). */
 export function SubCheckInLine({ checkIn, dateKey, plannedCrew }: { checkIn: DayCheckIn | null; dateKey: string; plannedCrew: number | null }) {
   const today = todayEasternKey();
@@ -197,12 +222,16 @@ export function SubCheckInLine({ checkIn, dateKey, plannedCrew }: { checkIn: Day
   if (!checkIn?.inAt) {
     if (checkIn?.missedAlertAt) {
       return (
-        <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-red-600">
-          Not checked in, PM emailed at {clock(checkIn.missedAlertAt)}
-          <InfoTip text={tip} />
-        </p>
+        <>
+          <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-red-600">
+            Not checked in, PM emailed at {clock(checkIn.missedAlertAt)}
+            <InfoTip text={tip} />
+          </p>
+          <WrapUpLine checkIn={checkIn} />
+        </>
       );
     }
+    if (checkIn && (checkIn.wrapUp || checkIn.wrapUpEmailAt)) return <WrapUpLine checkIn={checkIn} />;
     if (dateKey !== today) return null;
     return (
       <p className="mt-1 flex items-center gap-1 text-[10px] text-gray-500">
@@ -233,13 +262,15 @@ export function SubCheckInLine({ checkIn, dateKey, plannedCrew }: { checkIn: Day
       <InfoTip text={tip} />
     </p>
     <SubPhotosLine checkIn={checkIn} />
+    <WrapUpLine checkIn={checkIn} />
     </>
   );
 }
 
 /** Short words for calendar chip hovers */
 export function checkInChipText(c: DayCheckIn | null | undefined): string {
-  if (!c?.inAt) return c?.missedAlertAt ? " · not checked in" : "";
+  if (!c?.inAt) return c?.missedAlertAt ? " · not checked in" : c?.wrapUp?.notDone ? ` · ${c.wrapUp.notDone} not done` : "";
+  if (c.wrapUp?.notDone) return ` · ${c.wrapUp.notDone} not done`;
   if (c.review?.status === "NEEDS_FIX") return " · fixes asked";
   if (c.review?.status === "PASSED") return " · passed review";
   const flags = [c.lateMinutes != null ? "late" : "", c.inOffSite || c.outOffSite ? "off site" : ""].filter(Boolean);

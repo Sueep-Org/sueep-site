@@ -9,6 +9,8 @@ import type { DeclineReason, PortalOffer } from "@/lib/erp/subOffers";
 import type { TodayCheckIn } from "@/lib/erp/subCheckIns";
 import type { PortalFix, ReviewStatus } from "@/lib/erp/subReviews";
 import { FixCards } from "./FixCards";
+import { WrapUpCards } from "./WrapUpCards";
+import type { PortalWrapUp } from "@/lib/erp/subWrapUpShared";
 import { LangToggle, useSubLang } from "./useSubLang";
 import { TodayTab } from "./TodayTab";
 
@@ -399,6 +401,7 @@ export function SubPortal({
   offers,
   checkIns,
   fixes,
+  wrapUps,
   reviewResults,
   declineReasons,
   profileLang,
@@ -410,6 +413,7 @@ export function SubPortal({
   offers: PortalOffer[];
   checkIns: Record<string, TodayCheckIn>;
   fixes: PortalFix[];
+  wrapUps: PortalWrapUp[];
   reviewResults: Record<string, ReviewStatus>;
   declineReasons: ReasonOption[];
   profileLang: Lang;
@@ -448,6 +452,8 @@ export function SubPortal({
         </header>
 
         {flash && <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{flash}</p>}
+
+        <WrapUpCards token={token} wrapUps={wrapUps} lang={lang} today={jobs.today} />
 
         <FixCards token={token} fixes={fixes} lang={lang} />
 

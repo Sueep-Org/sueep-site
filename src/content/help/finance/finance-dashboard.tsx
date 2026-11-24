@@ -154,6 +154,7 @@ export function FinanceDashboard() {
       <H2>Billed vs paid</H2>
       <UL>
         <LI>Work finished in the selected dates, split by its billing status today: <strong>Paid</strong>, <strong>Billed, waiting</strong> (invoiced, not paid yet), and <strong>Done, not billed</strong>. This always uses the completion date, even when counting by Paid.</LI>
+        <LI>Click <strong>Paid</strong>, <strong>Billed, waiting</strong> or <strong>Done, not billed</strong> to see the jobs behind that number, biggest first, with what was counted (the contract, SOV lines, change orders or contract months). The list adds up to the number. Click a job to open it; the link at the bottom goes to Project Billing or Invoices.</LI>
         <LI><strong>Future</strong> is the contract value of projects that are Active, Upcoming, or On Hold right now: sold, not finished yet. It includes change orders on those projects that aren&apos;t done yet. It doesn&apos;t change with the dates picked.</LI>
         <LI><strong>Needs review</strong> (in amber under Future) is the part of Future that looks finished or stale: the end date has passed, an Upcoming project&apos;s start date has passed, or an Active project has had no work logged in 60+ days. Those projects are listed under Needs review at the bottom of the Future revenue tab. Updating their status fixes both numbers.</LI>
       </UL>

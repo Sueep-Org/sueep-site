@@ -352,10 +352,10 @@ export const registry: ArticleEntry[] = [
   },
   {
     slug: "billing/invoices-and-payments",
-    keywords: ["invoices", "payment", "paid", "unpaid", "overdue", "follow up", "short pay", "retainage", "collections", "ar", "accounts receivable"],
+    keywords: ["invoices", "payment", "paid", "unpaid", "overdue", "follow up", "short pay", "retainage", "collections", "ar", "accounts receivable", "cleanup", "dismiss", "not linked"],
     title: "Invoices Page and Getting Paid",
     category: "Billing",
-    description: "Find any invoice, its PDF and History, record payments so work turns Paid, log follow-ups, explain short pays, and fix invoices that need linking.",
+    description: "Find any invoice, its PDF and History, record payments so work turns Paid, log follow-ups, explain short pays, fix invoices that need linking, and clean up old work still showing unpaid.",
     order: 5,
     component: InvoicesAndPayments,
     roles: [...PM_LEVEL_ROLES],

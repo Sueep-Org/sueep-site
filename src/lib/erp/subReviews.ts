@@ -25,6 +25,7 @@ import { MAX_PHOTO_UPLOAD_BYTES, type PhotoErrorCode } from "@/lib/erp/subPhotos
 import { processPhoto } from "@/lib/erp/photoProcessing";
 import { TURNOVER_PHOTO_AREAS, photoAreaLabel } from "@/lib/erp/subPhotoAreas";
 import { parseLang, tr, type Lang } from "@/lib/erp/language";
+import { wrapUpSummary, type WrapUpSummary } from "@/lib/erp/subWrapUpShared";
 import { isPmLevel } from "@/lib/erpRoles";
 import type { ErpRole } from "@/lib/erpSession";
 
@@ -462,6 +463,8 @@ export type ReviewDetail = {
   turnover: boolean;
   canReview: boolean;
   checkIn: { inAt: string | null; outAt: string | null; lateMinutes: number | null; inOffSite: boolean; outOffSite: boolean; crewCount: number | null; waivedReason: string | null };
+  /** The sub's end-of-day wrap-up (subWrapUps.ts), once sent */
+  wrapUp: WrapUpSummary | null;
   photos: ReviewPhoto[];
   events: { at: string; round: number; action: string; by: string; note: string | null; items: string[]; onSite: boolean }[];
   fixItems: string[];
@@ -492,6 +495,9 @@ export async function loadReviewDetail(id: string, who: Reviewer): Promise<Revie
           outOffSite: true,
           crewCount: true,
           photosWaivedReason: true,
+          wrapUpAt: true,
+          wrapUpItems: true,
+          wrapUpNote: true,
           photos: { orderBy: { takenAt: "asc" }, select: { id: true, kind: true, area: true, takenAt: true, offSite: true, reviewRound: true } },
         },
       },
@@ -519,6 +525,7 @@ export async function loadReviewDetail(id: string, who: Reviewer): Promise<Revie
       crewCount: r.checkIn.crewCount,
       waivedReason: r.checkIn.photosWaivedReason,
     },
+    wrapUp: wrapUpSummary(r.checkIn),
     photos: r.checkIn.photos.map((p) => ({ id: p.id, kind: p.kind, area: p.area, takenAt: p.takenAt.toISOString(), offSite: p.offSite, round: p.reviewRound })),
     events: r.events.map((e) => ({ at: e.createdAt.toISOString(), round: e.round, action: e.action, by: e.by, note: e.note, items: fixItemLabels(e.items), onSite: e.onSite })),
     fixItems: fixItemLabels(r.fixItems),
