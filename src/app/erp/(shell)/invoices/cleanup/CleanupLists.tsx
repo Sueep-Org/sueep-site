@@ -61,7 +61,8 @@ function buildJobs(data: InvoiceCleanup): Job[] {
     j.cents += r.cents ?? 0;
   }
   for (const inv of data.unlinked) {
-    if (inv.workState !== "HAS_UNPAID" || !inv.linkTarget) continue;
+    // Only invoices we can match go on a job; the rest are extra work (folded below)
+    if (inv.workState !== "HAS_UNPAID" || !inv.linkTarget || inv.suggestions.length === 0) continue;
     get(`${inv.linkTarget.scope === "project" ? "p" : "b"}:${inv.linkTarget.id}`, inv.title, inv.href).invoices.push(inv);
   }
   // Jobs with an invoice to attach first (quickest to fix), then the most money
@@ -79,6 +80,9 @@ export function CleanupBoard({ data }: { data: InvoiceCleanup }) {
   const jobs = useMemo(() => buildJobs(data), [data]);
   const nothingToFix = data.unlinked.filter((i) => i.workState === "ALL_PAID");
   const noJob = data.unlinked.filter((i) => i.workState === "NO_JOB");
+  // On a job with unpaid work, but nothing unpaid matches: usually extra work
+  // (grill cleaning, supplies, pressure washing) that was never entered in the ERP.
+  const extraWork = data.unlinked.filter((i) => i.workState === "HAS_UNPAID" && i.suggestions.length === 0);
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -88,12 +92,12 @@ export function CleanupBoard({ data }: { data: InvoiceCleanup }) {
     router.refresh();
   };
 
-  async function clearAll() {
+  async function clearAll(list: CleanupInvoice[], reason: DismissReason) {
     setBusy(true);
-    const r = await post({ action: "dismiss", hubspotInvoiceIds: nothingToFix.map((i) => i.hubspotInvoiceId), reason: "ALREADY_PAID" });
+    const r = await post({ action: "dismiss", hubspotInvoiceIds: list.map((i) => i.hubspotInvoiceId), reason });
     setBusy(false);
     if (r.error) toast(r.error, "error");
-    else done(`Cleared ${nothingToFix.length} invoices.`);
+    else done(`Cleared ${list.length} invoice${list.length === 1 ? "" : "s"}.`);
   }
 
   return (
@@ -124,12 +128,38 @@ export function CleanupBoard({ data }: { data: InvoiceCleanup }) {
             title={`${nothingToFix.length} paid invoices with nothing to fix`}
             hint="Their jobs are already marked Paid in the ERP, so there's nothing to attach them to. Clearing just takes them off the to-do lists."
             action={
-              <Button size="sm" variant="secondary" disabled={busy} onClick={() => void clearAll()}>
+              <Button size="sm" variant="secondary" disabled={busy} onClick={() => void clearAll(nothingToFix, "ALREADY_PAID")}>
                 {busy ? "Clearing…" : "Clear all"}
               </Button>
             }
           >
             <InvoiceRows invoices={nothingToFix} />
+          </Fold>
+        )}
+        {extraWork.length > 0 && (
+          <Fold
+            title={`${extraWork.length} paid invoices for extra work that isn't in the ERP`}
+            hint="Things like grill cleaning, supplies or pressure washing that were invoiced and paid but never added to the ERP, so there's nothing to attach them to. Clearing them is fine. If one does belong to something in the ERP, use Pick the items."
+            action={
+              <Button size="sm" variant="secondary" disabled={busy} onClick={() => void clearAll(extraWork, "NOT_IN_ERP")}>
+                {busy ? "Clearing…" : "Clear all"}
+              </Button>
+            }
+          >
+            <InvoiceRows
+              invoices={extraWork}
+              showLines
+              action={(inv) => (
+                <span className="flex shrink-0 gap-2">
+                  <Button size="xs" variant="ghost" onClick={() => setDialog({ kind: "link", invoice: inv })}>
+                    Pick the items
+                  </Button>
+                  <Button size="xs" variant="ghost" onClick={() => setDialog({ kind: "dismiss", ids: [inv.hubspotInvoiceId], label: inv.number ?? "this invoice", suggested: "NOT_IN_ERP" })}>
+                    Clear
+                  </Button>
+                </span>
+              )}
+            />
           </Fold>
         )}
         {noJob.length > 0 && (
@@ -274,28 +304,7 @@ function JobCard({ job, onDialog }: { job: Job; onDialog: (d: Dialog) => void })
 
       <div className="mt-4 space-y-3 border-t border-gray-100 px-5 py-4">
         {job.invoices.map((inv) => (
-          <div key={inv.hubspotInvoiceId} className="rounded-lg bg-emerald-50 px-4 py-3">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              <p className="min-w-0 flex-1 text-sm text-emerald-900">
-                <span className="font-semibold">Paid invoice found: {inv.number ?? "no number"}</span>, {money(inv.amountCents)}, dated {day(inv.invoiceDateKey)}.
-                <span className="block text-emerald-800/80">
-                  {inv.lines
-                    .slice(0, 2)
-                    .map((l) => l.text)
-                    .join("; ")}
-                  {inv.lines.length > 2 ? "…" : ""}
-                </span>
-              </p>
-              <div className="flex gap-2">
-                <Button size="sm" onClick={() => onDialog({ kind: "link", invoice: inv })}>
-                  Attach to the work
-                </Button>
-                <Button size="sm" variant="secondary" onClick={() => onDialog({ kind: "dismiss", ids: [inv.hubspotInvoiceId], label: inv.number ?? "this invoice", suggested: null })}>
-                  Not for this
-                </Button>
-              </div>
-            </div>
-          </div>
+          <InvoiceMatch key={inv.hubspotInvoiceId} invoice={inv} onDialog={onDialog} />
         ))}
 
         {job.rows.length > 0 && (
@@ -320,6 +329,101 @@ function JobCard({ job, onDialog }: { job: Job; onDialog: (d: Dialog) => void })
   );
 }
 
+// ── A paid invoice and what it looks like it paid for ─────────────────────
+
+function InvoiceMatch({ invoice: inv, onDialog }: { invoice: CleanupInvoice; onDialog: (d: Dialog) => void }) {
+  const router = useRouter();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const guess = inv.suggestions;
+  const guessCents = guess.reduce((s, g) => s + g.linkCents, 0);
+  const coversAll = guess.length > 0 && Math.abs(guessCents - inv.amountCents) <= 100;
+  const unmatchedLines = inv.lines.filter((l) => !guess.some((g) => g.lineText === l.text && g.linkCents === l.cents));
+
+  async function attach() {
+    if (!inv.linkTarget) return;
+    setBusy(true);
+    setError(null);
+    const res = await fetch("/api/erp/hubspot-invoice-links", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        scope: inv.linkTarget.scope,
+        ownerId: inv.linkTarget.id,
+        hubspotInvoiceId: inv.hubspotInvoiceId,
+        links: guess.map((g) => ({ targetId: g.targetId, amountCents: g.linkCents })),
+      }),
+    }).catch(() => null);
+    const j = (await res?.json().catch(() => ({}))) as { error?: string } | undefined;
+    setBusy(false);
+    if (!res?.ok) return setError(j?.error ?? "Couldn't attach it. Try Pick the items instead.");
+    toast(`${inv.number ?? "Invoice"} attached. ${guess.length === 1 ? "That item is" : "Those items are"} now Paid.`);
+    router.refresh();
+  }
+
+  return (
+    <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-4 py-3 text-sm">
+      <p className="text-emerald-900">
+        <span className="font-semibold">Paid invoice {inv.number ?? "(no number)"}</span> · {money(inv.amountCents)} · dated {day(inv.invoiceDateKey)}
+      </p>
+      <p className="mt-0.5 text-xs text-emerald-800/70">It&apos;s on this job&apos;s HubSpot deal but not attached to anything in the ERP.</p>
+
+      {guess.length > 0 ? (
+        <div className="mt-3 rounded-md bg-white px-3 py-2.5 ring-1 ring-emerald-100">
+          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{coversAll ? "Looks like it paid for" : "Part of it looks like it paid for"}</p>
+          <ul className="mt-1.5 space-y-1.5">
+            {guess.map((g) => (
+              <li key={g.targetId} className="flex items-start justify-between gap-3">
+                <span className="min-w-0">
+                  <span className="font-medium text-gray-900">{g.label}</span>
+                  <span className="block text-xs text-gray-500">
+                    Invoice says &ldquo;{g.lineText}&rdquo; · {g.why} match{g.why.includes(" and ") ? "" : "es"}
+                  </span>
+                </span>
+                <span className="shrink-0 tabular-nums text-gray-700">{money(g.linkCents)}</span>
+              </li>
+            ))}
+          </ul>
+          {unmatchedLines.length > 0 && (
+            <p className="mt-2 text-xs text-amber-700">
+              Not matched: {unmatchedLines.map((l) => `“${l.text}” ${money(l.cents)}`).join(", ")}. Use Pick the items to place it.
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="mt-3 rounded-md bg-white px-3 py-2.5 ring-1 ring-emerald-100">
+          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">We couldn&apos;t tell what it paid for</p>
+          <p className="mt-1 text-xs text-gray-600">
+            The invoice says: {inv.lines.map((l) => `“${l.text}” ${money(l.cents)}`).join(", ") || "no lines"}
+          </p>
+          {inv.candidates.length > 0 && (
+            <p className="mt-1 text-xs text-gray-600">
+              Unpaid on this job: {inv.candidates.slice(0, 6).map((c) => `${c.label}${c.cents ? ` ${money(c.cents)}` : ""}`).join(", ")}
+              {inv.candidates.length > 6 ? `, and ${inv.candidates.length - 6} more` : ""}
+            </p>
+          )}
+        </div>
+      )}
+
+      {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {guess.length > 0 && (
+          <Button size="sm" disabled={busy} onClick={() => void attach()}>
+            {busy ? "Attaching…" : coversAll ? "Yes, attach it" : "Attach these"}
+          </Button>
+        )}
+        <Button size="sm" variant={guess.length ? "secondary" : "primary"} onClick={() => onDialog({ kind: "link", invoice: inv })}>
+          {guess.length ? "Pick different items" : "Pick the items"}
+        </Button>
+        <Button size="sm" variant="secondary" onClick={() => onDialog({ kind: "dismiss", ids: [inv.hubspotInvoiceId], label: inv.number ?? "this invoice", suggested: null })}>
+          Not for this job
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // ── Folded sections ────────────────────────────────────────────────────────
 
 function Fold({ title, hint, action, children }: { title: string; hint: string; action?: React.ReactNode; children: React.ReactNode }) {
@@ -338,15 +442,21 @@ function Fold({ title, hint, action, children }: { title: string; hint: string; 
   );
 }
 
-function InvoiceRows({ invoices, action }: { invoices: CleanupInvoice[]; action?: (inv: CleanupInvoice) => React.ReactNode }) {
+function InvoiceRows({ invoices, action, showLines }: { invoices: CleanupInvoice[]; action?: (inv: CleanupInvoice) => React.ReactNode; showLines?: boolean }) {
   return (
     <ul className="divide-y divide-gray-100">
       {invoices.map((inv) => (
         <li key={inv.hubspotInvoiceId} className="flex items-center gap-3 py-2 text-sm">
           <span className="w-24 shrink-0 font-medium text-gray-900">{inv.number ?? "No number"}</span>
           <span className="w-28 shrink-0 text-gray-500">{day(inv.invoiceDateKey)}</span>
-          <span className="min-w-0 flex-1 truncate text-gray-600" title={inv.lines.map((l) => l.text).join("\n")}>
-            {inv.title}
+          <span className="min-w-0 flex-1 text-gray-600" title={inv.lines.map((l) => l.text).join("\n")}>
+            <span className="block truncate">{inv.title}</span>
+            {showLines && inv.lines.length > 0 && (
+              <span className="block truncate text-xs text-gray-400">
+                {inv.lines[0].text}
+                {inv.lines.length > 1 ? ` +${inv.lines.length - 1} more` : ""}
+              </span>
+            )}
           </span>
           <span className="tabular-nums text-gray-700">{money(inv.amountCents)}</span>
           {action?.(inv)}

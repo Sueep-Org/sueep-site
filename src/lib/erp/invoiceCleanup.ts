@@ -9,8 +9,10 @@ import { prisma } from "@/lib/prisma";
 import { normalizeBillingStatus, isOwedStatus } from "./billingStatus";
 import { todayEasternKey, utcDateKey } from "./dates";
 import { loadUnlinkedHubSpotInvoices, readHeaders } from "./unlinkedHubSpotInvoices";
+import { suggestMatches } from "./invoiceCleanupMatch";
 import {
   OLD_UNPAID_DAYS,
+  type CleanupCandidate,
   isDismissReason,
   type CleanupInvoice,
   type DismissedInvoice,
@@ -47,7 +49,10 @@ export async function loadInvoiceCleanup(): Promise<InvoiceCleanup> {
     }),
     prisma.projectChangeOrder.findMany({
       where: { status: { in: BILLABLE_CO }, OR: [{ billingStatus: null }, { billingStatus: { notIn: ["PAID", "INVOICE_PAID", "VOIDED"] } }] },
-      select: { id: true, title: true, status: true, billingStatus: true, completedAt: true, contractValueCents: true, project: { select: { id: true, jobTitle: true, buildingId: true } } },
+      select: {
+        id: true, title: true, status: true, billingStatus: true, completedAt: true, contractValueCents: true,
+        project: { select: { id: true, jobTitle: true, buildingId: true, hubspotDealId: true, turnoverRequest: { select: { buildingId: true } } } },
+      },
     }),
     prisma.turnoverRequest.findMany({
       where: { status: { in: DONE_TURN as never[] }, billingStatus: { notIn: ["PAID", "INVOICE_PAID", "VOIDED"] } },
@@ -55,7 +60,7 @@ export async function loadInvoiceCleanup(): Promise<InvoiceCleanup> {
     }),
     prisma.recurringContractPeriod.findMany({
       where: { billingStatus: { notIn: ["PAID", "INVOICE_PAID", "VOIDED"] }, amountCents: { gt: 0 } },
-      select: { id: true, periodStart: true, billingStatus: true, amountCents: true, recurringContract: { select: { building: { select: { id: true, name: true } } } } },
+      select: { id: true, periodStart: true, billingStatus: true, amountCents: true, charges: { select: { amountCents: true } }, recurringContract: { select: { building: { select: { id: true, name: true } } } } },
     }),
     prisma.project.findMany({
       where: {
@@ -98,6 +103,29 @@ export async function loadInvoiceCleanup(): Promise<InvoiceCleanup> {
   for (const t of turns) if (isOwedStatus(t.billingStatus)) push(unpaidByBuilding, t.building.id, `Unit ${t.unitNumber ?? "?"}`);
   for (const p of periods) if (isOwedStatus(p.billingStatus)) push(unpaidByBuilding, p.recurringContract.building.id, `${p.periodStart.toISOString().slice(0, 7)} month`);
 
+  // ── What an invoice could be attached to, per project and per building ──
+  const candByProject = new Map<string, CleanupCandidate[]>();
+  const candByBuilding = new Map<string, CleanupCandidate[]>();
+  const addCand = (map: Map<string, CleanupCandidate[]>, key: string | null | undefined, c: CleanupCandidate) => {
+    if (key) map.set(key, [...(map.get(key) ?? []), c]);
+  };
+  for (const s of sovItems) addCand(candByProject, s.sov.project.id, { targetId: `sov:${s.id}`, label: s.description, cents: s.scheduledValueCents || null, kind: "SOV" });
+  for (const c of changeOrders) {
+    const cand: CleanupCandidate = { targetId: `co:${c.id}`, label: `CO: ${c.title}`, cents: c.contractValueCents, kind: "CO" };
+    addCand(candByProject, c.project.id, cand);
+    // A building invoice can only take change orders on its unit projects (no deal of their own)
+    if (!c.project.hubspotDealId) addCand(candByBuilding, c.project.buildingId ?? c.project.turnoverRequest?.buildingId, cand);
+  }
+  for (const t of turns) {
+    if (!t.unitNumber) continue;
+    addCand(candByBuilding, t.building.id, { targetId: t.id, label: `Unit ${t.unitNumber}`, cents: t.approvedPriceCents ?? t.priceCents, kind: "TURN", unit: t.unitNumber });
+  }
+  for (const p of periods) {
+    const monthKey = p.periodStart.toISOString().slice(0, 7);
+    const label = `${new Date(p.periodStart).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" })} cleaning`;
+    addCand(candByBuilding, p.recurringContract.building.id, { targetId: `month:${p.id}`, label, cents: p.amountCents + p.charges.reduce((s, c) => s + c.amountCents, 0), kind: "MONTH", monthKey });
+  }
+
   // ── Paid, not linked ──
   const ids = unlinked.map((u) => u.hubspotInvoiceId);
   const lineRows = ids.length
@@ -117,6 +145,8 @@ export async function loadInvoiceCleanup(): Promise<InvoiceCleanup> {
   const waitingBuildings = new Set<string>();
   const unlinkedRows: CleanupInvoice[] = unlinked.map((u) => {
     const unpaid = u.projectId ? unpaidByProject.get(u.projectId) ?? [] : u.buildingId ? unpaidByBuilding.get(u.buildingId) ?? [] : [];
+    const candidates = (u.projectId ? candByProject.get(u.projectId) : u.buildingId ? candByBuilding.get(u.buildingId) : null) ?? [];
+    const lines = linesByInvoice.get(u.hubspotInvoiceId) ?? [];
     if (u.projectId) waitingProjects.add(u.projectId);
     if (u.buildingId) waitingBuildings.add(u.buildingId);
     return {
@@ -125,13 +155,15 @@ export async function loadInvoiceCleanup(): Promise<InvoiceCleanup> {
       status: u.status,
       invoiceDateKey: u.invoiceDateKey,
       amountCents: u.amountCents,
-      lines: linesByInvoice.get(u.hubspotInvoiceId) ?? [],
+      lines,
       title: u.title,
       href: u.href,
       linkTarget: u.projectId ? { scope: "project", id: u.projectId, title: u.title } : u.buildingId ? { scope: "building", id: u.buildingId, title: u.title } : null,
       workState: !u.projectId && !u.buildingId ? "NO_JOB" : unpaid.length ? "HAS_UNPAID" : "ALL_PAID",
       unpaid: unpaid.slice(0, 6),
       unpaidCount: unpaid.length,
+      candidates: [...candidates].sort((a, b) => (b.cents ?? 0) - (a.cents ?? 0)).slice(0, 40),
+      suggestions: suggestMatches(lines, candidates, u.invoiceDateKey),
     };
   });
   // Oldest first: those are the ones nobody has looked at.

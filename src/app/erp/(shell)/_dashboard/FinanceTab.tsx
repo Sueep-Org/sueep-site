@@ -654,13 +654,13 @@ export async function FinanceTab({ period: periodParam, by }: { period: string |
     },
   ];
   const costs = costBreakdown(total).filter((c) => c.cents !== 0);
-  // Months whose QuickBooks costs (rent, software...) aren't all entered yet use the
-  // average of recent complete months, so say which and how much.
+  // The month in progress (rent, software... not in QuickBooks yet) uses the
+  // average of recent finished months, so say which and how much.
   const bookedThrough = summary.qboBookedThrough ? `${monthName(summary.qboBookedThrough, "long")} ${summary.qboBookedThrough.slice(0, 4)}` : null;
   const estimatedMonths = rows.filter((r) => r.month.qboEstimatedCents > 0).sort((a, b) => a.key.localeCompare(b.key)).map((r) => (isAll || isRange ? r.title : monthName(r.key, "long")));
   const estimateNote =
     total.qboEstimatedCents > 0
-      ? `Estimate: QuickBooks costs ${estimatedMonths.length && !isRange ? `for ${listWords(estimatedMonths)} ` : ""}aren't all entered yet, so ${short(total.qboEstimatedCents)} of overhead is the average of recent months. It updates by itself as they're entered.`
+      ? `Estimate: QuickBooks costs ${estimatedMonths.length && !isRange ? `for ${listWords(estimatedMonths)} ` : ""}aren't in yet because the month isn't over, so ${short(total.qboEstimatedCents)} of overhead is the average of recent months. Once the month ends, the real QuickBooks numbers are used.`
       : null;
 
   /** Whether a day ("YYYY-MM-DD") is inside the dates being viewed. */
@@ -751,7 +751,7 @@ export async function FinanceTab({ period: periodParam, by }: { period: string |
           {estimateNote ? (
             <p className="flex items-center gap-1.5 text-xs text-amber-700" title={estimateNote}>
               <span aria-hidden>~</span>
-              {short(total.qboEstimatedCents)} of overhead is estimated until QuickBooks is finished
+              {short(total.qboEstimatedCents)} of overhead is estimated until the month is over
             </p>
           ) : (
             <span />

@@ -19,6 +19,31 @@ export function isDismissReason(v: unknown): v is DismissReason {
 /** What the ERP holds for the job an unlinked invoice's HubSpot deal points at. */
 export type CleanupWorkState = "ALL_PAID" | "HAS_UNPAID" | "NO_JOB";
 
+/** Unpaid ERP work an invoice could be attached to. targetId is what the
+ * invoice link API takes for this job: "sov:<id>" / "co:<id>" on a project,
+ * "<turnId>" / "co:<id>" / "month:<id>" on a building. */
+export type CleanupCandidate = {
+  targetId: string;
+  label: string;
+  cents: number | null;
+  kind: "SOV" | "CO" | "TURN" | "MONTH";
+  unit?: string | null;
+  /** "YYYY-MM", janitorial months */
+  monthKey?: string | null;
+};
+
+/** "This invoice line looks like it paid for this item" (invoiceCleanupMatch.ts) */
+export type CleanupSuggestion = {
+  targetId: string;
+  label: string;
+  itemCents: number | null;
+  /** The invoice line's amount, saved on the link */
+  linkCents: number;
+  lineText: string;
+  /** What matched: "amount", "amount and name", "unit number"... */
+  why: string;
+};
+
 export type CleanupInvoice = {
   hubspotInvoiceId: string;
   number: string | null;
@@ -34,6 +59,10 @@ export type CleanupInvoice = {
   /** Unpaid work on that job, a few names */
   unpaid: string[];
   unpaidCount: number;
+  /** The job's unpaid items (biggest first, up to 40) */
+  candidates: CleanupCandidate[];
+  /** Our guess at what it paid for; empty when we can't tell */
+  suggestions: CleanupSuggestion[];
 };
 
 export type DismissedInvoice = {

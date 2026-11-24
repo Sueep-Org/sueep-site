@@ -123,10 +123,10 @@ export function FinanceDashboard() {
           contractors) are skipped there, so nothing is counted twice.
         </LI>
         <LI>
-          <strong>Estimates</strong>: the bookkeeper enters a month&apos;s costs over the following weeks. Until a month&apos;s
-          QuickBooks costs are close to the usual amount (and for the month in progress), its QuickBooks overhead is the
-          average of the last 3 complete months. The page says <strong>Estimate</strong> and the By month chart marks the
-          month with <strong>~</strong>. It switches to the real numbers by itself once they&apos;re entered.
+          <strong>Estimates</strong>: for the month in progress, QuickBooks overhead is the average of the last 3
+          finished months. The page says <strong>Estimate</strong> and the By month chart marks the month with{" "}
+          <strong>~</strong>. Once the month is over, whatever is in QuickBooks for it counts as the real numbers, so
+          costs the bookkeeper enters later show up the next morning.
         </LI>
       </UL>
 
