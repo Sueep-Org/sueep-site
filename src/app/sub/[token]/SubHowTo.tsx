@@ -43,6 +43,10 @@ const SECTIONS: Section[] = [
         es: "Toca Registrar salida cuando te vayas.",
       },
       {
+        en: "If you're running the job, wrap up the day: a card shows at the top after you check out (or after the day ends). Mark each task Done or Not done, and write why for anything not done. We also email you a reminder.",
+        es: "Si diriges el trabajo, cierra el día: aparece una tarjeta arriba cuando registras tu salida (o cuando termina el día). Marca cada tarea como Hecho o No hecho, y escribe por qué para lo que no se hizo. También te enviamos un recordatorio por correo.",
+      },
+      {
         en: "No signal? Keep going. Taps and photos wait on your phone and send by themselves when signal comes back, with the time you took them.",
         es: "¿Sin señal? Sigue trabajando. Los registros y las fotos esperan en tu teléfono y se envían solos cuando vuelve la señal, con la hora en que los hiciste.",
       },

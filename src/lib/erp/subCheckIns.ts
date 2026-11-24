@@ -18,6 +18,7 @@
  */
 import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { wrapUpSummary, type WrapUpSummary } from "@/lib/erp/subWrapUpShared";
 import { escapeHtml, sendEmail } from "@/lib/email";
 import { getNotificationSetting } from "@/lib/notificationSettings";
 import { dayKey } from "@/lib/erp/schedule";
@@ -78,6 +79,11 @@ export type DayCheckIn = {
   crewCount: number | null;
   /** When the PM was emailed they hadn't checked in */
   missedAlertAt: string | null;
+  /** End-of-day wrap-up (subWrapUps.ts), once sent */
+  wrapUp: WrapUpSummary | null;
+  /** When they were emailed to wrap up, and reminded the next morning */
+  wrapUpEmailAt: string | null;
+  wrapUpReminderAt: string | null;
 };
 
 export type CheckInErrorCode = "NOT_TODAY" | "ALREADY_IN" | "NOT_IN" | "ALREADY_OUT" | "CREW" | "PHOTOS" | "INVALID";
@@ -379,6 +385,11 @@ type CheckInRow = {
   outLatitude: number | null;
   crewCount: number | null;
   missedAlertAt: Date | null;
+  wrapUpAt: Date | null;
+  wrapUpItems: unknown;
+  wrapUpNote: string | null;
+  wrapUpEmailAt: Date | null;
+  wrapUpReminderAt: Date | null;
 };
 
 function dayView(r: CheckInRow, photos: PhotoCounts, settings: SubPortalSettings): DayCheckIn {
@@ -400,6 +411,9 @@ function dayView(r: CheckInRow, photos: PhotoCounts, settings: SubPortalSettings
     outNoLocation: !!r.checkOutAt && r.outLatitude == null,
     crewCount: r.crewCount,
     missedAlertAt: r.missedAlertAt?.toISOString() ?? null,
+    wrapUp: wrapUpSummary(r),
+    wrapUpEmailAt: r.wrapUpEmailAt?.toISOString() ?? null,
+    wrapUpReminderAt: r.wrapUpReminderAt?.toISOString() ?? null,
   };
 }
 
@@ -433,6 +447,11 @@ export async function loadDayCheckIns(): Promise<Map<string, DayCheckIn>> {
       outLatitude: true,
       crewCount: true,
       missedAlertAt: true,
+      wrapUpAt: true,
+      wrapUpItems: true,
+      wrapUpNote: true,
+      wrapUpEmailAt: true,
+      wrapUpReminderAt: true,
     },
   });
   const [counts, settings] = await Promise.all([photoCountsFor(rows.map((r) => r.id)), loadSubPortalSettings()]);

@@ -173,6 +173,20 @@ export type FutureJob = {
   reviewReason: string | null;
 };
 
+/** One job's (or contract month's) finished work in one billing bucket, for
+ * the Billed vs paid lists on the Finance tab. */
+export type BillingItem = {
+  key: string;
+  /** Same bucket as the month rows: "YYYY-MM", or the range key */
+  monthKey: string;
+  status: "PAID" | "BILLED" | "NOT_BILLED";
+  title: string;
+  href: string;
+  cents: number;
+  /** What was counted: "Contract", SOV line names, "CO: ..." or the month */
+  pieces: string[];
+};
+
 export type FinanceJob = {
   id: string;
   /** Project id for a job, contract id for a janitorial contract month. */
@@ -211,6 +225,8 @@ export type FinanceSummary = {
   backlogJobs: number;
   /** The backlog projects themselves, biggest first (the Future revenue list). */
   futureJobs: FutureJob[];
+  /** Finished work behind Paid / Billed, waiting / Done, not billed, per job */
+  billingItems: BillingItem[];
   /** Sum of ACTIVE janitorial contracts' monthly rate. */
   recurringMonthlyCents: number;
   activeContracts: number;
@@ -408,10 +424,10 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
         laborEntries: { select: { id: true, employeeId: true, workerName: true, workDate: true, createdAt: true, hours: true, hourlyRateCents: true } },
         materialEntries: { select: { costCents: true, usedOn: true } },
         contractorAssignments: { select: { costCents: true, endDate: true, startDate: true, assignedDate: true, createdAt: true } },
-        sov: { select: { items: { select: { id: true, scheduledValueCents: true, completed: true, completedAt: true, billingStatus: true, paidAt: true }, orderBy: [{ order: "asc" }, { createdAt: "asc" }] } } },
+        sov: { select: { items: { select: { id: true, description: true, scheduledValueCents: true, completed: true, completedAt: true, billingStatus: true, paidAt: true }, orderBy: [{ order: "asc" }, { createdAt: "asc" }] } } },
         changeOrders: {
           select: {
-            id: true, status: true, billingStatus: true, completedAt: true, endDate: true, paidAt: true,
+            id: true, title: true, status: true, billingStatus: true, completedAt: true, endDate: true, paidAt: true,
             contractValueCents: true, estimatedCostCents: true,
             actualLaborCents: true, actualMaterialCents: true, actualTravelCents: true,
             materialEntries: { select: { costCents: true } },
@@ -497,6 +513,16 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
   // counted there, added together).
   const jobRows = new Map<string, FinanceJob>();
 
+  // The Billed vs paid lists: per job (or contract) and bucket, what was counted.
+  const billingItems = new Map<string, BillingItem>();
+  const addBillingItem = (monthKey: string, status: BillingItem["status"], who: string, title: string, href: string, cents: number, piece: string) => {
+    const key = `${monthKey}|${status}|${who}`;
+    const item = billingItems.get(key) ?? { key, monthKey, status, title, href, cents: 0, pieces: [] };
+    item.cents += cents;
+    item.pieces.push(piece);
+    billingItems.set(key, item);
+  };
+
   /** Count one piece of a project: its original contract, one change order,
    * one SOV line, or (with `spent`) one cost on an SOV project, which counts
    * on the day it happened in both views. Each piece has its own billing
@@ -514,6 +540,8 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
     paidDay: string | null;
     laborLogs: { id: string; employeeId: string | null }[];
     spent?: boolean;
+    /** For the Billed vs paid lists: "Contract", the SOV line or "CO: ..." */
+    pieceLabel?: string;
   }) => {
     const { project: p } = piece;
     const status = normalizeBillingStatus(piece.billingStatus);
@@ -528,6 +556,7 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
       if (status === "PAID") sm.paidCents += valueCents;
       else if (status === "BILLED") sm.billedCents += valueCents;
       else sm.notBilledCents += valueCents;
+      addBillingItem(completedBucket, status === "PAID" || status === "BILLED" ? status : "NOT_BILLED", `p:${p.id}`, p.jobTitle, `/erp/projects/${p.id}`, valueCents, piece.pieceLabel ?? "Contract");
     }
 
     // Paid view: unpaid pieces aren't counted yet; one paid before its paid
@@ -619,7 +648,7 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
           project: p, isChangeOrder: false, isSovLine: true, valueCents: share,
           laborCents: 0, contractorCents: 0, materialCents: 0,
           billingStatus: line.billingStatus, completedDay: day, paidDay: dayKeyOf(line.paidAt),
-          laborLogs: [],
+          laborLogs: [], pieceLabel: line.description,
         });
       }
       if (missingDay) warnings.noCompletionDate.push({ id: p.id, label: p.jobTitle, href: `/erp/projects/${p.id}` });
@@ -685,6 +714,7 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
         billingStatus: co.billingStatus, completedDay: day,
         paidDay: co.paidAt ? todayEasternKey(co.paidAt) : null,
         laborLogs: c.laborFromLogs ? co.laborers : [],
+        pieceLabel: `CO: ${co.title}`,
       });
     }
 
@@ -761,6 +791,15 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
       if (status === "PAID") sm.paidCents += partCents;
       else if (status === "BILLED") sm.billedCents += partCents;
       else sm.notBilledCents += partCents;
+      addBillingItem(
+        range ? FINANCE_RANGE_KEY : key,
+        status === "PAID" || status === "BILLED" ? status : "NOT_BILLED",
+        `month:${period.recurringContractId}`,
+        `${period.recurringContract.building.name} (monthly)`,
+        `/erp/janitorial/contracts/${period.recurringContractId}`,
+        partCents,
+        new Date(`${key}-15T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" }),
+      );
     }
 
     // Paid view: a month paid before paidAt existed falls back to its own month.
@@ -1037,6 +1076,7 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
     backlogCents: futureJobs.reduce((s, j) => s + j.valueCents, 0),
     backlogJobs: futureJobs.length,
     futureJobs,
+    billingItems: [...billingItems.values()].sort((a, b) => b.cents - a.cents),
     recurringMonthlyCents: activeContracts.reduce((s, c) => s + c.monthlyRateCents, 0),
     activeContracts: activeContracts.length,
     nextContractStartKey: activeContracts

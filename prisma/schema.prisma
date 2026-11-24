@@ -2449,6 +2449,17 @@ model SubCheckIn {
   /// The PM's quality review of this day's work (subReviews.ts), made at check-out
   review SubReview?
 
+  /// End-of-day wrap-up (subWrapUps.ts): the lead marks each task done or
+  /// not done, with a reason for each one not done. Locked once sent.
+  wrapUpAt         DateTime?
+  /// [{ label, done, reason }] in the order the tasks were shown
+  wrapUpItems      Json?
+  wrapUpNote       String?
+  /// When the wrap-up email went to the sub (after the day's end time)
+  wrapUpEmailAt    DateTime?
+  /// Next morning, still not wrapped up: sub reminded and PM told
+  wrapUpReminderAt DateTime?
+
   @@unique([contractorId, jobKey, date])
   @@index([projectId, date])
   @@index([changeOrderId, date])
@@ -3419,6 +3430,10 @@ model HubSpotInvoiceLineItemMatch {
   resolvedByUserId String?
   resolvedByUser   ErpUser? @relation(fields: [resolvedByUserId], references: [id], onDelete: SetNull)
   resolvedByName   String?
+  /// Why a person dismissed this line on the invoice cleanup page (status
+  /// IGNORED): ALREADY_PAID | NOT_IN_ERP | OTHER. See lib/erp/invoiceCleanupShared.ts.
+  dismissReason    String?
+  dismissNote      String?
   /// false = a one-off resolution the human didn't want remembered as a reusable alias.
   createAlias      Boolean  @default(true)
 

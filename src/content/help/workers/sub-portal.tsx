@@ -113,6 +113,22 @@ export function SubPortal() {
           <strong>No signal:</strong> taps and photos wait on the phone and send with their own time when signal comes back
           (up to 2 hours).
         </LI>
+        <LI>
+          <strong>End-of-day wrap-up:</strong> the sub running the day marks each task <strong>Done</strong> or{" "}
+          <strong>Not done</strong>, and has to write why for anything not done. The tasks are the day&apos;s SOV lines,
+          scope items and change orders (a turnover unit uses its checklist sections; a change order day is the change
+          order). A card shows at the top of their page once they check out or the day ends, for up to 3 days.
+        </LI>
+        <LI>
+          <strong>Wrap-up emails:</strong> an hour after the day&apos;s end time (5 PM when there&apos;s no end time) they get
+          an email with a button to their page, in their language. Anything not done is emailed to the day&apos;s PM with
+          the reason (Sub work not done). If they still haven&apos;t sent it by 8 AM the next day, they get a reminder and
+          the PM is told (Sub didn&apos;t wrap up the day). Turn these on or off and add people on the Notifications page.
+        </LI>
+        <LI>
+          <strong>Where it shows:</strong> on the schedule&apos;s day card (red when something wasn&apos;t done; hover the{" "}
+          <strong>i</strong> for every task) and on the day&apos;s Sub Reviews page.
+        </LI>
       </UL>
       <P>
         Photos show on the project&apos;s <strong>Sub Reviews</strong> tab (under Quality &amp; Safety), and on turnovers at the top of the Checklist tab

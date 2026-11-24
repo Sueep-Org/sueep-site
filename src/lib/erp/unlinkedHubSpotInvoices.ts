@@ -25,7 +25,7 @@ export type UnlinkedHubSpotInvoice = {
   href: string;
 };
 
-type Header = { id: string; number: string | null; status: string | null; date: string | null };
+export type Header = { id: string; number: string | null; status: string | null; date: string | null };
 
 async function fetchHeaders(ids: string[]): Promise<Header[]> {
   const records = await batchRead("invoices", ids, ["hs_number", "hs_invoice_status", "hs_invoice_date"]);
@@ -41,7 +41,7 @@ async function fetchHeaders(ids: string[]): Promise<Header[]> {
 const cachedHeaders = unstable_cache(fetchHeaders, ["unlinked-hubspot-invoice-headers-v1"], { revalidate: 3600 });
 
 /** Cached inside the app; scripts have no Next cache, so they read HubSpot directly. */
-async function readHeaders(ids: string[]): Promise<Header[]> {
+export async function readHeaders(ids: string[]): Promise<Header[]> {
   try {
     return await cachedHeaders(ids);
   } catch (e) {

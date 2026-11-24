@@ -101,6 +101,29 @@ export default async function SubReviewPage({ params }: PageProps) {
         </p>
       </div>
 
+      <section className="rounded-lg border border-gray-200 bg-white p-4">
+        <h2 className="text-sm font-semibold text-gray-900">Their wrap-up</h2>
+        {r.wrapUp ? (
+          <>
+            <ul className="mt-2 space-y-1 text-sm">
+              {r.wrapUp.items.map((i, n) => (
+                <li key={n} className={i.done ? "text-gray-700" : "text-red-700"}>
+                  <span className={`mr-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${i.done ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
+                    {i.done ? "Done" : "Not done"}
+                  </span>
+                  {i.label}
+                  {i.reason ? <span className="text-gray-600">: {i.reason}</span> : null}
+                </li>
+              ))}
+            </ul>
+            {r.wrapUp.note && <p className="mt-2 whitespace-pre-line text-sm text-gray-600">Note: {r.wrapUp.note}</p>}
+            <p className="mt-2 text-xs text-gray-400">Sent {when(r.wrapUp.at)}</p>
+          </>
+        ) : (
+          <p className="mt-1 text-sm text-gray-500">Not sent yet. They get an email an hour after the day ends.</p>
+        )}
+      </section>
+
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-gray-900">Before and after</h2>
         {areaKeys.length === 0 ? (

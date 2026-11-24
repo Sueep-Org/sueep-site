@@ -207,6 +207,32 @@ export function InvoicesAndPayments() {
         Make invoices on Ready to Send rather than straight in QuickBooks. Invoices made there are linked to their work
         automatically, so they never need linking by hand.
       </Callout>
+
+      <H2>Fix old unpaid work</H2>
+      <P>
+        Admins and the Business Manager: click <strong>Fix old unpaid work</strong> at the top of the Invoices page. It
+        lists jobs whose finished work still shows unpaid, usually because the invoice was never attached to it. Each job
+        asks one question, and leaves the list once it&apos;s answered.
+      </P>
+      <UL>
+        <LI>
+          <strong>Paid invoice found:</strong> a paid invoice on the job&apos;s HubSpot deal isn&apos;t attached to anything.
+          Click <strong>Attach to the work</strong>, then Link on that invoice, and tick what it paid for. Those turn Paid
+          with the invoice&apos;s date. <strong>Not for this</strong> clears it with a reason.
+        </LI>
+        <LI>
+          <strong>What happened?</strong> for work with no invoice: <strong>It was paid</strong> asks the date the money came
+          in (Finance counts it in that month); <strong>Won&apos;t be billed</strong> voids it with a reason (duplicate,
+          billed on another invoice, cancelled, no charge); <strong>Still needs billing</strong> opens it on Billing.{" "}
+          <strong>See the items</strong> lets you untick some, so the answer applies only to the ones picked.
+        </LI>
+        <LI>
+          At the bottom, folded: <strong>paid invoices with nothing to fix</strong> (their job is already Paid;{" "}
+          <strong>Clear all</strong> takes them off the lists), <strong>paid invoices we can&apos;t match to a job</strong>,
+          and <strong>cleared earlier</strong> with Undo. Clearing never changes HubSpot or QuickBooks.
+        </LI>
+        <LI>A line at the very bottom tells the bookkeeper how many open invoices never reached QuickBooks.</LI>
+      </UL>
     </>
   );
 }

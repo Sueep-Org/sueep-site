@@ -232,9 +232,62 @@ export async function applyPaidInvoiceLinks(scope: { projectId?: string; buildin
     if (countedMonths.length > 0) {
       await prisma.hubSpotContractInvoice.updateMany({ where: { id: { in: countedMonths } }, data: { paidAppliedAt: new Date() } });
     }
+
+    result.reviewCleared += await clearCoveredBuildingRows(scope.buildingId);
   }
 
   return result;
+}
+
+/**
+ * clearCoveredReviewRows for building invoices (units, unit change orders,
+ * janitorial months): their match rows carry a buildingId, not a projectId,
+ * so they were never cleared and stayed "needs review" after being linked.
+ * Same rule: every link on the invoice is paid, everything it's linked to is
+ * Paid, and the links add up to the invoice's lines.
+ */
+async function clearCoveredBuildingRows(buildingId?: string): Promise<number> {
+  const pending = await prisma.hubSpotInvoiceLineItemMatch.findMany({
+    where: { status: "PENDING_REVIEW", buildingId: buildingId ?? { not: null } },
+    select: { hubspotInvoiceId: true },
+  });
+  const invoiceIds = [...new Set(pending.map((p) => p.hubspotInvoiceId))];
+  if (invoiceIds.length === 0) return 0;
+
+  const where = { hubspotInvoiceId: { in: invoiceIds }, status: { not: "voided" } };
+  const [lines, units, cos, months] = await Promise.all([
+    prisma.hubSpotInvoiceLineItemMatch.findMany({
+      where: { hubspotInvoiceId: { in: invoiceIds }, buildingId: { not: null } },
+      select: { id: true, hubspotInvoiceId: true, amountCents: true, status: true },
+    }),
+    prisma.hubSpotUnitInvoice.findMany({ where, select: { hubspotInvoiceId: true, status: true, amountCents: true, turnoverRequest: { select: { billingStatus: true } } } }),
+    prisma.hubSpotSovInvoice.findMany({ where: { ...where, changeOrderId: { not: null } }, select: { hubspotInvoiceId: true, status: true, amountCents: true, changeOrder: { select: { billingStatus: true } } } }),
+    prisma.hubSpotContractInvoice.findMany({ where, select: { hubspotInvoiceId: true, status: true, amountCents: true, period: { select: { billingStatus: true } } } }),
+  ]);
+  const links = [
+    ...units.map((l) => ({ id: l.hubspotInvoiceId, status: l.status, cents: l.amountCents, targetPaid: normalizeBillingStatus(l.turnoverRequest?.billingStatus) === "PAID" })),
+    ...cos.map((l) => ({ id: l.hubspotInvoiceId, status: l.status, cents: l.amountCents, targetPaid: normalizeBillingStatus(l.changeOrder?.billingStatus) === "PAID" })),
+    ...months.map((l) => ({ id: l.hubspotInvoiceId, status: l.status, cents: l.amountCents, targetPaid: normalizeBillingStatus(l.period.billingStatus) === "PAID" })),
+  ];
+  const linksByInvoice = groupBy(links, (l) => l.id);
+  const linesByInvoice = groupBy(lines, (l) => l.hubspotInvoiceId);
+
+  const toClear: string[] = [];
+  for (const invoiceId of invoiceIds) {
+    const group = linksByInvoice.get(invoiceId);
+    if (!group || !group.every((l) => l.status === "paid" && l.targetPaid)) continue;
+    const invoiceLines = linesByInvoice.get(invoiceId) ?? [];
+    const linked = group.reduce((s, l) => s + l.cents, 0);
+    const invoiced = invoiceLines.reduce((s, r) => s + r.amountCents, 0);
+    if (!amountReconciles(linked, invoiced, AMOUNT_TOLERANCE_CENTS)) continue;
+    toClear.push(...invoiceLines.filter((r) => r.status === "PENDING_REVIEW").map((r) => r.id));
+  }
+  if (toClear.length === 0) return 0;
+  await prisma.hubSpotInvoiceLineItemMatch.updateMany({
+    where: { id: { in: toClear } },
+    data: { status: "RESOLVED", resolvedAt: new Date(), resolvedByName: "Linked invoice" },
+  });
+  return toClear.length;
 }
 
 /**

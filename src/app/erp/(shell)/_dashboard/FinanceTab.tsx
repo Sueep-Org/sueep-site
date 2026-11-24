@@ -18,6 +18,7 @@ import {
   type FinanceMonth,
   type FinanceJob,
   type FutureJob,
+  type BillingItem,
   type GapItem,
   type CommissionItem,
 } from "@/lib/erp/financeSummary";
@@ -122,7 +123,80 @@ function Headline({ label, cents, sub, title, negative }: { label: string; cents
 
 /** Finished work by billing status, closest to cash first (one blue, lighter
  * the further from paid), with sold-but-not-finished work beside it. */
-function BillingCard({ parts, future }: { parts: { label: string; cents: number; color: string; hint: string }[]; future: FutureJob[] }) {
+type BillingPart = { label: string; cents: number; color: string; hint: string; items: BillingItem[]; fix?: { label: string; href: string } };
+
+/** One bucket's jobs, merged across months, biggest first. */
+function mergeItems(items: BillingItem[]): BillingItem[] {
+  const byJob = new Map<string, BillingItem>();
+  for (const i of items) {
+    const k = `${i.status}|${i.href}|${i.title}`;
+    const m = byJob.get(k);
+    if (m) {
+      m.cents += i.cents;
+      m.pieces = [...m.pieces, ...i.pieces];
+    } else byJob.set(k, { ...i, pieces: [...i.pieces] });
+  }
+  return [...byJob.values()].sort((a, b) => b.cents - a.cents);
+}
+
+function piecesText(pieces: string[]): string {
+  const uniq = [...new Set(pieces)];
+  if (uniq.length === 1) return uniq[0];
+  return `${pieces.length} items: ${uniq.slice(0, 3).join(", ")}${uniq.length > 3 ? "…" : ""}`;
+}
+
+/** A bucket's label and amount; click to see the jobs behind it. */
+function BillingPartList({ part }: { part: BillingPart }) {
+  const items = mergeItems(part.items);
+  return (
+    <details className="group relative">
+      <summary className="cursor-pointer list-none rounded-md px-1.5 py-1 -mx-1.5 hover:bg-gray-50" title={`${part.hint}: ${money(part.cents)}. Click to see the jobs.`}>
+        <dt className="flex items-center gap-1.5 text-xs text-gray-500">
+          <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: part.color }} />
+          {part.label}
+          <span aria-hidden className="text-gray-300 transition-transform group-open:rotate-90">›</span>
+        </dt>
+        <dd className="mt-0.5 text-sm font-semibold tabular-nums text-gray-900 underline decoration-gray-300 decoration-dotted underline-offset-4">{short(part.cents)}</dd>
+      </summary>
+      <div className="absolute left-0 z-20 mt-2 w-[26rem] max-w-[90vw] rounded-xl border border-gray-200 bg-white text-xs shadow-lg">
+        <div className="flex items-baseline justify-between gap-3 border-b border-gray-100 px-4 py-3">
+          <div>
+            <p className="text-sm font-semibold text-gray-900">{part.label}</p>
+            <p className="text-gray-500">{part.hint}</p>
+          </div>
+          <p className="shrink-0 text-right">
+            <span className="block text-sm font-semibold tabular-nums text-gray-900">{money(part.cents)}</span>
+            <span className="text-gray-400">{items.length} {items.length === 1 ? "job" : "jobs"}</span>
+          </p>
+        </div>
+        {items.length === 0 ? (
+          <p className="px-4 py-3 text-gray-400">Nothing here for these dates.</p>
+        ) : (
+          <ul className="max-h-80 divide-y divide-gray-50 overflow-y-auto px-2 py-1">
+            {items.map((i) => (
+              <li key={i.key}>
+                <Link href={i.href} className="flex items-baseline justify-between gap-3 rounded px-2 py-1.5 hover:bg-gray-50">
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium text-gray-800" title={i.title}>{i.title}</span>
+                    <span className="block truncate text-gray-400" title={[...new Set(i.pieces)].join("\n")}>{piecesText(i.pieces)}</span>
+                  </span>
+                  <span className="shrink-0 tabular-nums text-gray-900">{money(i.cents)}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+        {part.fix && (
+          <div className="border-t border-gray-100 px-4 py-2.5">
+            <Link href={part.fix.href} className="font-medium text-pink-600 hover:underline">{part.fix.label} →</Link>
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
+function BillingCard({ parts, future }: { parts: BillingPart[]; future: FutureJob[] }) {
   const futureCents = future.reduce((s, j) => s + j.valueCents, 0);
   const review = future.filter((j) => j.reviewReason);
   const reviewCents = review.reduce((s, j) => s + j.valueCents, 0);
@@ -142,13 +216,7 @@ function BillingCard({ parts, future }: { parts: { label: string; cents: number;
             </div>
             <dl className="mt-3 flex flex-wrap gap-x-8 gap-y-2">
               {parts.map((p) => (
-                <div key={p.label} title={`${p.hint}: ${money(p.cents)}`}>
-                  <dt className="flex items-center gap-1.5 text-xs text-gray-500">
-                    <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: p.color }} />
-                    {p.label}
-                  </dt>
-                  <dd className="mt-0.5 text-sm font-semibold tabular-nums text-gray-900">{short(p.cents)}</dd>
-                </div>
+                <BillingPartList key={p.label} part={p} />
               ))}
             </dl>
           </>
@@ -570,10 +638,20 @@ export async function FinanceTab({ period: periodParam, by }: { period: string |
 
   const jobCosts = total.laborCents + total.materialCents;
   const totalCosts = jobCosts + total.overheadCents;
-  const billingParts = [
-    { label: "Paid", cents: total.paidCents, color: "#1c5cab", hint: "Finished and marked paid" },
-    { label: "Billed, waiting", cents: total.billedCents, color: "#4a90e2", hint: "Finished and invoiced, not paid yet" },
-    { label: "Done, not billed", cents: total.notBilledCents, color: "#a9cdf5", hint: "Finished, not invoiced yet" },
+  // The jobs behind each billing number, for the same dates as the totals.
+  const periodBilling = isRange ? summary.billingItems : summary.billingItems.filter((i) => (isAll ? i.monthKey >= FINANCE_DATA_START : i.monthKey.startsWith(selected)));
+  const billingParts: BillingPart[] = [
+    { label: "Paid", cents: total.paidCents, color: "#1c5cab", hint: "Finished and marked paid", items: periodBilling.filter((i) => i.status === "PAID") },
+    {
+      label: "Billed, waiting", cents: total.billedCents, color: "#4a90e2", hint: "Finished and invoiced, not paid yet",
+      items: periodBilling.filter((i) => i.status === "BILLED"),
+      fix: { label: "See late invoices on Invoices", href: "/erp/invoices" },
+    },
+    {
+      label: "Done, not billed", cents: total.notBilledCents, color: "#a9cdf5", hint: "Finished, not invoiced yet",
+      items: periodBilling.filter((i) => i.status === "NOT_BILLED"),
+      fix: { label: "Bill these on Project Billing", href: "/erp/billing" },
+    },
   ];
   const costs = costBreakdown(total).filter((c) => c.cents !== 0);
   // Months whose QuickBooks costs (rent, software...) aren't all entered yet use the
