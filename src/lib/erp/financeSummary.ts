@@ -113,7 +113,7 @@ export type FinanceMonth = {
   /** Costs only QuickBooks knows about (rent, vehicles, software...), by group (qboOverhead.ts). Included in overheadCents. */
   qboGroups: QboGroupCents;
   qboOverheadCents: number;
-  /** Months in this bucket, how many have their QuickBooks costs in, and how many use an estimate instead (see qboMonthComplete). */
+  /** Months in this bucket, how many have their QuickBooks costs in, and how many use an estimate instead (only the month in progress, or a past month with nothing in QuickBooks). */
   qboMonthsInView: number;
   qboMonthsBooked: number;
   qboMonthsEstimated: number;
@@ -213,7 +213,7 @@ export type GapItem = { id: string; label: string; href: string; detail?: string
 
 export type FinanceSummary = {
   months: FinanceMonth[];
-  /** The latest month whose QuickBooks costs look complete ("YYYY-MM"), null when none do. */
+  /** The latest finished month with QuickBooks costs ("YYYY-MM"), null when none do. */
   qboBookedThrough: string | null;
   jobs: FinanceJob[];
   /** Today, "YYYY-MM-DD" (Eastern). */
@@ -361,22 +361,8 @@ function monthKeysBetween(firstKey: string, lastKey: string): string[] {
  * 2026, so earlier months are missing jobs and costs and would mislead. */
 export const FINANCE_DATA_START = "2026-08";
 
-/** Recent complete months averaged for a month whose QuickBooks costs aren't in yet. */
+/** Recent finished months averaged for the month in progress (or a past month with no QuickBooks costs). */
 const QBO_ESTIMATE_MONTHS = 3;
-
-/**
- * Whether a finished month's QuickBooks costs look fully entered: at least
- * 60% of the middle of the up-to-3 months before it. The bookkeeper enters
- * costs over the following weeks, so a month far below its neighbours is
- * still being entered. With nothing to compare to, any costs count.
- */
-export function qboMonthComplete(totalCents: number, previousCents: number[]): boolean {
-  if (totalCents <= 0) return false;
-  const prior = previousCents.filter((c) => c > 0).sort((a, b) => a - b);
-  if (prior.length === 0) return true;
-  const middle = prior[Math.floor(prior.length / 2)]!;
-  return totalCents >= middle * 0.6;
-}
 
 /** Every "YYYY-MM-DD" from `from` to `to`, inclusive. */
 function dayKeysBetween(from: string, to: string): string[] {
@@ -999,9 +985,9 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
 
   // QuickBooks overhead: costs only the books have (rent, vehicles, software,
   // taxes...), from the P&L synced on the QuickBooks page. Nobody has to mark a
-  // month done: a finished month counts once its costs look complete (see
-  // qboMonthComplete). Months that don't yet, and the month in progress, use
-  // the average of the last complete months instead and are marked an estimate.
+  // month done: once a month is over, whatever QuickBooks has for it counts as
+  // its real costs. Only the month in progress (or a past month with nothing in
+  // QuickBooks) uses the average of the last finished months, marked an estimate.
   // A custom range takes each month's share by days.
   const qboLines = await prisma.qboPnlLine.findMany({
     where: { section: { in: [...QBO_COST_SECTIONS] } },
@@ -1020,7 +1006,7 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
     return g ? QBO_GROUPS.reduce((sum, group) => sum + g[group], 0) : 0;
   };
   const qboMonths = [...qboByMonth.keys()].filter((k) => k < currentMonthKey).sort();
-  const complete = new Set(qboMonths.filter((mk, i) => qboMonthComplete(qboTotal(mk), qboMonths.slice(Math.max(0, i - 3), i).map(qboTotal))));
+  const complete = new Set(qboMonths.filter((mk) => qboTotal(mk) > 0));
   const completeList = [...complete].sort();
   /** Average of the last QBO_ESTIMATE_MONTHS complete months before this one, per group. */
   const estimateFor = (mk: string): QboGroupCents | null => {
