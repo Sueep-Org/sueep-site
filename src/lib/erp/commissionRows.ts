@@ -225,7 +225,8 @@ export async function loadCommissionRows(): Promise<{
     .map((period) => {
       if (!period.amountCents) return null;
       if (period.billingStatus !== "PAID") return null;
-      const assigned = period.recurringContract.commissionEmployeeId;
+      // A month's own owner (set when a contract changed hands) beats the contract's.
+      const assigned = period.commissionEmployeeId ?? period.recurringContract.commissionEmployeeId;
       const ownerId = assigned && employeeById.has(assigned) ? assigned : null;
       const monthIndex =
         (period.periodStart.getUTCFullYear() - period.recurringContract.startDate.getUTCFullYear()) * 12 +
