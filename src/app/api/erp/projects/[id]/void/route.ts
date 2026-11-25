@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getErpAuth, canSeeFinancials } from "@/lib/erpAuth";
 import { scheduleEditForbidden } from "@/lib/erp/scheduleAccess";
-import { voidJob } from "@/lib/erp/voidJob";
+import { unvoidJob, voidJob } from "@/lib/erp/voidJob";
 import { cancelUpcomingDaysOfVoidedJob, personName } from "@/lib/erp/scheduleDayRemove";
 import { todayEasternAsUtcMidnight } from "@/lib/erp/dates";
 
@@ -31,4 +31,20 @@ export async function POST(req: Request, ctx: Ctx) {
     ? await cancelUpcomingDaysOfVoidedJob(id, reason, await personName(auth.email), todayEasternAsUtcMidnight())
     : 0;
   return NextResponse.json({ ...result, cancelledDays });
+}
+
+// Undoes a void (voidJob.ts unvoidJob): back to Not billed, reason cleared.
+// Days the void cancelled stay gray on the calendar with their notes. Same
+// roles as voiding.
+export async function DELETE(_req: Request, ctx: Ctx) {
+  const auth = await getErpAuth();
+  if (!auth) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!canSeeFinancials(auth.role)) {
+    const forbidden = await scheduleEditForbidden();
+    if (forbidden) return forbidden;
+  }
+  const { id } = await ctx.params;
+  const result = await unvoidJob(id);
+  if (!result.ok) return NextResponse.json({ error: result.message }, { status: result.message === "Job not found" ? 404 : 409 });
+  return NextResponse.json(result);
 }

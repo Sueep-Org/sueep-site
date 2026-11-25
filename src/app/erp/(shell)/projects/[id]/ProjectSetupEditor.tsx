@@ -5,7 +5,7 @@ import { HolidayHint } from "@/app/erp/components/HolidayHint";
 import { useMemo, useRef, useState } from "react";
 import { deriveProjectLifecycle, type ProjectLifecycle } from "@/lib/erp/projectLifecycle";
 import { PROJECT_SEGMENT_OPTIONS } from "@/lib/erp/projectSegments";
-import { Button, inputClass, labelClass, useAskText } from "@/app/erp/components/ui";
+import { Button, inputClass, labelClass, useAskText, useConfirm } from "@/app/erp/components/ui";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 
 const input = inputClass.md;
@@ -71,6 +71,7 @@ export function ProjectSetupEditor({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const askText = useAskText();
+  const confirm = useConfirm();
 
   const currentLifecycle = useMemo(
     () => deriveProjectLifecycle(status, projectDateIso, hasActiveChangeOrder, billingStatus),
@@ -113,7 +114,7 @@ export function ProjectSetupEditor({
   async function voidThisJob() {
     const reason = await askText({
       title: "Void this job?",
-      message: "It comes off every to-bill list and counts as $0 revenue on the Finance tab. Its days turn gray on the calendar with a VOID tag, and days after today are cancelled so nobody is invited. Notes on removed days stay. Bring it back any time from Billing status.",
+      message: "It comes off every to-bill list and counts as $0 revenue on the Finance tab. Its days turn gray on the calendar with a VOID tag, and days after today are cancelled so nobody is invited. Notes on removed days stay. Undo it any time from here.",
       placeholder: "Why it won't be billed",
       confirmLabel: "Void",
     });
@@ -133,6 +134,26 @@ export function ProjectSetupEditor({
       const fullyVoided = data.message === "Job voided" || data.message === "Job was already voided";
       if (fullyVoided) setLifecycle("VOIDED");
       else if (data.message) setNotice(data.message);
+      router.refresh();
+    } catch {
+      setError("Network error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Undo void: back to Not billed with the reason cleared. Days the void
+  // cancelled stay gray on the calendar with their notes.
+  async function undoVoid() {
+    if (!(await confirm({ title: "Undo void?", message: "The job goes back to Not billed and shows on the to-bill lists again. Days already taken off the calendar stay gray with their notes; restore any you need from the calendar.", confirmLabel: "Undo void" }))) return;
+    setError("");
+    setNotice("");
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/erp/projects/${projectId}/void`, { method: "DELETE" });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) { setError(data.error || "Couldn't undo the void"); return; }
+      setLifecycle(deriveProjectLifecycle(status, projectDateIso, hasActiveChangeOrder, "NOT_BILLED"));
       router.refresh();
     } catch {
       setError("Network error");
@@ -250,7 +271,14 @@ export function ProjectSetupEditor({
             {notice ? <p className="mt-1 text-[11px] text-amber-700">{notice}</p> : null}
             {currentLifecycle === "VOIDED" ? (
               <p className="mt-1 text-[11px] text-gray-500">
-                Voided in billing{voidReason ? `: ${voidReason}` : ""}. Change the billing status to bring it back.
+                Voided in billing{voidReason ? `: ${voidReason}` : ""}.{" "}
+                {canVoid ? (
+                  <button type="button" onClick={() => void undoVoid()} disabled={loading} className="font-semibold text-pink-600 hover:underline disabled:opacity-50">
+                    Undo void
+                  </button>
+                ) : (
+                  "Change the billing status to bring it back."
+                )}
               </p>
             ) : null}
             {status === "COMPLETE" && completedAtIso ? (

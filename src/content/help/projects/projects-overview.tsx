@@ -34,7 +34,7 @@ export function ProjectsOverview() {
           <Img src="/help/projects_overview/details_5.5.png" alt="Expanded project row" />
           This tab combines what used to be two separate tabs. It has the project&apos;s work
           order fields (name, address, service type, main points of contact, and any notes to the
-          PM), plus its setup fields: lifecycle (Upcoming, WIP, or Completed; a voided project shows <strong>Voided</strong> and can&apos;t be changed here until its billing status is changed), segment, PM,
+          PM), plus its setup fields: lifecycle (Upcoming, WIP, or Completed; a voided project shows <strong>Voided</strong> and can&apos;t be changed here; click <strong>Undo void</strong> under it to put it back to Not billed), segment, PM,
           supervisor, and start/end dates.
           <Callout type="info">
             When the whole job is finished, click <strong>Mark job complete</strong> at the top of the project page and
