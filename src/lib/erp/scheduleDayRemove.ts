@@ -53,7 +53,16 @@ export async function removeProjectDay(
       existing.supervisorContractor?.name ??
       null;
     removal = await prisma.scheduleDayRemoval.create({
-      data: { projectId: existing.projectId, date: existing.date, reason: opts.reason, note: opts.note, coveredBy, removedByName: opts.removedByName },
+      data: {
+        projectId: existing.projectId,
+        date: existing.date,
+        reason: opts.reason,
+        note: opts.note,
+        coveredBy,
+        removedByName: opts.removedByName,
+        dayComment: existing.comment,
+        dayInternalNote: existing.internalNote,
+      },
       select: { id: true, note: true, coveredBy: true, removedByName: true },
     });
   }

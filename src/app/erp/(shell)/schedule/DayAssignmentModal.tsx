@@ -118,6 +118,8 @@ export function DayAssignmentModal({
   answers = {},
   initialProjectId,
   initialChangeOrderId,
+  initialComment,
+  initialInternalNote,
   onClose,
   onCreated,
   onSeriesCreated,
@@ -145,6 +147,9 @@ export function DayAssignmentModal({
   initialProjectId?: string;
   /** Pre-selects a change order instead (opens in change order mode), e.g. restoring a CO's removed day. */
   initialChangeOrderId?: string;
+  /** Prefills the day's comment and staff note, e.g. a restored day's old notes. */
+  initialComment?: string;
+  initialInternalNote?: string;
   onClose: () => void;
   onCreated: (assignment: ScheduleDayAssignment) => void;
   /** Fired instead of onCreated when a repeat/range is active, one row per generated day. */
@@ -192,9 +197,9 @@ export function DayAssignmentModal({
   // scheduled on a day between its start/end, not just those two days.
   const [coPicks, setCoPicks] = useState<string[]>([]);
   // Free-text note, mainly for when there are no SOV items yet to pick from.
-  const [comment, setComment] = useState("");
+  const [comment, setComment] = useState(initialComment ?? "");
   // Staff-only note, never sent in invites.
-  const [internalNote, setInternalNote] = useState("");
+  const [internalNote, setInternalNote] = useState(initialInternalNote ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [deletingSeriesId, setDeletingSeriesId] = useState<string | null>(null);

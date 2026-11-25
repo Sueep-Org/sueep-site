@@ -334,6 +334,8 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     coveredBy: r.coveredBy,
     removedByName: r.removedByName,
     removedAt: r.createdAt.toISOString(),
+    dayComment: r.dayComment,
+    dayInternalNote: r.dayInternalNote,
   }));
 
   const workerAssignments: ScheduleWorkerAssignment[] = workerAssignmentRows.map((a) => ({

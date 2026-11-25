@@ -181,7 +181,7 @@ export function CoDayPopover({
       const res = await fetch("/api/erp/schedule/co-day-removals", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ changeOrderId: co.id, dateKey, reason, note, coveredBy }),
+        body: JSON.stringify({ changeOrderId: co.id, dateKey, reason, note, coveredBy, dayComment: assignment?.comment ?? null, dayInternalNote: assignment?.internalNote ?? null }),
       });
       const data = (await res.json().catch(() => ({}))) as {
         error?: string;
@@ -203,6 +203,8 @@ export function CoDayPopover({
           coveredBy: data.removal.coveredBy,
           removedByName: data.removal.removedByName,
           removedAt: new Date().toISOString(),
+          dayComment: assignment?.comment ?? null,
+          dayInternalNote: assignment?.internalNote ?? null,
         });
       }
       onClose();

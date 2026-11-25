@@ -1010,6 +1010,14 @@ export function SchedulePlanner({
     }
   }
 
+  // A restored day keeps its old staff note plus a line saying why it was
+  // removed, so the history isn't lost when the gray day comes off.
+  function restoredInternalNote(r: ScheduleDayRemovalRow): string {
+    const when = new Date(r.removedAt).toLocaleDateString("en-US", { month: "numeric", day: "numeric" });
+    const removedLine = `Removed ${when}${r.removedByName ? ` by ${r.removedByName}` : ""} (${removalReasonLabel(removalReasons, r.reason)})${r.note ? `: ${r.note}` : ""}`;
+    return [r.dayInternalNote, removedLine].filter(Boolean).join("\n");
+  }
+
   function startRestoreRemoval(r: ScheduleDayRemovalRow) {
     setRestoringRemoval(r);
     setOpenDayKey(r.dateKey);
@@ -1023,7 +1031,7 @@ export function SchedulePlanner({
       await handleUndoVoid(projectId);
       return;
     }
-    if (!(await confirm({ title: "Restore this day?", message: `Puts ${title} back on ${dayCellLabel(r.dateKey)}. Pick who's covering it and save, and the gray day goes away.`, confirmLabel: "Restore" }))) return;
+    if (!(await confirm({ title: "Restore this day?", message: `Puts ${title} back on ${dayCellLabel(r.dateKey)} with its old notes, plus a staff note saying why it was removed. Pick who's covering it and save, and the gray day goes away.`, confirmLabel: "Restore" }))) return;
     startRestoreRemoval(r);
   }
 
@@ -1089,6 +1097,8 @@ export function SchedulePlanner({
             coveredBy: r.coveredBy,
             removedByName: r.removedByName,
             removedAt: new Date().toISOString(),
+            dayComment: assignment.comment,
+            dayInternalNote: assignment.internalNote,
           },
         ]);
       }
@@ -4767,6 +4777,8 @@ export function SchedulePlanner({
                                     {r.changeOrderId ? <div className="text-gray-300">{CHANGE_ORDER_LABEL} · Project: {project.jobTitle}</div> : null}
                                     <div className="text-gray-300">Removed: {removalReasonLabel(removalReasons, r.reason)}</div>
                                     {r.note && r.reason !== JOB_VOIDED_REMOVAL ? <div className="line-clamp-3 text-gray-300">Note: {r.note}</div> : null}
+                                    {r.dayComment ? <div className="line-clamp-3 text-gray-300">Day notes: {r.dayComment}</div> : null}
+                                    {r.dayInternalNote ? <div className="line-clamp-3 text-gray-300">Staff note: {r.dayInternalNote}</div> : null}
                                     <VoidedLine reason={project.voidReason ?? (r.reason === JOB_VOIDED_REMOVAL ? r.note : null)} />
                                     {r.coveredBy ? <div className="text-gray-300">Was covered by: {r.coveredBy}</div> : null}
                                     <div className="text-gray-400">
@@ -4896,6 +4908,8 @@ export function SchedulePlanner({
           existingCoWorkers={coWorkerAssignments.filter((a) => a.dateKey === openDayKey)}
           initialProjectId={openDayInitialProjectId ?? undefined}
           initialChangeOrderId={restoringRemoval?.changeOrderId ?? undefined}
+          initialComment={restoringRemoval?.dayComment ?? undefined}
+          initialInternalNote={restoringRemoval ? restoredInternalNote(restoringRemoval) : undefined}
           onClose={() => {
             setOpenDayKey(null);
             setOpenDayInitialProjectId(null);

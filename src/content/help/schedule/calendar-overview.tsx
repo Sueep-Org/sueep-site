@@ -327,7 +327,7 @@ export function ScheduleCalendarOverview() {
             and sends the cancellations, but leaves a <strong>gray, crossed-out chip</strong> on that day. Hover it
             to see the reason, the note, who was covering it, and who removed it. Click its own{" "}
             <strong>×</strong> to clear it for good, or click the chip itself (or its <strong>↺</strong>) to restore the day: the day window opens on that
-            job and date, and once you save it the gray chip goes away. If the job is still voided, clicking it offers
+            job and date, and once you save it the gray chip goes away. The day keeps its old notes, and its staff note gets a line saying when, by whom and why it was removed. If the job is still voided, clicking it offers
             Undo void first.
           </P>
           <Callout type="warning">
