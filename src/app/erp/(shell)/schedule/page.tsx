@@ -21,6 +21,7 @@ import { createCrewCollector } from "@/lib/erp/crewTimeline";
 import { hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
 import { todayEasternAsUtcMidnight } from "@/lib/erp/dates";
 import { makeHolidayHelpers } from "@/lib/erp/holidays";
+import { normalizeBillingStatus } from "@/lib/erp/billingStatus";
 import { loadCompanyHolidays } from "@/lib/erp/holidaysServer";
 import {
   canFilterScheduleBySupervisor,
@@ -141,6 +142,8 @@ export default async function SchedulePage({ searchParams }: PageProps) {
         percentDone: true,
         supervisorUserId: true,
         contractValueCents: true,
+        billingStatus: true,
+        voidReason: true,
         sov: { select: { items: { select: { id: true, description: true, completed: true, scheduledValueCents: true } } } },
         turnoverRequest: {
           select: {
@@ -788,6 +791,8 @@ export default async function SchedulePage({ searchParams }: PageProps) {
       changeOrders: changeOrdersByProject.get(r.id) ?? [],
       buildingId: r.turnoverRequest?.buildingId ?? null,
       buildingName: r.turnoverRequest?.building?.name ?? null,
+      // Voided in billing: every day of it is drawn gray with a VOID tag
+      voidReason: normalizeBillingStatus(r.billingStatus) === "VOIDED" ? (r.voidReason || "No reason given") : null,
     };
   });
 

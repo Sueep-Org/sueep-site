@@ -46,8 +46,7 @@ import { addDaysKey, daysBetween } from "@/lib/erp/managementCalendar";
 import { AnswerMark, CoverageAnswer, answerUid, answersSummary, type Answers } from "./AnswerMark";
 import { RemoveDayModal } from "./RemoveDayModal";
 import { SubOfferBox, SubCrewLine, SubCheckInLine, checkInChipText } from "./SubOfferBox";
-import type { ScheduleDayRemovalRow, ScheduleRemovalReason } from "@/lib/erp/scheduleRemovals";
-import { listLabel } from "@/lib/erp/appLists";
+import { JOB_VOIDED_REMOVAL, removalReasonLabel, type ScheduleDayRemovalRow, type ScheduleRemovalReason } from "@/lib/erp/scheduleRemovals";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -140,6 +139,19 @@ export type ScheduleDayCompletionRow = { key: string; completedByName: string | 
 
 function completionChipClass(complete: boolean): string {
   return complete ? "opacity-60" : "";
+}
+
+// A job voided in billing: every chip of it is gray with a VOID tag (over
+// its usual colors), and it never gets the overdue or needs-supervisor
+// warnings. A removed day keeps its own dashed, struck-through look.
+function voidedChipClass(p: { voidReason: string | null } | null | undefined): string {
+  return p?.voidReason ? "border-gray-300! bg-gray-200! text-gray-500! hover:bg-gray-200! shadow-none!" : "";
+}
+function VoidTag({ show }: { show: boolean }) {
+  return show ? <span className="shrink-0 rounded bg-gray-500 px-1 text-[9px] font-bold text-white">VOID</span> : null;
+}
+function VoidedLine({ reason }: { reason: string | null | undefined }) {
+  return reason ? <div className="mt-1 line-clamp-3 font-medium text-gray-200">Voided: {reason}</div> : null;
 }
 
 // Muted, pastel-ish colors keyed by calendar group — used for the
@@ -973,7 +985,29 @@ export function SchedulePlanner({
   const [pendingRemoval, setPendingRemoval] = useState<{ assignmentId: string; title: string; dateKey: string } | null>(null);
   const [dismissingRemovalId, setDismissingRemovalId] = useState<string | null>(null);
 
-  async function handleDeleteAssignment(id: string, reason: ScheduleRemovalReason, note: string, voidJob = false) {
+  // Voids the whole job from the Remove dialog (projects/[id]/void): its days
+  // turn gray with a VOID tag, days after today are cancelled with invites.
+  async function handleVoidJob(projectId: string, reason: string) {
+    try {
+      const res = await fetch(`/api/erp/projects/${projectId}/void`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string; cancelledDays?: number };
+      if (!res.ok) {
+        toast(data.error || "Couldn't void the job", "error");
+        return;
+      }
+      const days = data.cancelledDays ?? 0;
+      toast(`${data.message ?? "Job voided"}${days ? `. ${days} upcoming day${days === 1 ? "" : "s"} cancelled.` : ""}`, "success");
+      router.refresh();
+    } catch {
+      toast("Couldn't void the job", "error");
+    }
+  }
+
+  async function handleDeleteAssignment(id: string, reason: ScheduleRemovalReason, note: string) {
     const assignment = dayAssignments.find((a) => a.id === id);
     setDeletingAssignmentId(id);
     const previous = dayAssignments;
@@ -982,14 +1016,12 @@ export function SchedulePlanner({
       const res = await fetch(`/api/erp/schedule/day-assignments/${id}`, {
         method: "DELETE",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ reason, note, voidJob }),
+        body: JSON.stringify({ reason, note }),
       });
       if (!res.ok) throw new Error("Failed to remove");
       const data = (await res.json()) as {
         removal: { id: string; coveredBy: string | null; removedByName: string | null; note: string | null } | null;
-        voided: { ok: boolean; message: string } | null;
       };
-      if (data.voided) toast(data.voided.message, data.voided.ok ? "success" : "error");
       if (data.removal && assignment) {
         const r = data.removal;
         setDayRemovals((prev) => [
@@ -3352,9 +3384,13 @@ export function SchedulePlanner({
     const daySpanMarkers = projectSpanMarkersByDay.get(k) ?? [];
     // Unassigned by definition, so a supervisor filter can never
     // match one — hide rather than show under the wrong supervisor.
-    let dayNeedsSupervisor = selectedSupervisorId ? [] : daySpanMarkers.filter((e) => e.kind === "needsSupervisor");
-    let dayCoNeedsSupervisor = selectedSupervisorId ? [] : coNeedsSupervisorByDay.get(k) ?? [];
-    let dayProjectSpanEndpoints = daySpanMarkers.filter((e) => e.kind === "spanEndpoint");
+    // A voided job needs no supervisor: its start/end markers are drawn as
+    // plain (gray) span endpoints instead.
+    let dayNeedsSupervisor = selectedSupervisorId ? [] : daySpanMarkers.filter((e) => e.kind === "needsSupervisor" && !e.project.voidReason);
+    let dayCoNeedsSupervisor = (selectedSupervisorId ? [] : coNeedsSupervisorByDay.get(k) ?? []).filter((x) => !projectById.get(x.co.projectId)?.voidReason);
+    let dayProjectSpanEndpoints = daySpanMarkers
+      .filter((e) => e.kind === "spanEndpoint" || (e.kind === "needsSupervisor" && e.project.voidReason))
+      .map((e) => ({ ...e, kind: "spanEndpoint" as const }));
 
     if (selectedSupervisorId) {
       dayProjects = dayProjects.filter(
@@ -3838,7 +3874,8 @@ export function SchedulePlanner({
                   // a missed assignment, not just an upcoming plan — flagged
                   // red instead of gray.
                   // Not flagged once the day (or the whole change order) is marked complete.
-                  const isOverdue = isPlannedOnly && !isFutureOrToday && !coIsComplete(co.status) && !isDayDone(`co:${co.id}:${k}`);
+                  const coVoided = !!parentProject?.voidReason;
+                  const isOverdue = isPlannedOnly && !isFutureOrToday && !coIsComplete(co.status) && !isDayDone(`co:${co.id}:${k}`) && !coVoided;
                   // A day with logged work never gets dragged, even when
                   // it's also the CO's own scheduled start/end day — real
                   // work already happened there, same rule a project's own
@@ -3860,7 +3897,7 @@ export function SchedulePlanner({
                   // Still flagged even though it's nested under its unit now
                   // instead of floating separately — see the
                   // coNeedsSupervisorIds split above.
-                  const needsSupervisor = coNeedsSupervisorIds.has(co.id);
+                  const needsSupervisor = coNeedsSupervisorIds.has(co.id) && !coVoided;
                   const warningIcons = (
                     <>
                       {needsSupervisor ? <span aria-hidden>⚠</span> : null}
@@ -3871,6 +3908,7 @@ export function SchedulePlanner({
                     <>
                       {warningIcons}
                       <CompletionStatusIcon complete={coIsComplete(co.status)} dayComplete={seg ? barDaysDone("co", co.id, k, seg) : isDayDone(`co:${co.id}:${k}`)} />
+                      <VoidTag show={coVoided} />
                       <span className="truncate">{co.title}</span>
                     </>
                   );
@@ -3897,7 +3935,7 @@ export function SchedulePlanner({
                           setDragOverDayKey(null);
                         } : undefined}
                         onClick={() => openCoPopover(k, co)}
-                        className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${draggableHere ? "cursor-grab active:cursor-grabbing" : ""} ${isPlannedOnly ? (isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS) : ""} ${needsSupervisor ? "border-2 border-amber-600 bg-amber-400 font-bold text-amber-950 hover:bg-amber-300" : CHANGE_ORDER_CHIP_CLASS} ${completionChipClass(coIsComplete(co.status) || isDayDone(`co:${co.id}:${k}`))}`}
+                        className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${draggableHere ? "cursor-grab active:cursor-grabbing" : ""} ${isPlannedOnly ? (isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS) : ""} ${needsSupervisor ? "border-2 border-amber-600 bg-amber-400 font-bold text-amber-950 hover:bg-amber-300" : CHANGE_ORDER_CHIP_CLASS} ${completionChipClass(coIsComplete(co.status) || isDayDone(`co:${co.id}:${k}`))} ${voidedChipClass(parentProject)}`}
                         style={seg ? laneButtonStyle(seg) : undefined}
                       >
                         {seg ? (seg.labelSpanDays ? null : warningIcons) : chipContent}
@@ -3916,6 +3954,7 @@ export function SchedulePlanner({
                           <div className="font-semibold">{co.title}</div>
                           <div className="text-gray-300">{CHANGE_ORDER_LABEL}</div>
                           {parentProject ? <div className="text-gray-300">Project: {parentProject.jobTitle}</div> : null}
+                          <VoidedLine reason={parentProject?.voidReason} />
                           {summary ? (
                             <>
                               <div className="mt-1">{formatHours(summary.hours)} logged</div>
@@ -3974,13 +4013,18 @@ export function SchedulePlanner({
                 function renderOrphanedUnitChip(p: ScheduleProject, compactLabel?: string, seg?: LaneSegment) {
                   const nestedCos = coByProjectId.get(p.id) ?? [];
                   const allNestedCosComplete = nestedCos.length > 0 && nestedCos.every((co) => coIsComplete(co.status));
-                  const chipContent = <span className="truncate">{compactLabel ?? p.jobTitle}</span>;
+                  const chipContent = (
+                    <>
+                      <VoidTag show={!!p.voidReason} />
+                      <span className="truncate">{compactLabel ?? p.jobTitle}</span>
+                    </>
+                  );
                   return (
                     <Fragment key={`co-only-${p.id}`}>
                     <li className={inMonth ? "group relative" : "relative"} style={seg ? laneLiStyle(seg) : undefined}>
                       <Link
                         href={`/erp/projects/${p.id}`}
-                        className={`flex w-full items-center gap-1 truncate rounded border border-dashed px-1.5 py-0.5 text-[10px] font-medium transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${completionChipClass(allNestedCosComplete)}`}
+                        className={`flex w-full items-center gap-1 truncate rounded border border-dashed px-1.5 py-0.5 text-[10px] font-medium transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${completionChipClass(allNestedCosComplete)} ${voidedChipClass(p)}`}
                         style={seg ? laneButtonStyle(seg) : undefined}
                       >
                         {seg ? null : chipContent}
@@ -3991,6 +4035,7 @@ export function SchedulePlanner({
                           <div className="font-semibold">{p.jobTitle}</div>
                           {p.requestNotes ? <div className="line-clamp-3 text-gray-300">PM notes: {p.requestNotes}</div> : null}
                           <div className="text-gray-300">Not otherwise scheduled this day - shown for its change order below</div>
+                          <VoidedLine reason={p.voidReason} />
                         </div>
                       ) : null}
                     </li>
@@ -4058,11 +4103,12 @@ export function SchedulePlanner({
                   // computeProjectSpanMarkersByDay, didn't render at all past
                   // its own date).
                   // Not flagged once the day (or the whole job) is marked complete.
-                  const isOverdue = !isFutureOrToday && p.status !== "COMPLETE" && !isDayDone(`p:${p.id}:${k}`);
+                  const isOverdue = !isFutureOrToday && p.status !== "COMPLETE" && !isDayDone(`p:${p.id}:${k}`) && !p.voidReason;
                   const chipContent = (
                     <>
                       {isOverdue ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : null}
                       <CompletionStatusIcon complete={p.status === "COMPLETE"} dayComplete={seg ? barDaysDone("p", p.id, k, seg) : isDayDone(`p:${p.id}:${k}`)} />
+                      <VoidTag show={!!p.voidReason} />
                       <span className="truncate">{compactLabel ?? p.jobTitle}</span>
                     </>
                   );
@@ -4082,7 +4128,7 @@ export function SchedulePlanner({
                           setDragOverDayKey(null);
                         }}
                         onClick={() => openEventPopover(k, p, undefined, role)}
-                        className={`flex w-full cursor-grab items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors active:cursor-grabbing ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS} ${completionChipClass(p.status === "COMPLETE" || isDayDone(`p:${p.id}:${k}`))}`}
+                        className={`flex w-full cursor-grab items-center gap-1 truncate rounded py-0.5 pl-1.5 pr-4 text-[10px] font-medium shadow-sm transition-colors active:cursor-grabbing ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS} ${completionChipClass(p.status === "COMPLETE" || isDayDone(`p:${p.id}:${k}`))} ${voidedChipClass(p)}`}
                         style={seg ? laneButtonStyle(seg) : undefined}
                       >
                         {seg ? (seg.labelSpanDays ? null : <>{isOverdue ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : null}</>) : chipContent}
@@ -4109,6 +4155,7 @@ export function SchedulePlanner({
                               ? `${role === "end" ? "Ended" : "Started"} ${formatShortDate(k)} - nothing ever logged`
                               : `${role === "end" ? "Ends on this day" : "Starts on this day"} - not otherwise scheduled`}
                           </div>
+                          <VoidedLine reason={p.voidReason} />
                           <div className="mt-1 text-gray-300">Click to view or schedule it</div>
                         </div>
                       ) : null}
@@ -4134,6 +4181,7 @@ export function SchedulePlanner({
                   const chipContent = (
                     <>
                       <CompletionStatusIcon complete={p.status === "COMPLETE"} dayComplete={seg ? barDaysDone("p", p.id, k, seg) : isDayDone(`p:${p.id}:${k}`)} />
+                      <VoidTag show={!!p.voidReason} />
                       <span className="truncate">{compactLabel ?? p.jobTitle}</span>
                     </>
                   );
@@ -4143,7 +4191,7 @@ export function SchedulePlanner({
                       <button
                         type="button"
                         onClick={() => openLaborPopover(k, p)}
-                        className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${completionChipClass(p.status === "COMPLETE" || isDayDone(`p:${p.id}:${k}`))}`}
+                        className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm transition-colors ${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(p.segment)]} ${completionChipClass(p.status === "COMPLETE" || isDayDone(`p:${p.id}:${k}`))} ${voidedChipClass(p)}`}
                         style={seg ? laneButtonStyle(seg) : undefined}
                       >
                         {seg ? null : chipContent}
@@ -4155,6 +4203,7 @@ export function SchedulePlanner({
                           <div className="font-semibold">{p.jobTitle}</div>
                           {p.requestNotes ? <div className="line-clamp-3 text-gray-300">PM notes: {p.requestNotes}</div> : null}
                           <div className="text-gray-300">{CALENDAR_GROUP_LABEL[calendarSegmentGroup(p.segment)]}</div>
+                          <VoidedLine reason={p.voidReason} />
                           {summary ? (
                             <>
                               <div className="mt-1">{formatHours(summary.hours)} logged</div>
@@ -4179,7 +4228,7 @@ export function SchedulePlanner({
 
                 function renderPlannedChip(assignment: ScheduleDayAssignment, project: ScheduleProject, compactLabel?: string, seg?: LaneSegment) {
                   // Not flagged once the day (or the whole job) is marked complete.
-                  const isOverdue = !isFutureOrToday && project.status !== "COMPLETE" && !isDayDone(`p:${project.id}:${k}`);
+                  const isOverdue = !isFutureOrToday && project.status !== "COMPLETE" && !isDayDone(`p:${project.id}:${k}`) && !project.voidReason;
                   const plannedWorkers = project.plannedWorkersByDay[k] ?? [];
                   const supervisor = assignment.supervisorUserId ? supervisors.find((s) => s.id === assignment.supervisorUserId) : null;
                   const pm = !supervisor && assignment.projectManagerUserId ? projectManagers.find((p) => p.id === assignment.projectManagerUserId) : null;
@@ -4198,7 +4247,7 @@ export function SchedulePlanner({
                     pricedSovItems.length > 0 ? pricedSovItems.reduce((sum, s) => sum + (s.scheduledValueCents ?? 0), 0) : null;
                   const assignmentScopeLabels = assignment.scopeItems.map((v) => turnoverScopeDisplayLabel(v, project.otherScopeDescription));
                   const noSupervisor =
-                    !isOverdue && !supervisor && !pm && !contractor && !projectSoloCoverage.dayPairs.has(`${project.id}:${k}`);
+                    !isOverdue && !project.voidReason && !supervisor && !pm && !contractor && !projectSoloCoverage.dayPairs.has(`${project.id}:${k}`);
                   const chipContent = (
                     <>
                       {isOverdue ? (
@@ -4207,6 +4256,7 @@ export function SchedulePlanner({
                         <span aria-hidden title="No supervisor assigned" className="shrink-0 text-amber-950">⚠</span>
                       ) : null}
                       <CompletionStatusIcon complete={project.status === "COMPLETE"} dayComplete={seg ? barDaysDone("p", project.id, k, seg) : isDayDone(`p:${project.id}:${k}`)} />
+                      <VoidTag show={!!project.voidReason} />
                       {assignment.nextDayUpcharge ? (
                         <span
                           className="shrink-0 rounded bg-amber-200 px-1 text-[9px] font-bold text-amber-900"
@@ -4238,7 +4288,7 @@ export function SchedulePlanner({
                         noSupervisor
                           ? NO_SUPERVISOR_PLANNED_CHIP_CLASS
                           : `${CALENDAR_GROUP_CHIP_CLASS[calendarSegmentGroup(project.segment)]} ${isOverdue ? OVERDUE_PLANNED_CHIP_EXTRA_CLASS : PLANNED_CHIP_EXTRA_CLASS}`
-                      } ${completionChipClass(project.status === "COMPLETE" || isDayDone(`p:${project.id}:${k}`))}`}
+                      } ${completionChipClass(project.status === "COMPLETE" || isDayDone(`p:${project.id}:${k}`))} ${voidedChipClass(project)}`}
                       style={seg ? laneButtonStyle(seg) : undefined}
                     >
                       {seg ? (seg.labelSpanDays ? null : <>{isOverdue ? <span aria-hidden className="shrink-0 text-sm font-bold text-red-600">⚠</span> : noSupervisor ? <span aria-hidden title="No supervisor assigned" className="shrink-0 text-amber-950">⚠</span> : null}</>) : chipContent}
@@ -4262,8 +4312,9 @@ export function SchedulePlanner({
                         <div className="font-semibold">{project.jobTitle}</div>
                         {project.requestNotes ? <div className="line-clamp-3 text-gray-300">PM notes: {project.requestNotes}</div> : null}
                         <div className="text-gray-300">
-                          {isOverdue ? "Scheduled but never logged" : "Planned, not yet logged"}
+                          {project.voidReason ? "Planned before the job was voided" : isOverdue ? "Scheduled but never logged" : "Planned, not yet logged"}
                         </div>
+                        <VoidedLine reason={project.voidReason} />
                         {supervisor ? (
                           <div className="flex items-center gap-1 text-gray-300">
                             Supervisor: {supervisor.displayName}
@@ -4326,6 +4377,7 @@ export function SchedulePlanner({
                       e.kind === "needsSupervisor" ||
                       (e.kind === "planned" &&
                         !dayIsOverdue &&
+                        !e.project.voidReason &&
                         !e.assignment.supervisorUserId &&
                         !e.assignment.projectManagerUserId &&
                         !e.assignment.supervisorContractorId),
@@ -4610,9 +4662,12 @@ export function SchedulePlanner({
                             if (!project) return null;
                             if (r.changeOrderId ? !selectedTypes.has("CO") : !selectedTypes.has(calendarSegmentGroup(project.segment))) return null;
                             const removedTitle = r.changeOrderId ? (r.changeOrderTitle ?? CHANGE_ORDER_LABEL) : project.jobTitle;
+                            // Cancelled when the job was voided, or a removed day of a job voided since
+                            const removedVoided = r.reason === JOB_VOIDED_REMOVAL || !!project.voidReason;
                             return (
                               <li key={`removed-${r.id}`} className={inMonth ? "group relative" : "relative"}>
                                 <div className="flex items-center gap-1 truncate rounded border border-dashed border-gray-300 bg-gray-100 py-0.5 pl-1.5 pr-4 text-[10px] font-medium text-gray-400">
+                                  <VoidTag show={removedVoided} />
                                   <span className="truncate line-through">{removedTitle}</span>
                                 </div>
                                 <button
@@ -4628,8 +4683,9 @@ export function SchedulePlanner({
                                   <div className={`pointer-events-none absolute z-30 hidden w-max max-w-[220px] rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] leading-snug text-white shadow-lg group-hover:block ${tooltipPositionClass}`}>
                                     <div className="font-semibold">{removedTitle}</div>
                                     {r.changeOrderId ? <div className="text-gray-300">{CHANGE_ORDER_LABEL} · Project: {project.jobTitle}</div> : null}
-                                    <div className="text-gray-300">Removed: {listLabel(removalReasons, r.reason)}</div>
-                                    {r.note ? <div className="line-clamp-3 text-gray-300">Note: {r.note}</div> : null}
+                                    <div className="text-gray-300">Removed: {removalReasonLabel(removalReasons, r.reason)}</div>
+                                    {r.note && r.reason !== JOB_VOIDED_REMOVAL ? <div className="line-clamp-3 text-gray-300">Note: {r.note}</div> : null}
+                                    <VoidedLine reason={project.voidReason ?? (r.reason === JOB_VOIDED_REMOVAL ? r.note : null)} />
                                     {r.coveredBy ? <div className="text-gray-300">Was covered by: {r.coveredBy}</div> : null}
                                     <div className="text-gray-400">
                                       {r.removedByName ? `By ${r.removedByName}, ` : ""}
@@ -4796,15 +4852,20 @@ export function SchedulePlanner({
         open={pendingRemoval !== null}
         title={pendingRemoval?.title ?? ""}
         dateLabel={pendingRemoval ? dayCellLabel(pendingRemoval.dateKey) : ""}
-        isLastDay={
-          !!pendingRemoval &&
-          !dayAssignments.some((a) => a.id !== pendingRemoval.assignmentId && a.projectId === dayAssignments.find((x) => x.id === pendingRemoval.assignmentId)?.projectId)
-        }
         onClose={() => setPendingRemoval(null)}
-        onRemove={(reason, note, voidJob) => {
-          if (pendingRemoval) handleDeleteAssignment(pendingRemoval.assignmentId, reason, note, voidJob);
+        onRemove={(reason, note) => {
+          if (pendingRemoval) handleDeleteAssignment(pendingRemoval.assignmentId, reason, note);
           setPendingRemoval(null);
         }}
+        onVoidJob={
+          pendingRemoval && !projectById.get(dayAssignments.find((x) => x.id === pendingRemoval.assignmentId)?.projectId ?? "")?.voidReason
+            ? (reason) => {
+                const projectId = dayAssignments.find((x) => x.id === pendingRemoval.assignmentId)?.projectId;
+                if (projectId) void handleVoidJob(projectId, reason);
+                setPendingRemoval(null);
+              }
+            : undefined
+        }
       />
     </div>
   );

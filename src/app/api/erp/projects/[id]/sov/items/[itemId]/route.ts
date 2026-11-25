@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { notifyReadyToBill } from "@/lib/erp/notifyReadyToBill";
 import { syncSovPercentDone, syncProjectBillingFromSOV, sovItemDateChanges, parseSovItemDate, sovItemLastWorkDay } from "@/lib/sovSync";
 import { BILLING_STATUSES, voidReasonFor, type BillingStatus } from "@/lib/erp/billingStatus";
+import { getErpAuth } from "@/lib/erpAuth";
+import { cancelDaysIfJobVoided } from "@/lib/erp/scheduleDayRemove";
 
 type Ctx = { params: Promise<{ id: string; itemId: string }> };
 
@@ -65,6 +67,10 @@ export async function PATCH(req: Request, ctx: Ctx) {
   await syncProjectBillingFromSOV(id);
   if (updated.completed && !existing.completed && updated.billingStatus === "NOT_BILLED") {
     await notifyReadyToBill(id, [{ kind: "SOV line", title: updated.description, amountCents: updated.scheduledValueCents }]);
+  }
+  // Voiding the last open line voids the job: its days after today come off the calendar too.
+  if (updated.billingStatus === "VOIDED" && existing.billingStatus !== "VOIDED") {
+    await cancelDaysIfJobVoided(id, (await getErpAuth())?.email);
   }
   return NextResponse.json(updated);
 }

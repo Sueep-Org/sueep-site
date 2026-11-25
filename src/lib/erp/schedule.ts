@@ -75,6 +75,9 @@ const DEFAULT_SPAN_DAYS = 20;
 export type ScheduleProject = {
   id: string;
   jobTitle: string;
+  /** Set when the job is voided in billing (the reason), so the calendar draws
+   * all of its days gray with a VOID tag. Null for a job that isn't voided. */
+  voidReason: string | null;
   segment: string;
   status: string;
   projectDate: string | null;

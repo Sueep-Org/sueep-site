@@ -637,6 +637,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             completedBy={project.completedBy ?? null}
             billingStatus={project.billingStatus ?? null}
             voidReason={project.voidReason ?? null}
+            canVoid={!!auth && canSeeFinancials(auth.role)}
           />
           {invoiceDestination && (
             <>

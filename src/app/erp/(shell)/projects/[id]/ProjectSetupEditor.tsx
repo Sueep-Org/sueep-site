@@ -5,7 +5,7 @@ import { HolidayHint } from "@/app/erp/components/HolidayHint";
 import { useMemo, useRef, useState } from "react";
 import { deriveProjectLifecycle, type ProjectLifecycle } from "@/lib/erp/projectLifecycle";
 import { PROJECT_SEGMENT_OPTIONS } from "@/lib/erp/projectSegments";
-import { Button, inputClass, labelClass } from "@/app/erp/components/ui";
+import { Button, inputClass, labelClass, useAskText } from "@/app/erp/components/ui";
 import { SearchableSelect } from "@/app/erp/components/SearchableSelect";
 
 const input = inputClass.md;
@@ -34,6 +34,8 @@ type Props = {
   /** Billing status: Voided shows the lifecycle as Voided and locks it */
   billingStatus?: string | null;
   voidReason?: string | null;
+  /** Can void the job from Lifecycle (same roles as Billing) */
+  canVoid?: boolean;
 };
 
 function toInputDate(iso: string | null): string {
@@ -62,10 +64,13 @@ export function ProjectSetupEditor({
   completedBy = null,
   billingStatus = null,
   voidReason = null,
+  canVoid = false,
 }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const askText = useAskText();
 
   const currentLifecycle = useMemo(
     () => deriveProjectLifecycle(status, projectDateIso, hasActiveChangeOrder, billingStatus),
@@ -103,7 +108,44 @@ export function ProjectSetupEditor({
   const [selectedSupervisorUserId, setSelectedSupervisorUserId] = useState(supervisorUserId ?? "");
 
 
+  // Voided is billing only (voidJob.ts): it doesn't touch the project's
+  // status, dates or calendar, so it's done right away, not on Save.
+  async function voidThisJob() {
+    const reason = await askText({
+      title: "Void this job?",
+      message: "It comes off every to-bill list and counts as $0 revenue on the Finance tab. Its days turn gray on the calendar with a VOID tag, and days after today are cancelled so nobody is invited. Notes on removed days stay. Bring it back any time from Billing status.",
+      placeholder: "Why it won't be billed",
+      confirmLabel: "Void",
+    });
+    if (!reason) return;
+    setError("");
+    setNotice("");
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/erp/projects/${projectId}/void`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+      if (!res.ok) { setError(data.error || "Couldn't void it"); return; }
+      // A partly billed SOV job only has its open lines voided, so it isn't Voided
+      const fullyVoided = data.message === "Job voided" || data.message === "Job was already voided";
+      if (fullyVoided) setLifecycle("VOIDED");
+      else if (data.message) setNotice(data.message);
+      router.refresh();
+    } catch {
+      setError("Network error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function handleLifecycleChange(next: ProjectLifecycle) {
+    if (next === "VOIDED") {
+      void voidThisJob();
+      return;
+    }
     setLifecycle(next);
     if (startDate) return;
 
@@ -203,8 +245,9 @@ export function ProjectSetupEditor({
               <option value="UPCOMING">Upcoming</option>
               <option value="ACTIVE">WIP</option>
               <option value="COMPLETED">Completed</option>
-              {currentLifecycle === "VOIDED" ? <option value="VOIDED">Voided</option> : null}
+              {currentLifecycle === "VOIDED" || canVoid ? <option value="VOIDED">Voided</option> : null}
             </select>
+            {notice ? <p className="mt-1 text-[11px] text-amber-700">{notice}</p> : null}
             {currentLifecycle === "VOIDED" ? (
               <p className="mt-1 text-[11px] text-gray-500">
                 Voided in billing{voidReason ? `: ${voidReason}` : ""}. Change the billing status to bring it back.
