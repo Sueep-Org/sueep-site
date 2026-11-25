@@ -187,6 +187,10 @@ export type ScheduleChangeOrder = {
    * scheduledDateKey — also draggable (moves endDate). Null if unset or
    * equal to the start day (no separate occurrence in that case). */
   scheduledEndDateKey: string | null;
+  /** Weekdays strictly between the start and end day that show only because
+   * they're in the range (coRangeDayKeys), not planned or logged. Taking one
+   * off leaves a ScheduleDayRemoval so it stays off. */
+  rangeDayKeys: string[];
   /** The CO's own current supervisor (ProjectChangeOrder.supervisorUserId),
    * mirroring ScheduleProject.supervisorUserId — drives the "needs a
    * supervisor" warning the same way. */
@@ -207,6 +211,36 @@ export type ScheduleChangeOrder = {
 // icon/fade) and CoDayPopover.tsx (read-only vs. still-planning card).
 export function coIsComplete(status: string): boolean {
   return status === "COMPLETED" || status === "BILLING";
+}
+
+/** Longest start-to-end range filled in; a longer one is likely a typo. */
+const CO_RANGE_MAX_DAYS = 62;
+
+/**
+ * The days strictly between a change order's start and end day that it
+ * should show on: weekdays that aren't company holidays or taken off
+ * (removedKeys). A Monday-Friday CO with Thanksgiving inside it shows every
+ * day but Thursday. Saturdays are scheduled by hand.
+ */
+export function coRangeDayKeys(
+  startKey: string,
+  endKey: string,
+  isHoliday: (dayKey: string) => boolean,
+  removedKeys: Set<string> = new Set(),
+): string[] {
+  const start = new Date(`${startKey}T00:00:00.000Z`);
+  const end = new Date(`${endKey}T00:00:00.000Z`);
+  const span = Math.round((end.getTime() - start.getTime()) / 86_400_000);
+  if (!(span > 1) || span > CO_RANGE_MAX_DAYS) return [];
+  const keys: string[] = [];
+  for (let i = 1; i < span; i++) {
+    const d = addDays(start, i);
+    const k = d.toISOString().slice(0, 10);
+    const weekday = d.getUTCDay();
+    if (weekday === 0 || weekday === 6 || isHoliday(k) || removedKeys.has(k)) continue;
+    keys.push(k);
+  }
+  return keys;
 }
 
 /** A planned supervisor and/or PM coverage of a ProjectChangeOrder on a
