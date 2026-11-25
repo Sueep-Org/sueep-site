@@ -49,8 +49,13 @@ export async function POST(req: Request) {
     await prisma.projectChangeOrder.update({ where: { id: co.id }, data });
   }
 
+  // A day strictly between start and end shows because it's in the range
+  // (coRangeDayKeys), so even a MISTAKE removal is saved to keep it off. The
+  // schedule hides MISTAKE rows.
+  const inRange = !!startK && !!endK && k > startK && k < endK;
+
   let removal: { id: string; note: string | null; coveredBy: string | null; removedByName: string | null } | null = null;
-  if (reason !== "MISTAKE") {
+  if (reason !== "MISTAKE" || inRange) {
     const auth = await getErpAuth();
     let removedByName: string | null = null;
     if (auth?.email) {

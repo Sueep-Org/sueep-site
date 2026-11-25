@@ -165,7 +165,8 @@ export function CoDayPopover({
   // if it's this day and saves the grayed-out removal.
   const dateRole: "start" | "end" | null =
     dateKey === co.scheduledDateKey ? "start" : dateKey === co.scheduledEndDateKey ? "end" : null;
-  const canTakeOffDay = (dateRole !== null || !!assignment) && !hasLoggedLabor && !coIsComplete(co.status);
+  const isRangeDay = co.rangeDayKeys.includes(dateKey);
+  const canTakeOffDay = (dateRole !== null || isRangeDay || !!assignment) && !hasLoggedLabor && !coIsComplete(co.status);
   const [takeOffOpen, setTakeOffOpen] = useState(false);
   const [takingOff, setTakingOff] = useState(false);
   const [takeOffError, setTakeOffError] = useState("");
@@ -190,7 +191,7 @@ export function CoDayPopover({
         setTakeOffError(data.error || "Couldn't take it off this day");
         return;
       }
-      if (data.removal) {
+      if (data.removal && reason !== "MISTAKE") {
         onDayRemoved({
           id: data.removal.id,
           projectId: co.projectId,

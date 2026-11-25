@@ -5,6 +5,7 @@ import type { ScheduleDayRemovalRow } from "@/lib/erp/scheduleRemovals";
 import {
   addDays,
   coIsComplete,
+  coRangeDayKeys,
   contractorWorkedDayKeys,
   dayKey,
   type ScheduleChangeOrder,
@@ -19,6 +20,8 @@ import { contractedTurnoverScope, parseCompletedScopeItems } from "@/lib/erp/tur
 import { createCrewCollector } from "@/lib/erp/crewTimeline";
 import { hasActiveChangeOrder } from "@/lib/erp/projectLifecycle";
 import { todayEasternAsUtcMidnight } from "@/lib/erp/dates";
+import { makeHolidayHelpers } from "@/lib/erp/holidays";
+import { loadCompanyHolidays } from "@/lib/erp/holidaysServer";
 import {
   canFilterScheduleBySupervisor,
   canManageManagementCalendar,
@@ -306,7 +309,18 @@ export default async function SchedulePage({ searchParams }: PageProps) {
       : Promise.resolve(null),
   ]);
 
-  const dayRemovals: ScheduleDayRemovalRow[] = dayRemovalRows.map((r) => ({
+  // Every day taken off a CO, so its start-to-end range skips them. A
+  // MISTAKE removal of a range day is saved only for this; it isn't shown.
+  const removedDaysByChangeOrder = new Map<string, Set<string>>();
+  for (const r of dayRemovalRows) {
+    if (!r.changeOrderId) continue;
+    const set = removedDaysByChangeOrder.get(r.changeOrderId) ?? new Set<string>();
+    set.add(dayKey(r.date));
+    removedDaysByChangeOrder.set(r.changeOrderId, set);
+  }
+  const holidays = makeHolidayHelpers(await loadCompanyHolidays());
+
+  const dayRemovals: ScheduleDayRemovalRow[] = dayRemovalRows.filter((r) => r.reason !== "MISTAKE").map((r) => ({
     id: r.id,
     projectId: r.projectId,
     changeOrderId: r.changeOrderId,
@@ -598,6 +612,14 @@ export default async function SchedulePage({ searchParams }: PageProps) {
       if (co.endDate) days.add(dayKey(co.endDate));
       for (const k of plannedDaysByChangeOrder.get(co.id) ?? []) days.add(k);
       for (const k of ownPlannedDaysByChangeOrder.get(co.id) ?? []) days.add(k);
+      // Weekdays between start and end show too (not holidays or days taken
+      // off), so a Tue-Fri CO isn't just its first and last day. Not for
+      // finished COs: their days are what was actually worked.
+      const rangeDayKeys =
+        scheduledDateKey && scheduledEndDateKey && !coIsComplete(co.status)
+          ? coRangeDayKeys(scheduledDateKey, scheduledEndDateKey, (k) => !!holidays.holidayOn(k), removedDaysByChangeOrder.get(co.id)).filter((k) => !days.has(k))
+          : [];
+      for (const k of rangeDayKeys) days.add(k);
       const laborByDay: Record<string, { hours: number; workers: string[] }> = {};
       for (const [k, entry] of laborSummaryByChangeOrder.get(co.id) ?? []) {
         laborByDay[k] = { hours: entry.hours, workers: Array.from(entry.workers) };
@@ -611,6 +633,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
         laborByDay,
         scheduledDateKey,
         scheduledEndDateKey: scheduledEndDateKey !== scheduledDateKey ? scheduledEndDateKey : null,
+        rangeDayKeys,
         supervisorUserId: co.supervisorUserId,
         contractValueCents: showSovPrices ? co.contractValueCents : null,
         subPayByDay: coSubPayByCo.get(co.id) ?? {},
