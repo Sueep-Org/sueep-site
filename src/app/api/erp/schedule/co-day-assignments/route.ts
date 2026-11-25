@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { scheduleEditForbidden } from "@/lib/erp/scheduleAccess";
 import { prisma } from "@/lib/prisma";
 import { dayKey } from "@/lib/erp/schedule";
+import { notifyCoDayRequester } from "@/lib/erp/scheduleRequester";
 import { appUrl, notifyChangeOrderCrew, sendDayInvite, sendSubLeadInvite } from "@/lib/erp/scheduleInvites";
 import { joinCoSubPayVisit, saveCoSubPay, subPayFromBody, syncCoScheduleSubPay } from "@/lib/erp/subPay";
 import { canSeeFinancials, getErpAuth } from "@/lib/erpAuth";
@@ -171,6 +172,9 @@ export async function POST(req: Request) {
     endTime: assignment.endTime,
     url,
   });
+
+  // A sub on the day, or a day already fully confirmed, tells the client who asked for it
+  await notifyCoDayRequester(assignment.id).catch((e) => console.error("Requester confirmed email failed", { coDayId: assignment.id }, e));
 
   return NextResponse.json({ ...assignment, subPay }, { status: 201 });
 }
