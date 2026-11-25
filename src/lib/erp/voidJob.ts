@@ -68,3 +68,40 @@ export async function voidJob(projectId: string, voidReason: string): Promise<Vo
   await prisma.project.update({ where: { id: projectId }, data: { billingStatus: "VOIDED", voidReason } });
   return { ok: true, message: "Job voided", fullyVoided: true };
 }
+
+/**
+ * Undoes voidJob: the job goes back to Not billed wherever its billing lives
+ * (the unit, its voided SOV lines, or the project) and the void reason is
+ * cleared. Calendar days are left alone, so days cancelled by the void stay
+ * gray with their notes (restore one from the calendar if it's needed).
+ */
+export async function unvoidJob(projectId: string): Promise<{ ok: boolean; message: string }> {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: {
+      billingStatus: true,
+      turnoverRequestId: true,
+      sov: { select: { items: { select: { id: true, billingStatus: true } } } },
+    },
+  });
+  if (!project) return { ok: false, message: "Job not found" };
+  if (normalizeBillingStatus(project.billingStatus) !== "VOIDED") return { ok: false, message: "This job isn't voided" };
+
+  if (project.turnoverRequestId) {
+    await prisma.turnoverRequest.update({ where: { id: project.turnoverRequestId }, data: { billingStatus: "NOT_BILLED", voidReason: null } });
+    await syncProjectBillingFromRequest(project.turnoverRequestId, "NOT_BILLED");
+    return { ok: true, message: "Void undone, the job is Not billed again" };
+  }
+
+  const voidedLines = (project.sov?.items ?? []).filter((l) => normalizeBillingStatus(l.billingStatus) === "VOIDED");
+  if (voidedLines.length > 0) {
+    await prisma.projectSOVItem.updateMany({ where: { id: { in: voidedLines.map((l) => l.id) } }, data: { billingStatus: "NOT_BILLED", voidReason: null } });
+    await prisma.project.update({ where: { id: projectId }, data: { voidReason: null } });
+    await syncSovPercentDone(projectId);
+    await syncProjectBillingFromSOV(projectId);
+    return { ok: true, message: "Void undone, the job is Not billed again" };
+  }
+
+  await prisma.project.update({ where: { id: projectId }, data: { billingStatus: "NOT_BILLED", voidReason: null } });
+  return { ok: true, message: "Void undone, the job is Not billed again" };
+}

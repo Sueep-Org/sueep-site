@@ -984,6 +984,47 @@ export function SchedulePlanner({
   }
   const [pendingRemoval, setPendingRemoval] = useState<{ assignmentId: string; title: string; dateKey: string } | null>(null);
   const [dismissingRemovalId, setDismissingRemovalId] = useState<string | null>(null);
+  // A gray removed day being put back: the day modal opens on its job and
+  // date, and once that day is saved the gray day is cleared.
+  const [restoringRemoval, setRestoringRemoval] = useState<ScheduleDayRemovalRow | null>(null);
+  const [undoingVoidId, setUndoingVoidId] = useState<string | null>(null);
+
+  // Undoes a void (DELETE projects/[id]/void): back to Not billed. Days the
+  // void took off the calendar stay gray with their notes.
+  async function handleUndoVoid(projectId: string) {
+    if (!(await confirm({ title: "Undo void?", message: "The job goes back to Not billed. Days already taken off the calendar stay gray with their notes; use Restore on any you need back.", confirmLabel: "Undo void" }))) return;
+    setUndoingVoidId(projectId);
+    try {
+      const res = await fetch(`/api/erp/projects/${projectId}/void`, { method: "DELETE" });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+      if (!res.ok) {
+        toast(data.error || "Couldn't undo the void", "error");
+        return;
+      }
+      toast(data.message ?? "Void undone", "success");
+      router.refresh();
+    } catch {
+      toast("Couldn't undo the void", "error");
+    } finally {
+      setUndoingVoidId(null);
+    }
+  }
+
+  function startRestoreRemoval(r: ScheduleDayRemovalRow) {
+    setRestoringRemoval(r);
+    setOpenDayKey(r.dateKey);
+    setOpenDayInitialProjectId(r.projectId);
+  }
+
+  // The restored day was saved: its gray removed day comes off.
+  async function finishRestoreRemoval(saved: { projectId?: string; changeOrderId?: string; dateKey: string }) {
+    const r = restoringRemoval;
+    if (!r || saved.dateKey !== r.dateKey) return;
+    if (r.changeOrderId ? saved.changeOrderId !== r.changeOrderId : saved.projectId !== r.projectId) return;
+    setRestoringRemoval(null);
+    setDayRemovals((prev) => prev.filter((x) => x.id !== r.id));
+    await fetch(`/api/erp/schedule/day-removals/${r.id}`, { method: "DELETE" }).catch(() => undefined);
+  }
 
   // Voids the whole job from the Remove dialog (projects/[id]/void): its days
   // turn gray with a VOID tag, days after today are cancelled with invites.
@@ -2419,6 +2460,21 @@ export function SchedulePlanner({
           </button>
         </div>
         <p className="mt-0.5 text-[10px] text-gray-400">{CALENDAR_GROUP_LABEL[calendarSegmentGroup(p.segment)]}</p>
+        {p.voidReason ? (
+          <div className="mt-2 flex items-center justify-between gap-2 rounded border border-gray-200 bg-gray-50 px-2 py-1.5 text-[10px] text-gray-600">
+            <span className="min-w-0">Voided: {p.voidReason}</span>
+            {canAssign ? (
+              <button
+                type="button"
+                onClick={() => void handleUndoVoid(p.id)}
+                disabled={undoingVoidId === p.id}
+                className="shrink-0 font-semibold text-pink-600 hover:underline disabled:opacity-50"
+              >
+                {undoingVoidId === p.id ? "Undoing…" : "Undo void"}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
         {/* Disabled (view only) for roles that can't change the schedule; Mark day complete and links stay outside. */}
         <fieldset disabled={!canAssign} className="min-w-0">
@@ -4666,10 +4722,20 @@ export function SchedulePlanner({
                             const removedVoided = r.reason === JOB_VOIDED_REMOVAL || !!project.voidReason;
                             return (
                               <li key={`removed-${r.id}`} className={inMonth ? "group relative" : "relative"}>
-                                <div className="flex items-center gap-1 truncate rounded border border-dashed border-gray-300 bg-gray-100 py-0.5 pl-1.5 pr-4 text-[10px] font-medium text-gray-400">
+                                <div className={`flex items-center gap-1 truncate rounded border border-dashed border-gray-300 bg-gray-100 py-0.5 pl-1.5 text-[10px] font-medium text-gray-400 ${canAssign ? "pr-8" : "pr-4"}`}>
                                   <VoidTag show={removedVoided} />
                                   <span className="truncate line-through">{removedTitle}</span>
                                 </div>
+                                {canAssign ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => (project.voidReason ? toast("Undo the void first (click one of the job's days, or its project page)", "error") : startRestoreRemoval(r))}
+                                    title={project.voidReason ? "Undo the void first to restore this day" : "Restore this day to the calendar"}
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 z-20 px-0.5 text-[11px] font-bold leading-none text-gray-400 opacity-60 hover:opacity-100"
+                                  >
+                                    ↺
+                                  </button>
+                                ) : null}
                                 <button
                                   type="button"
                                   onClick={() => handleDismissRemoval(r.id)}
@@ -4813,11 +4879,14 @@ export function SchedulePlanner({
           existingWorkers={workerAssignments.filter((a) => a.dateKey === openDayKey)}
           existingCoWorkers={coWorkerAssignments.filter((a) => a.dateKey === openDayKey)}
           initialProjectId={openDayInitialProjectId ?? undefined}
+          initialChangeOrderId={restoringRemoval?.changeOrderId ?? undefined}
           onClose={() => {
             setOpenDayKey(null);
             setOpenDayInitialProjectId(null);
+            setRestoringRemoval(null);
           }}
           onCreated={(a) => {
+            void finishRestoreRemoval({ projectId: a.projectId, dateKey: a.dateKey });
             setDayAssignments((prev) => [...prev.filter((x) => x.id !== a.id), a]);
             // Assigning a supervisor here also sets the project's supervisor
             // server-side, mirror that in the local supervisor overrides right
@@ -4826,6 +4895,7 @@ export function SchedulePlanner({
             if (a.supervisorUserId) setSupervisorOverrides((o) => ({ ...o, [a.projectId]: a.supervisorUserId }));
           }}
           onSeriesCreated={(created) => {
+            for (const a of created) void finishRestoreRemoval({ projectId: a.projectId, dateKey: a.dateKey });
             setDayAssignments((prev) => [...prev.filter((x) => !created.some((a) => a.id === x.id)), ...created]);
             const last = created[created.length - 1];
             if (last?.supervisorUserId) setSupervisorOverrides((o) => ({ ...o, [last.projectId]: last.supervisorUserId }));
@@ -4841,6 +4911,7 @@ export function SchedulePlanner({
           onWorkerDeleted={(id) => setWorkerAssignments((prev) => prev.filter((a) => a.id !== id))}
           onWorkerUpdated={(a) => setWorkerAssignments((prev) => prev.map((x) => (x.id === a.id ? a : x)))}
           onCoCreated={(a) => {
+            void finishRestoreRemoval({ changeOrderId: a.changeOrderId, dateKey: a.dateKey });
             setCoDayAssignments((prev) => [...prev.filter((x) => x.id !== a.id), a]);
             if (a.supervisorUserId) setCoSupervisorOverrides((o) => ({ ...o, [a.changeOrderId]: a.supervisorUserId }));
           }}

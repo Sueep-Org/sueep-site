@@ -326,14 +326,18 @@ export function ScheduleCalendarOverview() {
             (Rescheduled, Client canceled, Weather, Crew unavailable, Site not ready, Other) still removes the day
             and sends the cancellations, but leaves a <strong>gray, crossed-out chip</strong> on that day. Hover it
             to see the reason, the note, who was covering it, and who removed it. Click its own{" "}
-            <strong>×</strong> to clear it for good.
+            <strong>×</strong> to clear it for good, or <strong>↺</strong> to restore the day: the day window opens on that
+            job and date, and once you save it the gray chip goes away. A voided job&apos;s days can&apos;t be restored
+            until the void is undone.
           </P>
           <Callout type="warning">
             A gray, crossed-out chip only means that <strong>day</strong> was removed. The job itself stays open and
             still shows as WIP on Projects. If it was the job&apos;s last day on the calendar, the Remove dialog offers{" "}
             <strong>Also void the whole job</strong>: tick it when the work won&apos;t be done or billed, and the job
             (and its turnover request) is set to Voided with your note as the reason. A job already billed or paid
-            isn&apos;t voided from here; change it on the project.
+            isn&apos;t voided from here; change it on the project. To bring a voided job back, click any of its gray
+            days and hit <strong>Undo void</strong> (or use Undo void under Lifecycle on the project). It goes back to Not
+            billed, and days the void took off stay gray with their notes until you restore or clear them.
           </Callout>
           <P>
             A <strong>change order</strong> chip works the same way from its card: click the chip, then{" "}

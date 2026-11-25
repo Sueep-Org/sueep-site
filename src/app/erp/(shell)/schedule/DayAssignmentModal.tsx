@@ -117,6 +117,7 @@ export function DayAssignmentModal({
   existingCoWorkers,
   answers = {},
   initialProjectId,
+  initialChangeOrderId,
   onClose,
   onCreated,
   onSeriesCreated,
@@ -142,6 +143,8 @@ export function DayAssignmentModal({
   answers?: Answers;
   /** Pre-selects a project — e.g. jumping here from the "needs a supervisor" alert chip for a specific project. */
   initialProjectId?: string;
+  /** Pre-selects a change order instead (opens in change order mode), e.g. restoring a CO's removed day. */
+  initialChangeOrderId?: string;
   onClose: () => void;
   onCreated: (assignment: ScheduleDayAssignment) => void;
   /** Fired instead of onCreated when a repeat/range is active, one row per generated day. */
@@ -163,14 +166,14 @@ export function DayAssignmentModal({
   // full-featured flow: SOV/scope pickers, repeat/duplicate, project-level
   // series) or a change order directly (supervisor/PM/time/comment + crew
   // only, no repeat yet, see ChangeOrderDayAssignment).
-  const [targetMode, setTargetMode] = useState<"project" | "co">("project");
+  const [targetMode, setTargetMode] = useState<"project" | "co">(initialChangeOrderId ? "co" : "project");
 
   const [projectId, setProjectId] = useState(initialProjectId ?? "");
   const [projectQuery, setProjectQuery] = useState(
     () => projects.find((p) => p.id === initialProjectId)?.jobTitle ?? ""
   );
-  const [coId, setCoId] = useState("");
-  const [coQuery, setCoQuery] = useState("");
+  const [coId, setCoId] = useState(initialChangeOrderId ?? "");
+  const [coQuery, setCoQuery] = useState(() => changeOrderOptions.find((co) => co.id === initialChangeOrderId)?.title ?? "");
   const [supervisorUserId, setSupervisorUserId] = useState("");
   // Rare case: only the PM is on site that day, no supervisor. At least one
   // of supervisorUserId/projectManagerUserId is required to submit.
