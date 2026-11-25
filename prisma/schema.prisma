@@ -739,6 +739,12 @@ model RecurringContractPeriod {
   /// elapsed months — only paid status needs to be persisted per period.
   /// Extras in `charges` are not commissioned.
   commissionPaidAt DateTime?
+  /// Who earns this month's commission, when it isn't the contract's
+  /// salesperson (e.g. a contract handed to a new rep keeps the old rep on
+  /// the months before the handover). Null means the contract's
+  /// commissionEmployeeId.
+  commissionEmployeeId String?
+  commissionEmployee   Employee? @relation("RecurringPeriodCommissionOwner", fields: [commissionEmployeeId], references: [id], onDelete: SetNull)
 
   projects        Project[]
   charges         RecurringContractCharge[]
@@ -1923,6 +1929,7 @@ model Employee {
   reimbursements               Reimbursement[]
   commissionPayouts            CommissionPayout[]
   recurringContractCommissions RecurringContract[]
+  recurringPeriodCommissions   RecurringContractPeriod[]        @relation("RecurringPeriodCommissionOwner")
   buildingCommissions          Building[]                       @relation("BuildingCommissionOwner")
   offshorePayrollPayments      OffshorePayrollPayment[]
   bidBonusEntries              BidBonusEntry[]
