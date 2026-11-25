@@ -473,6 +473,7 @@ export function ChangeOrderDetailEditor({
             </a>
           </div>
         </div>
+        <CoForDate startIso={data.startDate ?? data.requestedDate} endIso={data.endDate} />
       </div>
 
       {isSupervisor ? (
@@ -895,6 +896,28 @@ export function ChangeOrderDetailEditor({
         ...(signingContent ? [{ label: "Signing", content: signingContent }] : []),
       ]} />
       )}
+    </div>
+  );
+}
+
+/** The day (or days) the change order is for, big at the top of the page. */
+function CoForDate({ startIso, endIso }: { startIso: string | null; endIso: string | null }) {
+  if (!startIso) {
+    return (
+      <div className="rounded-lg border border-dashed border-gray-300 px-4 py-2 text-sm text-gray-500">No date set yet</div>
+    );
+  }
+  const fmt = (iso: string) =>
+    new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+  const start = startIso.slice(0, 10);
+  const end = endIso && endIso.slice(0, 10) > start ? endIso.slice(0, 10) : null;
+  return (
+    <div className="rounded-lg border border-pink-200 bg-pink-50 px-4 py-2 text-right">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-pink-700">For</div>
+      <div className="text-lg font-bold text-gray-900">
+        {fmt(start)}
+        {end ? <span className="font-semibold text-gray-600"> to {fmt(end)}</span> : null}
+      </div>
     </div>
   );
 }

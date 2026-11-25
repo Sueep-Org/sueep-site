@@ -119,8 +119,8 @@ export const NOTIFICATIONS = {
   SCHEDULE_REQUESTER_CONFIRMED: def({
     label: "Client's day confirmed",
     group: "Projects & schedule",
-    when: "Everyone scheduled on a day the client asked for has clicked Confirm",
-    automatic: "The client who asked for that day (set on the day, filled in from the project portal)",
+    when: "Everyone scheduled on a day the client asked for has clicked Confirm, or we put a sub on that day (the sub isn't named)",
+    automatic: "The client who asked for that day (set on the day, filled in from the project portal), or the property manager whose turnover request made the unit",
     ccEditable: true,
     sender: "sueep",
   }),
