@@ -1674,6 +1674,10 @@ model ScheduleDayRemoval {
   /// Who was covering the day, as plain text, since the assignment is gone
   coveredBy     String?
   removedByName String?
+  /// The day's own comment and staff note at removal, carried back onto the
+  /// day if it's restored (the day's row is deleted on removal).
+  dayComment      String?
+  dayInternalNote String?
 
   @@index([date])
 }

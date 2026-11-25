@@ -34,4 +34,7 @@ export type ScheduleDayRemovalRow = {
   coveredBy: string | null;
   removedByName: string | null;
   removedAt: string;
+  /** The day's own comment and staff note when it was removed, put back on a restore */
+  dayComment: string | null;
+  dayInternalNote: string | null;
 };

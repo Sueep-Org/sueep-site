@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   const forbidden = await scheduleEditForbidden();
   if (forbidden) return forbidden;
   const body = (await req.json().catch(() => null)) as
-    | { changeOrderId?: unknown; dateKey?: unknown; reason?: unknown; note?: unknown; coveredBy?: unknown }
+    | { changeOrderId?: unknown; dateKey?: unknown; reason?: unknown; note?: unknown; coveredBy?: unknown; dayComment?: unknown; dayInternalNote?: unknown }
     | null;
   const changeOrderId = typeof body?.changeOrderId === "string" ? body.changeOrderId : "";
   const k = typeof body?.dateKey === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.dateKey) ? body.dateKey : "";
@@ -26,6 +26,9 @@ export async function POST(req: Request) {
   const reason = body.reason;
   const note = typeof body?.note === "string" && body.note.trim() ? body.note.trim().slice(0, 500) : null;
   const coveredBy = typeof body?.coveredBy === "string" && body.coveredBy.trim() ? body.coveredBy.trim().slice(0, 200) : null;
+  // The removed day's own notes, sent by the client (its row is already deleted), kept for a restore
+  const dayComment = typeof body?.dayComment === "string" && body.dayComment.trim() ? body.dayComment.trim() : null;
+  const dayInternalNote = typeof body?.dayInternalNote === "string" && body.dayInternalNote.trim() ? body.dayInternalNote.trim() : null;
 
   const co = await prisma.projectChangeOrder.findUnique({
     where: { id: changeOrderId },
@@ -73,6 +76,8 @@ export async function POST(req: Request) {
         reason,
         note,
         coveredBy,
+        dayComment,
+        dayInternalNote,
         removedByName,
       },
       select: { id: true, note: true, coveredBy: true, removedByName: true },

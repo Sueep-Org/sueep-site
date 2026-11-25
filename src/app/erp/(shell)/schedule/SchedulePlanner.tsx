@@ -1010,10 +1010,29 @@ export function SchedulePlanner({
     }
   }
 
+  // A restored day keeps its old staff note plus a line saying why it was
+  // removed, so the history isn't lost when the gray day comes off.
+  function restoredInternalNote(r: ScheduleDayRemovalRow): string {
+    const when = new Date(r.removedAt).toLocaleDateString("en-US", { month: "numeric", day: "numeric" });
+    const removedLine = `Removed ${when}${r.removedByName ? ` by ${r.removedByName}` : ""} (${removalReasonLabel(removalReasons, r.reason)})${r.note ? `: ${r.note}` : ""}`;
+    return [r.dayInternalNote, removedLine].filter(Boolean).join("\n");
+  }
+
   function startRestoreRemoval(r: ScheduleDayRemovalRow) {
     setRestoringRemoval(r);
     setOpenDayKey(r.dateKey);
     setOpenDayInitialProjectId(r.projectId);
+  }
+
+  // Clicking a gray removed day (or its ↺): a voided job offers Undo void
+  // first, otherwise it asks to restore the day.
+  async function restoreRemovalClicked(r: ScheduleDayRemovalRow, title: string, jobVoided: boolean, projectId: string) {
+    if (jobVoided) {
+      await handleUndoVoid(projectId);
+      return;
+    }
+    if (!(await confirm({ title: "Restore this day?", message: `Puts ${title} back on ${dayCellLabel(r.dateKey)} with its old notes, plus a staff note saying why it was removed. Pick who's covering it and save, and the gray day goes away.`, confirmLabel: "Restore" }))) return;
+    startRestoreRemoval(r);
   }
 
   // The restored day was saved: its gray removed day comes off.
@@ -1078,6 +1097,8 @@ export function SchedulePlanner({
             coveredBy: r.coveredBy,
             removedByName: r.removedByName,
             removedAt: new Date().toISOString(),
+            dayComment: assignment.comment,
+            dayInternalNote: assignment.internalNote,
           },
         ]);
       }
@@ -4722,14 +4743,19 @@ export function SchedulePlanner({
                             const removedVoided = r.reason === JOB_VOIDED_REMOVAL || !!project.voidReason;
                             return (
                               <li key={`removed-${r.id}`} className={inMonth ? "group relative" : "relative"}>
-                                <div className={`flex items-center gap-1 truncate rounded border border-dashed border-gray-300 bg-gray-100 py-0.5 pl-1.5 text-[10px] font-medium text-gray-400 ${canAssign ? "pr-8" : "pr-4"}`}>
+                                <button
+                                  type="button"
+                                  disabled={!canAssign}
+                                  onClick={() => restoreRemovalClicked(r, removedTitle, !!project.voidReason, project.id)}
+                                  className={`flex w-full items-center gap-1 truncate rounded border border-dashed border-gray-300 bg-gray-100 py-0.5 pl-1.5 text-left text-[10px] font-medium text-gray-400 enabled:cursor-pointer enabled:hover:bg-gray-200 ${canAssign ? "pr-8" : "pr-4"}`}
+                                >
                                   <VoidTag show={removedVoided} />
                                   <span className="truncate line-through">{removedTitle}</span>
-                                </div>
+                                </button>
                                 {canAssign ? (
                                   <button
                                     type="button"
-                                    onClick={() => (project.voidReason ? toast("Undo the void first (click one of the job's days, or its project page)", "error") : startRestoreRemoval(r))}
+                                    onClick={() => restoreRemovalClicked(r, removedTitle, !!project.voidReason, project.id)}
                                     title={project.voidReason ? "Undo the void first to restore this day" : "Restore this day to the calendar"}
                                     className="absolute right-4 top-1/2 -translate-y-1/2 z-20 px-0.5 text-[11px] font-bold leading-none text-gray-400 opacity-60 hover:opacity-100"
                                   >
@@ -4751,6 +4777,8 @@ export function SchedulePlanner({
                                     {r.changeOrderId ? <div className="text-gray-300">{CHANGE_ORDER_LABEL} · Project: {project.jobTitle}</div> : null}
                                     <div className="text-gray-300">Removed: {removalReasonLabel(removalReasons, r.reason)}</div>
                                     {r.note && r.reason !== JOB_VOIDED_REMOVAL ? <div className="line-clamp-3 text-gray-300">Note: {r.note}</div> : null}
+                                    {r.dayComment ? <div className="line-clamp-3 text-gray-300">Day notes: {r.dayComment}</div> : null}
+                                    {r.dayInternalNote ? <div className="line-clamp-3 text-gray-300">Staff note: {r.dayInternalNote}</div> : null}
                                     <VoidedLine reason={project.voidReason ?? (r.reason === JOB_VOIDED_REMOVAL ? r.note : null)} />
                                     {r.coveredBy ? <div className="text-gray-300">Was covered by: {r.coveredBy}</div> : null}
                                     <div className="text-gray-400">
@@ -4880,6 +4908,8 @@ export function SchedulePlanner({
           existingCoWorkers={coWorkerAssignments.filter((a) => a.dateKey === openDayKey)}
           initialProjectId={openDayInitialProjectId ?? undefined}
           initialChangeOrderId={restoringRemoval?.changeOrderId ?? undefined}
+          initialComment={restoringRemoval?.dayComment ?? undefined}
+          initialInternalNote={restoringRemoval ? restoredInternalNote(restoringRemoval) : undefined}
           onClose={() => {
             setOpenDayKey(null);
             setOpenDayInitialProjectId(null);
