@@ -6,6 +6,17 @@ import type { ListItem } from "./appLists";
 
 export type ScheduleRemovalReason = string;
 
+/** Saved on a day cancelled because its job was voided. Not in the editable
+ * list (nobody picks it), shown as "Job voided". */
+export const JOB_VOIDED_REMOVAL = "JOB_VOIDED";
+export const JOB_VOIDED_REMOVAL_LABEL = "Job voided";
+
+/** A removal reason's label, including the built-in Job voided one. */
+export function removalReasonLabel(reasons: ListItem[], value: string): string {
+  if (value === JOB_VOIDED_REMOVAL) return JOB_VOIDED_REMOVAL_LABEL;
+  return reasons.find((r) => r.value === value)?.label ?? value;
+}
+
 export function isScheduleRemovalReason(v: unknown, reasons: ListItem[]): v is ScheduleRemovalReason {
   return typeof v === "string" && reasons.some((r) => r.value === v);
 }

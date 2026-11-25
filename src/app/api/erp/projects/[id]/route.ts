@@ -16,6 +16,7 @@ import { paidDayToTimestamp } from "@/lib/erp/payPeriods";
 import { lienPatchData } from "@/lib/erp/lienPatch";
 import type { ErpRole } from "@/lib/erpSession";
 import { syncScheduleSubPay } from "@/lib/erp/subPay";
+import { cancelDaysIfJobVoided } from "@/lib/erp/scheduleDayRemove";
 
 const STATUSES = ["ACTIVE", "UPCOMING", "ON_HOLD", "COMPLETE", "ARCHIVED"] as const;
 
@@ -441,6 +442,11 @@ export async function PATCH(req: Request, ctx: Ctx) {
       } else {
         await prisma.commissionPayout.deleteMany({ where: { sourceType: "PROJECT", sourceId: project.id } });
       }
+    }
+
+    // Voided here (Billing status): its days after today come off the calendar too.
+    if (data.billingStatus === "VOIDED" && existing.billingStatus !== "VOIDED") {
+      await cancelDaysIfJobVoided(id, (await getErpAuth())?.email);
     }
 
     return NextResponse.json(project);

@@ -8,6 +8,8 @@ import { BILLING_STATUSES, voidReasonFor, type BillingStatus } from "@/lib/erp/b
 import { billingBlockedBySubReview } from "@/lib/erp/subReviews";
 import { matchUnitName } from "@/lib/erp/unitNames";
 import { parseDate } from "@/lib/erp/dates";
+import { getErpAuth } from "@/lib/erpAuth";
+import { cancelDaysIfJobVoided } from "@/lib/erp/scheduleDayRemove";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -219,6 +221,13 @@ export async function PATCH(req: Request, ctx: Ctx) {
 
     if (data.billingStatus) {
       await syncProjectBillingFromRequest(id, String(data.billingStatus), null, data.voidReason as string | null);
+      // Voided: the unit's days after today come off the calendar too.
+      if (data.billingStatus === "VOIDED" && existing.billingStatus !== "VOIDED") {
+        const email = (await getErpAuth())?.email;
+        for (const p of await prisma.project.findMany({ where: { turnoverRequestId: id }, select: { id: true } })) {
+          await cancelDaysIfJobVoided(p.id, email);
+        }
+      }
     }
 
     return NextResponse.json(request);

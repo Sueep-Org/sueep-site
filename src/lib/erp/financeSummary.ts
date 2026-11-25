@@ -704,7 +704,9 @@ export async function computeFinanceSummary(anchor: FinanceAnchor = "completed",
       });
     }
 
-    if (!isComplete) {
+    // A voided job won't be billed, so it isn't future work or up for review
+    // even while it's still Active.
+    if (!isComplete && normalizeBillingStatus(p.billingStatus) !== "VOIDED") {
       const valueCents = futureContractCents + futureChangeOrderCents;
       if (valueCents > 0) {
         futureJobs.push({
